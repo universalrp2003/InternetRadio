@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Final plan — 2 × 200 W Mono PERC for Microtek 1435/12V, Alangudi</title>
+<style>
+  :root{
+    --ink:#12181f; --muted:#5b6673; --line:#e3e8ee; --bg:#f6f8fb;
+    --green:#0f7b4f; --greenbg:#e8f6ef; --amber:#8a5a00; --amberbg:#fff6e5;
+    --red:#9b1c1c; --redbg:#fdecec; --blue:#12507b; --bluebg:#eaf3fa;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:16px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1020px;margin:0 auto;padding:28px 20px 80px}
+  header.hero{background:linear-gradient(135deg,#0d3b66,#12507b 55%,#1d7a8c);color:#fff;
+       border-radius:16px;padding:28px 26px;box-shadow:0 10px 26px rgba(13,59,102,.25)}
+  header.hero h1{margin:0 0 6px;font-size:25px;letter-spacing:-.3px}
+  header.hero p{margin:6px 0 0;color:#d9e8f3;font-size:15px}
+  .verdict{margin-top:18px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.3);
+       border-radius:12px;padding:14px 16px;font-size:15.5px}
+  h2{font-size:21px;margin:34px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--line)}
+  h3{font-size:17px;margin:20px 0 8px}
+  p{margin:10px 0}
+  table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;
+        box-shadow:0 1px 3px rgba(16,24,40,.07);font-size:14.6px;margin:12px 0}
+  th,td{padding:10px 11px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  th{background:#eef3f8;font-weight:600;font-size:13.4px;text-transform:uppercase;letter-spacing:.03em;color:#3d4b5c}
+  tr:last-child td{border-bottom:none}
+  .tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12.2px;font-weight:700;white-space:nowrap}
+  .t-best{background:var(--greenbg);color:var(--green)}
+  .t-ok{background:var(--bluebg);color:var(--blue)}
+  .t-warn{background:var(--amberbg);color:var(--amber)}
+  .t-no{background:var(--redbg);color:var(--red)}
+  .callout{border-radius:12px;padding:13px 16px;margin:14px 0;font-size:15px;border:1px solid}
+  .c-green{background:var(--greenbg);border-color:#bfe6d3}
+  .c-amber{background:var(--amberbg);border-color:#f2ddb2}
+  .c-red{background:var(--redbg);border-color:#f4c9c9}
+  .c-blue{background:var(--bluebg);border-color:#c8dff0}
+  ul,ol{margin:8px 0 8px 22px;padding:0}
+  li{margin:5px 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;
+        box-shadow:0 1px 3px rgba(16,24,40,.06)}
+  .card h3{margin-top:0}
+  .small{font-size:13.6px;color:var(--muted)}
+  .price{font-weight:700;color:var(--green)}
+  figure{margin:16px 0;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px}
+  figcaption{font-size:13.4px;color:var(--muted);padding:6px 6px 2px}
+  svg{display:block;width:100%;height:auto}
+  .foot{margin-top:34px;font-size:13.6px;color:var(--muted)}
+  .foot a{color:var(--blue)}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;font-size:14.8px}
+  .kv b{white-space:nowrap}
+  @media (max-width:720px){.grid{grid-template-columns:1fr} header.hero h1{font-size:20px}}
+  @media print{body{background:#fff}.wrap{padding:0}table{box-shadow:none;border:1px solid var(--line)}header.hero{box-shadow:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Final panel plan — Microtek Solar PCU 1435/12V · Luminous 150 Ah · Alangudi</h1>
+  <p>Load reality-check, exact panel size, and where to buy (Amazon / Flipkart / local) · October 2026</p>
+  <div class="verdict">
+    <b>Verdict: buy 2 × 200 W 12 V Mono PERC panels (= 400 Wp) in parallel.</b>
+    Your daily need is ~1.1–1.4 units; two 200 W panels generate ~1.3–1.4 units/day, which keeps the 150 Ah battery full every day and still runs
+    the modem + camera + fans through a full-day power cut.<br>
+    <b>One 200 W panel is not enough</b> (~0.7 units/day) — but you were right that per-panel, anything in the 150–200 W range is fine.
+    Any 2–3 panels totalling 300–600 Wp will work; they must all be <b>12 V (36-cell)</b> and wired in <b>parallel</b>.
+  </div>
+</header>
+
+<h2>1. What you actually use per day</h2>
+<table>
+  <tr><th>Load</th><th>Power</th><th>Hours/day</th><th>Energy/day</th></tr>
+  <tr><td>2 × BLDC fan</td><td>2 × 32 W = 64 W</td><td>~9 h <span class="small">(evening + night)</span></td><td>≈ 580 Wh</td></tr>
+  <tr><td>WiFi modem / router</td><td>~12 W</td><td>24 h</td><td>≈ 290 Wh</td></tr>
+  <tr><td>1 security camera (WiFi type)</td><td>~8 W</td><td>24 h</td><td>≈ 190 Wh</td></tr>
+  <tr><td>PCU + wiring losses</td><td>~15 % overhead</td><td>—</td><td>≈ 160 Wh</td></tr>
+  <tr><th>Total</th><th>~84 W when fans are on</th><th>—</th><th><b>≈ 1.2 kWh (units) per day</b></th></tr>
+</table>
+<p class="small">If your camera is a wired CCTV/DVR setup, add ~20 W → about 1.6 units/day; the 400 Wp plan still works, 3 panels would be safer.</p>
+
+<div class="callout c-green">
+  <b>The good news about your battery:</b> a Luminous 150 Ah holds 1.8 kWh. At 50–60 % depth of discharge it delivers ~0.9–1.1 kWh — almost exactly one full day of your loads.
+  So for a 24-hour power cut, the battery (not the panels) carries you through the night, and the panels' only job is to refill it the next morning. That is why <b>daily refill capability</b> is the number to design for.
+</div>
+
+<h2>2. How much panel do you need?</h2>
+<table>
+  <tr><th>Array (12 V mono PERC)</th><th>Real output/day*</th><th>Cost of panels</th><th>Verdict for your load</th></tr>
+  <tr><td>1 × 200 W = 200 Wp</td><td>≈ 0.7 kWh</td><td>₹4,500–7,300</td><td><span class="tag t-no">Not enough — battery will drift down</span></td></tr>
+  <tr><td><b>2 × 200 W = 400 Wp</b></td><td><b>≈ 1.35 kWh</b></td><td><b>₹9,000–14,600</b></td><td><span class="tag t-best">Recommended — matches your 1.2 kWh/day</span></td></tr>
+  <tr><td>3 × 150 W = 450 Wp</td><td>≈ 1.5 kWh</td><td>₹9,600–13,200</td><td><span class="tag t-best">Equally good, cheapest per watt right now</span></td></tr>
+  <tr><td>3 × 165 W = 495 Wp</td><td>≈ 1.7 kWh</td><td>₹13,500–19,000</td><td><span class="tag t-ok">Extra margin for cloudy days</span></td></tr>
+  <tr><td>3 × 200 W = 600 Wp</td><td>≈ 2.0 kWh</td><td>₹13,500–21,000</td><td><span class="tag t-warn">Your PCU's maximum — more than you need, but battery is always full by ~10:30 a.m.</span></td></tr>
+</table>
+<p class="small">* = Wp × ~4.9 peak sun hours (Alangudi) × ~0.70 PWM harvesting factor. PWM controllers cannot extract the full printed Wp — that 0.70 is normal, not a fault.</p>
+
+<div class="callout c-amber">
+  <b>Why 1 panel fails and 2 succeed:</b> your loads run day <i>and</i> night. A single 200 W panel collects about 0.7 units a day, but you consume ~1.2 units — the battery loses ~0.5 units daily and slowly slides toward shutdown. Two panels collect ~1.35 units, so the battery is fully charged by early afternoon every day and topped up even on hazy days.
+</div>
+
+<h2>3. Exactly what to buy (checked Oct 2026)</h2>
+<h3>Option A — Best balance of quality and price <span class="tag t-best">recommended</span></h3>
+<table>
+  <tr><th>Item</th><th>Where</th><th>Price</th></tr>
+  <tr><td><b>2 × 200 W 12 V Mono PERC</b> — Loom Solar (36-cell, Voc 23.3 V)</td><td>loomsolar.com, Moglix, Amazon</td><td class="price">₹6,799–₹7,299 each</td></tr>
+  <tr><td>or <b>2 × 200 W 12 V Mono PERC</b> — Waaree WS-200 (Voc ≈ 23–25 V)</td><td>Amazon (sold as packs), local dealer</td><td class="price">≈ ₹7,000 each</td></tr>
+  <tr><td>or <b>2 × 200 W 12 V Mono PERC</b> — ZunSolar (budget brand)</td><td>zunpulse.com, Amazon</td><td class="price">₹4,499 each</td></tr>
+</table>
+
+<h3>Option B — Cheapest correct build <span class="tag t-ok">value pick</span></h3>
+<table>
+  <tr><th>Item</th><th>Where</th><th>Price</th></tr>
+  <tr><td><b>3 × 150 W 12 V Mono PERC</b> — Waaree</td><td>Amazon listing</td><td class="price">₹4,399 each → ₹13,197 for 450 Wp</td></tr>
+  <tr><td>or <b>3 × 165 W 12 V</b> — Microtek (poly) / Luminous (poly, Voc 22.84 V)</td><td>Amazon, IndiaMART dealers, Microtek e-shop</td><td class="price">₹4,400–₹6,400 each</td></tr>
+</table>
+
+<h3>Option C — Maximum your PCU allows <span class="tag t-warn">only if budget is easy</span></h3>
+<table>
+  <tr><th>Item</th><th>Where</th><th>Price</th></tr>
+  <tr><td>3 × 200 W 12 V Mono PERC = 600 Wp</td><td>as Option A</td><td class="price">₹13,500–₹21,000</td></tr>
+</table>
+
+<div class="callout c-blue">
+  <b>Amazon / Flipkart / Meesho — how to buy safely</b>
+  <ul>
+    <li><b>Buy only branded modules</b> — Loom Solar, Waaree, Luminous, ZunSolar, Microtek, Exide. The listing must state <b>12 V nominal, 36 cells</b> and give <b>Voc</b> (should be 22–26 V).</li>
+    <li><b>Meesho caution:</b> most listings there are unbranded/B-grade with no serviceable warranty. Buy from Meesho only if the seller is a brand's own store and the price is not suspiciously low; returns on 12 kg glass panels are painful.</li>
+    <li><b>Unbox in front of the delivery person.</b> Photograph the carton and panels; refuse any box with a cracked cell or bent frame. Micro-cracks show up as whitish lines under light.</li>
+    <li><b>Keep the GST invoice with serial numbers</b> — it is your 10-year product + 25-year performance warranty proof. Amazon/Flipkart invoices are accepted.</li>
+    <li><b>Check the price per watt</b>: online runs ₹28–₹36/W; a local dealer in Pudukkottai/Karaikudi/Trichy may quote ₹22–₹28/W and will also install. Worth one phone call before ordering online — the saving on 400 Wp can be ₹2,000–₹4,000.</li>
+    <li>Prefer a panel whose datasheet you can download (PDF) before paying — that is how you confirm Voc, Isc and cell count.</li>
+  </ul>
+</div>
+
+<h2>4. Wiring (simple, do not change it)</h2>
+<figure>
+<svg viewBox="0 0 920 300" role="img" aria-label="Two panels in parallel into the Microtek 1435/12V PCU and 150 Ah battery">
+  <rect x="0" y="0" width="920" height="300" fill="#fff"/>
+  <g font-family="Arial" fill="#12181f" font-size="13">
+    <rect x="40" y="55" width="180" height="90" rx="6" fill="#eaf3fa" stroke="#12507b" stroke-width="2"/>
+    <text x="130" y="85" text-anchor="middle" font-weight="bold">Panel 1 — 200 W</text>
+    <text x="130" y="104" text-anchor="middle" font-size="11.5">12 V · 36-cell · Voc 23 V</text>
+    <text x="130" y="122" text-anchor="middle" font-size="11.5">Isc ≈ 10 A</text>
+
+    <rect x="40" y="165" width="180" height="90" rx="6" fill="#eaf3fa" stroke="#12507b" stroke-width="2"/>
+    <text x="130" y="195" text-anchor="middle" font-weight="bold">Panel 2 — 200 W</text>
+    <text x="130" y="214" text-anchor="middle" font-size="11.5">same model, same batch</text>
+    <text x="130" y="232" text-anchor="middle" font-size="11.5">Isc ≈ 10 A</text>
+
+    <rect x="350" y="70" width="185" height="170" rx="10" fill="#fff6e5" stroke="#8a5a00" stroke-width="2"/>
+    <text x="442" y="96" text-anchor="middle" font-weight="bold" fill="#8a5a00">Combiner / junction</text>
+    <text x="442" y="118" text-anchor="middle" font-size="11.5" fill="#5b6673">15 A DC fuse per panel</text>
+    <text x="442" y="136" text-anchor="middle" font-size="11.5" fill="#5b6673">DC isolator switch</text>
+    <text x="442" y="154" text-anchor="middle" font-size="11.5" fill="#5b6673">DC SPD (lightning)</text>
+    <text x="442" y="180" text-anchor="middle" font-size="12.5">Array = 400 Wp</text>
+    <text x="442" y="200" text-anchor="middle" font-size="12.5">≈ 19–20 A · Voc 23 V</text>
+    <text x="442" y="223" text-anchor="middle" font-size="11.5" fill="#0f7b4f">4–6 mm² DC cable · MC4</text>
+
+    <rect x="655" y="60" width="235" height="105" rx="10" fill="#e8f6ef" stroke="#0f7b4f" stroke-width="2"/>
+    <text x="772" y="86" text-anchor="middle" font-weight="bold" fill="#0f7b4f">Microtek 1435/12V</text>
+    <text x="772" y="106" text-anchor="middle" font-size="11.5">PV in max 600 Wp / 30–35 A</text>
+    <text x="772" y="125" text-anchor="middle" font-size="11.5">PWM · 1135 VA pure sine wave</text>
+    <text x="772" y="144" text-anchor="middle" font-size="11.5">Grid + solar dual charging</text>
+
+    <rect x="655" y="185" width="235" height="80" rx="10" fill="#f3f4f6" stroke="#5b6673" stroke-width="2"/>
+    <text x="772" y="212" text-anchor="middle" font-weight="bold">Luminous 150 Ah</text>
+    <text x="772" y="232" text-anchor="middle" font-size="11.5">12 V tubular · ~1.8 kWh</text>
+    <text x="772" y="251" text-anchor="middle" font-size="11.5">One full day of your loads</text>
+  </g>
+  <g stroke="#12507b" stroke-width="3" fill="none">
+    <path d="M220 100 C 285 100, 300 140, 348 140"/>
+    <path d="M220 210 C 285 210, 300 170, 348 170"/>
+    <path d="M535 155 L 653 155"/>
+    <path d="M772 165 L 772 183" stroke="#5b6673"/>
+  </g>
+  <text x="560" y="143" font-family="Arial" font-size="12" fill="#12507b">+/− pair only</text>
+  <text x="360" y="275" font-family="Arial" font-size="11.5" fill="#5b6673">Array voltage stays equal to ONE panel (23 V). Never join panels in series on a 12 V PCU.</text>
+</svg>
+<figcaption>Two 200 W panels in parallel. Array current ~20 A sits well inside the PCU's 30 A manual limit, so you can add a third identical panel later if you ever need it.</figcaption>
+</figure>
+
+<h2>5. Terrace notes for Alangudi (10.4° N, cyclone belt)</h2>
+<ul>
+  <li><b>Tilt 10–12°, facing true south.</b> A steep tilt is only for wind drag here, not for energy.</li>
+  <li><b>Shade check:</b> watch where the parapet, water tank and staircase head-room cast shadows at 9 a.m. and 4 p.m. Keep panels clear of those — one shaded strip can cut a panel's output by a third.</li>
+  <li><b>Aim for ~2.5 m × 1.2 m of clear area</b> for two 200 W panels with walking gap.</li>
+  <li><b>Galvanised structure, chemical anchors, 10–15 cm air gap</b> under the panels. Bolt down hard — November–December winds are the design case.</li>
+  <li><b>DC SPD + good earthing</b> (one earth pit for the frame, copper 6 mm²). Lightning is the most likely cause of a dead PCU in this district.</li>
+  <li>Run DC cable in conduit, keep it under ~20 m for 6 mm²; longer runs need 10 mm².</li>
+</ul>
+
+<h2>6. PCU &amp; battery settings that protect your money</h2>
+<div class="grid">
+  <div class="card">
+    <h3>PCU</h3>
+    <ul>
+      <li>Charging voltage: select <b>tubular</b> (your Luminous 150 Ah), not flat/SMF.</li>
+      <li>Keep <b>solar priority ON</b>; the PCU runs your fans + modem + camera on solar first, then charges the battery.</li>
+      <li><b>Grid charging:</b> ON during the June–September monsoon; OFF in the dry months (or leave it in "economy" mode) if you want the maximum EB bill saving.</li>
+      <li>Needs <b>1 ft free space</b> on all sides — it is a fan-cooled unit.</li>
+      <li><b>Do not add a 3rd panel of a different wattage later.</b> If you expand, buy the same model.</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Battery (the part that dies early if ignored)</h3>
+    <ul>
+      <li>Top up with distilled water every <b>30–45 days</b> in summer — 400 Wp is more charge current than mains-only charging, so it uses water faster.</li>
+      <li>Never let it sit discharged: your loads run 24×7, so the array must be able to refill daily — this is exactly why 2 panels is the minimum, not 1.</li>
+      <li>Wipe the panel glass every 2–3 weeks; Alangudi's dust months cost you 5–10 % output if ignored.</li>
+      <li>Expected battery life with this cycling: <b>3.5–5 years</b> for a good tubular; longer if you keep water levels right.</li>
+    </ul>
+  </div>
+</div>
+
+<h2>7. Money</h2>
+<table>
+  <tr><th>Item</th><th>Spec</th><th>Cost</th></tr>
+  <tr><td>Panels</td><td>2 × 200 W 12 V Mono PERC (Loom / Waaree / ZunSolar)</td><td class="price">₹9,000–₹14,600</td></tr>
+  <tr><td>Structure</td><td>GI frame, 10–12° tilt, anchors, 2 modules</td><td>₹3,000–₹5,000</td></tr>
+  <tr><td>DC cable + MC4 + conduit</td><td>4–6 mm², ~15–20 m</td><td>₹1,500–₹3,000</td></tr>
+  <tr><td>Combiner + protection</td><td>2 × 15 A DC fuse, DC isolator, DC SPD</td><td>₹1,500–₹3,000</td></tr>
+  <tr><td>Earthing + installation</td><td>Frame earth pit + labour</td><td>₹2,000–₹4,000</td></tr>
+  <tr><th>Total</th><th>400 Wp installed</th><th class="price">₹17,000–₹29,600</th></tr>
+  <tr><td>Annual saving</td><td>~1.35 units/day ≈ 450–480 units/year at ₹8/unit</td><td class="price">≈ ₹3,600–₹3,800/year</td></tr>
+  <tr><td>Payback</td><td>Panels warranted 25 years</td><td>≈ 5–7 years</td></tr>
+</table>
+
+<div class="callout c-red">
+  <b>Do not buy:</b> any 24 V / 60-cell / 72-cell module (Voc 41–51 V) — including 440 W, 450 W, 540 W, 550 W panels. They look cheaper per watt and will damage a 12 V PCU the moment you connect them. If the seller cannot tell you the <b>Voc</b> and the <b>cell count</b>, do not buy that panel.
+</div>
+
+<h2>8. Order-of-work checklist</h2>
+<ol>
+  <li>Measure the terrace: is there a 2.5 m × 1.2 m shadow-free patch at 9 a.m. and 4 p.m.? If not, adjust placement before ordering.</li>
+  <li>Choose panels; download the datasheet; confirm <b>36 cells, Voc 22–26 V, 12 V nominal</b>.</li>
+  <li>Call one local dealer in Pudukkottai / Karaikudi / Trichy for a price on the same wattage — compare with Amazon/Flipkart/Moglix price per watt.</li>
+  <li>Buy 2 identical panels + the combiner hardware in one order.</li>
+  <li>Get the structure fabricated locally (any welding shop can copy the drawing above).</li>
+  <li>Install in the early morning, torque the MC4s, then check the PCU's LCD: PV current should be 8–10 A per panel in good sun.</li>
+  <li>First month: check water level weekly until you learn how fast this array uses it.</li>
+</ol>
+
+<div class="foot">
+  <b>Sources (checked Oct 2026):</b>
+  Microtek 1435/12V — 600 Wp max PV, 35 A solar current, 1135 VA/12 V PWM (Microtek dealer spec sheets; user manual lists 30 A / 45–600 W);
+  Microtek's own 1435/12V combo shipped with 4 × 150 W panels + 150 Ah battery;
+  prices — Loom Solar 200 W/12 V Mono PERC ₹6,799–₹7,299 (IndiaMART dealer quote, Moglix);
+  Waaree 150 W/12 V Mono PERC ₹4,399 and Waaree 200 W/12 V ≈ ₹7,000 each (Amazon.in packs);
+  ZunSolar 200 W/12 V Mono PERC ₹4,499 (zunpulse.com);
+  Luminous 165 W/12 V poly Voc 22.84 V (luminousindia.com); Exide 110 W/12 V ₹3,744–₹3,795 (Flipkart/Amazon);
+  Microtek 165 W/12 V poly ₹4,550–₹6,354 (Microtek e-shop, IndiaMART).
+  <br><br><i>Prices change weekly and vary by seller. Always confirm Voc, cell count and 12 V nominal on the datasheet of the exact batch before paying.</i>
+</div>
+
+</div>
+</body>
+</html>
