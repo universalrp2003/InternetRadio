@@ -17,6 +17,17 @@ Five Android applications in one Gradle project:
 - **Local:** open the repo root in Android Studio, or run
   `gradle wrapper && ./gradlew assembleDebug`.
 
+## Station list refresh (Tamilnadu FM Radio)
+
+The app ships a station list inside the APK, and that list is rebuilt from the open
+Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
+
+- monthly, on demand, or whenever `tools/fetch_stations.py` / `tools/curated_stations.json` change;
+- every hand-picked stream in `tools/curated_stations.json` is **probed** first, and only the
+  ones that really answer with audio (or a valid HLS playlist) are shipped;
+- the result is committed to `radio/src/main/assets/stations_seed.json` and packaged into the
+  next APK, so a build never ships a station link that was already dead at build time.
+
 ## What's new
 
 - **CleanSweep v1.3** — the optional Accessibility service was removed: no screen reading, no automated
