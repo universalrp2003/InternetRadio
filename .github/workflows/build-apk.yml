@@ -215,7 +215,21 @@ jobs:
             exit 1
           fi
 
-          for symbol in PlaybackService AudioFx EqPresets StationRepository MainViewModel DirectoryClient; do
+          if grep -q "com.universalrp.tamilnadufm.widget.RadioWidgetProvider" "$MERGED_RADIO"; then
+            echo "OK: the home-screen widget receiver is declared in the manifest"
+          else
+            echo "FAIL: the widget receiver is missing from the merged manifest"
+            exit 1
+          fi
+          if unzip -l "$RADIO" | grep -q "res/xml/radio_widget_info.xml" || \
+             unzip -l "$RADIO" | grep -q "res/.*/radio_widget_info.xml"; then
+            echo "OK: the widget info is packaged in the APK"
+          else
+            echo "FAIL: res/xml/radio_widget_info.xml is not packaged in the APK"
+            exit 1
+          fi
+
+          for symbol in PlaybackService AudioFx EqPresets StationRepository MainViewModel DirectoryClient RadioWidgetProvider; do
             if grep -aq "$symbol" "$WORK/radio.dex"; then
               echo "OK: $symbol is in the Tamilnadu FM Radio APK"
             else
