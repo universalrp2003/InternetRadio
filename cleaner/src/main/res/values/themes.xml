@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cleansweep_bg">#070D1A</color>
+
+    <style name="Theme.CleanSweep" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/cleansweep_bg</item>
+    </style>
+</resources>
