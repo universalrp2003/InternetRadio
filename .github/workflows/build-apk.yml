@@ -1,11 +1,15 @@
-# GitHub Actions workflow: builds the Android APK in the cloud, for free.
-# Place this file in your repository at: .github/workflows/build-apk.yml
+# GitHub Actions workflow: builds both Android APKs in the cloud, for free.
+# - Internet Radio  (:app)
+# - CleanSweep junk cleaner (:cleaner)
 name: Build APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "arena/**" ]
   workflow_dispatch:   # lets you start a build manually from the Actions tab
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -28,11 +32,53 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
 
-      - name: Build debug APK
-        run: gradle assembleDebug --no-daemon
+      - name: Build debug APKs
+        run: |
+          set -o pipefail
+          gradle assembleDebug --no-daemon 2>&1 | tee build.log
 
-      - name: Upload APK
+      - name: Surface build errors
+        if: failure()
+        run: |
+          echo "::error::Build failed - details committed to ci-build-failure.md on this branch"
+
+      - name: Publish build failure excerpt
+        if: failure()
+        run: |
+          {
+            echo "# CI build failure excerpt"
+            echo ""
+            echo "## Kotlin / resource errors"
+            echo '```'
+            grep -E "^e: " build.log | sed 's|file:///home/runner/work/InternetRadio/InternetRadio/||' | head -60
+            echo '```'
+            echo ""
+            echo "## Gradle summary"
+            echo '```'
+            grep -B2 -A30 -m1 "FAILURE: Build failed" build.log
+            echo '```'
+          } > ci-build-failure.md
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add ci-build-failure.md
+          git commit -m "CI: publish build failure excerpt"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+      - name: Upload build log on failure
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: build-log
+          path: build.log
+
+      - name: Upload Internet Radio APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: internet-radio-apk
+          path: app/build/outputs/apk/debug/*.apk
+
+      - name: Upload CleanSweep APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleansweep-apk
+          path: cleaner/build/outputs/apk/debug/*.apk
