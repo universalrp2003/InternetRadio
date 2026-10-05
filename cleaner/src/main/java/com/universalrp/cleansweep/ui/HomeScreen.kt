@@ -21,12 +21,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SdStorage
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +39,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -128,6 +131,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 )
             }
 
+            item { AssistantCard(state, vm) }
+
             item {
                 SectionTitle("Quick actions")
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -200,6 +205,72 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             item { RedmiTipCard() }
+        }
+    }
+}
+
+/** Entry point for the on-device assistant (v1.3). */
+@Composable
+private fun AssistantCard(state: UiState, vm: MainViewModel) {
+    val totalCache = state.appCaches.sumOf { if (it.cacheBytes > 0L) it.cacheBytes else 0L }
+    val subtitle = when {
+        state.report != null -> "Ask me what the scan found — I work offline"
+        totalCache > 0L -> "${totalCache.formatBytes()} of app cache found — ask me what to do"
+        else -> "Free space, safe deletes, cache help — answers stay on this phone"
+    }
+    PanelCard(
+        Modifier
+            .fillMaxWidth()
+            .clickable { vm.openAssistant() }
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .size(42.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    Icons.Outlined.SmartToy,
+                    contentDescription = null,
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Ask the assistant",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "ON-DEVICE",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color(0xFF04202A),
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(AccentCyan)
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+            }
+            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
         }
     }
 }

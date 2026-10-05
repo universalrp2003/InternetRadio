@@ -4,9 +4,10 @@ A privacy-friendly cleaning app built for **Redmi 13 5G** (HyperOS / MIUI, Andro
 and any Android 8+ phone (MIUI/HyperOS, One UI, Pixel, OnePlus, Realme, Vivo…).
 100% offline — it does not even request the INTERNET permission.
 
-**v1.2 highlights:** HyperOS auto-clean now taps *Clear data → Clear cache → OK*
-(confirmation dialog included); animated LED light bars + optional sound effects;
-CI signs every build with one fixed keystore so APKs install as **updates**.
+**v1.3 highlights:** the Accessibility service is **gone**. CleanSweep never asks for the
+Accessibility permission, never reads your screen and never taps inside other apps.
+App caches are cleared with a **guided two-tap flow** instead, and a new **on-device
+assistant** explains your storage and answers cleaning questions offline.
 
 ## What it cleans
 
@@ -20,17 +21,41 @@ CI signs every build with one fixed keystore so APKs install as **updates**.
 | Old downloads | files in `Download/` older than N days (configurable) | ❌ |
 | Large files | files above a threshold (configurable) for manual review | ❌ |
 
-Plus an **App cache cleaner**: shows per-app cache sizes (StorageStats API) and clears
-them either **automatically** via an optional Accessibility service (it opens each app's
-settings page and taps *Storage → Clear cache*, including the MIUI/HyperOS *Clear data*
-sheet), or **manually** with guided steps.
+## App cache cleaning (no Accessibility)
+
+Android does not allow one app to wipe another app's cache — that needs root, and the
+old workaround (an Accessibility service that taps buttons for you) asks for a very
+powerful permission. v1.3 removed it completely and replaced it with a guided flow:
+
+1. **App cache** shows per-app cache sizes (Storage API + Usage access).
+2. Tick the apps you want (sorted by cache size) and tap **Clean cache**.
+3. CleanSweep opens the first app's storage page — you tap **Clear cache**.
+4. Come back and tap **Next app** to continue down the list.
+
+Two taps per app, you always see what is happening, and nothing is automated behind your back.
+
+## On-device assistant (new in 1.3)
+
+Tap **Ask the assistant** on the home screen and ask anything about your storage:
+
+- *"What is taking the most space?"* → real numbers from your last scan
+- *"What is safe to delete?"* → category-by-category guidance
+- *"How do I clear the Instagram cache?"* → exact two-tap steps
+- *"Is my data private?"*, *"Why can't you clean Android/data?"*, *"Does cleaning speed up my phone?"*
+  → straight, honest answers
+- Plus context-aware quick-reply chips, and one-tap actions like *Scan now* or *Open app cache*
+
+It is a small **offline rule engine**, not a cloud chatbot: your question is matched
+against built-in rules on the phone, using only the numbers already on screen. There is
+no network call, no API key, no model download, and no data collection of any kind.
+(Turn off *Detailed answers* in Settings for one-line replies.)
 
 ## Features
 
-- Material 3 dark UI with a live storage gauge and radar-style scan animation
+- Material 3 dark UI with a live storage gauge, radar-style scan animation and LED bars
 - One-tap clean with per-file / per-category selection and confirmation
 - Settings: hidden-folder scan, duplicate min size, large-file threshold,
-  old-download age, protected folders list
+  old-download age, protected folders list, sound effects, assistant detail level
 - MediaStore cleanup after deletion so gallery/file managers update instantly
 - No ads, no analytics, no accounts, no INTERNET permission
 
@@ -56,17 +81,15 @@ gradle wrapper            # once, if the wrapper is missing
 1. Copy `cleaner-debug.apk` to the phone and open it (allow "install unknown apps").
 2. Launch CleanSweep and tap **Allow storage access** → switch CleanSweep ON.
 3. Tap **Scan & clean junk**. Review the selection, then **Clean**.
-4. For app caches: **App cache** → grant *Usage access* → (recommended) enable
-   *Auto clean (Accessibility)* → **Clean cache**.
+4. For app caches: **App cache** → grant *Usage access* → tick apps → **Clean cache** →
+   tap **Clear cache** on each app's page, returning to tap **Next app**.
 
 ## Honest limitations (Android security)
 
-- Apps can't silently wipe other apps' caches without root; the Accessibility
-  automation (or guided manual mode) is the standard workaround.
-  On MIUI/HyperOS it taps the bottom-bar **Clear data** button and then
-  **Clear cache** in the sheet; on stock Android/One UI it goes through the
-  **Storage** page; progress toasts show what it's doing.
-- `Android/data` and `Android/obb` are locked by the system since Android 11,
-  even for cleaners. Redmi's built-in *Security → Cleaner* can reach some of them.
-- The Accessibility service is strictly optional, only taps "Clear cache" buttons,
-  and never reads or stores your content.
+- Apps can't silently wipe other apps' caches without root. CleanSweep v1.3 refuses to
+  fake it with Accessibility, so it guides you through the official Settings buttons
+  instead — two taps per app.
+- `Android/data` and `Android/obb` are locked by the system since Android 11, even for
+  cleaners. Redmi's built-in *Security → Cleaner* can reach some of them.
+- Cleaning junk frees real disk space; it does not "boost RAM" or "cool down" the phone,
+  and CleanSweep will never pretend otherwise (ask the assistant — it says the same thing).

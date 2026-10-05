@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
                 val vm: MainViewModel = viewModel()
 
                 // Refresh permissions/storage info every time the user comes back
-                // from a Settings screen (files access, usage access, accessibility).
+                // from a Settings screen (files access, usage access).
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->

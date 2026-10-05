@@ -4,6 +4,10 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.universalrp.cleansweep.ai.Assistant
+import com.universalrp.cleansweep.ai.AssistantAction
+import com.universalrp.cleansweep.ai.AssistantContext
+import com.universalrp.cleansweep.ai.AssistantMessage
 import com.universalrp.cleansweep.data.AppCacheInfo
 import com.universalrp.cleansweep.data.AppCacheRepo
 import com.universalrp.cleansweep.data.JunkDeleter
@@ -17,16 +21,16 @@ import com.universalrp.cleansweep.data.StorageAccess
 import com.universalrp.cleansweep.data.StorageInfo
 import com.universalrp.cleansweep.data.StorageInfoProvider
 import com.universalrp.cleansweep.data.hasAllFilesAccess
-import com.universalrp.cleansweep.service.CacheCleanerService
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import android.os.Environment
 
-enum class Screen { HOME, SCANNING, RESULTS, APP_CACHE, SETTINGS, ABOUT }
+enum class Screen { HOME, SCANNING, RESULTS, APP_CACHE, ASSISTANT, SETTINGS, ABOUT }
 
 data class CleanStats(val atMs: Long, val freedBytes: Long, val items: Int)
 
@@ -39,6 +43,7 @@ data class UiState(
     val report: ScanReport? = null,
     val settings: ScanSettings = ScanSettings(),
     val soundsEnabled: Boolean = true,
+    val assistantVerbose: Boolean = true,
     val cleaning: Boolean = false,
     val cleanDone: Int = 0,
     val cleanTotal: Int = 0,
@@ -51,8 +56,10 @@ data class UiState(
     val appsLoading: Boolean = false,
     val includeSystemApps: Boolean = false,
     val appCaches: List<AppCacheInfo> = emptyList(),
-    val autoCleanAvailable: Boolean = false,
     val pendingManualApps: Int = 0,
+    // On-device assistant
+    val assistantMessages: List<AssistantMessage> = emptyList(),
+    val assistantTyping: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -84,6 +91,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 mutate { it.copy(soundsEnabled = on) }
             }
         }
+        viewModelScope.launch {
+            settingsRepo.assistantVerbose.collect { on ->
+                mutate { it.copy(assistantVerbose = on) }
+            }
+        }
         val lastMs = prefs.getLong("last_clean_ms", 0L)
         if (lastMs > 0L) {
             val stats = CleanStats(
@@ -108,7 +120,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hasAllFilesAccess = hasAllFilesAccess(),
                 storage = runCatching { StorageInfoProvider.read() }.getOrNull(),
                 usageAccess = AppCacheRepo.hasUsageAccess(ctx),
-                autoCleanAvailable = CacheCleanerService.isRunning,
             )
         }
         if (_state.value.screen == Screen.APP_CACHE && _state.value.usageAccess) {
@@ -258,8 +269,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadAppCaches()
     }
 
-    fun openAccessibilitySettings() = StorageAccess.openAccessibilitySettings(ctx)
-
+    /**
+     * v1.3: no Accessibility automation. CleanSweep walks the user through the
+     * official two-tap path (open app storage page → user taps "Clear cache").
+     */
     fun cleanSelectedApps() {
         val pkgs = _state.value.appCaches
             .filter { it.selected && it.cacheBytes > 0 }
@@ -268,16 +281,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             mutate { it.copy(message = "Select at least one app with cache to clean.") }
             return
         }
-        if (CacheCleanerService.isRunning) {
-            CacheCleanerService.startCleaning(ctx, pkgs)
-            mutate {
-                it.copy(message = "Auto clean started — keep your screen on while CleanSweep clears caches.")
-            }
-        } else {
-            manualQueue.clear()
-            manualQueue.addAll(pkgs)
-            openNextManualApp()
-        }
+        manualQueue.clear()
+        manualQueue.addAll(pkgs)
+        openNextManualApp()
     }
 
     fun openNextManualApp() {
@@ -287,16 +293,80 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             loadAppCaches()
             return
         }
-        StorageAccess.openAppInfo(ctx, pkg)
+        StorageAccess.openAppStorage(ctx, pkg)
         mutate {
             it.copy(
                 pendingManualApps = manualQueue.size,
-                message = "Tap Storage → Clear cache, come back, then tap “Next app”."
+                message = "Tap “Clear cache” on that screen, come back, then tap “Next app”."
             )
         }
     }
 
+    // --------------------------------------------------------- assistant (v1.3)
+
+    /** Opens the chat and seeds the greeting bubble on first use. */
+    fun openAssistant() {
+        mutate { it.copy(screen = Screen.ASSISTANT) }
+        if (_state.value.assistantMessages.isEmpty()) {
+            val msg = Assistant.welcome(assistantContext(), _state.value.assistantVerbose)
+            mutate { it.copy(assistantMessages = it.assistantMessages + msg) }
+        }
+    }
+
+    fun assistantSuggestions(): List<String> = Assistant.suggestionChips(assistantContext())
+
+    fun askAssistant(question: String) {
+        val q = question.trim()
+        if (q.isEmpty() || _state.value.assistantTyping) return
+        val userMsg = AssistantMessage(fromUser = true, text = q)
+        mutate { it.copy(assistantMessages = it.assistantMessages + userMsg, assistantTyping = true) }
+        viewModelScope.launch {
+            // A short beat so the reply feels like a considered answer rather than
+            // a canned string — the whole engine still runs locally and instantly.
+            delay(420)
+            val s = _state.value
+            val reply = Assistant.answer(q, assistantContext(), s.assistantVerbose)
+            mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
+        }
+    }
+
+    fun runAssistantAction(action: AssistantAction) {
+        when (action) {
+            AssistantAction.SCAN -> startScan()
+            AssistantAction.OPEN_APP_CACHE -> navigate(Screen.APP_CACHE)
+            AssistantAction.OPEN_RESULTS -> {
+                if (_state.value.report != null) navigate(Screen.RESULTS)
+                else mutate { it.copy(message = "Scan first and I'll show you the results here.") }
+            }
+            AssistantAction.OPEN_SETTINGS -> navigate(Screen.SETTINGS)
+            AssistantAction.NONE -> Unit
+        }
+    }
+
+    fun clearAssistant() {
+        val msg = Assistant.welcome(assistantContext(), _state.value.assistantVerbose)
+        mutate { it.copy(assistantMessages = listOf(msg), assistantTyping = false) }
+    }
+
+    private fun assistantContext(): AssistantContext {
+        val s = _state.value
+        return AssistantContext(
+            storage = s.storage,
+            report = s.report,
+            lastCleanBytes = s.lastClean?.freedBytes ?: 0L,
+            lastCleanItems = s.lastClean?.items ?: 0,
+            hasAllFilesAccess = s.hasAllFilesAccess,
+            usageAccess = s.usageAccess,
+            appCacheCount = s.appCaches.size,
+            totalAppCacheBytes = s.appCaches.sumOf { it.cacheBytes }.coerceAtLeast(0L),
+            topAppCache = s.appCaches.maxByOrNull { it.cacheBytes },
+        )
+    }
+
     // --------------------------------------------------------------- settings
+
+    fun setAssistantVerbose(v: Boolean) =
+        viewModelScope.launch { settingsRepo.setAssistantVerbose(v) }
 
     fun setSoundsEnabled(v: Boolean) =
         viewModelScope.launch { settingsRepo.setSoundsEnabled(v) }

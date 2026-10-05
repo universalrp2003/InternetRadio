@@ -96,6 +96,15 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
+                    title = "Detailed assistant answers",
+                    subtitle = "Off = the on-device assistant replies in one short line",
+                    checked = state.assistantVerbose,
+                    onCheckedChange = { vm.setAssistantVerbose(it) },
+                )
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                SettingSwitch(
                     title = "Scan hidden folders",
                     subtitle = "Look inside folders starting with “.” (more junk, slightly slower)",
                     checked = settings.includeHidden,

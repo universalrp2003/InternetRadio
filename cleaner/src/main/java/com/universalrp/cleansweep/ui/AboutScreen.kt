@@ -64,7 +64,7 @@ fun AboutScreen(vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        "CleanSweep v1.0",
+                        "CleanSweep v1.3",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,
@@ -74,7 +74,9 @@ fun AboutScreen(vm: MainViewModel) {
                         "A privacy-friendly junk & cache cleaner built for Redmi 13 5G and other " +
                             "Android 8+ phones running MIUI or HyperOS. It finds residual temp files, " +
                             "thumbnail caches, duplicate files, leftover APK installers, empty folders, " +
-                            "old downloads and large files — then removes only what you confirm.",
+                            "old downloads and large files — then removes only what you confirm.\n\n" +
+                            "New in 1.3: an on-device assistant that explains your storage and walks you " +
+                            "through cleaning — and the Accessibility service is gone for good.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )
@@ -95,10 +97,12 @@ fun AboutScreen(vm: MainViewModel) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         "• 100% offline — CleanSweep does not even ask for the INTERNET permission.\n" +
+                            "• No Accessibility service: v1.3 removed it, so CleanSweep cannot read " +
+                            "your screen or tap inside other apps.\n" +
+                            "• The assistant runs on this phone as a small rule engine — your questions " +
+                            "and file names never leave the device.\n" +
                             "• No ads, no analytics, no accounts.\n" +
-                            "• Files are only deleted after you select them and confirm.\n" +
-                            "• The Accessibility service is optional and only used to tap " +
-                            "“Clear cache” buttons for you; it never reads your content.",
+                            "• Files are only deleted after you select them and confirm.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )
@@ -116,11 +120,10 @@ fun AboutScreen(vm: MainViewModel) {
                     Text(
                         "• CleanSweep works on any Android 8+ phone (Redmi/MIUI/HyperOS, " +
                             "Samsung One UI, Pixel, OnePlus, Realme, Vivo…), not just Redmi.\n\n" +
-                            "• Because this APK is installed outside Google Play and uses an " +
-                            "Accessibility service, Play Protect shows a warning. That is Android's " +
-                            "standard caution for sideloaded cleaners — CleanSweep contains no " +
-                            "malware, ads or internet access. You can safely tap “Install anyway” " +
-                            "(or pause Play Protect during installation).\n\n" +
+                            "• This APK is installed outside Google Play, so Play Protect may show a " +
+                            "warning — Android's standard caution for sideloaded apps. CleanSweep " +
+                            "contains no malware, ads or internet access, and v1.3 no longer uses " +
+                            "Accessibility at all. You can safely tap “Install anyway”.\n\n" +
                             "• Builds are signed with one fixed key, so newer APKs install as an " +
                             "update. If an install ever says “app not installed”, uninstall the " +
                             "older copy first (needed once when moving from v1.1 or older).",
@@ -140,9 +143,10 @@ fun AboutScreen(vm: MainViewModel) {
                     Spacer(Modifier.height(6.dp))
                     Text(
                         "Modern Android is built to protect you:\n\n" +
-                            "• Other apps' caches can't be wiped silently — that's why CleanSweep " +
-                            "either automates the official Settings buttons via Accessibility or guides " +
-                            "you through them.\n\n" +
+                            "• Other apps' caches can't be wiped silently — no app can do that without " +
+                            "root, and CleanSweep refuses to fake it with Accessibility. Instead it " +
+                            "opens each app's storage page and you tap “Clear cache” (two taps per app, " +
+                            "with a “Next app” button so you never lose your place).\n\n" +
                             "• The Android/data and Android/obb folders are locked by the system, even " +
                             "for cleaners. Redmi's built-in Security app can reach some of them.\n\n" +
                             "• Nothing is ever “RAM boosted” or “cooled down” — apps that claim that are " +
@@ -165,7 +169,9 @@ fun AboutScreen(vm: MainViewModel) {
                         "1. Tap “Scan & clean junk” and review what's selected.\n" +
                             "2. Check Large files and Old downloads — unselect anything you want to keep.\n" +
                             "3. Clean, then scan once more to sweep the folders left empty.\n" +
-                            "4. Open App cache cleaner once a week for apps like Instagram, YouTube or WhatsApp.",
+                            "4. Open App cache cleaner once a week for apps like Instagram, YouTube or WhatsApp.\n" +
+                            "5. Stuck on something? Ask the on-device assistant — it answers from your " +
+                            "real numbers, offline.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )

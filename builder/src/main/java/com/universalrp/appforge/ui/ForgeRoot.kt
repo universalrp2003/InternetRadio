@@ -1,4 +1,4 @@
-package com.universalrp.cleansweep.ui
+package com.universalrp.appforge.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -15,14 +15,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.universalrp.cleansweep.MainViewModel
-import com.universalrp.cleansweep.Screen
-import com.universalrp.cleansweep.ui.theme.Bg
-import com.universalrp.cleansweep.ui.theme.SurfaceHigh
-import com.universalrp.cleansweep.ui.theme.TextPrimary
+import com.universalrp.appforge.BScreen
+import com.universalrp.appforge.BuilderViewModel
 
 @Composable
-fun AppRoot(vm: MainViewModel) {
+fun ForgeRoot(vm: BuilderViewModel) {
     val state by vm.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -40,13 +37,11 @@ fun AppRoot(vm: MainViewModel) {
             .background(Bg)
     ) {
         when (state.screen) {
-            Screen.HOME -> HomeScreen(state, vm)
-            Screen.SCANNING -> ScanScreen(state, vm)
-            Screen.RESULTS -> ResultsScreen(state, vm)
-            Screen.APP_CACHE -> AppCacheScreen(state, vm)
-            Screen.ASSISTANT -> AssistantScreen(state, vm)
-            Screen.SETTINGS -> SettingsScreen(state, vm)
-            Screen.ABOUT -> AboutScreen(vm)
+            BScreen.HOME -> ForgeHomeScreen(state, vm)
+            BScreen.EDITOR -> EditorScreen(state, vm)
+            BScreen.PREVIEW -> PreviewScreen(state, vm)
+            BScreen.EXPORT -> ExportScreen(state, vm)
+            BScreen.ABOUT -> ForgeAboutScreen(vm)
         }
 
         SnackbarHost(
@@ -61,5 +56,9 @@ fun AppRoot(vm: MainViewModel) {
                 contentColor = TextPrimary,
             )
         }
+    }
+
+    if (state.showTemplates) {
+        TemplatePickerDialog(vm)
     }
 }

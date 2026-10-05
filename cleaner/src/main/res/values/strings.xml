@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CleanSweep</string>
-    <string name="accessibility_service_description">CleanSweep uses this service only when you tap “Auto clean app cache”. It opens each selected app’s settings page and taps “Storage” and “Clear cache” for you, because Android does not allow apps to clear other apps’ caches directly. Nothing is read, collected or sent anywhere — everything stays on your device.</string>
+    <!-- v1.3: no accessibility service description needed; CleanSweep declares no accessibility service. -->
 </resources>

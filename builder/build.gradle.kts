@@ -1,24 +1,23 @@
-// CleanSweep - junk & cache cleaner app module.
+// AppForge - offline app builder module (:builder).
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-// CI generates this keystore once and commits it, so every build is signed with
-// the SAME key -> new APKs install as updates over older ones.
+// Same stable CI keystore as the other modules, so every APK keeps one signature.
 val stableKeystore = rootProject.file("ci-keystore/release.p12")
 
 android {
-    namespace = "com.universalrp.cleansweep"
+    namespace = "com.universalrp.appforge"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.universalrp.cleansweep"
+        applicationId = "com.universalrp.appforge"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 1
+        versionName = "1.0"
     }
 
     signingConfigs {
@@ -69,6 +68,4 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
-
-    implementation("androidx.datastore:datastore-preferences:1.1.7")
 }

@@ -29,6 +29,7 @@ class SettingsRepo(context: Context) {
 
     private object Keys {
         val SOUNDS = booleanPreferencesKey("sounds_enabled")
+        val ASSISTANT_VERBOSE = booleanPreferencesKey("assistant_verbose")
         val INCLUDE_HIDDEN = booleanPreferencesKey("include_hidden")
         val DUP_MIN_KB = intPreferencesKey("dup_min_kb")
         val LARGE_MB = intPreferencesKey("large_mb")
@@ -43,6 +44,13 @@ class SettingsRepo(context: Context) {
 
     suspend fun setSoundsEnabled(value: Boolean) =
         store.edit { it[Keys.SOUNDS] = value }
+
+    val assistantVerbose: Flow<Boolean> = store.data.map { p ->
+        p[Keys.ASSISTANT_VERBOSE] ?: true
+    }
+
+    suspend fun setAssistantVerbose(value: Boolean) =
+        store.edit { it[Keys.ASSISTANT_VERBOSE] = value }
 
     val scanSettings: Flow<ScanSettings> = store.data.map { p ->
         ScanSettings(
