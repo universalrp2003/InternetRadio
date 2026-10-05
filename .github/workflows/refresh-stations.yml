@@ -1,4 +1,4 @@
-# Refreshes the station seed list that ships inside the Tamilnadu FM Radio APK.
+# Refreshes the station seed list that ships inside the Ramesh Radio APK.
 #
 # The directory (radio-browser.info) is community maintained, so stream URLs come
 # and go. This workflow re-reads it and commits the result — monthly, or whenever

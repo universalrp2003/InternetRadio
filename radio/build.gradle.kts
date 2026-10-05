@@ -1,4 +1,4 @@
-// Tamilnadu FM Radio - online Tamil FM + world news + local audio + 10-band EQ.
+// Ramesh Radio (Tamilnadu FM Radio) - online Tamil FM + world news + local audio + 10-band EQ.
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -17,7 +17,7 @@ android {
         minSdk = 26
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.1"
     }
 
     signingConfigs {

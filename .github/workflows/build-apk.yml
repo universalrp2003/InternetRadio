@@ -3,7 +3,7 @@
 # - CleanSweep junk cleaner + on-device assistant (:cleaner)
 # - AppForge offline app builder (:builder)
 # - PulseEQ 20-band equalizer (:equalizer)
-# - Tamilnadu FM Radio — Tamil FM + world news + local audio + 10-band EQ (:radio)
+# - Ramesh Radio (Tamilnadu FM Radio) — Tamil FM + world news + local audio + 10-band EQ (:radio)
 name: Build APK
 
 on:
@@ -177,12 +177,12 @@ jobs:
             fi
           done
 
-          echo "=== Tamilnadu FM Radio checks ==="
+          echo "=== Ramesh Radio checks ==="
           if [ -n "$MERGED_RADIO" ]; then
             if grep -q "android.permission.INTERNET" "$MERGED_RADIO"; then
               echo "OK: INTERNET permission present (streaming)"
             else
-              echo "FAIL: Tamilnadu FM Radio cannot stream without INTERNET"
+              echo "FAIL: Ramesh Radio cannot stream without INTERNET"
               exit 1
             fi
             if grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$MERGED_RADIO"; then
@@ -204,7 +204,7 @@ jobs:
               exit 1
             fi
             if grep -qi "accessibilityservice" "$MERGED_RADIO"; then
-              echo "FAIL: Tamilnadu FM Radio must not declare an Accessibility service"
+              echo "FAIL: Ramesh Radio must not declare an Accessibility service"
               exit 1
             fi
             echo "OK: no Accessibility service"
@@ -231,7 +231,7 @@ jobs:
 
           for symbol in PlaybackService AudioFx EqPresets StationRepository MainViewModel DirectoryClient RadioWidgetProvider; do
             if grep -aq "$symbol" "$WORK/radio.dex"; then
-              echo "OK: $symbol is in the Tamilnadu FM Radio APK"
+              echo "OK: $symbol is in the Ramesh Radio APK"
             else
               echo "FAIL: $symbol is missing from the radio APK"
               exit 1
@@ -338,8 +338,8 @@ jobs:
           name: pulseeq-apk
           path: equalizer/build/outputs/apk/debug/*.apk
 
-      - name: Upload Tamilnadu FM Radio APK
+      - name: Upload Ramesh Radio APK
         uses: actions/upload-artifact@v4
         with:
-          name: tamilnadu-fm-radio-apk
+          name: ramesh-radio-apk
           path: radio/build/outputs/apk/debug/*.apk

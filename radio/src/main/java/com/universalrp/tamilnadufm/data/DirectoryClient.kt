@@ -74,7 +74,7 @@ object DirectoryClient {
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             connectTimeout = 12_000
             readTimeout = 20_000
-            setRequestProperty("User-Agent", "TamilnaduFMRadio/1.0 (Android)")
+            setRequestProperty("User-Agent", "RameshRadio/1.1 (Android)")
             setRequestProperty("Accept", "application/json")
         }
         try {

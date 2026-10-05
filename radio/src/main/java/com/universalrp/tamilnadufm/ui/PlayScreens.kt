@@ -769,13 +769,13 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        "Tamilnadu FM Radio",
+                        "Ramesh Radio",
                         style = MaterialTheme.typography.titleLarge,
                         color = Saffron,
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Version 1.0 • Tamil FM, world news and a 10-band equalizer",
+                        "Version 1.1 • Tamil FM, world news, home-screen widget and a 10-band equalizer",
                         style = MaterialTheme.typography.labelMedium,
                         color = TextSecondary,
                     )

@@ -62,7 +62,7 @@ class RadioWidgetProvider : AppWidgetProvider() {
             val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             val name = prefs.getString(KEY_NAME, null)
                 ?: prefs.getString("last_name", null)
-                ?: "Tamilnadu FM Radio"
+                ?: "Ramesh Radio"
             val playing = prefs.getBoolean(KEY_PLAYING, false)
 
             val views = RemoteViews(context.packageName, R.layout.widget_radio)

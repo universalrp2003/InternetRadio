@@ -112,6 +112,37 @@ object Category {
     const val RECENT = "recent"
     const val LOCAL = "local"
 
+    /** UI-only filter: stations that carry a Tamil Nadu town or city in their name. */
+    const val TOWNS = "towns"
+
+    /** Town / city names used by the [TOWNS] filter and by search suggestions. */
+    val TOWN_WORDS = listOf(
+        "kovai", "coimbatore", "madurai", "trichy", "tiruchirappalli", "salem", "erode",
+        "vellore", "dharmapuri", "puducherry", "pondicherry", "pondy", "ooty",
+        "udhagamandalam", "kodaikanal", "nagercoil", "kanyakumari", "tirunelveli",
+        "tuticorin", "thoothukudi", "thanjavur", "dindigul", "karur", "pollachi",
+        "tirupur", "tiruppur", "hosur", "cuddalore", "namakkal", "villupuram", "chennai",
+        "chengalpattu", "kanchipuram", "ranipet", "ramanathapuram", "theni", "tenkasi",
+        "virudhunagar", "krishnagiri", "ariyalur", "perambalur", "nagapattinam",
+        "mayiladuthurai", "tiruvannamalai", "tiruvarur", "kallakurichi", "pudukkottai",
+        "pudukottai", "sivaganga", "nilgiris", "palani", "tiruvallur", "tambaram",
+    )
+
+    /**
+     * True when a station is a Tamil station that names a Tamil Nadu town or city, so
+     * the towns chip shows local FM (AIR Madurai, Puducherry, Kodaikanal, Pollachi …)
+     * instead of foreign stations that happen to share a name.
+     */
+    fun isTamilTown(station: RadioStation): Boolean {
+        val tamil = station.language.lowercase().contains("tamil") ||
+            station.category == TAMIL || station.category == TAMIL_FM ||
+            station.category == TAMIL_NEWS || station.category == TAMIL_DEVOTIONAL
+        if (!tamil) return false
+        val text = listOf(station.name, station.tags, station.state, station.homepage)
+            .joinToString(" ").lowercase()
+        return TOWN_WORDS.any { text.contains(it) }
+    }
+
     fun isNews(id: String): Boolean =
         id == TAMIL_NEWS || id == WORLD_NEWS || id == INDIA_NEWS
 
@@ -121,6 +152,7 @@ object Category {
         FAVOURITES -> "Favourites"
         CUSTOM -> "My stations"
         RECENT -> "Recent"
+        TOWNS -> "TN towns"
         TAMIL -> "Tamil FM"
         TAMIL_FM -> "Tamil worldwide"
         TAMIL_NEWS -> "Tamil news"

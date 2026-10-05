@@ -231,6 +231,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Category.FAVOURITES -> s.favourites.contains(station.url.lowercase())
                 Category.CUSTOM -> station.isCustom
                 Category.RECENT -> repo.recent().contains(station.url.lowercase())
+                Category.TOWNS -> Category.isTamilTown(station)
                 Category.TAMIL -> station.language.lowercase().contains("tamil") ||
                     station.category == Category.TAMIL ||
                     station.category == Category.TAMIL_FM ||
@@ -383,7 +384,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 MediaMetadata.Builder()
                     .setTitle(station.name)
                     .setArtist(
-                        listOf(station.subtitle, "Tamilnadu FM Radio")
+                        listOf(station.subtitle, "Ramesh Radio")
                             .firstOrNull { it.isNotBlank() }
                     )
                     .setArtworkUri(station.favicon.takeIf { it.startsWith("http") }?.let { Uri.parse(it) })
@@ -533,7 +534,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 putExtra(Intent.EXTRA_SUBJECT, station.name)
                 putExtra(
                     Intent.EXTRA_TEXT,
-                    "${station.name}\n${station.url}\n\nShared from Tamilnadu FM Radio",
+                    "${station.name}\n${station.url}\n\nShared from Ramesh Radio",
                 )
             }
             ctx.startActivity(
@@ -551,13 +552,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Plain-text share of the app itself (no link needed — it is sideloaded). */
     fun shareApp() {
-        val text = "Tamilnadu FM Radio — Tamil FM stations, Tamil and world news radio, " +
+        val text = "Ramesh Radio — Tamil FM stations, Tamil and world news radio, " +
             "a local file player and a 10-band equalizer with Clear sound. " +
             "Built by Ramesh prathap .R."
         try {
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "Tamilnadu FM Radio")
+                putExtra(Intent.EXTRA_SUBJECT, "Ramesh Radio")
                 putExtra(Intent.EXTRA_TEXT, text)
             }
             ctx.startActivity(

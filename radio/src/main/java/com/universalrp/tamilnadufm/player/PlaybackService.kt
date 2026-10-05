@@ -115,7 +115,7 @@ class PlaybackService : MediaSessionService() {
     private fun resumeLastStation(player: ExoPlayer) {
         val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
         val url = prefs.getString("last_url", null) ?: return
-        val name = prefs.getString("last_name", null) ?: "Tamilnadu FM Radio"
+        val name = prefs.getString("last_name", null) ?: "Ramesh Radio"
         val favicon = prefs.getString("last_favicon", null)
         player.setMediaItem(
             MediaItem.Builder()
@@ -124,7 +124,7 @@ class PlaybackService : MediaSessionService() {
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(name)
-                        .setArtist("Tamilnadu FM Radio")
+                        .setArtist("Ramesh Radio")
                         .setArtworkUri(
                             favicon?.takeIf { it.startsWith("http") }?.let { android.net.Uri.parse(it) }
                         )
@@ -140,7 +140,7 @@ class PlaybackService : MediaSessionService() {
         val exo = player ?: return
         val title = exo.currentMediaItem?.mediaMetadata?.title?.toString()
             ?: exo.currentMediaItem?.mediaId
-            ?: "Tamilnadu FM Radio"
+            ?: "Ramesh Radio"
         RadioWidgetProvider.rememberState(this, title, exo.isPlaying)
         RadioWidgetProvider.refresh(this)
     }

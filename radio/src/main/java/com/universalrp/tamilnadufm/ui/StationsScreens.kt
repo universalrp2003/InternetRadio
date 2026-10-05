@@ -59,10 +59,10 @@ fun RadioScreen(vm: MainViewModel, state: UiState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Column(Modifier.padding(top = 16.dp)) {
+            Column(Modifier.padding(top = 10.dp)) {
                 Text(
-                    "Tamilnadu FM Radio",
-                    style = MaterialTheme.typography.headlineSmall,
+                    "Ramesh Radio",
+                    style = MaterialTheme.typography.titleLarge,
                     color = Saffron,
                     fontWeight = FontWeight.Bold,
                 )
@@ -85,6 +85,7 @@ fun RadioScreen(vm: MainViewModel, state: UiState) {
                     Category.ALL,
                     Category.FAVOURITES,
                     Category.RECENT,
+                    Category.TOWNS,
                     Category.TAMIL,
                     Category.TAMIL_FM,
                     Category.TAMIL_DEVOTIONAL,

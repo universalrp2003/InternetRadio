@@ -9,12 +9,15 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -72,6 +75,10 @@ fun AppRoot(vm: MainViewModel, controller: MediaController?) {
         Modifier
             .fillMaxSize()
             .background(Bg)
+            // Android 15+ draws apps edge to edge. Without this the title sat under the
+            // status bar and the tab bar was covered by the 3-button navigation, which
+            // made the tabs impossible to tap.
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         Box(Modifier.weight(1f)) {
             when (state.tab) {
@@ -261,7 +268,7 @@ private fun TransportBar(
 @Composable
 private fun BottomNav(current: Tab, onSelect: (Tab) -> Unit) {
     Surface(color = SurfaceHigh, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+        Row(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
             NavItem("Radio", Icons.Filled.Radio, current == Tab.RADIO) { onSelect(Tab.RADIO) }
             NavItem("News", Icons.Filled.Newspaper, current == Tab.NEWS) { onSelect(Tab.NEWS) }
             NavItem("Local", Icons.Filled.LibraryMusic, current == Tab.LOCAL) { onSelect(Tab.LOCAL) }
@@ -277,21 +284,22 @@ private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean
         Modifier
             .weight(1f)
             .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
+            .padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Icon(
             icon,
             contentDescription = label,
             tint = if (selected) Saffron else TextSecondary,
-            modifier = Modifier.size(22.dp),
+            modifier = Modifier.size(24.dp),
         )
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             label,
             style = MaterialTheme.typography.labelSmall,
             color = if (selected) Saffron else TextSecondary,
             fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
         )
     }
 }

@@ -1,10 +1,12 @@
-# Tamilnadu FM Radio v1.0
+# Ramesh Radio v1.1
 
-Tamil FM, world news and a 10-band equalizer in one app — built by **Ramesh prathap .R**.
+Tamil FM, world news, a **home-screen widget** and a 10-band equalizer in one app — built by **Ramesh prathap .R**.
+
+*(The app was called **Tamilnadu FM Radio** in v1.0; it is the same app, renamed.)*
 
 Module `:radio` • package `com.universalrp.tamilnadufm` • Android 8.0+ (API 26) • sideloaded APK
 
-Get the APK from **Actions → Build APK → the `tamilnadu-fm-radio-apk` artifact** on the branch that
+Get the APK from **Actions → Build APK → the `ramesh-radio-apk` artifact** on the branch that
 built it. Unsigned-by-Play: install it over an older copy of itself (same CI keystore as the other
 apps in this repo), or uninstall the old one first if you installed a differently signed copy.
 
@@ -12,7 +14,7 @@ apps in this repo), or uninstall the old one first if you installed a differentl
 
 | Screen | What is there |
 |---|---|
-| **Radio** | Tamil FM stations from Tamil Nadu, Sri Lanka, Malaysia, Singapore, the UAE, UK, USA, Canada, Australia and South Africa. Search box (name, city, language), category chips, star favourites, "Continue listening", and a **Live directory** search that talks to the open Radio-Browser directory from your phone. |
+| **Radio** | Tamil FM stations from Tamil Nadu, Sri Lanka, Malaysia, Singapore, the UAE, UK, USA, Canada, Australia and South Africa. Search box (name, city, language), category chips — including a **"TN towns"** chip that lists Tamil Nadu town and city stations (Madurai, Puducherry, Kodaikanal, Coimbatore, Tiruchirappalli, Erode, Karur, Pollachi, Nagercoil, Tirunelveli …), star favourites, "Continue listening", and a **Live directory** search that talks to the open Radio-Browser directory from your phone. |
 | **News** | Tamil news, Indian news and world news in English, with one-tap live directory searches for more. |
 | **Local** | Plays audio files already on the phone (MediaStore scan with permission, or a single file through the system picker) through the same equalizer. |
 | **EQ** | A real **10-band equalizer: 31, 62, 125, 250, 500 Hz, 1, 2, 4, 8, 16 kHz**, ±12 dB per band, 16 presets (Tamil FM, Old songs, Music, Movies, Speech/News, Podcast, Vocal, Bass boost, Treble boost, Devotional, Rock, Pop, Jazz/Classical, Dance, Night, Flat), quick-curve chips, preamp with automatic anti-clipping, and the **Clear sound** section. |

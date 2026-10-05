@@ -159,7 +159,7 @@ fun StationLogo(station: RadioStation, size: Dp = 48.dp, modifier: Modifier = Mo
                 val connection = (URL(url).openConnection() as HttpURLConnection).apply {
                     connectTimeout = 8_000
                     readTimeout = 8_000
-                    setRequestProperty("User-Agent", "TamilnaduFMRadio/1.0")
+                    setRequestProperty("User-Agent", "RameshRadio/1.1")
                 }
                 connection.inputStream.use { stream ->
                     BitmapFactory.decodeStream(stream)?.also { bitmap ->
