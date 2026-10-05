@@ -280,7 +280,17 @@ jobs:
             echo "Nothing new to publish."
           else
             git commit -m "CI: publish build failure excerpt"
-            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "Could not push the report."
+            # Another workflow (the station refresh) may have pushed to this
+            # branch while the build was running, so rebase before pushing.
+            for attempt in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                echo "Report pushed."
+                break
+              fi
+              echo "Push attempt $attempt failed; retrying…"
+              sleep 6
+            done
           fi
 
       - name: Upload build log on failure

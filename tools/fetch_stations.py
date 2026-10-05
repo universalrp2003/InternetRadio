@@ -20,6 +20,7 @@ Run by .github/workflows/refresh-stations.yml (manual, on changes, monthly), or:
     python3 tools/fetch_stations.py radio/src/main/assets/stations_seed.json
 """
 
+import http.client
 import json
 import os
 import re
@@ -49,21 +50,84 @@ UA = "TamilnaduFMRadio/1.2 (+https://github.com/universalrp2003/InternetRadio)"
 # thin and a station that answered last month is better than an empty screen -
 # the app marks those rows as unchecked.
 QUERIES = [
-    ("tamil", {"language": "tamil", "order": "votes", "reverse": "true"}, 130, True),
-    ("tamil", {"tagList": "tamil", "order": "votes", "reverse": "true"}, 70, True),
-    ("tamil", {"countrycode": "IN", "language": "tamil", "order": "votes", "reverse": "true"}, 50, False),
-    ("tamil_devotional", {"language": "tamil", "tagList": "bhakti,devotional,temple", "order": "votes", "reverse": "true"}, 30, False),
-    ("tamil_news", {"language": "tamil", "tagList": "news,talk", "order": "votes", "reverse": "true"}, 25, False),
-    ("tamil_fm", {"countrycode": "LK", "order": "votes", "reverse": "true"}, 60, False),
-    ("tamil_fm", {"countrycode": "MY", "order": "votes", "reverse": "true"}, 40, False),
-    ("tamil_fm", {"countrycode": "SG", "order": "votes", "reverse": "true"}, 20, False),
-    ("world_news", {"tagList": "news", "language": "english", "order": "votes", "reverse": "true"}, 60, False),
-    ("world_news", {"tagList": "news", "countrycode": "US", "order": "votes", "reverse": "true"}, 25, False),
-    ("world_news", {"tagList": "news", "countrycode": "GB", "order": "votes", "reverse": "true"}, 20, False),
-    ("world_news", {"tagList": "news", "countrycode": "AU", "order": "votes", "reverse": "true"}, 15, False),
-    ("world_news", {"tagList": "news", "countrycode": "CA", "order": "votes", "reverse": "true"}, 15, False),
-    ("india_news", {"countrycode": "IN", "tagList": "news", "order": "votes", "reverse": "true"}, 30, False),
-    ("english", {"language": "english", "order": "votes", "reverse": "true"}, 110, False),
+    # --- Tamil music, the heart of the app
+    ({"category": "tamil", "params": {"language": "tamil", "order": "votes", "reverse": "true"}, "limit": 130, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"tagList": "tamil", "order": "votes", "reverse": "true"}, "limit": 60, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"countrycode": "IN", "language": "tamil", "order": "votes", "reverse": "true"}, "limit": 50}),
+    # --- The stations people actually ask for by name
+    ({"category": "tamil", "params": {"name": "hello fm"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "suryan"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "suryan fm"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "radio mirchi"}, "limit": 20}),
+    ({"category": "tamil", "params": {"name": "mirchi tamil"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "radio city"}, "limit": 20}),
+    ({"category": "tamil", "params": {"name": "big fm"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "fm rainbow"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "vividh bharti"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "ilayaraja"}, "limit": 20}),
+    ({"category": "tamil", "params": {"name": "spb"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "a r rahman"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "tamil 80"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "tamil 90"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "old tamil"}, "limit": 15}),
+    ({"category": "tamil", "params": {"name": "kovai"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "madurai"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "trichy"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "tiruchirappalli"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "dharmapuri"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "pondy"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "pondicherry"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "salem"}, "limit": 12}),
+    ({"category": "tamil", "params": {"name": "tirunelveli"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "thoothukudi"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "ooty"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "kodaikanal"}, "limit": 10}),
+    ({"category": "tamil", "params": {"name": "vanniyar"}, "limit": 8}),
+    ({"category": "tamil", "params": {"name": "tamil fm"}, "limit": 25}),
+    ({"category": "tamil", "params": {"name": "tamil radio"}, "limit": 25}),
+    # --- Tamil worldwide (Sri Lanka / Malaysia / Singapore / diaspora).
+    # For these the name itself is proof enough that the station is Tamil.
+    ({"category": "tamil_fm", "params": {"countrycode": "LK", "order": "votes", "reverse": "true"}, "limit": 40}),
+    ({"category": "tamil_fm", "params": {"countrycode": "MY", "order": "votes", "reverse": "true"}, "limit": 30}),
+    ({"category": "tamil_fm", "params": {"countrycode": "SG", "order": "votes", "reverse": "true"}, "limit": 15}),
+    ({"category": "tamil_fm", "params": {"name": "shakthi"}, "limit": 12}),
+    ({"category": "tamil_fm", "params": {"name": "sooriyan"}, "limit": 12}),
+    ({"category": "tamil_fm", "params": {"name": "minnal"}, "limit": 12}),
+    ({"category": "tamil_fm", "params": {"name": "raaga"}, "limit": 15}),
+    ({"category": "tamil_fm", "params": {"name": "varnam"}, "limit": 10}),
+    ({"category": "tamil_fm", "params": {"name": "yarl"}, "limit": 10}),
+    ({"category": "tamil_fm", "params": {"name": "lankasri"}, "limit": 10}),
+    ({"category": "tamil_fm", "params": {"name": "oli"}, "limit": 10}),
+    ({"category": "tamil_fm", "params": {"name": "malaysia tamil"}, "limit": 15}),
+    ({"category": "tamil_fm", "params": {"name": "jaffna"}, "limit": 12}),
+    ({"category": "tamil_fm", "params": {"name": "eelam"}, "limit": 12}),
+    # --- Tamil news: the directory is thin here, so try both tags and names
+    ({"category": "tamil_news", "params": {"language": "tamil", "tagList": "news"}, "limit": 25}),
+    ({"category": "tamil_news", "params": {"name": "tamil news"}, "limit": 20}),
+    ({"category": "tamil_news", "params": {"name": "kalaignar"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "puthiya thalaimurai"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "thanthi"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "sun news"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "news7"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "polimer"}, "limit": 10}),
+    ({"category": "tamil_news", "params": {"name": "seithi"}, "limit": 10}),
+    # --- Devotional
+    ({"category": "tamil_devotional", "params": {"language": "tamil", "tagList": "devotional"}, "limit": 25}),
+    ({"category": "tamil_devotional", "params": {"language": "tamil", "tagList": "bhakti"}, "limit": 20}),
+    ({"category": "tamil_devotional", "params": {"name": "bakthi"}, "limit": 12}),
+    ({"category": "tamil_devotional", "params": {"name": "murugan"}, "limit": 10}),
+    # --- World + India news in English
+    ({"category": "world_news", "params": {"tagList": "news", "language": "english", "order": "votes", "reverse": "true"}, "limit": 60}),
+    ({"category": "world_news", "params": {"tagList": "news", "countrycode": "US", "order": "votes", "reverse": "true"}, "limit": 25}),
+    ({"category": "world_news", "params": {"tagList": "news", "countrycode": "GB", "order": "votes", "reverse": "true"}, "limit": 20}),
+    ({"category": "world_news", "params": {"tagList": "news", "countrycode": "AU", "order": "votes", "reverse": "true"}, "limit": 15}),
+    ({"category": "world_news", "params": {"tagList": "news", "countrycode": "CA", "order": "votes", "reverse": "true"}, "limit": 15}),
+    ({"category": "world_news", "params": {"tagList": "news", "countrycode": "IE", "order": "votes", "reverse": "true"}, "limit": 10}),
+    ({"category": "india_news", "params": {"countrycode": "IN", "tagList": "news", "order": "votes", "reverse": "true"}, "limit": 30}),
+    ({"category": "india_news", "params": {"name": "air news"}, "limit": 15}),
+    ({"category": "india_news", "params": {"name": "newsonair"}, "limit": 10}),
+    # --- General English listening
+    ({"category": "english", "params": {"language": "english", "order": "votes", "reverse": "true"}, "limit": 110}),
 ]
 
 KEEP_CODECS = ("mp3", "aac", "aac+", "ogg", "opus", "mp4a", "hls", "m3u8", "")
@@ -100,7 +164,55 @@ def fetch(query, retries=2):
     return []
 
 
-def probe(url, timeout=12):
+def _one_probe(url, timeout, ranged):
+    headers = {"User-Agent": UA, "Icy-MetaData": "1", "Accept": "*/*"}
+    if ranged:
+        headers["Range"] = "bytes=0-4095"
+    request = urllib.request.Request(url, headers=headers)
+    context = ssl.create_default_context()
+    context.check_hostname = False
+    context.verify_mode = ssl.CERT_NONE
+    try:
+        with urllib.request.urlopen(request, timeout=timeout, context=context) as response:
+            status = getattr(response, "status", 200) or 200
+            content_type = (response.headers.get("Content-Type") or "").lower()
+            head = response.read(2048)
+    except http.client.BadStatusLine as line:
+        # Shoutcast v1 servers answer with "ICY 200 OK" instead of an HTTP status
+        # line; that is a live stream, not an error.
+        if "200" in str(getattr(line, "line", "")):
+            return True, "icy"
+        raise
+    if status >= 400:
+        return False, f"http {status}"
+    if not head:
+        return False, "empty response"
+    if head.startswith(b"#EXTM3U"):
+        return True, "hls playlist"
+    if head.startswith(b"ID3"):
+        return True, "mp3/id3"
+    if len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0:
+        return True, "aac/mp3 frame"
+    if head.startswith(b"OggS"):
+        return True, "ogg"
+    for token in ("audio", "mpegurl", "ogg", "mp3", "aac", "octet-stream", "mpeg"):
+        if token in content_type:
+            return True, content_type
+    return False, f"not audio (content-type={content_type or 'none'})"
+
+
+def probe(url, timeout=15):
+    """Two attempts: a ranged GET, then a plain GET (some servers dislike Range)."""
+    first_error = None
+    for ranged in (True, False):
+        try:
+            return _one_probe(url, timeout, ranged)
+        except Exception as error:  # noqa: BLE001
+            first_error = f"{type(error).__name__}: {error}"
+    return False, first_error or "unreachable"
+
+
+def _unused_probe_original(url, timeout=12):
     """
     Cheap liveness check: ask for the first few kB only and look at what comes
     back. Icecast/Shoutcast answer with an audio content type, HLS with an
@@ -159,7 +271,7 @@ def looks_non_latin(name):
     return foreign / len(letters) > 0.3
 
 
-def usable(row, category, keep_unverified):
+def usable(row, category, keep_unverified, trust_tamil=False):
     last_check = row.get("lastcheckok")
     if last_check != 1 and not keep_unverified:
         return False, "unchecked"
@@ -174,7 +286,7 @@ def usable(row, category, keep_unverified):
         return False, "name"
 
     if category.startswith("tamil"):
-        if not tamil_evidence(row):
+        if not trust_tamil and not tamil_evidence(row):
             return False, "not-tamil"
     if category == "english":
         language = (row.get("language") or "").lower()
@@ -183,6 +295,10 @@ def usable(row, category, keep_unverified):
             return False, "not-english"
         if looks_non_latin(name):
             return False, "non-latin-name"
+        letters = [c for c in name if c.isalpha()]
+        latin = sum(1 for c in letters if c.isascii())
+        if letters and latin / len(letters) < 0.6:
+            return False, "not-latin-name"
     if category in ("world_news", "india_news"):
         language = (row.get("language") or "").lower()
         if language and "english" not in language and category == "world_news":
@@ -279,15 +395,27 @@ def main():
     print(f"   {curated_ok}/{len(curated)} curated streams answered")
 
     # -------------------------------------------------------------- directory
-    for category, query, limit, keep_unverified in QUERIES:
-        print(f"-> {category}: {query}")
-        rows = fetch(query)
+    for query in QUERIES:
+        category = query["category"]
+        params = query["params"]
+        limit = query["limit"]
+        keep_unverified = bool(query.get("keep_unverified", False))
+        # A "name=..." search for a specific station implies language.
+        trust_tamil = "name" in params and any(
+            token in params["name"]
+            for token in ("tamil", "shakthi", "sooriyan", "minnal", "raaga", "varnam", "yarl",
+                          "lankasri", "oli", "jaffna", "eelam", "malaysia", "kovai", "madurai",
+                          "pondy", "pondicherry", "seithi", "murugan", "bakthi", "kalaignar",
+                          "puthiya", "thanthi", "polimer", "news7")
+        )
+        print(f"-> {category}: {params}")
+        rows = fetch(params)
         kept = 0
         rejected = {}
         for row in rows:
             if kept >= limit:
                 break
-            ok, reason = usable(row, category, keep_unverified)
+            ok, reason = usable(row, category, keep_unverified, trust_tamil)
             if not ok:
                 rejected[reason] = rejected.get(reason, 0) + 1
                 continue
@@ -304,9 +432,9 @@ def main():
             counts[final_category] = counts.get(final_category, 0) + 1
             kept += 1
         print(f"   kept {kept} of {len(rows)} (rejected: {rejected})")
-        debug.append({"stage": "directory", "category": category, "query": query,
+        debug.append({"stage": "directory", "category": category, "query": params,
                       "returned": len(rows), "kept": kept, "rejected": rejected})
-        time.sleep(1)
+        time.sleep(0.6)
 
     # ------------------------------------------------------------------ order
     category_order = {
