@@ -56,5 +56,15 @@ jobs:
             echo "Station list is already up to date."
           else
             git commit -m "Refresh station list from the directory"
-            git push origin "HEAD:${GITHUB_REF_NAME}"
+            # A build run may be pushing a failure report to the same branch at the
+            # same time, so rebase onto whatever is there and retry the push.
+            for attempt in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                echo "Station list pushed."
+                break
+              fi
+              echo "Push attempt $attempt failed; retrying…"
+              sleep 6
+            done
           fi

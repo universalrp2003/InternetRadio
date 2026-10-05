@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -271,7 +272,7 @@ private fun BottomNav(current: Tab, onSelect: (Tab) -> Unit) {
 }
 
 @Composable
-private fun NavItem(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
+private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean, onClick: () -> Unit) {
     Column(
         Modifier
             .weight(1f)

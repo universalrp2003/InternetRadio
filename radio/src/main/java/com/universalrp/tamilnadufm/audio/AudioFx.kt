@@ -1,16 +1,15 @@
 package com.universalrp.tamilnadufm.audio
 
 import android.content.Context
-import androidx.annotation.RequiresApi
 import android.media.audiofx.BassBoost
 import android.media.audiofx.DynamicsProcessing
 import android.media.audiofx.Equalizer
 import android.media.audiofx.LoudnessEnhancer
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import kotlin.math.abs
 import kotlin.math.ln
-import kotlin.math.pow
 
 /**
  * Everything that makes the sound better, attached to **our own** playback.
@@ -18,16 +17,17 @@ import kotlin.math.pow
  * CleanSound works on the 10-band EQ and then layers the extras:
  *
  *  - **Rumble cut** rolls off the sub-bass that FM compression and phone speakers
- *    turn into mush (and that studio mics pick up from traffic and footsteps).
+ *    turn into mush (and that microphones pick up from traffic, wind and footsteps).
  *  - **Hiss cut** trims the top octave that low-bitrate streams fill with hiss.
  *  - **Clear sound** adds gentle multiband compression plus a limiter, so quiet
  *    parts stay audible and loud parts (ads, jingles) stop distorting.
  *  - **Volume boost** is a loudness enhancer, kept modest on purpose.
  *
- * The chain is built on `DynamicsProcessing` (API 28+) which gives true 10-band EQ,
- * compression and limiting; on older phones it degrades to the classic
- * `Equalizer` + `BassBoost` + `LoudnessEnhancer` effects. Everything here is a
- * standard Android audio effect on a session we own, so no root and no hacks.
+ * On Android 9+ the chain is built on `DynamicsProcessing`, which gives a real
+ * multi-band EQ, a multiband compressor and a limiter. On Android 8 the app falls
+ * back to the classic `Equalizer` + `BassBoost` + `LoudnessEnhancer` effects, and
+ * the EQ screen names the engine it got. Everything is a standard Android audio
+ * effect on a session the app owns: no root, no hidden APIs.
  */
 object AudioFx {
 
@@ -68,7 +68,7 @@ object AudioFx {
     var engineName: String = "not attached"
         private set
 
-    /** The curve actually sent to the effects: user gains + noise trimming. */
+    /** The curve actually sent to the effects: user gains + the noise trimming. */
     fun effectiveGains(): List<Float> {
         val s = settings
         return s.gains.mapIndexed { index, gain ->
@@ -99,18 +99,17 @@ object AudioFx {
 
     /** Called by the playback service whenever the player's audio session changes. */
     fun attach(sessionId: Int) {
-        if (context == null) return
-        if (sessionId <= 0) return
+        if (context == null || sessionId <= 0) return
         releaseEffects()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && attachDynamics(sessionId)) {
-            engineName = "10-band EQ + limiter (device engine)"
+            engineName = "10-band EQ + compressor + limiter (device engine)"
             applyToEffects()
             return
         }
-        if (attachLegacy(sessionId)) {
-            engineName = "5-band EQ + bass + loudness (older device engine)"
+        engineName = if (attachLegacy(sessionId)) {
+            "5-band EQ + bass + loudness (older device engine)"
         } else {
-            engineName = "no effect engine available on this phone"
+            "no effect engine available on this phone"
         }
         applyToEffects()
     }
@@ -131,31 +130,32 @@ object AudioFx {
         loudness = null
     }
 
-    // ------------------------------------------------------- modern chain (API 28+)
+    // ------------------------------------------------------ modern chain (API 28+)
 
+    /**
+     * Android's own DynamicsProcessing effect ships a default configuration with a
+     * multi-band pre-EQ, a multiband compressor and a limiter. We read that config
+     * back and push our curve into it through the documented setters.
+     */
     @RequiresApi(Build.VERSION_CODES.P)
     private fun attachDynamics(sessionId: Int): Boolean = try {
-        // channelCount, sessionId, preEq(+10 bands), mbc(+3 bands), postEq, limiter
-        val dp = DynamicsProcessing(
-            2,
-            sessionId,
-            true,
-            Bands.COUNT,
-            true,
-            3,
-            false,
-            true,
-        )
-        dynamic = dp
-        dp.enabled = false
-        true
+        val effect = DynamicsProcessing(sessionId)
+        val bandCount = effect.config?.preEqBandCount ?: 0
+        if (bandCount <= 0) {
+            effect.release()
+            false
+        } else {
+            effect.enabled = false
+            dynamic = effect
+            true
+        }
     } catch (t: Throwable) {
         Log.w(TAG, "DynamicsProcessing unavailable: ${t.javaClass.simpleName}")
         dynamic = null
         false
     }
 
-    // ------------------------------------------------------ legacy chain (API < 28)
+    // ----------------------------------------------------- legacy chain (API < 28)
 
     private fun attachLegacy(sessionId: Int): Boolean {
         var ok = false
@@ -168,12 +168,12 @@ object AudioFx {
         try {
             bassBoost = BassBoost(0, sessionId).also { it.enabled = false }
         } catch (t: Throwable) {
-            // Optional.
+            // Optional: not every device implements bass boost.
         }
         try {
             loudness = LoudnessEnhancer(sessionId).also { it.enabled = false }
         } catch (t: Throwable) {
-            // Optional.
+            // Optional: not every device implements the loudness enhancer.
         }
         return ok
     }
@@ -183,11 +183,8 @@ object AudioFx {
     private fun applyToEffects() {
         val s = settings
         val gains = effectiveGains()
-        val preamp = s.preampDb
-
-        runCatching { applyDynamics(gains, preamp, s) }
-        runCatching { applyLegacy(gains, preamp, s) }
-
+        runCatching { applyDynamics(gains, s) }
+        runCatching { applyLegacy(gains, s) }
         runCatching {
             if (s.boostDb > 0.05f && s.enabled) {
                 loudness?.setTargetGain((s.boostDb * 100f).toInt())
@@ -198,75 +195,74 @@ object AudioFx {
         }
     }
 
-    private fun applyDynamics(gains: List<Float>, preamp: Float, s: Settings): Boolean {
-        val dp = dynamic ?: return false
-        val config = dp.config ?: return false
+    @RequiresApi(Build.VERSION_CODES.P)
+    private fun applyDynamics(gains: List<Float>, s: Settings): Boolean {
+        val effect = dynamic ?: return false
+        val config = effect.config ?: return false
+        val preEqBands = config.preEqBandCount
+        val mbcBands = config.mbcBandCount
+        val channels = effect.channelCount
 
-        // ---- limiter: the thing that stops loud ads from shredding the sound
-        config.isLimiterInUse = true
-        config.limiter?.let { limiter ->
-            limiter.isEnabled = true
-            limiter.attackTime = 5f
-            limiter.releaseTime = 80f
-            limiter.ratio = 4f
-            limiter.threshold = -3f
-            limiter.postGain = 0f
-        }
-
-        // ---- multiband compressor: gentle, only when Clear sound is on
-        for (channelIndex in 0 until config.channelCount) {
-            val channel = config.getChannelByChannelIndex(channelIndex)
-
-            channel.eq?.let { eq ->
-                eq.isEnabled = s.enabled
-                val bands = eq.bandCount
-                for (bandIndex in 0 until bands) {
-                    val band = eq.getBandByBandIndex(bandIndex) ?: continue
-                    val centreHz = band.cutoffFrequency
-                    band.isEnabled = true
-                    band.gain = (interpolate(centreHz, gains) + preamp).coerceIn(-12f, 12f)
-                }
+        for (channelIndex in 0 until channels) {
+            // ---- 10-band equalizer: our curve, evaluated at this device's bands
+            for (bandIndex in 0 until preEqBands) {
+                val band = effect.getPreEqBandByChannelIndex(channelIndex, bandIndex) ?: continue
+                val target = (interpolate(band.cutoffFrequency, gains) + s.preampDb)
+                    .coerceIn(Bands.MIN_DB, Bands.MAX_DB)
+                band.isEnabled = s.enabled
+                band.gain = target
+                effect.setPreEqBandByChannelIndex(channelIndex, bandIndex, band)
             }
 
-            channel.mbc?.let { mbc ->
-                mbc.isEnabled = s.clearSound
-                for (bandIndex in 0 until mbc.bandCount) {
-                    val band = mbc.getBandByBandIndex(bandIndex) ?: continue
-                    band.isEnabled = s.clearSound
-                    band.attackTime = 15f
-                    band.releaseTime = 250f
-                    band.ratio = 2.5f
-                    // Low bands get more headroom than the vocal band.
-                    band.threshold = if (bandIndex == 0) -26f else -20f
-                }
+            // ---- multiband compressor: the "clear sound" levelling
+            for (bandIndex in 0 until mbcBands) {
+                val band = effect.getMbcBandByChannelIndex(channelIndex, bandIndex) ?: continue
+                band.isEnabled = s.clearSound
+                band.attackTime = 15f
+                band.releaseTime = 250f
+                band.ratio = 2.5f
+                // The low band gets more headroom; the vocal band is kept tighter.
+                band.threshold = if (bandIndex == 0) -26f else -20f
+                band.postGain = 0f
+                effect.setMbcBandByChannelIndex(channelIndex, bandIndex, band)
+            }
+
+            // ---- limiter: the thing that stops loud ads from shredding the sound
+            effect.getLimiterByChannelIndex(channelIndex)?.let { limiter ->
+                limiter.isEnabled = true
+                limiter.attackTime = 5f
+                limiter.releaseTime = 80f
+                limiter.ratio = 4f
+                limiter.threshold = -3f
+                limiter.postGain = 0f
+                effect.setLimiterByChannelIndex(channelIndex, limiter)
             }
         }
 
-        dp.setConfig(config)
-        dp.enabled = s.enabled || s.clearSound
+        effect.enabled = s.enabled || s.clearSound
         return true
     }
 
-    private fun applyLegacy(gains: List<Float>, preamp: Float, s: Settings) {
-        val eq = equalizer
-        if (eq != null) {
+    private fun applyLegacy(gains: List<Float>, s: Settings) {
+        equalizer?.let { eq ->
             val range = eq.bandLevelRange
             val low = range[0].toFloat()
             val high = range[1].toFloat()
             for (index in 0 until eq.numberOfBands.toInt()) {
                 val band = index.toShort()
-                val centreHz = eq.getCenterFreq(band) / 1000f // milliHz → Hz
-                val gainDb = interpolate(centreHz, gains) + preamp
+                val centreHz = eq.getCenterFreq(band) / 1000f // milliHertz → Hz
+                val gainDb = interpolate(centreHz, gains) + s.preampDb
                 val milliBel = (gainDb * 100f).coerceIn(low, high)
                 eq.setBandLevel(band, milliBel.toInt().toShort())
             }
             eq.enabled = s.enabled
         }
-        bassBoost?.let { bb ->
+
+        bassBoost?.let { boost ->
             val bass = gains.getOrElse(0) { 0f } + gains.getOrElse(1) { 0f }
             val strength = ((bass.coerceAtLeast(0f) / 12f) * 1000f).toInt().coerceIn(0, 1000)
-            bb.setStrength(strength.toShort())
-            bb.enabled = s.enabled && strength > 0
+            boost.setStrength(strength.toShort())
+            boost.enabled = s.enabled && strength > 0
         }
     }
 
