@@ -28,6 +28,7 @@ class SettingsRepo(context: Context) {
     }
 
     private object Keys {
+        val SOUNDS = booleanPreferencesKey("sounds_enabled")
         val INCLUDE_HIDDEN = booleanPreferencesKey("include_hidden")
         val DUP_MIN_KB = intPreferencesKey("dup_min_kb")
         val LARGE_MB = intPreferencesKey("large_mb")
@@ -35,6 +36,13 @@ class SettingsRepo(context: Context) {
         val APK_INSTALLED_ONLY = booleanPreferencesKey("apk_installed_only")
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
     }
+
+    val soundsEnabled: Flow<Boolean> = store.data.map { p ->
+        p[Keys.SOUNDS] ?: true
+    }
+
+    suspend fun setSoundsEnabled(value: Boolean) =
+        store.edit { it[Keys.SOUNDS] = value }
 
     val scanSettings: Flow<ScanSettings> = store.data.map { p ->
         ScanSettings(

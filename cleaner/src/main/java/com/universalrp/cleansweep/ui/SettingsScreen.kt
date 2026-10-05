@@ -87,6 +87,15 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
         ) {
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
+                    title = "Sound effects",
+                    subtitle = "Play a chime when scanning and cleaning",
+                    checked = state.soundsEnabled,
+                    onCheckedChange = { vm.setSoundsEnabled(it) },
+                )
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                SettingSwitch(
                     title = "Scan hidden folders",
                     subtitle = "Look inside folders starting with “.” (more junk, slightly slower)",
                     checked = settings.includeHidden,

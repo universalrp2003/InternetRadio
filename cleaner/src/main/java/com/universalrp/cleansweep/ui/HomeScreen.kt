@@ -106,6 +106,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
         }
 
+        LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),

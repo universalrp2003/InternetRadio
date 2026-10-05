@@ -21,7 +21,7 @@ import android.view.accessibility.AccessibilityNodeInfo
  */
 class CacheCleanerService : AccessibilityService() {
 
-    private enum class Step { IDLE, WAIT_APP_INFO, FIND_ENTRY, FIND_CLEAR_CACHE, BETWEEN }
+    private enum class Step { IDLE, WAIT_APP_INFO, FIND_ENTRY, FIND_CLEAR_CACHE, FIND_CONFIRM, BETWEEN }
 
     private var step = Step.IDLE
     private var stepAt = 0L
@@ -87,8 +87,24 @@ class CacheCleanerService : AccessibilityService() {
                 Step.FIND_CLEAR_CACHE -> {
                     val node = findText(root, CLEAR_CACHE_TEXTS)
                     if (node != null) {
-                        if (node.isEnabled && performClick(node)) finishCurrent()
-                        else skipCurrent() // Cache already empty or blocked.
+                        if (node.isEnabled && performClick(node)) {
+                            // HyperOS/MIUI pops a "Clear cache?" confirmation dialog;
+                            // other ROMs clear straight away. FIND_CONFIRM handles both.
+                            step = Step.FIND_CONFIRM
+                            stepAt = now
+                        } else {
+                            skipCurrent() // Cache already empty or blocked.
+                        }
+                    }
+                }
+                Step.FIND_CONFIRM -> {
+                    // Strict match only: never click a substring like "Bookmarks".
+                    val ok = findText(root, CONFIRM_TEXTS, exact = true)
+                    if (ok != null && ok.isEnabled && performClick(ok)) {
+                        finishCurrent()
+                    } else if (now - stepAt > 4_000) {
+                        // No confirmation dialog on this ROM — the clear already ran.
+                        finishCurrent()
                     }
                 }
                 else -> Unit
@@ -122,6 +138,7 @@ class CacheCleanerService : AccessibilityService() {
             android.widget.Toast.makeText(
                 this, "CleanSweep: auto clean finished", android.widget.Toast.LENGTH_SHORT
             ).show()
+            com.universalrp.cleansweep.data.SoundFx.play(this, com.universalrp.cleansweep.R.raw.sound_success)
             returnToApp()
             return
         }
@@ -156,6 +173,7 @@ class CacheCleanerService : AccessibilityService() {
     private fun findText(
         root: AccessibilityNodeInfo,
         texts: List<String>,
+        exact: Boolean = false,
     ): AccessibilityNodeInfo? {
         for (t in texts) {
             val found = try {
@@ -168,7 +186,7 @@ class CacheCleanerService : AccessibilityService() {
                 if (!n.isVisibleToUser) continue
                 val txt = n.text?.toString() ?: n.contentDescription?.toString() ?: continue
                 if (txt.equals(t, ignoreCase = true)) return clickableTarget(n)
-                if (fallback == null) fallback = clickableTarget(n)
+                if (!exact && fallback == null) fallback = clickableTarget(n)
             }
             if (fallback != null) return fallback
         }
@@ -204,6 +222,7 @@ class CacheCleanerService : AccessibilityService() {
         private val STORAGE_TEXTS = listOf("storage & cache", "storage usage", "storage", "存储", "儲存空間")
         private val CLEAR_CACHE_TEXTS = listOf("clear cache", "清除缓存", "清除快取")
         private val CLEAR_DATA_TEXTS = listOf("clear data", "清除数据", "清除資料")
+        private val CONFIRM_TEXTS = listOf("ok", "okay", "confirm", "allow", "确定", "確認")
 
         val isRunning: Boolean get() = instance != null
 

@@ -5,6 +5,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Same stable CI keystore as :cleaner so both apps keep a consistent signature.
+val stableKeystore = rootProject.file("ci-keystore/release.p12")
+
 android {
     namespace = "com.example.internetradio"
     compileSdk = 36
@@ -17,9 +20,25 @@ android {
         versionName = "1.0"
     }
 
+    signingConfigs {
+        if (stableKeystore.exists()) {
+            create("stable") {
+                storeFile = stableKeystore
+                storePassword = "cleansweep-ci"
+                keyAlias = "cleansweep"
+                keyPassword = "cleansweep-ci"
+                storeType = "PKCS12"
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
+        }
+        debug {
+            if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
         }
     }
 

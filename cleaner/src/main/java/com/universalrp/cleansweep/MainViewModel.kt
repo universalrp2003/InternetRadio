@@ -38,6 +38,7 @@ data class UiState(
     val progress: ScanProgress? = null,
     val report: ScanReport? = null,
     val settings: ScanSettings = ScanSettings(),
+    val soundsEnabled: Boolean = true,
     val cleaning: Boolean = false,
     val cleanDone: Int = 0,
     val cleanTotal: Int = 0,
@@ -75,6 +76,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             settingsRepo.scanSettings.collect { s ->
                 currentSettings = s
                 mutate { it.copy(settings = s) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.soundsEnabled.collect { on ->
+                com.universalrp.cleansweep.data.SoundFx.enabled = on
+                mutate { it.copy(soundsEnabled = on) }
             }
         }
         val lastMs = prefs.getLong("last_clean_ms", 0L)
@@ -123,6 +130,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             mutate { it.copy(message = "Please allow “All files access” for CleanSweep, then tap Scan again.") }
             return
         }
+        com.universalrp.cleansweep.data.SoundFx.play(ctx, com.universalrp.cleansweep.R.raw.sound_scan)
         mutate { it.copy(screen = Screen.SCANNING, progress = null) }
         val root = Environment.getExternalStorageDirectory()
         val cfg = currentSettings
@@ -194,6 +202,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 .putLong("last_clean_bytes", result.freedBytes)
                 .putInt("last_clean_items", result.deleted)
                 .apply()
+            com.universalrp.cleansweep.data.SoundFx.play(ctx, com.universalrp.cleansweep.R.raw.sound_success)
             mutate {
                 it.copy(
                     cleaning = false,
@@ -288,6 +297,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     // --------------------------------------------------------------- settings
+
+    fun setSoundsEnabled(v: Boolean) =
+        viewModelScope.launch { settingsRepo.setSoundsEnabled(v) }
 
     fun setIncludeHidden(v: Boolean) =
         viewModelScope.launch { settingsRepo.setIncludeHidden(v) }

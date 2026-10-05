@@ -1,7 +1,12 @@
 # CleanSweep — Junk & Cache Cleaner for Android
 
 A privacy-friendly cleaning app built for **Redmi 13 5G** (HyperOS / MIUI, Android 14)
-and any Android 8+ phone. 100% offline — it does not even request the INTERNET permission.
+and any Android 8+ phone (MIUI/HyperOS, One UI, Pixel, OnePlus, Realme, Vivo…).
+100% offline — it does not even request the INTERNET permission.
+
+**v1.2 highlights:** HyperOS auto-clean now taps *Clear data → Clear cache → OK*
+(confirmation dialog included); animated LED light bars + optional sound effects;
+CI signs every build with one fixed keystore so APKs install as **updates**.
 
 ## What it cleans
 

@@ -108,6 +108,31 @@ fun AboutScreen(vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
+                        "Installing & updating (Play Protect)",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "• CleanSweep works on any Android 8+ phone (Redmi/MIUI/HyperOS, " +
+                            "Samsung One UI, Pixel, OnePlus, Realme, Vivo…), not just Redmi.\n\n" +
+                            "• Because this APK is installed outside Google Play and uses an " +
+                            "Accessibility service, Play Protect shows a warning. That is Android's " +
+                            "standard caution for sideloaded cleaners — CleanSweep contains no " +
+                            "malware, ads or internet access. You can safely tap “Install anyway” " +
+                            "(or pause Play Protect during installation).\n\n" +
+                            "• Builds are signed with one fixed key, so newer APKs install as an " +
+                            "update. If an install ever says “app not installed”, uninstall the " +
+                            "older copy first (needed once when moving from v1.1 or older).",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                    )
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
                         "Why some things can't be cleaned",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,

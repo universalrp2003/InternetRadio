@@ -125,6 +125,7 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
             )
         }
 
+        LedBar(Modifier.fillMaxWidth().padding(horizontal = 40.dp))
         Spacer(Modifier.height(32.dp))
         Text(
             "Scanning your storage…",

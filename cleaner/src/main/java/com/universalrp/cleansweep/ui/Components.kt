@@ -1,7 +1,12 @@
 package com.universalrp.cleansweep.ui
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -147,6 +152,36 @@ fun StorageGauge(usedFraction: Float, modifier: Modifier = Modifier) {
                 style = Stroke(strokeWidth, cap = StrokeCap.Round),
             )
         }
+    }
+}
+
+/** Animated “LED strip” light bar used as decoration across screens. */
+@Composable
+fun LedBar(modifier: Modifier = Modifier) {
+    val transition = rememberInfiniteTransition(label = "led")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "ledPhase",
+    )
+    Canvas(modifier.height(4.dp)) {
+        val a = (phase * 1.4f - 0.4f).coerceIn(0f, 1f)
+        val b = (phase * 1.4f - 0.2f).coerceIn(0f, 1f)
+        val c = (phase * 1.4f).coerceIn(0f, 1f)
+        val brush = Brush.horizontalGradient(
+            colorStops = arrayOf(
+                0f to Color.Transparent,
+                a to Color.Transparent,
+                b to AccentCyan,
+                c to Color.Transparent,
+                1f to Color.Transparent,
+            )
+        )
+        drawRect(brush)
     }
 }
 

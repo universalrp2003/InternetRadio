@@ -5,6 +5,10 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// CI generates this keystore once and commits it, so every build is signed with
+// the SAME key -> new APKs install as updates over older ones.
+val stableKeystore = rootProject.file("ci-keystore/release.p12")
+
 android {
     namespace = "com.universalrp.cleansweep"
     compileSdk = 36
@@ -13,13 +17,29 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
+    }
+
+    signingConfigs {
+        if (stableKeystore.exists()) {
+            create("stable") {
+                storeFile = stableKeystore
+                storePassword = "cleansweep-ci"
+                keyAlias = "cleansweep"
+                keyPassword = "cleansweep-ci"
+                storeType = "PKCS12"
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
+        }
+        debug {
+            if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
         }
     }
 
