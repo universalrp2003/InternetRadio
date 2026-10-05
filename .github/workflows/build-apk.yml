@@ -56,8 +56,10 @@ jobs:
 
       - name: Verify built APKs
         run: |
-          set -eo pipefail
+          set -e
           exec > >(tee verify.log) 2>&1
+          WORK=$(mktemp -d)
+
           echo "=== APK files ==="
           for m in app cleaner builder equalizer; do
             ls -la "$m/build/outputs/apk/debug/" || true
@@ -65,72 +67,86 @@ jobs:
 
           CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
           BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
+          EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
 
           echo "=== Package info ==="
           AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
           if [ -n "$AAPT" ]; then
-            "$AAPT" dump badging "$CLEANER" | head -2 || true
-            "$AAPT" dump badging "$BUILDER" | head -2 || true
-          else
-            echo "(aapt2 not available; skipping badging)"
+            "$AAPT" dump badging "$CLEANER" | head -1 || true
+            "$AAPT" dump badging "$BUILDER" | head -1 || true
+            "$AAPT" dump badging "$EQ" | head -1 || true
           fi
 
+          # Extract the parts once and grep the files. Piping tens of megabytes
+          # through echo/grep inside an && chain breaks on SIGPIPE, which is not
+          # a real failure — so there are no big pipes here at all.
+          unzip -p "$CLEANER" AndroidManifest.xml > "$WORK/cleaner-manifest.bin"
+          unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
+          unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
+          unzip -p "$EQ" AndroidManifest.xml > "$WORK/eq-manifest.bin"
+          unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
+          strings -a "$WORK/cleaner-manifest.bin" > "$WORK/cleaner-manifest.txt"
+          strings -a "$WORK/eq-manifest.bin" > "$WORK/eq-manifest.txt"
+
           echo "=== CleanSweep v1.3 checks ==="
-          MANIFEST=$(unzip -p "$CLEANER" AndroidManifest.xml | strings -a)
-          if echo "$MANIFEST" | grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE"; then
+          if grep -qi "accessibilityservice" "$WORK/cleaner-manifest.txt"; then
             echo "FAIL: CleanSweep still declares an Accessibility service"
             exit 1
           fi
           echo "OK: no Accessibility service in CleanSweep's manifest"
 
-          DEX=$(unzip -p "$CLEANER" "classes*.dex")
-          if echo "$DEX" | grep -aq "CacheCleanerService"; then
+          if grep -aq "CacheCleanerService" "$WORK/cleaner.dex"; then
             echo "FAIL: CacheCleanerService is still compiled into the APK"
             exit 1
           fi
           echo "OK: CacheCleanerService is gone"
 
-          echo "$DEX" | grep -aq "CleanSweep Assistant" \
-            && echo "OK: on-device assistant is present" \
-            || { echo "FAIL: assistant missing from APK"; exit 1; }
+          if grep -aq "CleanSweep Assistant" "$WORK/cleaner.dex"; then
+            echo "OK: the on-device assistant is in the APK"
+          else
+            echo "FAIL: the on-device assistant is missing from the APK"
+            exit 1
+          fi
 
           echo "=== AppForge checks ==="
-          APP_DEX=$(unzip -p "$BUILDER" "classes*.dex")
-          echo "$APP_DEX" | grep -aq "AppForge" \
-            && echo "OK: AppForge APK contains its code" \
-            || { echo "FAIL: AppForge APK looks empty"; exit 1; }
-          echo "$APP_DEX" | grep -aq "AndroidCodeGen" \
-            && echo "OK: Android project generator is present" \
-            || { echo "FAIL: code generator missing"; exit 1; }
+          if grep -aq "AppForge" "$WORK/builder.dex"; then
+            echo "OK: AppForge APK contains its code"
+          else
+            echo "FAIL: AppForge APK looks empty"
+            exit 1
+          fi
+          if grep -aq "AndroidCodeGen" "$WORK/builder.dex"; then
+            echo "OK: the Android project generator is present"
+          else
+            echo "FAIL: the code generator is missing"
+            exit 1
+          fi
 
           echo "=== PulseEQ checks ==="
-          EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
-          echo "APK: $EQ"
-          EQ_MANIFEST=$(unzip -p "$EQ" AndroidManifest.xml | tr -d '\0' | strings -a)
-          PERMS=$(echo "$EQ_MANIFEST" | grep -o "android\.permission\.[A-Z_]*" | sort -u || true)
-          echo "Permissions declared: ${PERMS:-none found}"
+          PERMS=$(grep -o "android\.permission\.[A-Z_]*" "$WORK/eq-manifest.txt" | sort -u || true)
+          echo "PulseEQ permissions: $(echo "$PERMS" | tr '\n' ' ')"
           if echo "$PERMS" | grep -qx "android.permission.INTERNET"; then
             echo "FAIL: PulseEQ must not request INTERNET"
             exit 1
           fi
           echo "OK: PulseEQ has no INTERNET permission (fully offline)"
-          if echo "$EQ_MANIFEST" | grep -aq "EqService"; then
-            echo "OK: background equalizer service declared"
+
+          if grep -aq "EqService" "$WORK/eq-manifest.txt"; then
+            echo "OK: the background equalizer service is declared"
           else
-            echo "FAIL: EqService missing from the equalizer manifest"
-            echo "manifest strings: $(echo "$EQ_MANIFEST" | tr '\n' ' ' | head -c 600)"
+            echo "FAIL: EqService is missing from the equalizer manifest"
             exit 1
           fi
 
-          EQ_DEX=$(unzip -p "$EQ" "classes*.dex" | tr -d '\0')
           for symbol in PeakingBiquad EqEngine SessionEffectReceiver Bands; do
-            if echo "$EQ_DEX" | grep -aq "$symbol"; then
-              echo "OK: $symbol present in the equalizer APK"
+            if grep -aq "$symbol" "$WORK/eq.dex"; then
+              echo "OK: $symbol is in the equalizer APK"
             else
-              echo "FAIL: $symbol missing from the equalizer APK"
+              echo "FAIL: $symbol is missing from the equalizer APK"
               exit 1
             fi
           done
+
           echo "ALL CHECKS PASSED"
 
       - name: Surface build errors
