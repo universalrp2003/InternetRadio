@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Home-screen widget palette (the app itself is themed in Compose). -->
+    <color name="widget_bg_color">#E6171021</color>
+    <color name="widget_outline">#33254A</color>
+    <color name="widget_text">#F4EEF9</color>
+    <color name="widget_text_dim">#A99CBE</color>
+</resources>

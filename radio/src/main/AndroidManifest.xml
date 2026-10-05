@@ -37,6 +37,18 @@
             </intent-filter>
         </activity>
 
+        <!-- Home-screen widget: shows the station and controls playback. -->
+        <receiver
+            android:name=".widget.RadioWidgetProvider"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/radio_widget_info" />
+        </receiver>
+
         <!-- Owns the player, so sound keeps coming when the screen is off. -->
         <service
             android:name=".player.PlaybackService"

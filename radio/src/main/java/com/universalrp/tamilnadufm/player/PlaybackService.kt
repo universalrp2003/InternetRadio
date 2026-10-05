@@ -3,12 +3,15 @@ package com.universalrp.tamilnadufm.player
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.universalrp.tamilnadufm.audio.AudioFx
+import com.universalrp.tamilnadufm.widget.RadioWidgetProvider
 
 /**
  * Owns the player so sound keeps coming when the screen is off or the app is
@@ -38,6 +41,11 @@ class PlaybackService : MediaSessionService() {
 
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             PlayerBus.reportPlaying(isPlaying)
+            publishWidgetState()
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            publishWidgetState()
         }
 
         override fun onPlaybackStateChanged(playbackState: Int) {
@@ -80,6 +88,62 @@ class PlaybackService : MediaSessionService() {
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? =
         mediaSession
+
+    /**
+     * The home-screen widget drives playback through this service, so the widget
+     * keeps working with the app closed. Anything that is not one of our widget
+     * actions is left to MediaSessionService (media buttons, session commands).
+     */
+    override fun onStartCommand(intent: android.content.Intent?, flags: Int, startId: Int): Int {
+        when (intent?.action) {
+            RadioWidgetProvider.ACTION_TOGGLE -> {
+                val exo = player
+                when {
+                    exo == null -> Unit
+                    exo.mediaItemCount == 0 -> resumeLastStation(exo)
+                    exo.isPlaying -> exo.pause()
+                    else -> exo.play()
+                }
+            }
+            RadioWidgetProvider.ACTION_NEXT -> player?.seekToNextMediaItem()
+            RadioWidgetProvider.ACTION_PREVIOUS -> player?.seekToPreviousMediaItem()
+        }
+        return super.onStartCommand(intent, flags, startId)
+    }
+
+    /** Used by the widget when nothing is loaded yet: bring back the last station. */
+    private fun resumeLastStation(player: ExoPlayer) {
+        val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
+        val url = prefs.getString("last_url", null) ?: return
+        val name = prefs.getString("last_name", null) ?: "Tamilnadu FM Radio"
+        val favicon = prefs.getString("last_favicon", null)
+        player.setMediaItem(
+            MediaItem.Builder()
+                .setUri(url)
+                .setMediaId(url)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(name)
+                        .setArtist("Tamilnadu FM Radio")
+                        .setArtworkUri(
+                            favicon?.takeIf { it.startsWith("http") }?.let { android.net.Uri.parse(it) }
+                        )
+                        .build()
+                )
+                .build()
+        )
+        player.prepare()
+        player.play()
+    }
+
+    private fun publishWidgetState() {
+        val exo = player ?: return
+        val title = exo.currentMediaItem?.mediaMetadata?.title?.toString()
+            ?: exo.currentMediaItem?.mediaId
+            ?: "Tamilnadu FM Radio"
+        RadioWidgetProvider.rememberState(this, title, exo.isPlaying)
+        RadioWidgetProvider.refresh(this)
+    }
 
     override fun onTaskRemoved(rootIntent: android.content.Intent?) {
         val exo = player

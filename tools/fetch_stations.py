@@ -70,19 +70,30 @@ QUERIES = [
     ({"category": "tamil", "params": {"name": "tamil 80"}, "limit": 15}),
     ({"category": "tamil", "params": {"name": "tamil 90"}, "limit": 15}),
     ({"category": "tamil", "params": {"name": "old tamil"}, "limit": 15}),
-    ({"category": "tamil", "params": {"name": "kovai"}, "limit": 12}),
-    ({"category": "tamil", "params": {"name": "madurai"}, "limit": 12}),
-    ({"category": "tamil", "params": {"name": "trichy"}, "limit": 12}),
-    ({"category": "tamil", "params": {"name": "tiruchirappalli"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "dharmapuri"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "pondy"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "pondicherry"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "salem"}, "limit": 12}),
-    ({"category": "tamil", "params": {"name": "tirunelveli"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "thoothukudi"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "ooty"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "kodaikanal"}, "limit": 10}),
-    ({"category": "tamil", "params": {"name": "vanniyar"}, "limit": 8}),
+    ({"category": "tamil", "params": {"name": "kovai"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "madurai"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "trichy"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "tiruchirappalli"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "dharmapuri"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "pondy"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "pondicherry"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "salem"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "tirunelveli"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "thoothukudi"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "ooty"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "kodaikanal"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "vanniyar"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "coimbatore"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "erode"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "vellore"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "chennai"}, "limit": 12, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "tamil nadu"}, "limit": 15, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "tamilnadu"}, "limit": 15, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "nagercoil"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "thanjavur"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "dindigul"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"tagList": "kovai"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"tagList": "madurai"}, "limit": 10, "keep_unverified": True}),
     ({"category": "tamil", "params": {"name": "tamil fm"}, "limit": 25}),
     ({"category": "tamil", "params": {"name": "tamil radio"}, "limit": 25}),
     # --- Tamil worldwide (Sri Lanka / Malaysia / Singapore / diaspora).
@@ -412,12 +423,15 @@ def main():
         rows = fetch(params)
         kept = 0
         rejected = {}
+        dropped_names = []
         for row in rows:
             if kept >= limit:
                 break
             ok, reason = usable(row, category, keep_unverified, trust_tamil)
             if not ok:
                 rejected[reason] = rejected.get(reason, 0) + 1
+                if "name" in params and len(dropped_names) < 6:
+                    dropped_names.append(f"{row.get('name')} ({reason})")
                 continue
             final_category = classify(row, category)
             url = (row.get("url_resolved") or row.get("url") or "").strip()
@@ -432,8 +446,11 @@ def main():
             counts[final_category] = counts.get(final_category, 0) + 1
             kept += 1
         print(f"   kept {kept} of {len(rows)} (rejected: {rejected})")
-        debug.append({"stage": "directory", "category": category, "query": params,
-                      "returned": len(rows), "kept": kept, "rejected": rejected})
+        entry = {"stage": "directory", "category": category, "query": params,
+                 "returned": len(rows), "kept": kept, "rejected": rejected}
+        if dropped_names:
+            entry["dropped"] = dropped_names
+        debug.append(entry)
         time.sleep(0.6)
 
     # ------------------------------------------------------------------ order

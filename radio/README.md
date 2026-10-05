@@ -17,6 +17,7 @@ apps in this repo), or uninstall the old one first if you installed a differentl
 | **Local** | Plays audio files already on the phone (MediaStore scan with permission, or a single file through the system picker) through the same equalizer. |
 | **EQ** | A real **10-band equalizer: 31, 62, 125, 250, 500 Hz, 1, 2, 4, 8, 16 kHz**, ±12 dB per band, 16 presets (Tamil FM, Old songs, Music, Movies, Speech/News, Podcast, Vocal, Bass boost, Treble boost, Devotional, Rock, Pop, Jazz/Classical, Dance, Night, Flat), quick-curve chips, preamp with automatic anti-clipping, and the **Clear sound** section. |
 | **More** | Sleep timer (15/30/60/120 min), **My stations** (add any stream link), and About with the author credit. |
+| **Widget** | A home-screen widget showing the current station with play/pause, previous and next. It talks to the playback service directly, so it works with the app closed — and play resumes the last station. |
 
 **Clear sound / "clear sound without noise"** is four honest things, not a magic button:
 

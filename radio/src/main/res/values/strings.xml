@@ -3,4 +3,9 @@
     <string name="app_name">Tamilnadu FM Radio</string>
     <string name="notification_channel_name">Now playing</string>
     <string name="notification_channel_description">Shows the station playing in the background</string>
+    <string name="widget_description">Tamilnadu FM Radio: see what is playing and control it from your home screen</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next station</string>
+    <string name="widget_previous">Previous station</string>
+    <string name="widget_tap_to_play">Tap play to listen</string>
 </resources>
