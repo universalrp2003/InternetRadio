@@ -56,7 +56,8 @@ jobs:
 
       - name: Verify built APKs
         run: |
-          set -e
+          set -eo pipefail
+          exec > >(tee verify.log) 2>&1
           echo "=== APK files ==="
           for m in app cleaner builder equalizer; do
             ls -la "$m/build/outputs/apk/debug/" || true
@@ -104,53 +105,77 @@ jobs:
 
           echo "=== PulseEQ checks ==="
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
-          EQ_MANIFEST=$(unzip -p "$EQ" AndroidManifest.xml | strings -a)
-          echo "$EQ_MANIFEST" | grep -aq "EqService" \
-            && echo "OK: background equalizer service declared" \
-            || { echo "FAIL: EqService missing from the equalizer manifest"; exit 1; }
-          if echo "$EQ_MANIFEST" | grep -aq "permission.INTERNET"; then
+          echo "APK: $EQ"
+          EQ_MANIFEST=$(unzip -p "$EQ" AndroidManifest.xml | tr -d '\0' | strings -a)
+          PERMS=$(echo "$EQ_MANIFEST" | grep -o "android\.permission\.[A-Z_]*" | sort -u || true)
+          echo "Permissions declared: ${PERMS:-none found}"
+          if echo "$PERMS" | grep -qx "android.permission.INTERNET"; then
             echo "FAIL: PulseEQ must not request INTERNET"
             exit 1
           fi
           echo "OK: PulseEQ has no INTERNET permission (fully offline)"
+          if echo "$EQ_MANIFEST" | grep -aq "EqService"; then
+            echo "OK: background equalizer service declared"
+          else
+            echo "FAIL: EqService missing from the equalizer manifest"
+            echo "manifest strings: $(echo "$EQ_MANIFEST" | tr '\n' ' ' | head -c 600)"
+            exit 1
+          fi
 
-          EQ_DEX=$(unzip -p "$EQ" "classes*.dex")
-          echo "$EQ_DEX" | grep -aq "PeakingBiquad" \
-            && echo "OK: 20-band biquad DSP is in the APK" \
-            || { echo "FAIL: DSP missing"; exit 1; }
-          echo "$EQ_DEX" | grep -aq "EqEngine" \
-            && echo "OK: equalizer engine is present" \
-            || { echo "FAIL: EqEngine missing"; exit 1; }
-          echo "$EQ_DEX" | grep -aq "SessionEffectReceiver" \
-            && echo "OK: cooperating-player session receiver is present" \
-            || { echo "FAIL: session receiver missing"; exit 1; }
+          EQ_DEX=$(unzip -p "$EQ" "classes*.dex" | tr -d '\0')
+          for symbol in PeakingBiquad EqEngine SessionEffectReceiver Bands; do
+            if echo "$EQ_DEX" | grep -aq "$symbol"; then
+              echo "OK: $symbol present in the equalizer APK"
+            else
+              echo "FAIL: $symbol missing from the equalizer APK"
+              exit 1
+            fi
+          done
+          echo "ALL CHECKS PASSED"
 
       - name: Surface build errors
         if: failure()
         run: |
           echo "::error::Build failed - details committed to ci-build-failure.md on this branch"
 
+      # Commits whatever failed into ci-build-failure.md, so the reason is
+      # readable straight from the repository (and from a phone).
       - name: Publish build failure excerpt
         if: failure()
         run: |
           {
             echo "# CI build failure excerpt"
             echo ""
-            echo "## Kotlin / resource errors"
-            echo '```'
-            grep -E "^e: " build.log | sed 's|file:///home/runner/work/InternetRadio/InternetRadio/||' | head -60
-            echo '```'
-            echo ""
-            echo "## Gradle summary"
-            echo '```'
-            grep -B2 -A30 -m1 "FAILURE: Build failed" build.log
-            echo '```'
+            if [ -f build.log ]; then
+              echo "## Kotlin / resource errors"
+              echo '```'
+              grep -E "^e: " build.log | sed 's|file:///home/runner/work/InternetRadio/InternetRadio/||' | head -60 || true
+              echo '```'
+              echo ""
+              echo "## Gradle summary"
+              echo '```'
+              grep -B2 -A30 -m1 "FAILURE: Build failed" build.log || true
+              echo '```'
+            else
+              echo "_No Gradle build log: the failure happened before or after the build._"
+            fi
+            if [ -f verify.log ]; then
+              echo ""
+              echo "## APK verification output"
+              echo '```'
+              tail -80 verify.log || true
+              echo '```'
+            fi
           } > ci-build-failure.md
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
-          git add ci-build-failure.md
-          git commit -m "CI: publish build failure excerpt"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git add -f ci-build-failure.md
+          if git diff --cached --quiet; then
+            echo "Nothing new to publish."
+          else
+            git commit -m "CI: publish build failure excerpt"
+            git push origin "HEAD:${GITHUB_REF_NAME}" || echo "Could not push the report."
+          fi
 
       - name: Upload build log on failure
         if: failure()
