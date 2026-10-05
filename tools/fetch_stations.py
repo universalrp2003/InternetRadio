@@ -94,6 +94,16 @@ QUERIES = [
     ({"category": "tamil", "params": {"name": "dindigul"}, "limit": 8, "keep_unverified": True}),
     ({"category": "tamil", "params": {"tagList": "kovai"}, "limit": 10, "keep_unverified": True}),
     ({"category": "tamil", "params": {"tagList": "madurai"}, "limit": 10, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "kanyakumari"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "cuddalore"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "namakkal"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "karur"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "tirupur"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "hosur"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "pollachi"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "villupuram"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "trichy fm"}, "limit": 8, "keep_unverified": True}),
+    ({"category": "tamil", "params": {"name": "kovai fm"}, "limit": 8, "keep_unverified": True}),
     ({"category": "tamil", "params": {"name": "tamil fm"}, "limit": 25}),
     ({"category": "tamil", "params": {"name": "tamil radio"}, "limit": 25}),
     # --- Tamil worldwide (Sri Lanka / Malaysia / Singapore / diaspora).
@@ -216,19 +226,35 @@ def _one_probe(url, timeout, ranged):
     return False, f"not audio (content-type={content_type or 'none'})"
 
 
-def hls_alternates(url):
+def hls_candidates(url):
     """
-    AIR (and a few other broadcasters) publish both /playlist.m3u8 (the variant
-    list) and /master.m3u8. One of the two regularly 404s while the other works,
-    so try the sibling before declaring a station dead.
+    Ordered list of URLs to try for one station.
+
+    AIR publishes the same feed as /playlist.m3u8 (a one-entry master list) and as
+    /master.m3u8, while the directory often stores the inner /chunklist.m3u8 or only
+    one of the two. A sliding-window chunklist can stop being valid later, so for
+    these bitgravity feeds the stable playlist.m3u8 comes first and the stored URL is
+    the fallback. Other HLS URLs simply get their playlist/master sibling appended.
     """
-    out = []
-    if not url.lower().endswith(".m3u8"):
-        return out
-    if "/playlist.m3u8" in url.lower():
-        out.append(re.sub(r"/playlist\.m3u8$", "/master.m3u8", url, flags=re.I))
-    elif "/master.m3u8" in url.lower():
-        out.append(re.sub(r"/master\.m3u8$", "/playlist.m3u8", url, flags=re.I))
+    low = url.lower()
+    if "bitgravity.com" in low and "/pbaudio" in low and "hlspbaudio" not in low:
+        base = url.rsplit("/", 1)[0]
+        ordered = [base + "/playlist.m3u8", base + "/master.m3u8", url]
+    elif low.endswith(".m3u8"):
+        if "/playlist.m3u8" in low:
+            ordered = [url, re.sub(r"/playlist\.m3u8$", "/master.m3u8", url, flags=re.I)]
+        elif "/master.m3u8" in low:
+            ordered = [url, re.sub(r"/master\.m3u8$", "/playlist.m3u8", url, flags=re.I)]
+        else:
+            ordered = [url]
+    else:
+        ordered = [url]
+
+    seen, out = set(), []
+    for candidate in ordered:
+        if candidate not in seen:
+            seen.add(candidate)
+            out.append(candidate)
     return out
 
 
@@ -239,7 +265,7 @@ def probe(url, timeout=15):
     (alive, detail, url_that_answered) - the caller keeps the URL that worked.
     """
     first_error = None
-    for candidate in [url] + hls_alternates(url):
+    for candidate in hls_candidates(url):
         for ranged in (True, False):
             try:
                 alive, detail = _one_probe(candidate, timeout, ranged)

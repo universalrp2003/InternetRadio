@@ -70,9 +70,10 @@ class RadioWidgetProvider : AppWidgetProvider() {
             views.setTextViewText(
                 R.id.widget_status,
                 when {
-                    playing -> "Playing • tap for options"
-                    prefs.getString("last_url", null) != null -> "Paused • tap play to resume"
-                    else -> "Pick a station in the app"
+                    playing -> context.getString(R.string.widget_status_playing)
+                    prefs.getString("last_url", null) != null ->
+                        context.getString(R.string.widget_status_paused)
+                    else -> context.getString(R.string.widget_status_idle)
                 },
             )
             views.setImageViewResource(
