@@ -2,6 +2,7 @@
 # - Internet Radio  (:app)
 # - CleanSweep junk cleaner + on-device assistant (:cleaner)
 # - AppForge offline app builder (:builder)
+# - PulseEQ 20-band equalizer (:equalizer)
 name: Build APK
 
 on:
@@ -57,7 +58,7 @@ jobs:
         run: |
           set -e
           echo "=== APK files ==="
-          for m in app cleaner builder; do
+          for m in app cleaner builder equalizer; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
 
@@ -93,7 +94,6 @@ jobs:
             || { echo "FAIL: assistant missing from APK"; exit 1; }
 
           echo "=== AppForge checks ==="
-          echo "$DEX" >/dev/null
           APP_DEX=$(unzip -p "$BUILDER" "classes*.dex")
           echo "$APP_DEX" | grep -aq "AppForge" \
             && echo "OK: AppForge APK contains its code" \
@@ -101,6 +101,29 @@ jobs:
           echo "$APP_DEX" | grep -aq "AndroidCodeGen" \
             && echo "OK: Android project generator is present" \
             || { echo "FAIL: code generator missing"; exit 1; }
+
+          echo "=== PulseEQ checks ==="
+          EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
+          EQ_MANIFEST=$(unzip -p "$EQ" AndroidManifest.xml | strings -a)
+          echo "$EQ_MANIFEST" | grep -aq "EqService" \
+            && echo "OK: background equalizer service declared" \
+            || { echo "FAIL: EqService missing from the equalizer manifest"; exit 1; }
+          if echo "$EQ_MANIFEST" | grep -aq "permission.INTERNET"; then
+            echo "FAIL: PulseEQ must not request INTERNET"
+            exit 1
+          fi
+          echo "OK: PulseEQ has no INTERNET permission (fully offline)"
+
+          EQ_DEX=$(unzip -p "$EQ" "classes*.dex")
+          echo "$EQ_DEX" | grep -aq "PeakingBiquad" \
+            && echo "OK: 20-band biquad DSP is in the APK" \
+            || { echo "FAIL: DSP missing"; exit 1; }
+          echo "$EQ_DEX" | grep -aq "EqEngine" \
+            && echo "OK: equalizer engine is present" \
+            || { echo "FAIL: EqEngine missing"; exit 1; }
+          echo "$EQ_DEX" | grep -aq "SessionEffectReceiver" \
+            && echo "OK: cooperating-player session receiver is present" \
+            || { echo "FAIL: session receiver missing"; exit 1; }
 
       - name: Surface build errors
         if: failure()
@@ -153,3 +176,9 @@ jobs:
         with:
           name: appforge-apk
           path: builder/build/outputs/apk/debug/*.apk
+
+      - name: Upload PulseEQ APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulseeq-apk
+          path: equalizer/build/outputs/apk/debug/*.apk

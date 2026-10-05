@@ -16,3 +16,4 @@ rootProject.name = "InternetRadio"
 include(":app")
 include(":cleaner")
 include(":builder")
+include(":equalizer")
