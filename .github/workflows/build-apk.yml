@@ -53,6 +53,55 @@ jobs:
           set -o pipefail
           gradle assembleDebug --no-daemon 2>&1 | tee build.log
 
+      - name: Verify built APKs
+        run: |
+          set -e
+          echo "=== APK files ==="
+          for m in app cleaner builder; do
+            ls -la "$m/build/outputs/apk/debug/" || true
+          done
+
+          CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
+          BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
+
+          echo "=== Package info ==="
+          AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump badging "$CLEANER" | head -2 || true
+            "$AAPT" dump badging "$BUILDER" | head -2 || true
+          else
+            echo "(aapt2 not available; skipping badging)"
+          fi
+
+          echo "=== CleanSweep v1.3 checks ==="
+          MANIFEST=$(unzip -p "$CLEANER" AndroidManifest.xml | strings -a)
+          if echo "$MANIFEST" | grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE"; then
+            echo "FAIL: CleanSweep still declares an Accessibility service"
+            exit 1
+          fi
+          echo "OK: no Accessibility service in CleanSweep's manifest"
+
+          DEX=$(unzip -p "$CLEANER" "classes*.dex")
+          if echo "$DEX" | grep -aq "CacheCleanerService"; then
+            echo "FAIL: CacheCleanerService is still compiled into the APK"
+            exit 1
+          fi
+          echo "OK: CacheCleanerService is gone"
+
+          echo "$DEX" | grep -aq "CleanSweep Assistant" \
+            && echo "OK: on-device assistant is present" \
+            || { echo "FAIL: assistant missing from APK"; exit 1; }
+
+          echo "=== AppForge checks ==="
+          echo "$DEX" >/dev/null
+          APP_DEX=$(unzip -p "$BUILDER" "classes*.dex")
+          echo "$APP_DEX" | grep -aq "AppForge" \
+            && echo "OK: AppForge APK contains its code" \
+            || { echo "FAIL: AppForge APK looks empty"; exit 1; }
+          echo "$APP_DEX" | grep -aq "AndroidCodeGen" \
+            && echo "OK: Android project generator is present" \
+            || { echo "FAIL: code generator missing"; exit 1; }
+
       - name: Surface build errors
         if: failure()
         run: |
