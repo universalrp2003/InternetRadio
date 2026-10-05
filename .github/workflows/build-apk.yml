@@ -78,6 +78,18 @@ jobs:
             "$AAPT" dump badging "$BUILDER" | head -1 || true
             "$AAPT" dump badging "$EQ" | head -1 || true
             "$AAPT" dump badging "$RADIO" | head -1 || true
+            # The installed name must be the one the user asked for.
+            LABEL=$("$AAPT" dump badging "$RADIO" | grep -m1 "application-label:" || true)
+            echo "radio label: $LABEL"
+            case "$LABEL" in
+              *"Ramesh Radio"*)
+                echo "OK: the built APK is labelled Ramesh Radio"
+                ;;
+              *)
+                echo "FAIL: the radio APK is not labelled Ramesh Radio ($LABEL)"
+                exit 1
+                ;;
+            esac
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
@@ -90,7 +102,7 @@ jobs:
           MERGED_RADIO=$(find radio/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           echo "CleanSweep merged manifest: ${MERGED_CLEANER:-not found}"
           echo "PulseEQ merged manifest: ${MERGED_EQ:-not found}"
-          echo "Tamilnadu FM merged manifest: ${MERGED_RADIO:-not found}"
+          echo "Ramesh Radio merged manifest: ${MERGED_RADIO:-not found}"
           if [ -n "$AAPT" ]; then
             "$AAPT" dump permissions "$EQ" > "$WORK/eq-perms-aapt.txt" 2>/dev/null || true
             echo "--- aapt2 permissions for PulseEQ ---"
