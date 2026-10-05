@@ -1,18 +1,18 @@
 {
 "source": "radio-browser.info + curated, probed list",
-"generatedAt": "2026-10-05T13:16:41Z",
+"generatedAt": "2026-10-05T13:20:51Z",
 "note": "Seed list shipped with the app. 'verified' means the stream answered a health check or a build-time probe; the app marks the rest as unchecked. The app can also search the live directory for thousands more stations.",
 "counts": {
-"tamil": 174,
+"tamil": 170,
 "tamil_fm": 45,
 "world_news": 148,
-"india_news": 18,
+"india_news": 19,
 "tamil_devotional": 6,
 "tamil_news": 6,
 "english": 110
 },
-"verifiedCount": 474,
-"total": 506,
+"verifiedCount": 471,
+"total": 503,
 "debug": [
 {
 "stage": "curated",
@@ -294,49 +294,49 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "Vividh Bharati Chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR KODAI FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR PUDUCHERRY FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIT Tirunelveli FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -348,7 +348,7 @@
 "reverse": "true"
 },
 "returned": 200,
-"kept": 136,
+"kept": 135,
 "rejected": {
 "codec": 7
 }
@@ -357,42 +357,42 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR KODAI FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR PUDUCHERRY FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIT Tirunelveli FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -413,49 +413,49 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "Vividh Bharati Chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR KODAI FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR PUDUCHERRY FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIT Tirunelveli FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -587,7 +587,7 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "Chennai FM Rainbow",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -597,7 +597,7 @@
 "name": "fm rainbow"
 },
 "returned": 25,
-"kept": 1,
+"kept": 0,
 "rejected": {
 "not-tamil": 5,
 "codec": 8,
@@ -717,14 +717,14 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai AM1269",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio127/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio127/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -734,7 +734,7 @@
 "name": "madurai"
 },
 "returned": 5,
-"kept": 3,
+"kept": 2,
 "rejected": {
 "codec": 2
 },
@@ -822,7 +822,7 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIT Tirunelveli FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -832,7 +832,7 @@
 "name": "tirunelveli"
 },
 "returned": 3,
-"kept": 1,
+"kept": 0,
 "rejected": {
 "codec": 1
 },
@@ -927,28 +927,28 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "Chennai FM Rainbow",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "fm-gold-chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio021/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio021/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "Vividh Bharati Chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "vividh-bharati-chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -958,7 +958,7 @@
 "name": "chennai"
 },
 "returned": 17,
-"kept": 2,
+"kept": 1,
 "rejected": {
 "codec": 6,
 "not-tamil": 2
@@ -996,14 +996,14 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Nagercoil FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -1056,7 +1056,7 @@
 "stage": "probe-recovered",
 "category": "tamil",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "detail": "hls playlist"
 },
 {
@@ -1070,6 +1070,111 @@
 "rejected": {
 "codec": 1
 }
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "kanyakumari"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "cuddalore"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "namakkal"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "karur"
+},
+"returned": 1,
+"kept": 1,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "tirupur"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "hosur"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "pollachi"
+},
+"returned": 2,
+"kept": 0,
+"rejected": {
+"not-tamil": 1
+},
+"dropped": [
+"Pollachi Fm (not-tamil)"
+]
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "villupuram"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "trichy fm"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "kovai fm"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
 },
 {
 "stage": "directory",
@@ -1575,6 +1680,13 @@
 {
 "stage": "probe-recovered",
 "category": "india_news",
+"name": "Akashvani Nizamabad",
+"url": "https://radio.wavespb.com/live/5d9989b5189a8f4a/5d9989b5189a8f4a.m3u8",
+"detail": "hls playlist"
+},
+{
+"stage": "probe-recovered",
+"category": "india_news",
 "name": "Akashvani Warangal",
 "url": "https://radio.wavespb.com/live/deae7120a205bfff/deae7120a205bfff.m3u8",
 "detail": "hls playlist"
@@ -1589,7 +1701,7 @@
 "reverse": "true"
 },
 "returned": 31,
-"kept": 16,
+"kept": 17,
 "rejected": {
 "codec": 11,
 "unchecked": 10,
@@ -2266,26 +2378,6 @@
 "order": 0
 },
 {
-"id": "ec8d0a3d-ad66-49b5-9d0a-1d518bbd83fb",
-"name": "Vividh Bharati Chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio024/chunklist.m3u8",
-"favicon": "https://liveradios.in/wp-content/uploads/output-onlinepngtools-1-150x150.png",
-"homepage": "https://liveradios.in/vividh-bharati-chennai.html",
-"tags": "",
-"country": "India",
-"countryCode": "IN",
-"state": "Tamil Nadu",
-"language": "tamil",
-"codec": "probed",
-"bitrate": 0,
-"votes": 760,
-"category": "tamil",
-"isCustom": false,
-"verified": true,
-"source": "directory-probe",
-"order": 0
-},
-{
 "id": "ed3e4d31-7133-4eb3-a7e5-9729bf9c3ab2",
 "name": "Papa John's Pizza Pakistan",
 "url": "http://162.252.85.85:7086/",
@@ -2328,7 +2420,7 @@
 {
 "id": "ef86293f-ff84-4b91-84f4-5912c177ec0c",
 "name": "AIR KODAI FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio051/playlist.m3u8",
 "favicon": "https://liveradios.in/wp-content/uploads/output-onlinepngtools-1-150x150.png",
 "homepage": "https://liveradios.in/kodai-fm-100-5-mhz.html",
 "tags": "kodaikanal,tamil",
@@ -2568,7 +2660,7 @@
 {
 "id": "438f7cd3-898c-4ba4-837d-3a8ab6808ebf",
 "name": "AIR Madurai FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
 "favicon": "",
 "homepage": "https://www.tamilradios.com/air-madurai-fm-103-3",
 "tags": "madurai,south india,tamil,tamil fm",
@@ -2728,7 +2820,7 @@
 {
 "id": "0567fe25-0865-4486-a2ec-9cd6f49b3876",
 "name": "AIR PUDUCHERRY FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio098/playlist.m3u8",
 "favicon": "https://liveradios.in/wp-content/uploads/output-onlinepngtools-1-150x150.png",
 "homepage": "https://liveradios.in/fm-rainbow-puducherry.html",
 "tags": "puducherry,south india,tamil,tamil fm",
@@ -2928,7 +3020,7 @@
 {
 "id": "28509e6b-a9be-4bda-afb5-1dc88e168d0d",
 "name": "AIR Nagercoil",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio129/playlist.m3u8",
 "favicon": "https://www.radioindialive.com//uploads/radios/nagercoilkumarifm.png",
 "homepage": "https://www.radioindialive.com/air-nagercoil-live-all-india-radio",
 "tags": "nagercoil,tamil",
@@ -3108,7 +3200,7 @@
 {
 "id": "31221b31-a650-4b0c-93b6-8c36179ae34a",
 "name": "AIT Tirunelveli FM",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
 "favicon": "https://liveradios.in/wp-content/uploads/output-onlinepngtools-1-150x150.png",
 "homepage": "https://liveradios.in/fm-rainbow-tirunelveli.html",
 "tags": "south india,tamil,tamil fm,tirunelveli",
@@ -3566,26 +3658,6 @@
 "order": 0
 },
 {
-"id": "66373738-6b38-401b-a6a8-c109730f0256",
-"name": "Chennai FM Rainbow",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/chunklist.m3u8",
-"favicon": "https://ade.googlesyndication.com/ddm/activity/dc_oe=ChMIxozVhPDngQMVCQFoCh3MAAHCEAAYACD9haNeQhMIwqaahPDngQMVA3t9Ch2j5Alc;met=1;&timestamp=1696817275425;eid1=2;ecn1=0;etm1=120;",
-"homepage": "https://www.tamilradios.com/chennai-fm-rainbow",
-"tags": "",
-"country": "India",
-"countryCode": "IN",
-"state": "Tamil Nadu",
-"language": "",
-"codec": "probed",
-"bitrate": 0,
-"votes": 181,
-"category": "tamil",
-"isCustom": false,
-"verified": true,
-"source": "directory-probe",
-"order": 0
-},
-{
 "id": "562d059a-6517-4403-b6cc-e942a0bdb477",
 "name": "Kodaikanal FM",
 "url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio022/master.m3u8",
@@ -3888,7 +3960,7 @@
 {
 "id": "aa3e4511-6ca8-44ec-81b0-96f2e2832238",
 "name": "AIR Madurai AM1269",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio127/chunklist.m3u8",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio127/playlist.m3u8",
 "favicon": "",
 "homepage": "https://liveradios.in/air-madurai-1269-am.html",
 "tags": "",
@@ -4386,43 +4458,23 @@
 "order": 0
 },
 {
-"id": "80c77791-c1d7-4444-8f5d-49c3594b6d9f",
-"name": "maduraifm",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio126/playlist.m3u8",
-"favicon": "https://radiosindia.com/images/air.jpg",
+"id": "5220a4e6-9e24-477d-a8aa-ac51fde9b7c9",
+"name": "lifefmkarur",
+"url": "https://stream.zeno.fm/k0qrmtts91zuv",
+"favicon": "https://radiosindia.com/images/lifefmkarur.jpg",
 "homepage": "",
 "tags": "",
 "country": "India",
 "countryCode": "IN",
 "state": "",
 "language": "tamil",
-"codec": "AAC",
-"bitrate": 121,
-"votes": 88,
+"codec": "MP3",
+"bitrate": 96,
+"votes": 103,
 "category": "tamil",
 "isCustom": false,
 "verified": true,
 "source": "directory",
-"order": 0
-},
-{
-"id": "7d842328-601c-4b4a-b82c-aa6d0941b332",
-"name": "fm-gold-chennai",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio021/chunklist.m3u8",
-"favicon": "https://liveradios.in/wp-content/uploads/fmgold.jpg",
-"homepage": "",
-"tags": "",
-"country": "India",
-"countryCode": "IN",
-"state": "",
-"language": "tamil",
-"codec": "probed",
-"bitrate": 0,
-"votes": 64,
-"category": "tamil",
-"isCustom": false,
-"verified": true,
-"source": "directory-probe",
 "order": 0
 },
 {
@@ -4439,26 +4491,6 @@
 "codec": "AAC+",
 "bitrate": 64,
 "votes": 51,
-"category": "tamil",
-"isCustom": false,
-"verified": true,
-"source": "directory",
-"order": 0
-},
-{
-"id": "008ac84d-3bb0-4303-912f-af7b80847008",
-"name": "fm-rainbow-tirunelveli",
-"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio062/playlist.m3u8",
-"favicon": "https://liveradios.in/wp-content/uploads/fmrainbowrirunelveli.jpg",
-"homepage": "",
-"tags": "",
-"country": "India",
-"countryCode": "IN",
-"state": "",
-"language": "tamil",
-"codec": "MP3",
-"bitrate": 126,
-"votes": 47,
 "category": "tamil",
 "isCustom": false,
 "verified": true,
@@ -6546,6 +6578,26 @@
 "order": 0
 },
 {
+"id": "1d4a8127-ab20-4064-97b7-364a950bf233",
+"name": "Akashvani Nizamabad",
+"url": "https://radio.wavespb.com/live/5d9989b5189a8f4a/5d9989b5189a8f4a.m3u8",
+"favicon": "",
+"homepage": "https://newsonair.gov.in/regional-units/hyderabad/",
+"tags": "news talk,public radio",
+"country": "India",
+"countryCode": "IN",
+"state": "Telangana",
+"language": "telugu",
+"codec": "probed",
+"bitrate": 0,
+"votes": 3,
+"category": "india_news",
+"isCustom": false,
+"verified": true,
+"source": "directory-probe",
+"order": 0
+},
+{
 "id": "17adf752-cde5-45f3-a803-7ce15a60f849",
 "name": "Akashvani Warangal",
 "url": "https://radio.wavespb.com/live/deae7120a205bfff/deae7120a205bfff.m3u8",
@@ -6698,7 +6750,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 56,
-"votes": 164528,
+"votes": 164529,
 "category": "world_news",
 "isCustom": false,
 "verified": true,
@@ -9918,7 +9970,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 55704,
+"votes": 55705,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10298,7 +10350,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 29451,
+"votes": 29452,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10998,7 +11050,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 13387,
+"votes": 13388,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -11318,7 +11370,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 10119,
+"votes": 10120,
 "category": "english",
 "isCustom": false,
 "verified": true,
