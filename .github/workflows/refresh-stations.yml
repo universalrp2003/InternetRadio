@@ -7,6 +7,10 @@ name: Refresh station list
 
 on:
   workflow_dispatch:
+  # Also regenerate whenever the fetcher itself changes.
+  push:
+    paths:
+      - "tools/fetch_stations.py"
   schedule:
     - cron: "17 3 1 * *" # 03:17 on the 1st of every month
 

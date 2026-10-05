@@ -27,7 +27,7 @@ MIRRORS = [
     "https://fi1.api.radio-browser.info",
 ]
 
-UA = "TamilnaduFMRadio/1.0 (+https://github.com/universalrp2003/InternetRadio)"
+UA = "TamilnaduFMRadio/1.1 (+https://github.com/universalrp2003/InternetRadio)"
 
 # category -> (query parameters, max stations kept)
 QUERIES = [
