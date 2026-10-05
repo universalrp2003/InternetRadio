@@ -11,6 +11,7 @@ on:
   push:
     paths:
       - "tools/fetch_stations.py"
+      - "tools/curated_stations.json"
   schedule:
     - cron: "17 3 1 * *" # 03:17 on the 1st of every month
 

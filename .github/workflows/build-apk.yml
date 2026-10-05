@@ -3,6 +3,7 @@
 # - CleanSweep junk cleaner + on-device assistant (:cleaner)
 # - AppForge offline app builder (:builder)
 # - PulseEQ 20-band equalizer (:equalizer)
+# - Tamilnadu FM Radio — Tamil FM + world news + local audio + 10-band EQ (:radio)
 name: Build APK
 
 on:
@@ -61,13 +62,14 @@ jobs:
           WORK=$(mktemp -d)
 
           echo "=== APK files ==="
-          for m in app cleaner builder equalizer; do
+          for m in app cleaner builder equalizer radio; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
 
           CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
           BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
+          RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
 
           echo "=== Package info ==="
           AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
@@ -75,6 +77,7 @@ jobs:
             "$AAPT" dump badging "$CLEANER" | head -1 || true
             "$AAPT" dump badging "$BUILDER" | head -1 || true
             "$AAPT" dump badging "$EQ" | head -1 || true
+            "$AAPT" dump badging "$RADIO" | head -1 || true
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
@@ -84,8 +87,10 @@ jobs:
           # reliable. aapt2 output is used as a cross-check when available.
           MERGED_CLEANER=$(find cleaner/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           MERGED_EQ=$(find equalizer/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          MERGED_RADIO=$(find radio/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           echo "CleanSweep merged manifest: ${MERGED_CLEANER:-not found}"
           echo "PulseEQ merged manifest: ${MERGED_EQ:-not found}"
+          echo "Tamilnadu FM merged manifest: ${MERGED_RADIO:-not found}"
           if [ -n "$AAPT" ]; then
             "$AAPT" dump permissions "$EQ" > "$WORK/eq-perms-aapt.txt" 2>/dev/null || true
             echo "--- aapt2 permissions for PulseEQ ---"
@@ -97,6 +102,8 @@ jobs:
           unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
           unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
+          unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
+          unzip -l "$RADIO" > "$WORK/radio-entries.txt"
 
           echo "=== CleanSweep v1.3 checks ==="
           if [ -n "$MERGED_CLEANER" ] && grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE" "$MERGED_CLEANER"; then
@@ -169,6 +176,66 @@ jobs:
               exit 1
             fi
           done
+
+          echo "=== Tamilnadu FM Radio checks ==="
+          if [ -n "$MERGED_RADIO" ]; then
+            if grep -q "android.permission.INTERNET" "$MERGED_RADIO"; then
+              echo "OK: INTERNET permission present (streaming)"
+            else
+              echo "FAIL: Tamilnadu FM Radio cannot stream without INTERNET"
+              exit 1
+            fi
+            if grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$MERGED_RADIO"; then
+              echo "OK: foreground media playback permission declared"
+            else
+              echo "FAIL: background playback permission missing"
+              exit 1
+            fi
+            if grep -q "READ_MEDIA_AUDIO" "$MERGED_RADIO"; then
+              echo "OK: local audio permission declared"
+            else
+              echo "FAIL: local audio permission missing"
+              exit 1
+            fi
+            if grep -q "androidx.media3.session.MediaSessionService" "$MERGED_RADIO"; then
+              echo "OK: the Media3 playback service is declared"
+            else
+              echo "FAIL: no MediaSessionService intent filter in the manifest"
+              exit 1
+            fi
+            if grep -qi "accessibilityservice" "$MERGED_RADIO"; then
+              echo "FAIL: Tamilnadu FM Radio must not declare an Accessibility service"
+              exit 1
+            fi
+            echo "OK: no Accessibility service"
+            echo "Permissions in the merged manifest:"
+            grep -o "android.permission.[A-Z_]*" "$MERGED_RADIO" | sort -u || true
+          else
+            echo "FAIL: could not find the merged manifest for :radio"
+            exit 1
+          fi
+
+          for symbol in PlaybackService AudioFx EqPresets StationRepository MainViewModel DirectoryClient; do
+            if grep -aq "$symbol" "$WORK/radio.dex"; then
+              echo "OK: $symbol is in the Tamilnadu FM Radio APK"
+            else
+              echo "FAIL: $symbol is missing from the radio APK"
+              exit 1
+            fi
+          done
+
+          if unzip -p "$RADIO" "assets/stations_seed.json" > "$WORK/seed.json" 2>/dev/null && [ -s "$WORK/seed.json" ]; then
+            echo "OK: the station seed list is packaged ($(wc -c < "$WORK/seed.json") bytes)"
+          else
+            echo "FAIL: assets/stations_seed.json is not packaged in the APK"
+            exit 1
+          fi
+          if python3 tools/check_seed.py "$WORK/seed.json"; then
+            echo "OK: seed list parsed and contains Tamil + news stations"
+          else
+            echo "FAIL: the seed list could not be parsed"
+            exit 1
+          fi
 
           echo "ALL CHECKS PASSED"
 
@@ -246,3 +313,9 @@ jobs:
         with:
           name: pulseeq-apk
           path: equalizer/build/outputs/apk/debug/*.apk
+
+      - name: Upload Tamilnadu FM Radio APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: tamilnadu-fm-radio-apk
+          path: radio/build/outputs/apk/debug/*.apk
