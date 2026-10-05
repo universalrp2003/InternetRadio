@@ -142,6 +142,10 @@ QUERIES = [
 ]
 
 KEEP_CODECS = ("mp3", "aac", "aac+", "ogg", "opus", "mp4a", "hls", "m3u8", "")
+# Categories thin enough in the directory that it is worth probing rows whose
+# codec label we do not trust.
+PROBE_CATEGORIES = ("tamil", "tamil_fm", "tamil_news", "tamil_devotional", "india_news")
+PROBE_PER_QUERY = 25
 MAX_TOTAL = 560
 
 # Where Tamil stations live. Used to classify a station the directory did not tag.
@@ -212,15 +216,39 @@ def _one_probe(url, timeout, ranged):
     return False, f"not audio (content-type={content_type or 'none'})"
 
 
+def hls_alternates(url):
+    """
+    AIR (and a few other broadcasters) publish both /playlist.m3u8 (the variant
+    list) and /master.m3u8. One of the two regularly 404s while the other works,
+    so try the sibling before declaring a station dead.
+    """
+    out = []
+    if not url.lower().endswith(".m3u8"):
+        return out
+    if "/playlist.m3u8" in url.lower():
+        out.append(re.sub(r"/playlist\.m3u8$", "/master.m3u8", url, flags=re.I))
+    elif "/master.m3u8" in url.lower():
+        out.append(re.sub(r"/master\.m3u8$", "/playlist.m3u8", url, flags=re.I))
+    return out
+
+
 def probe(url, timeout=15):
-    """Two attempts: a ranged GET, then a plain GET (some servers dislike Range)."""
+    """
+    Two attempts per candidate URL (a ranged GET, then a plain GET: some servers
+    dislike Range), and for HLS the playlist/master sibling. Returns
+    (alive, detail, url_that_answered) - the caller keeps the URL that worked.
+    """
     first_error = None
-    for ranged in (True, False):
-        try:
-            return _one_probe(url, timeout, ranged)
-        except Exception as error:  # noqa: BLE001
-            first_error = f"{type(error).__name__}: {error}"
-    return False, first_error or "unreachable"
+    for candidate in [url] + hls_alternates(url):
+        for ranged in (True, False):
+            try:
+                alive, detail = _one_probe(candidate, timeout, ranged)
+                if alive:
+                    return True, detail, candidate
+                first_error = detail
+            except Exception as error:  # noqa: BLE001
+                first_error = f"{type(error).__name__}: {error}"
+    return False, first_error or "unreachable", url
 
 
 def _unused_probe_original(url, timeout=12):
@@ -378,6 +406,26 @@ def key_of(url):
     return re.sub(r"/+$", "", url.strip().lower())
 
 
+def url_of(row):
+    return (row.get("url_resolved") or row.get("url") or "").strip()
+
+
+def add_station(stations, counts, row, category, source="directory", verified=True):
+    """Deduplicate by URL, normalise and count. Returns 1 if it was really added."""
+    url = url_of(row)
+    item_key = key_of(url)
+    if not url or item_key in stations:
+        return 0
+    row = dict(row)
+    row["source"] = source
+    row.setdefault("order", 0)
+    final_category = classify(row, category)
+    item = normalise(row, final_category, verified=verified)
+    stations[item_key] = item
+    counts[final_category] = counts.get(final_category, 0) + 1
+    return 1
+
+
 def main():
     out_path = sys.argv[1] if len(sys.argv) > 1 else "radio/src/main/assets/stations_seed.json"
     stations = {}
@@ -391,12 +439,17 @@ def main():
         results = list(pool.map(lambda item: (item, probe(item["url"])), curated))
 
     curated_ok = 0
-    for index, (item, (alive, detail)) in enumerate(results):
+    for index, (item, (alive, detail, used_url)) in enumerate(results):
         if not alive:
             debug.append({"stage": "curated", "name": item["name"], "url": item["url"], "result": detail})
             print(f"   x {item['name']}: {detail}")
             continue
         row = dict(item)
+        if used_url != item["url"]:
+            debug.append({"stage": "curated-url-swap", "name": item["name"],
+                          "from": item["url"], "to": used_url})
+            print(f"   ~ {item['name']}: using {used_url}")
+            row["url"] = used_url
         row["source"] = "curated"
         row["order"] = 1000 - index
         item_key = key_of(item["url"])
@@ -424,6 +477,7 @@ def main():
         kept = 0
         rejected = {}
         dropped_names = []
+        codec_rejects = []      # rows the directory labels with an odd codec - probed below
         for row in rows:
             if kept >= limit:
                 break
@@ -432,19 +486,33 @@ def main():
                 rejected[reason] = rejected.get(reason, 0) + 1
                 if "name" in params and len(dropped_names) < 6:
                     dropped_names.append(f"{row.get('name')} ({reason})")
+                # The directory's codec column is community-maintained and often wrong
+                # (AIR and several Indian stations are filed as "asp" or left blank while
+                # their public HLS/MP3 feed plays fine). For Tamil and news rows, ask the
+                # stream itself instead of trusting the label.
+                if (reason == "codec" and category in PROBE_CATEGORIES
+                        and len(codec_rejects) < PROBE_PER_QUERY
+                        and (trust_tamil or not category.startswith("tamil") or tamil_evidence(row))):
+                    codec_rejects.append(row)
                 continue
-            final_category = classify(row, category)
-            url = (row.get("url_resolved") or row.get("url") or "").strip()
-            item_key = key_of(url)
-            if item_key in stations:
-                continue
-            row = dict(row)
-            row["source"] = "directory"
-            row.setdefault("order", 0)
-            item = normalise(row, final_category, verified=row.get("lastcheckok") == 1)
-            stations[item_key] = item
-            counts[final_category] = counts.get(final_category, 0) + 1
-            kept += 1
+            kept += add_station(stations, counts, row, category, source="directory",
+                                verified=row.get("lastcheckok") == 1)
+
+        if codec_rejects:
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                probed = list(pool.map(lambda row: (row, probe(url_of(row))), codec_rejects))
+            for row, (alive, detail, used_url) in probed:
+                if not alive:
+                    continue
+                row = dict(row)
+                row["url_resolved"] = used_url
+                row["codec"] = "probed"
+                added = add_station(stations, counts, row, category, source="directory-probe",
+                                    verified=True)
+                kept += added
+                debug.append({"stage": "probe-recovered", "category": category,
+                              "name": row.get("name"), "url": used_url, "detail": detail})
+                print(f"   + probed {row.get('name')}: {detail}")
         print(f"   kept {kept} of {len(rows)} (rejected: {rejected})")
         entry = {"stage": "directory", "category": category, "query": params,
                  "returned": len(rows), "kept": kept, "rejected": rejected}
