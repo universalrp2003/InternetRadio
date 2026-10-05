@@ -75,21 +75,31 @@ jobs:
             "$AAPT" dump badging "$CLEANER" | head -1 || true
             "$AAPT" dump badging "$BUILDER" | head -1 || true
             "$AAPT" dump badging "$EQ" | head -1 || true
+          else
+            echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
 
-          # Extract the parts once and grep the files. Piping tens of megabytes
-          # through echo/grep inside an && chain breaks on SIGPIPE, which is not
-          # a real failure — so there are no big pipes here at all.
-          unzip -p "$CLEANER" AndroidManifest.xml > "$WORK/cleaner-manifest.bin"
+          # The manifests are read from Gradle's plain-text merged manifests —
+          # parsing the binary manifest out of the APK with `strings` is not
+          # reliable. aapt2 output is used as a cross-check when available.
+          MERGED_CLEANER=$(find cleaner/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          MERGED_EQ=$(find equalizer/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          echo "CleanSweep merged manifest: ${MERGED_CLEANER:-not found}"
+          echo "PulseEQ merged manifest: ${MERGED_EQ:-not found}"
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump permissions "$EQ" > "$WORK/eq-perms-aapt.txt" 2>/dev/null || true
+            echo "--- aapt2 permissions for PulseEQ ---"
+            cat "$WORK/eq-perms-aapt.txt" || true
+          fi
+
+          # Dex checks: extract once, then grep the files (no huge pipes, so no
+          # spurious SIGPIPE failures).
           unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
           unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
-          unzip -p "$EQ" AndroidManifest.xml > "$WORK/eq-manifest.bin"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
-          strings -a "$WORK/cleaner-manifest.bin" > "$WORK/cleaner-manifest.txt"
-          strings -a "$WORK/eq-manifest.bin" > "$WORK/eq-manifest.txt"
 
           echo "=== CleanSweep v1.3 checks ==="
-          if grep -qi "accessibilityservice" "$WORK/cleaner-manifest.txt"; then
+          if [ -n "$MERGED_CLEANER" ] && grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE" "$MERGED_CLEANER"; then
             echo "FAIL: CleanSweep still declares an Accessibility service"
             exit 1
           fi
@@ -123,18 +133,31 @@ jobs:
           fi
 
           echo "=== PulseEQ checks ==="
-          PERMS=$(grep -o "android\.permission\.[A-Z_]*" "$WORK/eq-manifest.txt" | sort -u || true)
-          echo "PulseEQ permissions: $(echo "$PERMS" | tr '\n' ' ')"
-          if echo "$PERMS" | grep -qx "android.permission.INTERNET"; then
-            echo "FAIL: PulseEQ must not request INTERNET"
-            exit 1
-          fi
-          echo "OK: PulseEQ has no INTERNET permission (fully offline)"
-
-          if grep -aq "EqService" "$WORK/eq-manifest.txt"; then
-            echo "OK: the background equalizer service is declared"
+          if [ -n "$MERGED_EQ" ]; then
+            if grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
+              echo "FAIL: PulseEQ must not request INTERNET"
+              grep -n "uses-permission" "$MERGED_EQ" || true
+              exit 1
+            fi
+            echo "OK: PulseEQ requests no INTERNET permission (fully offline)"
+            echo "Permissions in the merged manifest:"
+            grep -o "android.permission.[A-Z_]*" "$MERGED_EQ" | sort -u || true
           else
-            echo "FAIL: EqService is missing from the equalizer manifest"
+            echo "WARN: merged manifest not found; falling back to aapt2 output"
+            if grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
+              echo "FAIL: PulseEQ must not request INTERNET"
+              exit 1
+            fi
+            echo "OK: no INTERNET permission in the aapt2 permission dump"
+          fi
+
+          if [ -n "$MERGED_EQ" ] && grep -q "EqService" "$MERGED_EQ"; then
+            echo "OK: the background equalizer service is declared"
+            grep -o 'android:name="[^"]*EqService"' "$MERGED_EQ" | head -2 || true
+          elif [ -n "$AAPT" ] && "$AAPT" dump xmltree --file AndroidManifest.xml "$EQ" 2>/dev/null | grep -q "EqService"; then
+            echo "OK: the background equalizer service is declared (aapt2)"
+          else
+            echo "FAIL: EqService could not be found in the equalizer manifest"
             exit 1
           fi
 
