@@ -1,9 +1,9 @@
 {
 "source": "radio-browser.info + curated, probed list",
-"generatedAt": "2026-10-05T12:57:30Z",
+"generatedAt": "2026-10-05T13:12:32Z",
 "note": "Seed list shipped with the app. 'verified' means the stream answered a health check or a build-time probe; the app marks the rest as unchecked. The app can also search the live directory for thousands more stations.",
 "counts": {
-"tamil": 161,
+"tamil": 165,
 "tamil_fm": 44,
 "world_news": 148,
 "india_news": 8,
@@ -12,7 +12,7 @@
 "english": 110
 },
 "verifiedCount": 454,
-"total": 482,
+"total": 486,
 "debug": [
 {
 "stage": "curated",
@@ -344,7 +344,10 @@
 "kept": 0,
 "rejected": {
 "not-tamil": 1
-}
+},
+"dropped": [
+"Hello Fm (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -377,7 +380,15 @@
 "rejected": {
 "unchecked": 3,
 "not-tamil": 8
-}
+},
+"dropped": [
+"Radio Mirchi 98.3 Chennai (unchecked)",
+"Radio Mirchi Bangla (unchecked)",
+"Radio Mirchi Bangla (unchecked)",
+"Radio Mirchi Bay Area (not-tamil)",
+"Radio Mirchi Dubai (not-tamil)",
+"Radio Mirchi Hindi (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -401,7 +412,15 @@
 "unchecked": 4,
 "not-tamil": 30,
 "codec": 1
-}
+},
+"dropped": [
+"97 Radio City  (unchecked)",
+"97.0 Radio City (not-tamil)",
+"Christian Radio City of Eden (not-tamil)",
+"Christian Radio City of Eden (not-tamil)",
+"Hitrádio City 93.7 FM (not-tamil)",
+"Hitrádio City Brno (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -414,7 +433,15 @@
 "rejected": {
 "not-tamil": 6,
 "unchecked": 2
-}
+},
+"dropped": [
+"95.7 BIG FM (not-tamil)",
+"Big FM (Lower Saxony) (not-tamil)",
+"Big FM 106.2 UAE (not-tamil)",
+"Big FM 91.9 Rosario (unchecked)",
+"Big FM Baden-Württemberg (not-tamil)",
+"Big FM Rheinland-Pfalz (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -428,7 +455,15 @@
 "not-tamil": 5,
 "codec": 8,
 "unchecked": 11
-}
+},
+"dropped": [
+"Air FM Rainbow Bangalore (not-tamil)",
+"AIR FM Rainbow Chennai (codec)",
+"AIR FM Rainbow Cuttack 🌈 (unchecked)",
+"Air FM Rainbow Delhi (not-tamil)",
+"AIR FM Rainbow Kochi (unchecked)",
+"AIR FM Rainbow Mumbai (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -441,7 +476,13 @@
 "rejected": {
 "not-tamil": 3,
 "unchecked": 1
-}
+},
+"dropped": [
+"Air Vividh Bharti  (not-tamil)",
+"Vividh Bharti (not-tamil)",
+"Vividh Bharti Mumbai (not-tamil)",
+"Vividh Bharti Pune (unchecked)"
+]
 },
 {
 "stage": "directory",
@@ -453,7 +494,11 @@
 "kept": 0,
 "rejected": {
 "unchecked": 2
-}
+},
+"dropped": [
+"Ilayaraja Radio (unchecked)",
+"Ilayaraja Super Beats Radio (unchecked)"
+]
 },
 {
 "stage": "directory",
@@ -465,7 +510,11 @@
 "kept": 0,
 "rejected": {
 "not-tamil": 2
-}
+},
+"dropped": [
+"91.9 KSPB Stevenson Pebble Beach (not-tamil)",
+"Hermitage Radio Spb (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -524,11 +573,14 @@
 "name": "madurai"
 },
 "returned": 5,
-"kept": 1,
+"kept": 2,
 "rejected": {
-"codec": 2,
-"unchecked": 1
-}
+"codec": 2
+},
+"dropped": [
+"AIR Madurai AM1269 (codec)",
+"AIR Madurai FM (codec)"
+]
 },
 {
 "stage": "directory",
@@ -539,8 +591,11 @@
 "returned": 2,
 "kept": 0,
 "rejected": {
-"unchecked": 1
-}
+"codec": 1
+},
+"dropped": [
+"AIR FM Rainbow Trichy (codec)"
+]
 },
 {
 "stage": "directory",
@@ -550,9 +605,7 @@
 },
 "returned": 1,
 "kept": 0,
-"rejected": {
-"unchecked": 1
-}
+"rejected": {}
 },
 {
 "stage": "directory",
@@ -593,9 +646,16 @@
 "returned": 7,
 "kept": 0,
 "rejected": {
-"not-tamil": 6,
-"unchecked": 1
-}
+"not-tamil": 7
+},
+"dropped": [
+"101fm radio jerusalem  (not-tamil)",
+"neu-jerusalem (not-tamil)",
+"Radio Salem 92.5 (not-tamil)",
+"Salem News Channel Audio Stream (not-tamil)",
+"sender neu jerusalem  (not-tamil)",
+"WFDD 88.5 - Piedmont NPR Winston-Salem, NC (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -607,7 +667,10 @@
 "kept": 1,
 "rejected": {
 "codec": 1
-}
+},
+"dropped": [
+"AIT Tirunelveli FM (codec)"
+]
 },
 {
 "stage": "directory",
@@ -626,10 +689,13 @@
 "name": "ooty"
 },
 "returned": 2,
-"kept": 0,
+"kept": 1,
 "rejected": {
-"unchecked": 2
-}
+"not-tamil": 1
+},
+"dropped": [
+"BOOTY FM (not-tamil)"
+]
 },
 {
 "stage": "directory",
@@ -655,6 +721,143 @@
 "stage": "directory",
 "category": "tamil",
 "query": {
+"name": "coimbatore"
+},
+"returned": 4,
+"kept": 1,
+"rejected": {
+"not-tamil": 2,
+"codec": 1
+},
+"dropped": [
+"Air Coimbatore (not-tamil)",
+"air-coimbatore (codec)",
+"Fm rainbow Coimbatore (not-tamil)"
+]
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "erode"
+},
+"returned": 1,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "vellore"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "chennai"
+},
+"returned": 17,
+"kept": 1,
+"rejected": {
+"codec": 6,
+"not-tamil": 2
+},
+"dropped": [
+"AIR FM Gold Chennai (codec)",
+"AIR FM Rainbow Chennai (codec)",
+"Chennai FM Rainbow (codec)",
+"Chennai live (not-tamil)",
+"CHENNAI LIVE  (not-tamil)",
+"fm-gold-chennai (codec)"
+]
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "tamil nadu"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "tamilnadu"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "nagercoil"
+},
+"returned": 2,
+"kept": 0,
+"rejected": {
+"codec": 2
+},
+"dropped": [
+"AIR Nagercoil (codec)",
+"AIR Nagercoil FM (codec)"
+]
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "thanjavur"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"name": "dindigul"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"tagList": "kovai"
+},
+"returned": 0,
+"kept": 0,
+"rejected": {}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
+"tagList": "madurai"
+},
+"returned": 1,
+"kept": 0,
+"rejected": {
+"codec": 1
+}
+},
+{
+"stage": "directory",
+"category": "tamil",
+"query": {
 "name": "tamil fm"
 },
 "returned": 3,
@@ -671,7 +874,10 @@
 "kept": 3,
 "rejected": {
 "unchecked": 1
-}
+},
+"dropped": [
+"Magesh  Tamil Radio (unchecked)"
+]
 },
 {
 "stage": "directory",
@@ -751,7 +957,11 @@
 "kept": 0,
 "rejected": {
 "unchecked": 2
-}
+},
+"dropped": [
+"Minnal FM (unchecked)",
+"Minnal FM (unchecked)"
+]
 },
 {
 "stage": "directory",
@@ -763,7 +973,10 @@
 "kept": 2,
 "rejected": {
 "codec": 1
-}
+},
+"dropped": [
+"AIR Raagam (codec)"
+]
 },
 {
 "stage": "directory",
@@ -805,7 +1018,10 @@
 "kept": 10,
 "rejected": {
 "unchecked": 1
-}
+},
+"dropped": [
+" CONEXIÓN 98.1 (Colima) - 98.1 FM - XHIRC-FM - Instituto Colimense de Radio y Televisión - Colima, Colima (unchecked)"
+]
 },
 {
 "stage": "directory",
@@ -1096,7 +1312,10 @@
 "kept": 0,
 "rejected": {
 "codec": 1
-}
+},
+"dropped": [
+"AIR News 24/7 (codec)"
+]
 },
 {
 "stage": "directory",
@@ -1698,7 +1917,7 @@
 "language": "tamil",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 821,
+"votes": 822,
 "category": "tamil",
 "isCustom": false,
 "verified": true,
@@ -1838,7 +2057,7 @@
 "language": "tamil",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 627,
+"votes": 628,
 "category": "tamil",
 "isCustom": false,
 "verified": true,
@@ -4306,6 +4525,26 @@
 "order": 0
 },
 {
+"id": "d1f9d08f-f32e-4c1a-9789-b91c0f0d44ef",
+"name": "radiomadurai",
+"url": "http://stream.zeno.fm/1ycmepnthkhvv",
+"favicon": "https://radiosindia.com/images/radiomadurai.jpg",
+"homepage": "",
+"tags": "",
+"country": "India",
+"countryCode": "IN",
+"state": "",
+"language": "tamil",
+"codec": "MP3",
+"bitrate": 0,
+"votes": 135,
+"category": "tamil",
+"isCustom": false,
+"verified": false,
+"source": "directory",
+"order": 0
+},
+{
 "id": "69c7b853-0444-4d73-8ba4-57d70927bd57",
 "name": "Vanavilfm - we play the hits",
 "url": "https://s7.yesstreaming.net:9000/stream",
@@ -4319,6 +4558,66 @@
 "codec": "MP3",
 "bitrate": 128,
 "votes": 127,
+"category": "tamil",
+"isCustom": false,
+"verified": false,
+"source": "directory",
+"order": 0
+},
+{
+"id": "9f1c89f0-4ccc-4476-b22d-f83c1877e979",
+"name": "radio-mist-ooty",
+"url": "https://stream.zeno.fm/81gn28sbna0uv",
+"favicon": "https://liveradios.in/wp-content/uploads/radiomistooty.jpg",
+"homepage": "",
+"tags": "",
+"country": "India",
+"countryCode": "IN",
+"state": "",
+"language": "tamil",
+"codec": "MP3",
+"bitrate": 0,
+"votes": 119,
+"category": "tamil",
+"isCustom": false,
+"verified": false,
+"source": "directory",
+"order": 0
+},
+{
+"id": "f4fd6dbc-a2c6-435c-a366-7ec795a4ce23",
+"name": "fmrainbowcoimbatore",
+"url": "https://air.pc.cdn.bitgravity.com/air/live/pbaudio017/playlist.m3u8",
+"favicon": "https://radiosindia.com/images/fmrainbowcoimbatore.jpg",
+"homepage": "",
+"tags": "",
+"country": "India",
+"countryCode": "IN",
+"state": "",
+"language": "tamil",
+"codec": "AAC",
+"bitrate": 95,
+"votes": 104,
+"category": "tamil",
+"isCustom": false,
+"verified": false,
+"source": "directory",
+"order": 0
+},
+{
+"id": "4c92b865-ba5c-42c7-8dd5-243f96083279",
+"name": "Radio Mirchi 98.3 Chennai",
+"url": "https://radiosindia.com/radiomirchitamil.html",
+"favicon": "",
+"homepage": "https://radiosindia.com/",
+"tags": "",
+"country": "India",
+"countryCode": "IN",
+"state": "Tamil Nadu",
+"language": "tamil",
+"codec": "",
+"bitrate": 0,
+"votes": 0,
 "category": "tamil",
 "isCustom": false,
 "verified": false,
@@ -5698,7 +5997,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 56,
-"votes": 164527,
+"votes": 164528,
 "category": "world_news",
 "isCustom": false,
 "verified": true,
@@ -6718,7 +7017,7 @@
 "language": "english,hindi",
 "codec": "AAC+",
 "bitrate": 32,
-"votes": 1400,
+"votes": 1401,
 "category": "world_news",
 "isCustom": false,
 "verified": true,
@@ -7678,7 +7977,7 @@
 "language": "english",
 "codec": "AAC",
 "bitrate": 0,
-"votes": 490,
+"votes": 491,
 "category": "world_news",
 "isCustom": false,
 "verified": true,
@@ -8578,7 +8877,7 @@
 "language": "english,german",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 826711,
+"votes": 826712,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -8598,7 +8897,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 571342,
+"votes": 571344,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -8618,7 +8917,7 @@
 "language": "english",
 "codec": "AAC",
 "bitrate": 320,
-"votes": 318503,
+"votes": 318504,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -8638,7 +8937,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 320,
-"votes": 305711,
+"votes": 305713,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -8758,7 +9057,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 192,
-"votes": 90120,
+"votes": 90121,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -9158,7 +9457,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 41341,
+"votes": 41343,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -9378,7 +9677,7 @@
 "language": "english",
 "codec": "AAC",
 "bitrate": 48,
-"votes": 27145,
+"votes": 27146,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -9778,7 +10077,7 @@
 "language": "english,russian,ukrainian",
 "codec": "MP3",
 "bitrate": 192,
-"votes": 17556,
+"votes": 17566,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -9938,7 +10237,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 320,
-"votes": 14051,
+"votes": 14052,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10098,7 +10397,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 12304,
+"votes": 12305,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10198,7 +10497,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 256,
-"votes": 11788,
+"votes": 11789,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10378,7 +10677,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 320,
-"votes": 8791,
+"votes": 8792,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10498,7 +10797,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 8430,
+"votes": 8431,
 "category": "english",
 "isCustom": false,
 "verified": true,
@@ -10718,7 +11017,7 @@
 "language": "english",
 "codec": "MP3",
 "bitrate": 128,
-"votes": 7468,
+"votes": 7469,
 "category": "english",
 "isCustom": false,
 "verified": true,
