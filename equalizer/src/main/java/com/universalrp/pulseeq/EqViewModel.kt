@@ -253,11 +253,14 @@ class EqViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun isBatteryOptimized(): Boolean = try {
-        val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
-        !pm.isIgnoringBatteryOptimizations(ctx.packageName)
-    } catch (t: Throwable) {
-        true
+    fun isBatteryOptimized(): Boolean {
+        return try {
+            val pm = ctx.getSystemService(Context.POWER_SERVICE) as PowerManager
+            val ignoring = pm.isIgnoringBatteryOptimizations(ctx.packageName)
+            ignoring == false
+        } catch (t: Throwable) {
+            true
+        }
     }
 
     // ------------------------------------------------------------------- LEDs

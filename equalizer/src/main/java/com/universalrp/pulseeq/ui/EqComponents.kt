@@ -70,9 +70,9 @@ fun Chip(
 fun IconChip(
     icon: ImageVector,
     label: String,
-    onClick: () -> Unit,
     tint: Color = Cyan,
     modifier: Modifier = Modifier,
+    onClick: () -> Unit,
 ) {
     Row(
         modifier = modifier

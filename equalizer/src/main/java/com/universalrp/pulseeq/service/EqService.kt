@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.graphics.drawable.IconCompat
 import com.universalrp.pulseeq.MainActivity
 import com.universalrp.pulseeq.R
 import com.universalrp.pulseeq.audio.EqCore
@@ -157,7 +158,7 @@ class EqService : Service() {
             .setContentIntent(open)
             .addAction(
                 NotificationCompat.Action.Builder(
-                    android.graphics.drawable.Icon.createWithResource(this, R.drawable.ic_stat_eq),
+                    IconCompat.createWithResource(this, R.drawable.ic_stat_eq),
                     "Stop",
                     stop,
                 ).build()
