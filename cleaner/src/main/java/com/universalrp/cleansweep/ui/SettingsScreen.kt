@@ -23,7 +23,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.VolumeOff
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -95,6 +98,42 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // ------------------------------------------------------- voice (v2.4)
+            PanelCard(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { vm.navigate(Screen.VOICE) }
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
+                        contentDescription = null,
+                        tint = if (state.voiceOn) AccentCyan else TextSecondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                    Spacer(Modifier.size(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            tr("Voice & daily watch"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            if (state.voiceOn) {
+                                tr("Warnings spoken out loud, quiet hours, and the daily brief.")
+                            } else {
+                                tr("Voice is off. Nothing will be spoken, at any hour.")
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                    }
+                    Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
+                }
+            }
+
             // ------------------------------------------------------- language
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
