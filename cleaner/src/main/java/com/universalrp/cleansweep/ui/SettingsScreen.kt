@@ -1,5 +1,9 @@
 package com.universalrp.cleansweep.ui
 
+import androidx.compose.ui.draw.clip
+
+import androidx.compose.foundation.shape.RoundedCornerShape
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -50,6 +54,7 @@ import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.SurfaceHigh
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -126,12 +131,52 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            // Replaces the old duplicate "Detailed assistant answers" row: the user asked
+            // for an online/offline choice there instead.
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Assistant answers",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "On-device: private, instant, works offline. Online: your AI provider " +
+                            "explains in more depth (needs the key in AI settings).",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeChip(
+                            label = "On-device",
+                            selected = !state.assistantOnline,
+                            onClick = { vm.setAssistantOnline(false) },
+                        )
+                        ModeChip(
+                            label = "Online AI",
+                            selected = state.assistantOnline,
+                            enabled = state.aiConfig.ready,
+                            onClick = { vm.setAssistantOnline(true) },
+                        )
+                    }
+                    if (!state.aiConfig.ready && state.assistantOnline) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "No AI provider is set up, so answers fall back to the on-device engine.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = WarnAmber,
+                        )
+                    }
+                }
+            }
+
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Detailed assistant answers",
-                    subtitle = "Off = the on-device assistant replies in one short line",
-                    checked = state.assistantVerbose,
-                    onCheckedChange = { vm.setAssistantVerbose(it) },
+                    title = "Charging status in the status bar",
+                    subtitle = "Ongoing notification with charging watts, battery % and time to full",
+                    checked = state.chargeMonitor,
+                    onCheckedChange = { vm.setChargeMonitor(it) },
                 )
             }
 
@@ -344,4 +389,28 @@ private fun SettingSwitch(
             ),
         )
     }
+}
+
+@Composable
+private fun ModeChip(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+) {
+    Text(
+        label,
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(if (selected) AccentCyan else SurfaceHigh)
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 9.dp),
+        style = MaterialTheme.typography.labelLarge,
+        color = when {
+            selected -> Color(0xFF03202B)
+            enabled -> TextPrimary
+            else -> TextSecondary
+        },
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+    )
 }

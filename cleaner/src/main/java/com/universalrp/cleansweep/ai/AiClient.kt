@@ -90,6 +90,65 @@ object AiClient {
         }
     }
 
+    /**
+     * Asks the provider which models this key can use (GET /models, the OpenAI-standard
+     * endpoint that Gemini, NVIDIA, OpenRouter, Groq and OpenAI all implement). This is
+     * what the "Load models" button in AI settings calls, so nobody has to guess a model
+     * name or discover that theirs was retired by reading a 410 error.
+     */
+    suspend fun listModels(config: AiConfig): Pair<List<String>, String?> = withContext(Dispatchers.IO) {
+        val base = config.resolvedBaseUrl
+        if (config.provider == AiProvider.FREE || base.isBlank()) {
+            return@withContext AiProvider.FREE.suggestedModels to null
+        }
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL("$base/models").openConnection() as HttpURLConnection).apply {
+                requestMethod = "GET"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = 30_000
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "CleanSweep/2.1 (Android)")
+                if (config.apiKey.isNotBlank()) {
+                    setRequestProperty("Authorization", "Bearer ${config.apiKey.trim()}")
+                }
+            }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val body = stream?.let { readAll(it) }.orEmpty()
+            if (status !in 200..299) {
+                return@withContext emptyList<String>() to explain(status, body)
+            }
+            val ids = mutableListOf<String>()
+            val json = JSONObject(body)
+            val data = json.optJSONArray("data")
+            if (data != null) {
+                for (i in 0 until data.length()) {
+                    val item = data.optJSONObject(i) ?: continue
+                    val id = item.optString("id").ifBlank { item.optString("name") }
+                    if (id.isNotBlank()) ids.add(id)
+                }
+            } else {
+                // Gemini's native shape, in case a compatibility layer is not present.
+                val models = json.optJSONArray("models")
+                if (models != null) {
+                    for (i in 0 until models.length()) {
+                        val item = models.optJSONObject(i) ?: continue
+                        val name = item.optString("name").removePrefix("models/")
+                        if (name.isNotBlank()) ids.add(name)
+                    }
+                }
+            }
+            ids.toList() to null
+        } catch (e: UnknownHostException) {
+            emptyList<String>() to "No internet connection (could not reach the AI service)."
+        } catch (e: Exception) {
+            emptyList<String>() to "${e.javaClass.simpleName}: ${e.message ?: "could not list models"}"
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
     /** Quick check used by the "Test connection" button. */
     suspend fun test(config: AiConfig): Result =
         ask(
@@ -110,7 +169,7 @@ object AiClient {
             val body = JSONObject().apply {
                 put("model", model)
                 put("temperature", 0.4)
-                put("max_tokens", 1600)
+                put("max_tokens", 3600)
                 put(
                     "messages",
                     JSONArray().apply {
@@ -185,7 +244,9 @@ object AiClient {
             400 -> "The service rejected the request${detail?.let { ": $it" } ?: ""}. " +
                 "Check the model name in AI settings."
             401, 403 -> "The API key was refused (HTTP $status). Paste it again — no spaces, whole key."
-            404 -> "Model not found. Open AI settings and pick a model that your account can use."
+            404 -> "Model not found. Tap \"Load models\" in AI settings to list the models your key can use."
+            410 -> "That model has been retired by the provider (HTTP 410). Tap \"Load models\" in " +
+                "AI settings and pick a current one — providers retire model ids every few months."
             413 -> "The report was too large for this model. Turn off \"send app names\" and retry."
             429 -> "Rate limit or free quota used up (HTTP 429). Wait a minute, or switch provider."
             in 500..599 -> "The AI service had a server error (HTTP $status). Try again shortly."

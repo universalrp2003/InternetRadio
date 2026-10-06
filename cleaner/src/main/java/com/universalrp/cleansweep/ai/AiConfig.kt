@@ -81,6 +81,50 @@ enum class AiProvider(
             "model running on your own computer (Ollama / LM Studio) on the same Wi-Fi.",
     );
 
+    /**
+     * Models that worked when this version was built. The AI settings screen also has a
+     * "Load models" button that asks the provider itself (GET /models) and lists exactly
+     * what your key can use — providers retire model ids, and a retired id is what makes
+     * an otherwise good key answer "410 model has reached its end of life".
+     */
+    val suggestedModels: List<String>
+        get() = when (this) {
+            FREE -> listOf("kilo-auto/free", "openai", "gpt-oss-120b")
+            GEMINI -> listOf(
+                "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-flash-latest",
+            )
+            NVIDIA -> listOf(
+                "meta/llama-3.3-70b-instruct",
+                "nvidia/llama-3.3-nemotron-super-49b-v1",
+                "mistralai/mistral-nemotron",
+                "qwen/qwen2.5-72b-instruct",
+            )
+            OPENROUTER -> listOf(
+                "meta-llama/llama-3.3-70b-instruct:free",
+                "google/gemini-2.0-flash-exp:free",
+                "deepseek/deepseek-chat-v3-0324:free",
+                "qwen/qwen-2.5-72b-instruct:free",
+            )
+            GROQ -> listOf(
+                "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b",
+                "qwen/qwen3-32b",
+            )
+            OPENAI -> listOf("gpt-4o-mini", "gpt-4.1-mini", "gpt-4o")
+            CUSTOM -> emptyList()
+        }
+
+    /** Where the user gets a key (or an account), opened from the AI settings screen. */
+    val signupUrl: String
+        get() = when (this) {
+            FREE -> "https://pollinations.ai"
+            GEMINI -> "https://aistudio.google.com/apikey"
+            NVIDIA -> "https://build.nvidia.com/explore/discover"
+            OPENROUTER -> "https://openrouter.ai/keys"
+            GROQ -> "https://console.groq.com/keys"
+            OPENAI -> "https://platform.openai.com/api-keys"
+            CUSTOM -> ""
+        }
+
     companion object {
         fun fromId(id: String): AiProvider =
             entries.firstOrNull { it.id == id } ?: GEMINI
@@ -117,20 +161,24 @@ object AiSettings {
 
     private const val PREFS = "cleansweep_ai"
 
-    /** Public, keyless endpoints, tried in order by the Free provider. */
+    /**
+     * Public, keyless endpoints, tried in this order by the Free provider. Kilo's gateway
+     * allows about 200 free requests an hour per IP, which makes it the most reliable of
+     * the keyless options; the others are community services that are often busy.
+     */
     val KEYLESS: List<KeylessEndpoint> = listOf(
         KeylessEndpoint(
-            label = "Pollinations",
-            url = "https://text.pollinations.ai/openai",
-            model = "openai",
-        ),
-        KeylessEndpoint(
-            label = "Kilo gateway",
+            label = "Kilo gateway (about 200/hour free)",
             url = "https://api.kilo.ai/api/gateway/chat/completions",
             model = "kilo-auto/free",
         ),
         KeylessEndpoint(
-            label = "OVHcloud AI Endpoints",
+            label = "Pollinations (shared, often busy)",
+            url = "https://text.pollinations.ai/openai",
+            model = "openai",
+        ),
+        KeylessEndpoint(
+            label = "OVHcloud AI (2 requests/min)",
             url = "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1/chat/completions",
             model = "gpt-oss-120b",
         ),

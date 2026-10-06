@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -99,6 +100,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
         Row(
             Modifier
@@ -124,7 +126,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
         val rows = vm.filteredApps()
 
         LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
@@ -396,6 +398,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
         Row(
             Modifier
@@ -419,7 +422,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
 
         val report = state.securityReport
         LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             if (state.securityBusy) {
@@ -593,6 +596,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
         Row(
             Modifier
@@ -616,10 +620,14 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
 
         val report = state.networkReport
         LazyColumn(
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            if (report == null || report.wifi.needsPermission || !state.locationPermission) {
+            // Only ask while there is really nothing to show: once the phone reports the
+            // Wi-Fi name / router address, the card goes away for good.
+            val needsPermissionCard = state.locationPermission.not() ||
+                (report != null && report.wifi.ssid == null && report.wifi.gateway == null)
+            if (needsPermissionCard) {
                 item { NetworkPermissionCard { permissionLauncher.launch(vm.networkPermissions()) } }
             }
 
@@ -632,7 +640,8 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        loaded.wifi.ssid ?: loaded.wifi.transport,
+                                        loaded.wifi.ssid?.let { "Wi-Fi \"$it\"" }
+                                            ?: if (loaded.wifi.connected) "Wi-Fi (name hidden)" else loaded.wifi.transport,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                     )
@@ -700,6 +709,28 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Spacer(Modifier.height(8.dp))
+                            if (loaded.devices.size > 1 && state.aiConfig.ready) {
+                                GradientButton(
+                                    text = if (state.aiDeviceBusy) {
+                                        "Identifying…"
+                                    } else {
+                                        "Identify with AI"
+                                    },
+                                    icon = Icons.Outlined.SmartToy,
+                                    onClick = { vm.identifyDevicesWithAi() },
+                                    enabled = !state.aiDeviceBusy,
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                                state.aiDeviceResult?.let { result ->
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        result,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextPrimary,
+                                    )
+                                }
+                                Spacer(Modifier.height(8.dp))
+                            }
                             Text(
                                 loaded.note,
                                 style = MaterialTheme.typography.labelSmall,
@@ -790,12 +821,21 @@ private fun DeviceCard(device: LanDevice) {
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    device.kind + (device.vendor?.let {
-                        if (it == device.kind) "" else " • $it"
-                    } ?: ""),
+                    buildString {
+                        append(device.identity.type)
+                        append(" • ").append(device.identity.confidence)
+                        append(" (").append(device.identity.evidence).append(")")
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
+                device.vendor?.let { vendor ->
+                    Text(
+                        "Maker: $vendor",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
                 device.mac?.let {
                     Text("MAC $it", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }

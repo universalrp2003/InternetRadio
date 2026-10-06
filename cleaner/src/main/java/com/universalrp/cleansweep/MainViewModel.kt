@@ -122,6 +122,16 @@ data class UiState(
     // Deletion failures (so the app can never say "0 MB cleaned" and mean success)
     val deleteFailureCount: Int = 0,
     val deleteFailureReason: String? = null,
+    // AI model list loaded from the provider (so nobody has to guess a model name)
+    val aiModels: List<String> = emptyList(),
+    val aiModelsBusy: Boolean = false,
+    val aiModelsError: String? = null,
+    // "Who is on my network" identified through the AI
+    val aiDeviceBusy: Boolean = false,
+    val aiDeviceResult: String? = null,
+    // Assistant mode + charging notification
+    val assistantOnline: Boolean = false,
+    val chargeMonitor: Boolean = true,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -156,6 +166,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsRepo.assistantVerbose.collect { on ->
                 mutate { it.copy(assistantVerbose = on) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.assistantOnline.collect { on ->
+                mutate { it.copy(assistantOnline = on) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepo.chargeMonitor.collect { on ->
+                mutate { it.copy(chargeMonitor = on) }
+                com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, on)
             }
         }
         val lastMs = prefs.getLong("last_clean_ms", 0L)
@@ -425,11 +446,51 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val userMsg = AssistantMessage(fromUser = true, text = q)
         mutate { it.copy(assistantMessages = it.assistantMessages + userMsg, assistantTyping = true) }
         viewModelScope.launch {
+            val state = _state.value
+            if (state.assistantOnline && state.aiConfig.ready) {
+                // Online mode: your provider answers, with the same on-device numbers as
+                // context so it cannot drift away from reality.
+                val context = assistantContext()
+                val facts = buildString {
+                    appendLine("Storage: free ${context.storage?.free ?: 0} of ${context.storage?.total ?: 0} bytes")
+                    context.report?.let { report ->
+                        appendLine("Last scan: ${report.totalCount} junk items, ${report.totalBytes} bytes")
+                    }
+                    appendLine("App cache measured: ${context.appCacheCount} apps, ${context.totalAppCacheBytes} bytes")
+                    context.topAppCache?.let { appendLine("Biggest cache: ${it.label}") }
+                    appendLine("All-files access: ${context.hasAllFilesAccess}, usage access: ${context.usageAccess}")
+                    _state.value.health?.let { health ->
+                        appendLine(
+                            "Battery ${health.battery.percent}% ${health.battery.statusLabel}, " +
+                                "%.1f C, ${health.battery.powerW ?: 0} W; " +
+                                "CPU ${health.cpuTempC ?: 0} C; " +
+                                "RAM free ${health.device.availableRamBytes} of ${health.device.totalRamBytes}"
+                        )
+                    }
+                }
+                val result = AiClient.ask(
+                    config = state.aiConfig,
+                    systemPrompt = "You are CleanSweep's helper inside an Android cleaning app. " +
+                        "Answer in under 200 words, plain language, using only the phone facts given.",
+                    userPrompt = "$facts\nQuestion from the user: $q",
+                )
+                val reply = AssistantMessage(
+                    fromUser = false,
+                    text = if (result.ok) {
+                        result.text
+                    } else {
+                        "I could not reach the AI provider (${result.error ?: "unknown error"}). " +
+                            "Here is the on-device answer instead:\n\n" +
+                            Assistant.answer(q, context, state.assistantVerbose).text
+                    },
+                )
+                mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
+                return@launch
+            }
             // A short beat so the reply feels like a considered answer rather than
             // a canned string — the whole engine still runs locally and instantly.
             delay(420)
-            val s = _state.value
-            val reply = Assistant.answer(q, assistantContext(), s.assistantVerbose)
+            val reply = Assistant.answer(q, assistantContext(), _state.value.assistantVerbose)
             mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
         }
     }
@@ -513,6 +574,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshHealth() {
         val snapshot = runCatching { DeviceHealthReader.read(ctx) }.getOrNull() ?: return
         mutate { it.copy(health = snapshot) }
+        // Keep the charging card in the status bar in step with reality: it appears when
+        // the charger is connected and removes itself when the cable comes out.
+        com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+    }
+
+    fun setChargeMonitor(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setChargeMonitor(enabled) }
+        com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, enabled)
+    }
+
+    fun setAssistantOnline(enabled: Boolean) {
+        if (enabled && !_state.value.aiConfig.ready) {
+            mutate {
+                it.copy(message = "Add an AI provider in AI settings first — then Online AI can answer.")
+            }
+            return
+        }
+        viewModelScope.launch { settingsRepo.setAssistantOnline(enabled) }
     }
 
     // ------------------------------------------------------------ app inventory
@@ -754,6 +833,76 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun openAiSettings() = mutate { it.copy(screen = Screen.AI_SETTINGS) }
+
+    /** Asks the provider for the model list ("Load models" button). */
+    fun loadAiModels() {
+        if (_state.value.aiModelsBusy) return
+        mutate { it.copy(aiModelsBusy = true, aiModelsError = null) }
+        viewModelScope.launch {
+            val config = _state.value.aiConfig
+            val (models, error) = AiClient.listModels(config)
+            mutate {
+                it.copy(
+                    aiModelsBusy = false,
+                    aiModels = models.distinct().sorted(),
+                    aiModelsError = error ?: if (models.isEmpty()) "The provider returned no models." else null,
+                    message = if (models.isNotEmpty()) "${models.size} models available" else null,
+                )
+            }
+        }
+    }
+
+    /**
+     * Second opinion on the network list: the AI gets the same facts the screen shows
+     * (ports, names, MAC vendors) and is asked what each device probably is.
+     */
+    fun identifyDevicesWithAi() {
+        val report = _state.value.networkReport ?: return
+        val config = _state.value.aiConfig
+        if (!config.ready) {
+            mutate { it.copy(message = "Set up an AI provider first.") }
+            return
+        }
+        if (report.devices.isEmpty()) {
+            mutate { it.copy(message = "Scan the network first.") }
+            return
+        }
+        mutate { it.copy(aiDeviceBusy = true, aiDeviceResult = null) }
+        viewModelScope.launch {
+            val listing = buildString {
+                appendLine("Wi-Fi network: \"${report.wifi.ssid ?: "name hidden"}\"")
+                appendLine("Devices that answered (ip | hostname | MAC vendor | open ports | CleanSweep guess):")
+                report.devices.forEach { device ->
+                    appendLine(
+                        "- ${device.ip}" +
+                            (if (device.isSelf) " (this phone)" else "") +
+                            (if (device.isGateway) " (router)" else "") +
+                            " | ${device.hostname ?: "-"} | ${device.vendor ?: "-"} | " +
+                            "${device.openPorts.joinToString(",").ifBlank { "-" }} | " +
+                            device.identity.type
+                    )
+                }
+            }
+            val result = AiClient.ask(
+                config = config,
+                systemPrompt = """
+                    You identify devices on a home Wi-Fi network from the evidence given.
+                    For each line say what the device probably is (phone, laptop, desktop, tablet,
+                    smart TV, IP camera, printer, router, NAS, smart-home device) and how confident
+                    you are, and what else would confirm it. Never invent a brand the evidence does
+                    not support. Then add a short section on anything that looks unusual for a home
+                    network. Keep it under 300 words, bullet points, plain language.
+                """.trimIndent(),
+                userPrompt = listing,
+            )
+            mutate {
+                it.copy(
+                    aiDeviceBusy = false,
+                    aiDeviceResult = if (result.ok) result.text else result.error,
+                )
+            }
+        }
+    }
 
     // --------------------------------------------------------------- settings
 

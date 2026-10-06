@@ -3,6 +3,7 @@ package com.universalrp.cleansweep.data
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -50,34 +51,100 @@ data class LanDevice(
     val isGateway: Boolean,
     val openPorts: List<Int>,
 ) {
-    val kind: String
-        get() = when {
-            isSelf -> "This phone"
-            isGateway -> "Router / gateway"
-            vendor != null && vendor.contains("apple", true) -> "Apple device"
-            vendor != null && vendor.contains("samsung", true) -> "Samsung device"
-            vendor != null && (vendor.contains("xiaomi", true) || vendor.contains("oppo", true) ||
-                vendor.contains("vivo", true) || vendor.contains("realme", true) ||
-                vendor.contains("oneplus", true) || vendor.contains("huawei", true) ||
-                vendor.contains("motorola", true) || vendor.contains("nokia", true) ||
-                vendor.contains("tecno", true) || vendor.contains("infinix", true) ||
-                vendor.contains("itel", true) || vendor.contains("google", true)) -> "Phone or tablet"
-            vendor != null && (vendor.contains("intel", true) || vendor.contains("dell", true) ||
-                vendor.contains("hp", true) || vendor.contains("lenovo", true) ||
-                vendor.contains("asus", true) || vendor.contains("acer", true) ||
-                vendor.contains("micro-star", true) || vendor.contains("gigabyte", true)) ->
-                "Computer"
-            vendor != null && (vendor.contains("tp-link", true) || vendor.contains("d-link", true) ||
-                vendor.contains("netgear", true) || vendor.contains("tenda", true) ||
-                vendor.contains("asus", true) || vendor.contains("ubiquiti", true) ||
-                vendor.contains("aruba", true) || vendor.contains("cisco", true) ||
-                vendor.contains("ruckus", true)) -> "Network gear"
-            vendor != null && (vendor.contains("espressif", true) || vendor.contains("tuya", true) ||
-                vendor.contains("sonos", true) || vendor.contains("amazon", true) ||
-                vendor.contains("chromecast", true) || vendor.contains("google", true)) ->
-                "Smart device"
-            else -> "Device"
-        }
+    /**
+     * Device type guessed from three real signals, in order of strength:
+     * open ports (a camera answers RTSP 554, a printer IPP 9100, an iPhone 62078,
+     * Windows file sharing 445…), the hostname the device reports, and the MAC vendor.
+     * The guess is labelled as a guess — "Looks like a phone" — never as a fact.
+     */
+    val identity: DeviceIdentity get() = identifyDevice(this)
+
+    val kind: String get() = identity.type
+
+    val evidence: String get() = identity.evidence
+}
+
+data class DeviceIdentity(val type: String, val confidence: String, val evidence: String)
+
+private fun portHit(device: LanDevice, vararg ports: Int) =
+    ports.any { device.openPorts.contains(it) }
+
+fun identifyDevice(device: LanDevice): DeviceIdentity {
+    val host = device.hostname?.lowercase().orEmpty()
+    val vendor = device.vendor?.lowercase().orEmpty()
+
+    // ---------------------------------------------------------------- ports first
+    when {
+        portHit(device, 554, 8554, 1935) && !portHit(device, 445, 3389) ->
+            return DeviceIdentity(
+                "IP camera / DVR",
+                "Likely",
+                "answers on ${if (device.openPorts.contains(554)) "554 (RTSP video)" else "a video-streaming port"}",
+            )
+        portHit(device, 9100, 631) ->
+            return DeviceIdentity("Printer", "Likely", "answers on a print port")
+        portHit(device, 62078) ->
+            return DeviceIdentity("iPhone / iPad", "Likely", "answers on 62078 (Apple devices only)")
+        portHit(device, 445, 3389, 139) ->
+            return DeviceIdentity("Windows PC / laptop", "Likely", "answers on file-sharing or remote-desktop ports")
+        portHit(device, 8009, 8008, 8060) ->
+            return DeviceIdentity("TV / streaming stick", "Likely", "answers on a casting port")
+        portHit(device, 5000, 5001, 6690, 2049) ->
+            return DeviceIdentity("NAS / storage device", "Likely", "answers on a storage port")
+        portHit(device, 22) && !portHit(device, 445) ->
+            return DeviceIdentity("Laptop / computer (Linux)", "Possible", "answers on 22 (SSH)")
+    }
+
+    // ------------------------------------------------------------- hostname hints
+    val hostnameHints = listOf(
+        "iphone" to "iPhone", "ipad" to "iPad", "ipod" to "iPod",
+        "macbook" to "MacBook", "imac" to "iMac", "mac-" to "Mac",
+        "android" to "Android phone", "redmi" to "Redmi phone", "mi-" to "Xiaomi phone",
+        "oneplus" to "OnePlus phone", "pixel" to "Pixel phone", "galaxy" to "Samsung phone",
+        "samsung" to "Samsung phone", "oppo" to "Oppo phone", "vivo" to "Vivo phone",
+        "realme" to "Realme phone", "moto" to "Motorola phone",
+        "desktop" to "Windows PC", "laptop" to "Laptop", "pc-" to "Computer",
+        "raspberry" to "Raspberry Pi", "esp32" to "Smart device (ESP32)",
+        "chromecast" to "Chromecast", "appletv" to "Apple TV", "tv" to "Smart TV",
+        "printer" to "Printer", "brother" to "Printer", "epson" to "Printer",
+        "canon" to "Printer", "hp-" to "Printer or PC",
+        "camera" to "IP camera", "ipcam" to "IP camera", "nvr" to "NVR / camera hub",
+        "router" to "Router", "gateway" to "Router", "modem" to "Router / modem",
+        "nas" to "NAS / storage", "synology" to "Synology NAS", "qnap" to "QNAP NAS",
+        "echo" to "Amazon Echo", "alexa" to "Amazon Echo", "sonos" to "Sonos speaker",
+        "homepod" to "HomePod", "nest" to "Google Nest", "tuya" to "Smart plug / bulb",
+        "switch" to "Network switch", "accesspoint" to "Wi-Fi access point",
+    )
+    hostnameHints.firstOrNull { host.contains(it.first) }?.let { (needle, type) ->
+        return DeviceIdentity(type, "Likely", "its name contains \"$needle\"")
+    }
+
+    // ---------------------------------------------------------------- MAC vendor
+    when {
+        vendor.contains("apple") ->
+            return DeviceIdentity("Apple device (iPhone / iPad / Mac)", "Possible", "MAC vendor is Apple")
+        vendor.contains("samsung") ->
+            return DeviceIdentity("Samsung device", "Possible", "MAC vendor is Samsung")
+        vendor.contains("xiaomi") || vendor.contains("oppo") || vendor.contains("vivo") ||
+            vendor.contains("realme") || vendor.contains("oneplus") || vendor.contains("huawei") ||
+            vendor.contains("motorola") || vendor.contains("nokia") || vendor.contains("tecno") ||
+            vendor.contains("infinix") || vendor.contains("itel") || vendor.contains("google") ->
+            return DeviceIdentity("Phone or tablet", "Possible", "MAC vendor is a phone maker")
+        vendor.contains("espressif") || vendor.contains("tuya") || vendor.contains("sonos") ||
+            vendor.contains("amazon") || vendor.contains("nest") ->
+            return DeviceIdentity("Smart home device", "Possible", "MAC vendor makes smart devices")
+        vendor.contains("tp-link") || vendor.contains("d-link") || vendor.contains("netgear") ||
+            vendor.contains("tenda") || vendor.contains("ubiquiti") || vendor.contains("aruba") ||
+            vendor.contains("cisco") || vendor.contains("ruckus") || vendor.contains("wistron") ->
+            return DeviceIdentity("Network gear (router / AP)", "Possible", "MAC vendor is network equipment")
+        vendor.contains("intel") || vendor.contains("dell") || vendor.contains("hp") ||
+            vendor.contains("lenovo") || vendor.contains("micro-star") || vendor.contains("gigabyte") ->
+            return DeviceIdentity("Computer / laptop", "Possible", "MAC vendor is a PC maker")
+    }
+
+    if (device.isSelf) return DeviceIdentity("This phone", "Certain", "this is the phone running the scan")
+    if (device.isGateway) return DeviceIdentity("Router / gateway", "Certain", "it is your default gateway")
+    return DeviceIdentity("Unknown device", "Unknown", "no ports, name or vendor gave it away")
 }
 
 data class NetworkReport(
@@ -277,31 +344,63 @@ object NetworkScanner {
         var frequency: Int? = null
         var mac: String? = null
 
+        // Android 10 and newer: this is the path that returns the Wi-Fi name once the
+        // user has granted Location / Nearby-devices. WifiManager.connectionInfo still
+        // answers "<unknown ssid>" on many phones, which is what made the permission
+        // card reappear even after the user had allowed it.
+        if (Build.VERSION.SDK_INT >= 29) {
+            try {
+                val network = connectivity?.activeNetwork
+                val capabilities = network?.let { connectivity.getNetworkCapabilities(it) }
+                val transportInfo = capabilities?.transportInfo
+                if (transportInfo is android.net.wifi.WifiInfo) {
+                    val raw = transportInfo.ssid
+                    if (raw != null && raw != "<unknown ssid>") {
+                        ssid = raw.trim('"')
+                    }
+                    val rawBssid = transportInfo.bssid
+                    if (rawBssid != null && rawBssid != "02:00:00:00:00:00" &&
+                        rawBssid != "00:00:00:00:00:00"
+                    ) {
+                        bssid = rawBssid
+                    }
+                    if (transportInfo.linkSpeed > 0) linkSpeed = transportInfo.linkSpeed
+                    val rawRssi = transportInfo.rssi
+                    if (rawRssi != 0 && rawRssi < 0) rssi = rawRssi
+                    if (transportInfo.frequency > 0) frequency = transportInfo.frequency
+                }
+            } catch (e: Exception) {
+                // Fall through to WifiManager below.
+            }
+        }
+
         if (wifiManager != null) {
             try {
                 @Suppress("DEPRECATION")
                 val info = wifiManager.connectionInfo
                 if (info != null) {
                     val rawSsid = info.ssid
-                    ssid = when {
+                    val legacySsid = when {
                         rawSsid == null -> null
-                        rawSsid == "<unknown ssid>" -> {
-                            needsPermission = true
-                            null
-                        }
-                        rawSsid.startsWith("\"") && rawSsid.endsWith("\"") ->
-                            rawSsid.trim('"')
+                        rawSsid == "<unknown ssid>" -> null
+                        rawSsid.startsWith("\"") && rawSsid.endsWith("\"") -> rawSsid.trim('"')
                         else -> rawSsid
                     }
-                    val rawBssid = info.bssid
-                    if (rawBssid != null && rawBssid != "02:00:00:00:00:00" && rawBssid != "00:00:00:00:00:00") {
-                        bssid = rawBssid
-                    } else if (ssid != null) {
-                        needsPermission = true
+                    if (ssid == null) {
+                        ssid = legacySsid
+                        if (legacySsid == null) needsPermission = true
                     }
-                    if (info.linkSpeed > 0) linkSpeed = info.linkSpeed
-                    if (info.rssi != 0) rssi = info.rssi
-                    if (info.frequency > 0) frequency = info.frequency
+                    val rawBssid = info.bssid
+                    if (bssid == null &&
+                        rawBssid != null &&
+                        rawBssid != "02:00:00:00:00:00" &&
+                        rawBssid != "00:00:00:00:00:00"
+                    ) {
+                        bssid = rawBssid
+                    }
+                    if (linkSpeed == null && info.linkSpeed > 0) linkSpeed = info.linkSpeed
+                    if (rssi == null && info.rssi != 0 && info.rssi < 0) rssi = info.rssi
+                    if (frequency == null && info.frequency > 0) frequency = info.frequency
                     @Suppress("DEPRECATION")
                     val rawMac = info.macAddress
                     if (!rawMac.isNullOrBlank() && rawMac != "02:00:00:00:00:00") mac = rawMac
@@ -411,7 +510,8 @@ object NetworkScanner {
             probedHosts = hosts.size,
             note = "Devices that are asleep, that block pings, or that your router keeps isolated " +
                 "will not appear. Phones in deep sleep are the usual reason a device you know about " +
-                "is missing.",
+                "is missing. Types are guessed from open ports, the device name and the MAC vendor — " +
+                "they are good guesses, not certainties. Tap \"Identify with AI\" for a second opinion.",
         )
     }
 

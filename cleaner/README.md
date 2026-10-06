@@ -4,6 +4,34 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.1 highlights**
+
+- **Charging card in the status bar** — while the charger is connected an ongoing
+  notification shows the real charging power in watts, the current going in, battery
+  temperature, the percentage and an estimate of the time left to full (computed from the
+  actual current, and it explains why the last 20% takes longest).
+- **AI analysis, much easier**: a **"Load models"** button asks the provider which models
+  your key can use (that is what fixes the "model has reached its end of life" 410 error
+  on NVIDIA and friends), plus suggested model chips for every provider. The Free option
+  now tries Kilo's gateway first (about 200 free requests an hour, no key) before the
+  community endpoints.
+- **AI analysis, much clearer**: the report screen opens with side-by-side vital boxes
+  (battery, battery heat, CPU heat, watts, RAM, storage, security score, time to
+  full/empty) coloured green/amber/red with plain-language notes, and the AI's answer is
+  split into sections with traffic-light dots instead of one long wall of text.
+- **Network devices explained**: each device is now identified as phone / laptop / Windows
+  PC / iPhone / IP camera / printer / TV / NAS / smart-home gear with the evidence shown
+  ("answers on 554 (RTSP video)"), and an **Identify with AI** button gives a second
+  opinion on anything unclear.
+- **Fixed**: the Wi-Fi permission card no longer keeps coming back after you allow it, the
+  refresh button gives visible feedback, and the device list no longer hides under the
+  3-button navigation bar (bottom insets everywhere).
+- **Fixed**: the duplicated "Detailed assistant answers" row in Settings is gone and
+  replaced by an **On-device / Online AI** choice for the assistant, plus a switch for the
+  charging notification.
+- **Fixed**: "Fastest core now" can no longer look higher than "maximum" (both are measured
+  across all cores), and the hottest-sensor reading explains itself.
+
 **v2.0 highlights**
 
 - **Battery & hardware monitor** — charge, temperature, voltage, **charging/discharging

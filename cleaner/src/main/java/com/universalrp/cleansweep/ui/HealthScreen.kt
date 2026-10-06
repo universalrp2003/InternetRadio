@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -43,6 +44,7 @@ import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.BatteryReading
 import com.universalrp.cleansweep.data.HealthSnapshot
+import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.formatUptime
 import com.universalrp.cleansweep.ui.theme.AccentCyan
@@ -75,6 +77,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
         Modifier
             .fillMaxSize()
             .statusBarsPadding()
+            .navigationBarsPadding()
     ) {
         Row(
             Modifier
@@ -203,7 +206,24 @@ private fun BatteryCard(battery: BatteryReading) {
 
             Bar(value = if (battery.percent >= 0) battery.percent / 100f else 0f,
                 color = if (battery.charging) GoodGreen else AccentCyan)
-            Spacer(Modifier.height(12.dp))
+            batteryTimeLabel(battery)?.let { estimate ->
+                Text(
+                    estimate,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (battery.charging && battery.percent >= 80) {
+                    Text(
+                        "Above 80% charging slows down on purpose — that is how lithium batteries " +
+                            "protect themselves, so the last 20% always takes longer.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            Spacer(Modifier.height(4.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox(
@@ -317,6 +337,13 @@ private fun ThermalCard(health: HealthSnapshot) {
             }
             Spacer(Modifier.height(8.dp))
             Text(
+                "The hottest sensor is often a charging or modem sensor, not the processor — it can " +
+                    "read higher than the CPU without anything being wrong.",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
                 "Normal for a phone in your hand: 30–42 °C. Warm to 48 °C while charging or gaming " +
                     "is normal. Repeated 50 °C+ makes the phone slow itself down; 60 °C+ is a sign to " +
                     "stop and let it cool.",
@@ -349,13 +376,13 @@ private fun CpuCard(health: HealthSnapshot) {
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox(
-                    "Now",
+                    "Fastest core now",
                     health.cpuCurrentMhz?.let { "$it MHz" } ?: "Not reported",
                     AccentCyan,
                     Modifier.weight(1f),
                 )
                 StatBox(
-                    "Maximum",
+                    "Fastest core max",
                     health.cpuMaxMhz?.let { "$it MHz" } ?: "Not reported",
                     TextPrimary,
                     Modifier.weight(1f),
@@ -371,6 +398,12 @@ private fun CpuCard(health: HealthSnapshot) {
                 )
                 Bar(value = load / 100f, color = if (load > 80f) WarnAmber else AccentCyan)
             }
+            Text(
+                "The two numbers are the fastest big core, not core 0 — a phone mixes big and " +
+                    "little cores, so \"now\" can be well below \"max\".",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
             Text(
                 "SoC ${health.device.soc} • ${health.device.abi}",
                 style = MaterialTheme.typography.labelSmall,

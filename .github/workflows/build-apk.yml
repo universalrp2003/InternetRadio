@@ -79,6 +79,8 @@ jobs:
             "$AAPT" dump badging "$EQ" | head -1 || true
             "$AAPT" dump badging "$RADIO" | head -1 || true
             # The installed name must be the one the user asked for.
+            CLEANER_LABEL=$("$AAPT" dump badging "$CLEANER" | grep -m1 "application-label:" || true)
+            echo "cleaner label: $CLEANER_LABEL"
             LABEL=$("$AAPT" dump badging "$RADIO" | grep -m1 "application-label:" || true)
             echo "radio label: $LABEL"
             case "$LABEL" in
@@ -162,8 +164,17 @@ jobs:
             exit 1
           fi
 
+          if grep -q "FOREGROUND_SERVICE_SPECIAL_USE" "$MERGED_CLEANER" && \
+             grep -q "ChargeMonitorService" "$MERGED_CLEANER"; then
+            echo "OK: the charging-status service is declared"
+          else
+            echo "FAIL: the charging-status foreground service is missing"
+            exit 1
+          fi
+
           for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
-                        SecurityScanner NetworkScanner AiClient AiReport; do
+                        SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
+                        ChargeMonitorService batteryTimeLabel; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

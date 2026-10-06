@@ -35,6 +35,8 @@ data class BatteryReading(
     val healthLabel: String,
     val technology: String,
     val chargeCounterMah: Float?,
+    /** Rough pack capacity learned from charge-counter ÷ state-of-charge. */
+    val estimatedCapacityMah: Float?,
     val currentSignNote: String,
 )
 
@@ -140,6 +142,12 @@ object BatteryReader {
             else -> "Near zero right now"
         }
 
+        val capacity = if (chargeCounter != null && percent in 5..100) {
+            (chargeCounter / (percent / 100f)).let { if (it in 500f..12_000f) it else null }
+        } else {
+            null
+        }
+
         return BatteryReading(
             percent = percent.coerceIn(if (percent < 0) -1 else 0, 100),
             temperatureC = temperatureC,
@@ -153,6 +161,7 @@ object BatteryReader {
             healthLabel = healthLabel(health),
             technology = tech.ifBlank { "Not reported" },
             chargeCounterMah = chargeCounter,
+            estimatedCapacityMah = capacity,
             currentSignNote = signNote,
         )
     }
@@ -281,10 +290,15 @@ object CpuReader {
 
     fun cores(): Int = Runtime.getRuntime().availableProcessors().coerceAtLeast(1)
 
+    /**
+     * The busy core's clock. A phone has big and little cores with different limits, so
+     * this (and the maximum below) are both measured across *all* cores — otherwise a
+     * boosting big core looked like it was running faster than "maximum", which is
+     * exactly what a user spotted in v2.0.
+     */
     fun currentFrequencyMhz(): Long? {
         var best: Long? = null
-        val cores = cores()
-        for (index in 0 until cores) {
+        for (index in 0 until cores()) {
             val khz = readText(
                 File("/sys/devices/system/cpu/cpu$index/cpufreq/scaling_cur_freq")
             ).trim().toLongOrNull() ?: continue
@@ -295,15 +309,19 @@ object CpuReader {
     }
 
     fun maxFrequencyMhz(): Long? {
-        val paths = listOf(
-            File("/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq"),
-            File("/sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq"),
-        )
-        for (path in paths) {
-            val khz = readText(path).trim().toLongOrNull() ?: continue
-            if (khz > 0) return khz / 1000
+        var best: Long? = null
+        for (index in 0 until cores()) {
+            val khz = readText(
+                File("/sys/devices/system/cpu/cpu$index/cpufreq/cpuinfo_max_freq")
+            ).trim().toLongOrNull()
+                ?: readText(
+                    File("/sys/devices/system/cpu/cpu$index/cpufreq/scaling_max_freq")
+                ).trim().toLongOrNull()
+                ?: continue
+            val mhz = khz / 1000
+            if (khz > 0 && (best == null || mhz > best)) best = mhz
         }
-        return null
+        return best
     }
 
     fun loadAverage(): Float? =
@@ -384,6 +402,38 @@ object DeviceHealthReader {
         stat.availableBytes
     } catch (e: Exception) {
         0L
+    }
+}
+
+/**
+ * "About 42 min to full" / "About 4 h 10 m left", computed from the *real* current
+ * instead of a guess. Returns null when the phone does not report enough data.
+ */
+fun batteryTimeLabel(battery: BatteryReading): String? {
+    val current = battery.currentA ?: return null
+    if (battery.percent < 0) return null
+    val capacity = battery.estimatedCapacityMah ?: return null
+    val remainingMah = capacity * (1f - battery.percent / 100f)
+    if (battery.charging) {
+        if (battery.percent >= 100) return "Full — unplug when convenient"
+        if (current <= 0.05f) return "Charging slowly right now"
+        val minutes = (remainingMah / (current * 1000f) * 60f).toInt().coerceIn(1, 14 * 60)
+        return "About ${formatMinutes(minutes)} to full"
+    } else {
+        if (current >= -0.05f) return "Not drawing power right now"
+        val minutes = (capacity * (battery.percent / 100f) / (-current * 1000f) * 60f)
+            .toInt().coerceIn(1, 48 * 60)
+        return "About ${formatMinutes(minutes)} left at this rate"
+    }
+}
+
+fun formatMinutes(minutes: Int): String {
+    val hours = minutes / 60
+    val mins = minutes % 60
+    return when {
+        hours <= 0 -> "$mins min"
+        mins == 0 -> "$hours h"
+        else -> "$hours h $mins min"
     }
 }
 

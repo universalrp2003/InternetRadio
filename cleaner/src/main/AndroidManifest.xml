@@ -38,6 +38,13 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
 
+    <!-- Ongoing charging card in the status bar (charging watts, %, time to full). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
     <!-- Battery / thermal / CPU readings need no permission at all: they come from the
          system battery broadcast and the kernel's own sysfs files. -->
 
@@ -70,5 +77,18 @@
             "Accessibility" permission and never automates taps in other apps.
             App caches are cleared through the guided two-tap flow instead.
         -->
+
+        <!--
+            The charging status card. It only runs while the charger is connected, shows
+            watts / percentage / time to full, and stops itself when the cable comes out.
+        -->
+        <service
+            android:name=".notify.ChargeMonitorService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Battery charging timer shown in the status bar while the phone charges" />
+        </service>
     </application>
 </manifest>

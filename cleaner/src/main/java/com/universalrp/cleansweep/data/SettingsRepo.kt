@@ -35,6 +35,8 @@ class SettingsRepo(context: Context) {
         val LARGE_MB = intPreferencesKey("large_mb")
         val OLD_DAYS = intPreferencesKey("old_days")
         val APK_INSTALLED_ONLY = booleanPreferencesKey("apk_installed_only")
+        val CHARGE_MONITOR = booleanPreferencesKey("charge_monitor")
+        val ASSISTANT_ONLINE = booleanPreferencesKey("assistant_online")
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
     }
 
@@ -51,6 +53,18 @@ class SettingsRepo(context: Context) {
 
     suspend fun setAssistantVerbose(value: Boolean) =
         store.edit { it[Keys.ASSISTANT_VERBOSE] = value }
+
+    /** Ongoing charging notification in the status bar. */
+    val chargeMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.CHARGE_MONITOR] ?: true }
+
+    suspend fun setChargeMonitor(value: Boolean) =
+        store.edit { it[Keys.CHARGE_MONITOR] = value }
+
+    /** true = the assistant answers through your AI provider, false = on-device engine. */
+    val assistantOnline: Flow<Boolean> = store.data.map { p -> p[Keys.ASSISTANT_ONLINE] ?: false }
+
+    suspend fun setAssistantOnline(value: Boolean) =
+        store.edit { it[Keys.ASSISTANT_ONLINE] = value }
 
     val scanSettings: Flow<ScanSettings> = store.data.map { p ->
         ScanSettings(

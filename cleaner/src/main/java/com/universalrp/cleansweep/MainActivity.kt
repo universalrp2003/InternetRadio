@@ -26,9 +26,14 @@ class MainActivity : ComponentActivity() {
     private val storagePermission =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
+    /** Android 13+: the charging card needs this, or nothing shows in the status bar. */
+    private val notificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         requestLegacyStorageIfNeeded()
+        requestNotificationsIfNeeded()
         setContent {
             CleanSweepTheme {
                 val vm: MainViewModel = viewModel()
@@ -47,6 +52,14 @@ class MainActivity : ComponentActivity() {
                 AppRoot(vm)
             }
         }
+    }
+
+    private fun requestNotificationsIfNeeded() {
+        if (Build.VERSION.SDK_INT < 33) return
+        val granted = ContextCompat.checkSelfPermission(
+            this, Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
     private fun requestLegacyStorageIfNeeded() {
