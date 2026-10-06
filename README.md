@@ -10,6 +10,23 @@ Five Android applications in one Gradle project:
 | `:radio` | **Ramesh Radio v1.1** | Tamil FM from Tamil Nadu, Sri Lanka, Malaysia, Singapore and the Tamil diaspora, plus Tamil and English **news** radio, a **local audio file player**, favourites/recently-played, a **"TN towns" chip** for city-level FM (Madurai, Puducherry, Kodaikanal, Coimbatore, Tirunelveli …), a sleep timer, a **home-screen widget** (play/pause, next/previous) and a **10-band equalizer (31 Hz – 16 kHz)** with Clear sound (multiband levelling + limiter), rumble cut and hiss cut. Station lists come from the shipped seed plus live search of the open Radio-Browser directory. See [radio/README.md](radio/README.md). |
 | `:equalizer` | **PulseEQ v1.0** | 20-band sound equalizer with its own DSP (peaking biquads + preamp + soft limiter), presets for music/movies/speech/podcast/gaming and more, LED light-bar spectrum driven by real audio energy, a built-in 20-band player, cooperating-player session support, and a foreground service that keeps it running in the background. No INTERNET permission. See [equalizer/README.md](equalizer/README.md). |
 
+## Download (no build needed)
+
+Every release is a GitHub Release with a permanent link — nothing expires, and the file names
+carry the version:
+
+| App | Version | Download |
+|---|---|---|
+| **CleanSweep** | 2.6 | [CleanSweep-v2.6.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/CleanSweep-v2.6.apk) |
+| **Ramesh Radio** | 1.2 | [Ramesh-Radio-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/Ramesh-Radio-v1.2.apk) |
+| **Internet Radio** | 1.0 | [Internet-Radio-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/Internet-Radio-v1.0.apk) |
+| **AppForge** | 1.0 | [AppForge-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/AppForge-v1.0.apk) |
+| **PulseEQ** | 1.0 | [PulseEQ-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/PulseEQ-v1.0.apk) |
+
+All releases: <https://github.com/universalrp2003/InternetRadio/releases> · These are the
+**release** builds (signed with the project keystore, not debuggable), which is what an app
+store will take. The "debug" builds CI also produces are for quick testing only.
+
 ## Building
 
 - **Cloud (easiest):** push to `main`, push an `arena/**` branch, or use *Actions → Build APK → Run workflow*.

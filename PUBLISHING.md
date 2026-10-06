@@ -50,6 +50,12 @@ Still required before any submission:
 
 ---
 
+**The first release already exists:**
+<https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.06> — CleanSweep-v2.6,
+Ramesh-Radio-v1.2, Internet-Radio-v1.0, AppForge-v1.0 and PulseEQ-v1.0, all signed with the
+project keystore and verified non-debuggable by CI. That link is what you share with family,
+and the one to paste into an IzzyOnDroid inclusion request.
+
 ## 2. How the channels compare
 
 | | Google Play | F-Droid (main repo) | IzzyOnDroid | Your own repo (GitHub Pages) | GitHub Releases + Obtainium |
