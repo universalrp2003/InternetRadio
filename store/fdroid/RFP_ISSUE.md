@@ -22,6 +22,15 @@ repository at `store/fdroid/metadata/`.
   https://github.com/universalrp2003/InternetRadio/releases)
 * **No proprietary dependencies:** no Google Play Services, no Firebase, no ads, no analytics,
   no crash reporting. Verified by CI on every build.
+* **AI disclosure (stated up front, please read):** the Kotlin code in these apps was written by
+  an AI coding agent (Arena.ai Agent Mode) working from the developer's feature requirements.
+  The developer chose every feature, tested each build on a phone, reported defects and directed
+  the fixes. In the apps themselves, CleanSweep has an **optional** assistant that the user may
+  point at a provider with their own API key (Gemini, NVIDIA, OpenRouter, Groq, OpenAI or a
+  custom endpoint, plus a keyless "Free" option); no key ships with the app and nothing is sent
+  unless the user turns it on and asks. The other four apps do not use AI at all. If that is a
+  problem for F-Droid, please say so and we will not argue — but we would rather state it now
+  than have it discovered later.
 * **Descriptions, screenshots folder and Tamil translation** are in each module under
   `<module>/fastlane/metadata/android/` (English `en-US`, Tamil `ta-IN` for CleanSweep and
   Ramesh Radio).

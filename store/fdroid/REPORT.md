@@ -1,125 +1,126 @@
-# Publish these apps for free — the exact steps
+# Publishing these apps for free — honest status (6 Oct 2026)
 
-**Route: F-Droid and IzzyOnDroid. No Google Play, no $25.** Everything on my side is already in
-the repository, so both of these are copy-paste jobs. Google Play is the one route that costs
-money and it is the one route that would refuse CleanSweep's All-files access anyway, so we skip
-it.
+## Read this first
 
-- **IzzyOnDroid** — the app is listed in about a day, and it **keeps your signature**, so nobody
-  reinstalls anything. Recommended first.
-- **F-Droid (the main store)** — free, takes a few weeks because a reviewer checks the recipes
-  and the server builds the apps with **F-Droid's own key**. That means the family uninstalls the
-  GitHub APK once and installs from F-Droid.
+**Free means free — that part was right.** No Google Play, no $25, no fee anywhere. But while
+checking why you could not find the button on Codeberg, I read **IzzyOnDroid's App Inclusion
+Policy**, and it contains an AI policy that decides this for us. Here is the honest table.
 
-Both need a free account that only you can create (I cannot sign up as you). IzzyOnDroid uses
-**Codeberg**, F-Droid uses **GitLab**. Nothing else about them needs an account, no card is asked
-for, and no fee is paid at any point.
+| Route | Cost | Who signs the APK | What happens to *these* apps |
+|---|---|---|---|
+| **GitHub Releases** (what you use now) | free | you | **Works today.** Nothing to file, no policy to satisfy. |
+| **F-Droid main repo** | free | F-Droid generates its own key | **A real chance** — F-Droid has no AI policy yet. Needs the honest disclosure below, and one reinstall for the family. |
+| **IzzyOnDroid** | free | you (keeps your key) | **Refused as they stand.** Two separate policy reasons, quoted below. |
+| Google Play | $25 | you | You said no. It also refuses CleanSweep's All-files access. |
 
----
+## Why IzzyOnDroid will refuse — their words, not mine
 
-## A. IzzyOnDroid — fastest, and your key stays
+From <https://izzyondroid.org/docs/general/AppInclusionPolicy/#ai-policy>:
 
-1. Make a free account at <https://codeberg.org> (e-mail + password only).
-2. Open <https://codeberg.org/IzzyOnDroid/repo/issues/new/choose> and pick the app-inclusion
-   template (any "new issue" button works).
-3. Paste the text below and submit. Then wait a day or two.
+> **We are strongly opposed to apps which are fully or in part created by generative AI tools.**
+> …
+> - **Vibe-coded apps will be rejected.**
+> - Apps acting as front-end for LLMs … **or integrate with such services, will be rejected.**
+> - Readme, Changelogs and similar documentation files are allowed to include LLM-generated
+>   texts, **but the code itself should be free of it.**
+> - Using LLMs for research, brainstorming, inspiration, debugging, look-ups, and comparable
+>   „read-only“ tasks, is acceptable – **provided their output is not included in the app's code.**
+>
+> **Any lack of transparency discovered by us, can lead to the project being degraded to rejected
+> state.**
 
-```text
-Please add my apps to IzzyOnDroid.
+Two independent strikes against these five apps:
 
-Repository: https://github.com/universalrp2003/InternetRadio
-Licence: GPL-3.0-or-later (LICENSE in the repository root)
-Author: Ramesh prathap .R <universalrp2003@gmail.com>
-Latest release tag: v2026.10.06 (all APKs attached to the GitHub Release)
-APK signing: the release APKs are signed with a stable keystore committed at
-ci-keystore/release.p12, so future releases keep the same signature and your
-updater will keep working.
+1. **The code was written by an AI coding agent** (Arena.ai Agent Mode) working from your feature
+   requests. You chose what each app does, tested every build on your phone, reported what was
+   wrong and directed the fixes — but the Kotlin was not typed by a human. That is IzzyOnDroid's
+   definition of "vibe-coded": rejected. And their issue form **requires** an honest
+   "Assistance Level" answer (None / Minimal / Moderate / Substantial / Dominant), so there is no
+   version of this where we file it truthfully and get a yes.
+2. **CleanSweep integrates LLM services** — the optional assistant can be pointed at Google
+   Gemini, NVIDIA, OpenRouter, Groq, OpenAI or a custom endpoint with a key you paste (plus a
+   keyless "Free" option). "Apps … which integrate with such services, will be rejected" is
+   explicit, and their point 6 refuses apps that support the big AI platforms.
 
-Five apps share this one Gradle project, one module each:
-- CleanSweep  (com.universalrp.cleansweep)   module cleaner   2.6, versionCode 11
-- Ramesh Radio (com.universalrp.tamilnadufm) module radio     1.2, versionCode 2
-- Internet Radio (com.universalrp.internetradio) module app   1.0, versionCode 2
-- AppForge    (com.universalrp.appforge)     module builder   1.0, versionCode 1
-- PulseEQ     (com.universalrp.pulseeq)      module equalizer 1.0, versionCode 1
+I am not going to write a request that answers "None" to that question. If the answer were ever
+found out, their policy says the project gets "degraded to rejected state" — and I would rather
+you never be in that position over an app store listing.
 
-No Google Play Services, no Firebase, no ads, no analytics, no crash reporting.
-PulseEQ declares no INTERNET permission at all. CleanSweep asks for All-files
-access because it is a cleaner, and nothing is ever deleted without the user
-selecting it and confirming. Its optional AI uses an API key the user pastes
-in themselves; no key ships with the app.
+**Your Codeberg account is fine**, by the way. Nothing about it breaks any rule; you simply had
+the wrong page open. Their new terms restrict *hosting LLM-generated projects on Codeberg*, not
+having an account.
 
-Descriptions are already in fastlane format in each module under
-<module>/fastlane/metadata/android/ (en-US everywhere, ta-IN for CleanSweep and
-Ramesh Radio), and store/fdroid/metadata/ in the repository has ready F-Droid
-metadata files (subdir per module) if they are useful.
-```
+## The corrected links (what your screenshot was missing)
 
-**After that:** every new tagged Release is picked up automatically, so publishing later versions
-is just `git tag` + push.
+The tracker moved. `IzzyOnDroid/repo` is **archived** — its README says the issue tracker has
+moved — and the app requests now live in the **`repodata`** repository:
 
----
+* right page: <https://codeberg.org/IzzyOnDroid/repodata/issues/new/choose>
+  (template: **App Inclusion Request**, title `[AppRequest] <App Name>`)
+* what you had open: `codeberg.org/issues` — that is **your own** dashboard. Its "Create…" menu
+  offers New repository / New migration / New organization, which is exactly what your second
+  screenshot showed. It cannot create an issue: an issue always belongs to *somebody's*
+  repository, never to your account root.
 
-## B. F-Droid (main repository) — free, slower, F-Droid signs the build
+On a phone, type the URL above (or open `codeberg.org/IzzyOnDroid/repodata`, then **Issues** →
+**New issue**). When it is right, the page header names `IzzyOnDroid/repodata`, not your own
+name.
 
-I have already written the five recipe files. They are in
-[`store/fdroid/metadata/`](fdroid/metadata/), one per application id, each pointing at its own
-module with `subdir`.
+## F-Droid: the one public store where these apps have a real chance
 
-1. Make a free account at <https://gitlab.com>.
-2. Go to <https://gitlab.com/fdroid/fdroiddata> and fork it (the Fork button).
-3. In your fork open the `metadata/` folder, "Add file → Upload file", and upload all five
-   `.yml` files from `store/fdroid/metadata/` in one go.
-4. Commit, then press **Create merge request** back into `fdroid/fdroiddata`.
-5. Paste the text below as the description and submit. A reviewer replies; if they ask for a
-   change, we change the recipe file and push it again.
+F-Droid has **no formal AI policy yet** — an interim one is being discussed right now, and one of
+their developers has written that AI-generated code must be **clearly disclosed**. So the honest
+position today is: submit, disclose, and let humans decide. Nobody can promise the outcome, and
+an "AI" warning label on CleanSweep's optional assistant is a realistic outcome (a label, not a
+ban; labels are F-Droid's normal tool for this).
 
-```text
-Adds five apps from one repository (one Gradle project, one module per app).
+### If you want to go that way, these are the exact steps
 
-Repository: https://github.com/universalrp2003/InternetRadio
-Licence: GPL-3.0-or-later
-Author: Ramesh prathap .R <universalrp2003@gmail.com>
-Tag for the versions in these recipes: v2026.10.06
-Commit: cf77610 (the tag points at it)
+0. **One minute for you, only you can do it:** fix the repository description on GitHub
+   (Settings → General → Description). It currently says *"first build"*, which is what the
+   GitHub page shows to any reviewer. Something like: *"Five free Android apps (GPL-3.0):
+   CleanSweep phone cleaner, Ramesh Radio Tamil FM + news, Internet Radio, AppForge, PulseEQ —
+   one Gradle project, one module each."* My token reaches the code but not the repository
+   settings (403), otherwise I would have done it.
+1. Make a free account at <https://gitlab.com> (F-Droid's own data is on GitLab).
+2. Fork <https://gitlab.com/fdroid/fdroiddata>, upload the five files from
+   `store/fdroid/metadata/`, open a merge request, and paste the text from
+   `store/fdroid/README.md` section B — **including the new AI disclosure paragraph**, which is
+   written out for you there.
+3. *No-account alternative:* open one issue at <https://gitlab.com/fdroid/rfp/-/issues/new> with
+   the text in `store/fdroid/RFP_ISSUE.md`. A volunteer does the packing. Slower, and the same
+   disclosure applies.
+4. Send me the screenshots if you want the listing to look right; F-Droid can show a listing
+   without them but it looks bare. Since F-Droid signs with its own key, the family uninstalls
+   the GitHub build **once** and reinstalls from the F-Droid client after that.
 
-- com.universalrp.cleansweep    subdir cleaner    2.6 (11)
-- com.universalrp.tamilnadufm   subdir radio      1.2 (2)
-- com.universalrp.internetradio subdir app        1.0 (2)
-- com.universalrp.appforge      subdir builder    1.0 (1)
-- com.universalrp.pulseeq       subdir equalizer  1.0 (1)
+### What I would not do
 
-UpdateCheckMode is RepoManifest and AutoUpdateMode is Version because the five
-apps version independently inside one repository. No proprietary dependencies,
-no Google Play Services, no ads or analytics. CleanSweep uses
-MANAGE_EXTERNAL_STORAGE deliberately: it is a file cleaner, nothing is deleted
-without the user selecting it and confirming. Its AI features are opt-in with a
-key the user pastes, and the app shows what was sent. No Accessibility service
-is used or declared. Listings for en-US and ta-IN are already in fastlane format
-in each module, and screenshots are on the way.
-```
+File the IzzyOnDroid request for you anyway, with a "None" in the AI box, hoping nobody checks.
+That is a lie in a required field of a form whose policy ends with the sentence about
+transparency, and it is your Codeberg account on the line, not mine.
 
-**If you would rather not make a GitLab account at all:** skip the fork and open an issue at
-<https://gitlab.com/fdroid/rfp/-/issues/new> with the text in
-[`fdroid/RFP_ISSUE.md`](fdroid/RFP_ISSUE.md). A volunteer packs it for you. GitLab does not
-require public visibility for issue replies; a plain issue is readable to anyone with the link,
-but it only contains what is in the text above — no keys, no personal data.
+## If you would rather skip the review queue entirely
 
----
+Both of these are free and need no new account:
 
-## What I still need from you
+1. **Stay on GitHub Releases.** <https://github.com/universalrp2003/InternetRadio/releases> —
+   the family installs a new APK over the old one (same signature, so it updates normally), and
+   every `git tag` I push builds and publishes them. This is what is working today.
+2. **Your own F-Droid-compatible repo, published from GitHub Pages.** I can add a CI job that
+   runs `fdroidserver` and publishes a signed index to GitHub Pages, so your family adds *your*
+   repo URL in Droid-ify / Neo Store once and then gets updates through the store app —
+   the same experience as a big store, without anyone reviewing the code but you. It is a real
+   piece of work (index signing key to keep, a Pages branch to publish), it is not
+   discoverability, and it is entirely your call. Say the word and I will build it.
 
-1. **The screenshots again** — they are not on my disk. A phone screenshot is attached to a chat
-   message as an image; in the next message, drag the nine in (or send them a few at a time) and
-   I will crop out the private parts and put them in the right folders for every store at once.
-2. **The 512×512 icon** (the launcher icon is a vector; the stores want a PNG). I can make it.
-   The 1024×500 feature graphic for F-Droid too.
+## So, your move
 
-## What you do not need to worry about
+Tell me which of these you want and I will do my half:
 
-- **Money:** nothing here costs anything, at any step.
-- **Your keystore:** keeping it in the repository is correct for IzzyOnDroid and GitHub Releases.
-  F-Droid's main repository ignores it and signs with its own key, which is why the family
-  reinstalls once if you go that way.
-- **Updates afterwards:** a new git tag makes a new GitHub Release for IzzyOnDroid to pick up;
-  for F-Droid I update the recipe's `commit`, version and code — tell me the new version and I
-  will push it.
+* **F-Droid submission** — I polish the MR text, you paste it, I place the screenshots when you
+  re-send them.
+* **GitHub Releases only** — nothing to do, it already works; I keep tagging releases.
+* **Own F-Droid repo on GitHub Pages** — I set it up in CI, you add the URL on the phones.
+* **IzzyOnDroid anyway, told truthfully** — I will write it with the honest AI answers, but go in
+  expecting a refusal under the policy quoted above, so that nobody wastes an evening on it.
