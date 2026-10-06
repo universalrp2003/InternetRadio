@@ -181,7 +181,7 @@ class HealthWatchWorker(
         val junk = if (hasAllFilesAccess()) {
             try {
                 val root = Environment.getExternalStorageDirectory()
-                ScanEngine.scan(root, ScanSettings(), JunkKind.entries.toSet()) { }
+                ScanEngine(ctx).scan(root, ScanSettings(), JunkKind.entries.toSet()) { }
             } catch (e: Exception) {
                 null
             }
