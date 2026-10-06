@@ -33,6 +33,13 @@
     <!-- Wi-Fi details + "who is on my network". Location is requested at runtime and is
          only used while the network screen is open. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!--
+      Mobile & data screen: the operator, the SIM names, "5G or 4G" and the real signal in
+      dBm need READ_PHONE_STATE on modern Android. Nothing is read outside that screen and
+      nothing is sent anywhere. Location (already declared) is what unlocks cell-tower ids.
+    -->
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission
         android:name="android.permission.ACCESS_FINE_LOCATION"
         android:maxSdkVersion="32" />
@@ -67,7 +74,8 @@
         android:largeHeap="true"
         android:requestLegacyExternalStorage="true"
         android:supportsRtl="true"
-        android:theme="@style/Theme.CleanSweep">
+        android:theme="@style/Theme.CleanSweep"
+        android:localeConfig="@xml/locales_config">
 
         <activity
             android:name=".MainActivity"

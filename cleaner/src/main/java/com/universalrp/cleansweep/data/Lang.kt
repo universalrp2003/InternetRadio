@@ -1,0 +1,314 @@
+package com.universalrp.cleansweep.data
+
+/**
+ * The app speaks English and Tamil.
+ *
+ * How it works: every visible label is written in English in the code and passed through
+ * [tr]. If the chosen language is Tamil and a translation exists, the Tamil text is shown;
+ * otherwise the English text is kept — nothing is ever blank or machine-mangled. Dynamic
+ * values (numbers, file names) are formatted first and looked up afterwards, so a line like
+ * "23 items selected" simply falls back to English rather than breaking.
+ *
+ * The language is written to SharedPreferences as well, so code outside Compose (services)
+ * can read it instantly.
+ */
+enum class AppLang(val id: String, val label: String) {
+    EN("en", "English"),
+    TA("ta", "தமிழ்"),
+    ;
+
+    companion object {
+        fun fromId(id: String?): AppLang =
+            entries.firstOrNull { it.id == id } ?: EN
+    }
+}
+
+object Lang {
+
+    /** Prefix for the language mirror that non-Compose code reads. */
+    const val PREFS = "cleansweep_state"
+    const val KEY = "app_lang"
+
+    /** Where the Tamil name of the app lives, so every screen can show it consistently. */
+    private const val APP_NAME_EN = "CleanSweep"
+    private const val APP_NAME_TA = "தொலைபேசி காவலர்"
+
+    @Volatile
+    var current: AppLang = AppLang.EN
+        private set
+
+    val isTamil: Boolean get() = current == AppLang.TA
+
+    fun set(lang: AppLang) {
+        current = lang
+    }
+
+    fun appName(): String = if (isTamil) APP_NAME_TA else APP_NAME_EN
+
+    /** The tagline under the app title. */
+    fun tagline(): String = if (isTamil) {
+        "எந்த ஆண்ட்ராய்டு போனுக்கும் க்ளீனர், பேட்டரி ஆரோக்கியம் & பாதுகாப்பு"
+    } else {
+        "Cleaner, battery health & security for any Android phone"
+    }
+
+    /** Translates one label, with optional %s values. */
+    fun t(text: String, vararg args: Any): String {
+        if (current == AppLang.EN) return if (args.isEmpty()) text else safeFormat(text, args)
+        val translated = TAMIL[text] ?: return if (args.isEmpty()) text else safeFormat(text, args)
+        return if (args.isEmpty()) translated else safeFormat(translated, args)
+    }
+
+    private fun safeFormat(pattern: String, args: Array<out Any>): String =
+        try {
+            String.format(pattern, *args)
+        } catch (e: Exception) {
+            pattern
+        }
+
+    /** Shown in Settings and About. */
+    val languageNote: String get() = if (isTamil) {
+        "மெனுவின் மொழி. தமிழ் தேர்ந்தெடுத்தால் பயன்பாட்டின் பெயர் “தொலைபேசி காவலர்” ஆகும்."
+    } else {
+        "Menu language. Tamil also renames the app to “தொலைபேசி காவலர்” (Phone Guardian)."
+    }
+
+    /**
+     * English text → Tamil. Kept flat on purpose: one table, easy to extend, and a missing
+     * entry is harmless (English shows through).
+     */
+    private val TAMIL: Map<String, String> = mapOf(
+        // ------------------------------------------------------------- app chrome
+        "CleanSweep" to "தொலைபேசி காவலர்",
+        "About CleanSweep" to "தொலைபேசி காவலர் பற்றி",
+        "CleanSweep v1.3" to "தொலைபேசி காவலர் v2.3",
+        "Cleaner, battery health & security for any Android phone" to
+            "எந்த ஆண்ட்ராய்டு போனுக்கும் க்ளீனர், பேட்டரி ஆரோக்கியம் & பாதுகாப்பு",
+        "Settings" to "அமைப்புகள்",
+        "Close" to "மூடு",
+        "Cancel" to "ரத்து",
+        "Delete" to "நீக்கு",
+        "Clean" to "சுத்தம் செய்",
+        "Great!" to "அருமை!",
+        "All" to "அனைத்தும்",
+        "None" to "எதுவும் இல்லை",
+        "Add" to "சேர்",
+        "free" to "இலவசம்",
+        "LIVE" to "நேரடி",
+        "Try again" to "மீண்டும் முயற்சி",
+        "What went wrong" to "என்ன தவறு நடந்தது",
+        "Check again" to "மீண்டும் சரிபார்",
+        "Use a free AI" to "இலவச AI-ஐப் பயன்படுத்து",
+        "Which AI answers?" to "எந்த AI பதில் தருகிறது?",
+        "AI settings" to "AI அமைப்புகள்",
+        "Set up AI" to "AI அமைக்க",
+        "Test" to "சோதி",
+        "Load models" to "மாடல்களை ஏற்று",
+        "Save settings" to "அமைப்புகளைச் சேமி",
+        "Try the free lane" to "இலவச வழியை முயற்சி",
+
+        // ----------------------------------------------------------- home screen
+        "Phone health" to "போன் ஆரோக்கியம்",
+        "Battery, heat, CPU, watts" to "பேட்டரி, வெப்பம், CPU, வாட்",
+        "Security check" to "பாதுகாப்பு சோதனை",
+        "Permissions, risky apps" to "அனுமதிகள், ஆபத்தான ஆப்ஸ்",
+        "Wi-Fi devices" to "Wi-Fi சாதனங்கள்",
+        "Who is on your network" to "உங்கள் நெட்வொர்க்கில் யார் இருக்கிறார்கள்",
+        "Installed apps" to "நிறுவப்பட்ட ஆப்ஸ்",
+        "Bloatware, unused apps" to "தேவையற்ற, பயன்படுத்தாத ஆப்ஸ்",
+        "Mobile & data" to "மொபைல் & டேட்டா",
+        "Signal, speed test, data used" to "சிக்னல், வேகப் பரிசோதனை, டேட்டா பயன்பாடு",
+        "Phone health, security & network" to "போன் ஆரோக்கியம், பாதுகாப்பு & நெட்வொர்க்",
+        "Quick cleaning actions" to "விரைவு சுத்தம்",
+        "Each tile scans for its own kind of junk only — then you tick what to clean." to
+            "ஒவ்வொரு பெட்டியும் அதற்குரிய குப்பையை மட்டுமே தேடும் — பிறகு நீங்கள் தேர்ந்தெடுக்க வேண்டும்.",
+        "Temp & junk" to "தற்காலிக & குப்பை கோப்புகள்",
+        "Only .tmp, .log, leftovers" to ".tmp, .log, எஞ்சியவை மட்டும்",
+        "Thumbnails" to "தம்ப்நெயில் கேஷ்",
+        "Only image cache files" to "பட கேஷ் கோப்புகள் மட்டும்",
+        "APK files" to "APK கோப்புகள்",
+        "Only installer packages" to "இன்ஸ்டாலர் கோப்புகள் மட்டும்",
+        "Duplicates" to "நகல் கோப்புகள்",
+        "Only identical files" to "ஒரே மாதிரியான கோப்புகள் மட்டும்",
+        "Empty folders" to "காலி போல்டர்கள்",
+        "Only empty folders" to "காலி போல்டர்கள் மட்டும்",
+        "Old downloads" to "பழைய பதிவிறக்கங்கள்",
+        "Only old Download files" to "Download-ல் பழைய கோப்புகள் மட்டும்",
+        "Large files" to "பெரிய கோப்புகள்",
+        "Only files over the limit" to "அளவை மீறிய கோப்புகள் மட்டும்",
+        "App cache" to "ஆப் கேஷ்",
+        "Per-app caches, cached" to "ஆப் வாரியாக கேஷ் சுத்தம்",
+        "Ask the assistant" to "உதவியாளரிடம் கேளுங்கள்",
+        "Storage access needed" to "சேமிப்பு அனுமதி தேவை",
+        "Allow storage access" to "சேமிப்பு அனுமதி தருக",
+        "Allow storage access to delete files" to "கோப்புகளை நீக்க சேமிப்பு அனுமதி தேவை",
+        "Works on every Android phone" to "எல்லா ஆண்ட்ராய்டு போன்களிலும் வேலை செய்யும்",
+        "Preselect after a scan" to "ஸ்கேன் முடிந்ததும் முன்-தேர்வு",
+        "Preselect after a scan" to "ஸ்கேன் முடிந்ததும் முன்-தேர்வு",
+
+        // --------------------------------------------------------------- scanning
+        "Cancel scan" to "ஸ்கேனை நிறுத்து",
+        "Scan results" to "ஸ்கேன் முடிவுகள்",
+        "Nothing to clean!" to "சுத்தம் செய்ய ஒன்றும் இல்லை!",
+        "Delete permanently?" to "நிரந்தரமாக நீக்கவா?",
+        "Nothing was deleted" to "எதுவும் நீக்கப்படவில்லை",
+        "Open permission settings" to "அனுமதி அமைப்புகளைத் திற",
+        "Cleaning complete ✨" to "சுத்தம் முடிந்தது ✨",
+        "Cleaning…" to "சுத்தம் செய்கிறது…",
+
+        // -------------------------------------------------------------- assistant
+        "CleanSweep Assistant" to "தொலைபேசி காவலர் உதவியாளர்",
+        "Detailed answers" to "விரிவான பதில்கள்",
+        "Detailed assistant answers" to "விரிவான உதவியாளர் பதில்கள்",
+        "Off = the on-device assistant replies in one short line" to
+            "ஆஃப் = உதவியாளர் ஒரு சிறு வரியில் பதில் தரும்",
+        "Ask about your storage…" to "உங்கள் சேமிப்பைப் பற்றிக் கேளுங்கள்…",
+        "CleanSweep AI" to "தொலைபேசி காவலர் AI",
+        "Thinking on this device…" to "இந்த போனிலேயே யோசிக்கிறது…",
+
+        // ----------------------------------------------------------- health screen
+        "Full analysis with AI" to "AI மூலம் முழு பரிசோதனை",
+        "Charging watts beside the clock" to "கடிகாரம் அருகே சார்ஜ் வாட்",
+        "Allow overlay" to "ஓவர்லே யை அனுமதி",
+        "Battery" to "பேட்டரி",
+        "Temperature" to "வெப்பநிலை",
+        "Processor" to "செயலி (CPU)",
+        "Memory & storage" to "மெமரி & சேமிப்பு",
+        "Reading the sensors…" to "சென்சார்களைப் படிக்கிறது…",
+
+        // -------------------------------------------------------------- app cache
+        "App cache cleaner" to "ஆப் கேஷ் க்ளீனர்",
+        "System apps" to "சிஸ்டம் ஆப்ஸ்",
+        "Select apps" to "ஆப்ஸைத் தேர்ந்தெடு",
+        "Usage access needed" to "பயன்பாட்டு அனுமதி தேவை",
+        "Grant usage access" to "பயன்பாட்டு அனுமதி தருக",
+        "Guided two-tap clean" to "வழிகாட்டும் இரண்டு-தொடு சுத்தம்",
+        "No Accessibility permission needed — v1.3 dropped it" to
+            "Accessibility அனுமதி தேவையில்லை — v1.3-ல் நீக்கப்பட்டது",
+        "1. Tick apps  →  2. Clean cache  →  3. Tap “Clear cache” in Settings  →  4. Back → Next app" to
+            "1. ஆப்ஸைத் தேர்ந்தெடு  →  2. கேஷ் சுத்தம்  →  3. Settings-ல் “Clear cache”  →  4. திரும்பி வா → அடுத்த ஆப்",
+
+        // ------------------------------------------------------------ apps screen
+        "Search an app or package" to "ஆப் அல்லது பேக்கேஜ் தேடு",
+        "Nothing matches that filter." to "இந்த வடிகட்டலுக்கு எதுவும் பொருந்தவில்லை.",
+        "Permissions worth knowing about" to "தெரிந்து கொள்ள வேண்டிய அனுமதிகள்",
+        "Want a second opinion?" to "இரண்டாவது கருத்து வேண்டுமா?",
+
+        // -------------------------------------------------------- network screen
+        "Wi-Fi & network" to "Wi-Fi & நெட்வொர்க்",
+        "Permission needed for Wi-Fi details" to "Wi-Fi விவரங்களுக்கு அனுமதி தேவை",
+        "App settings" to "ஆப் அமைப்புகள்",
+
+        // ------------------------------------------------------ settings screen
+        "Sound effects" to "ஒலி விளைவுகள்",
+        "Play a chime when scanning and cleaning" to "ஸ்கேன் மற்றும் சுத்தத்தின் போது ஒலி",
+        "AI analysis (optional)" to "AI பரிசோதனை (விருப்பம்)",
+        "Open AI settings" to "AI அமைப்புகளைத் திற",
+        "Assistant answers" to "உதவியாளர் பதில்கள்",
+        "On-device" to "போனிலேயே",
+        "Online AI" to "ஆன்லைன் AI",
+        "Charging status in the status bar" to "ஸ்டேட்டஸ் பாரில் சார்ஜிங் தகவல்",
+        "Ongoing notification with charging watts, battery % and time to full" to
+            "சார்ஜ் வாட், பேட்டரி %, முழு சார்ஜ் ஆகும் நேரம் — நிலையான அறிவிப்பில்",
+        "Watt reading beside the clock" to "கடிகாரம் அருகே வாட் வாசிப்பு",
+        "Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging" to
+            "சார்ஜ் செய்யும் போது ஸ்டேட்டஸ் பாரின் காலி இடத்தில் சிறிய “⚡ 3.9 W”",
+        "Allow display over other apps" to "மற்ற ஆப்ஸின் மேல் காட்ட அனுமதி",
+        "Scan hidden folders" to "மறைந்த போல்டர்களை ஸ்கேன் செய்",
+        "Look inside folders starting with “.” (more junk, slightly slower)" to
+            "“.” உடன் தொடங்கும் போல்டர்களுக்குள் தேடு (அதிக குப்பை, சற்று மெதுவாக)",
+        "Duplicate detection minimum size" to "நகல் கண்டறியும் குறைந்த அளவு",
+        "Large file threshold" to "பெரிய கோப்பு அளவு வரம்பு",
+        "Old downloads age" to "பழைய பதிவிறக்க வயது",
+        "Only flag APKs of installed apps" to "நிறுவிய ஆப்ஸின் APK மட்டும்",
+        "Keeps installers for apps you haven't installed yet" to
+            "இன்னும் நிறுவாத ஆப்ஸின் இன்ஸ்டாலர்களை வைத்திருக்கும்",
+        "Protected folders" to "பாதுகாக்கப்பட்ட போல்டர்கள்",
+        "These folders are never scanned. You can type a folder like “WhatsApp” or “DCIM/Camera”." to
+            "இந்த போல்டர்கள் ஸ்கேன் செய்யப்படாது. “WhatsApp” அல்லது “DCIM/Camera” போல தட்டச்சு செய்யலாம்.",
+        "e.g. WhatsApp" to "உ.ம். WhatsApp",
+        "Language" to "மொழி",
+        "Menu language" to "மெனுவின் மொழி",
+
+        // -------------------------------------------------------- mobile screen
+        "Mobile network" to "மொபைல் நெட்வொர்க்",
+        "Signal quality" to "சிக்னல் தரம்",
+        "Internet quality" to "இன்டர்நெட் தரம்",
+        "Ping & jitter" to "பிங் & ஜிட்டர்",
+        "Speed test" to "வேகப் பரிசோதனை",
+        "Data usage" to "டேட்டா பயன்பாடு",
+        "Today" to "இன்று",
+        "Wi-Fi" to "Wi-Fi",
+        "Mobile data" to "மொபைல் டேட்டா",
+        "Ping now" to "இப்போது பிங் செய்",
+        "Start test" to "பரிசோதனையைத் தொடங்கு",
+        "Stop" to "நிறுத்து",
+        "SIM & operator" to "SIM & ஆபரேட்டர்",
+        "Cell towers" to "செல் டவர்கள்",
+        "Public IP & ISP" to "பொது IP & ISP",
+        "Test size" to "பரிசோதனை அளவு",
+        "Data use is real — pick a size you can afford." to
+            "இது உண்மையான டேட்டாவைப் பயன்படுத்தும் — பொருத்தமான அளவைத் தேர்ந்தெடுக்கவும்.",
+
+        // ------------------------------------------------------------- about
+        "Privacy" to "தனியுரிமை",
+        "Installing & updating (Play Protect)" to "நிறுவல் & புதுப்பித்தல் (Play Protect)",
+        "Why some things can't be cleaned" to "சிலவற்றை ஏன் சுத்தம் செய்ய முடியாது",
+        "Suggested routine" to "பரிந்துரைக்கப்பட்ட வழக்கம்",
+        "Author" to "எழுத்தாளர்",
+        "App name" to "ஆப் பெயர்",
+
+        // ------------------------------------------------- mobile & data screen
+        "Phone permission gives the real numbers" to "Phone அனுமதி உண்மையான எண்களைத் தரும்",
+        "Allow and rescan" to "அனுமதித்து மீண்டும் படி",
+        "Signal quality" to "சிக்னல் தரம்",
+        "Cell towers in reach" to "அருகில் உள்ள செல் டவர்கள்",
+        "in use" to "பயன்பாட்டில்",
+        "Check" to "சரிபார்",
+        "Reading…" to "படிக்கிறது…",
+        "Tap refresh" to "புதுப்பிக்கத் தொடவும்",
+        "Asking the network…" to "நெட்வொர்க்கிடம் கேட்கிறது…",
+        "no answer" to "பதில் இல்லை",
+        "Measuring…" to "அளக்கிறது…",
+        "Testing…" to "பரிசோதிக்கிறது…",
+        "Download" to "பதிவிறக்கம்",
+        "Upload" to "பதிவேற்றம்",
+        "Downloading" to "பதிவிறக்குகிறது",
+        "Uploading" to "பதிவேற்றுகிறது",
+        "Starting the test" to "பரிசோதனை தொடங்குகிறது",
+        "Starting the upload" to "பதிவேற்றம் தொடங்குகிறது",
+        "The test failed" to "பரிசோதனை தோல்வி",
+        "Upload test failed" to "பதிவேற்ற பரிசோதனை தோல்வி",
+        "received" to "பெற்றது",
+        "sent" to "அனுப்பியது",
+        "Since the phone was switched on" to "போனை இயக்கியதிலிருந்து",
+        "Total today" to "இன்றைய மொத்தம்",
+        "Apps using the most data today" to "இன்று அதிக டேட்டா பயன்படுத்திய ஆப்ஸ்",
+        "Usage access gives today's exact figures" to "Usage access தந்தால் இன்றைய துல்லியமான எண்கள்",
+        "Also test upload" to "பதிவேற்றமும் சோதிக்க",
+        "Sends the same amount again — off by default to save data." to
+            "அதே அளவை மீண்டும் அனுப்பும் — டேட்டா சேமிக்க இயல்பாக ஆஃப்",
+        "You are on mobile data — this test downloads about" to
+            "நீங்கள் மொபைல் டேட்டாவில் உள்ளீர்கள் — இந்த பரிசோதனை பதிவிறக்குவது சுமார்",
+        "twice (download + upload)" to "இரண்டு மடங்கு (பதிவிறக்கம் + பதிவேற்றம்)",
+        "Unlimited 5G" to "அன்லிமிடெட் 5G",
+        "About" to "பற்றி",
+        "Where it sits" to "எங்கே இருக்கும்",
+        "Each tap moves it a little; “Auto” puts it back beside the camera." to
+            "ஒவ்வொரு தொடுதலும் சிறிது நகர்த்தும்; “Auto” கேமரா அருகே திரும்ப வைக்கும்.",
+        "The position is remembered, and the reading still only appears while charging." to
+            "இடம் நினைவில் வைக்கப்படும்; சார்ஜ் செய்யும் போது மட்டுமே தெரியும்.",
+        "Move it anywhere: phones put VoLTE, VPN, the carrier name or the battery " +
+            "percentage in that strip, so the free space is different on every model." to
+            "எங்கும் நகர்த்தலாம்: ஒவ்வொரு போனும் அந்தப் பட்டையில் VoLTE, VPN, ஆபரேட்டர் " +
+            "பெயர் அல்லது பேட்டரி % எழுதும் — காலி இடம் ஒவ்வொரு போனிலும் வேறு.",
+        "your phone writes VoLTE, VPN, the carrier name and the battery " +
+            "percentage up there, so move the reading wherever it is free." to
+            "உங்கள் போன் அங்கே VoLTE, VPN, ஆபரேட்டர் பெயர், பேட்டரி % எழுதும் — " +
+            "காலியாக இருக்கும் இடத்திற்கு நகர்த்துங்கள்.",
+        "Mobile data is ON." to "மொபைல் டேட்டா ஆன்.",
+    )
+}
+
+/** Convenience for UI code: tr("Save") → the label in the chosen language. */
+fun tr(text: String, vararg args: Any): String = Lang.t(text, *args)

@@ -269,6 +269,11 @@ object AiSettings {
         return updated
     }
 
+    /**
+     * Saves the live configuration *and* remembers the key/model per provider, so switching
+     * provider later never asks for the key again — the exact complaint that came with the
+     * v2.2 screenshots ("after switching it asks for the key and model again").
+     */
     fun save(context: Context, config: AiConfig) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putString("provider", config.provider.id)
@@ -279,14 +284,61 @@ object AiSettings {
             .putBoolean("include_network", config.includeNetwork)
             .putString("free_endpoint_url", config.freeEndpointUrl.trim())
             .apply()
+        if (config.apiKey.isNotBlank() || config.model.isNotBlank()) {
+            saveFor(context, config.provider, config.apiKey.trim(), config.model.trim())
+        }
     }
+
+    // ------------------------------------------------- per-provider saved credentials
+
+    /**
+     * One line per provider inside the same private prefs file:
+     * "geminiAIza…gemini-2.5-flash". Plain text on purpose — it can be read by eye
+     * when debugging, and it never leaves the app's private storage.
+     */
+    private fun keyName(provider: AiProvider) = "saved_" + provider.id
+
+    fun saveFor(context: Context, provider: AiProvider, apiKey: String, model: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(keyName(provider), apiKey + SEP + model)
+            .apply()
+    }
+
+    /** What was saved for this provider, if anything: key to model. */
+    fun savedFor(context: Context, provider: AiProvider): Pair<String, String> {
+        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(keyName(provider), "") ?: ""
+        if (raw.isBlank()) return "" to ""
+        val parts = raw.split(SEP)
+        return parts.getOrElse(0) { "" } to parts.getOrElse(1) { "" }
+    }
+
+    /** True when a key for this provider is already stored (shown as a badge in the UI). */
+    fun hasSavedKey(context: Context, provider: AiProvider): Boolean =
+        savedFor(context, provider).first.isNotBlank()
+
+    /** Restores the provider's own key/model into the live config when the user switches. */
+    fun applySaved(context: Context, provider: AiProvider): AiConfig {
+        val (key, model) = savedFor(context, provider)
+        val current = load(context)
+        return current.copy(
+            provider = provider,
+            apiKey = key,
+            model = model.ifBlank {
+                if (provider.needsKey) provider.defaultModel else ""
+            },
+        )
+    }
+
+    private const val SEP = "\u0001"
 
     /**
      * The key never leaves the phone except towards the provider you chose. It is
      * stored in the app's own private preferences file, which other apps cannot read.
      */
     fun keyStorageNote(): String =
-        "Stored only inside CleanSweep's private storage on this phone. It is sent to the " +
-            "provider you picked and nowhere else. Uninstall the app (or clear the field and " +
-            "save) to remove it."
+        "Saved keys live only inside CleanSweep's private storage on this phone, one per " +
+            "provider, so switching between Gemini, Groq or the free option never asks you to " +
+            "paste the same key twice. A key is sent to the provider you picked and nowhere " +
+            "else. Uninstall the app (or clear the field and save) to remove them."
 }

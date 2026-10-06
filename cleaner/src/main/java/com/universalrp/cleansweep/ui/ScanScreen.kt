@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.data.shortPath
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.SurfaceHigh
@@ -174,7 +175,7 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
             onClick = { vm.cancelScan() },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
         ) {
-            Text("Cancel scan")
+            Text(tr("Cancel scan"))
         }
     }
 }

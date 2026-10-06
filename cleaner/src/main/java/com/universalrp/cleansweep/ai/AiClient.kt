@@ -32,8 +32,18 @@ object AiClient {
         val model: String = "",
     )
 
-    private const val CONNECT_TIMEOUT_MS = 30_000
-    private const val READ_TIMEOUT_MS = 120_000
+    private const val CONNECT_TIMEOUT_MS = 20_000
+
+    /**
+     * Big reports on a free service can genuinely take a minute, and the 503s the user hit
+     * come from the provider being busy rather than from anything wrong on the phone. So the
+     * read timeout is generous and a busy/timed-out request is retried automatically.
+     */
+    private const val READ_TIMEOUT_MS = 180_000
+    private const val RETRIES = 2
+
+    /** Told which attempt is running, so the screen can say "retrying…" instead of freezing. */
+    var attemptListener: ((attempt: Int, of: Int, reason: String) -> Unit)? = null
 
     suspend fun ask(
         config: AiConfig,
@@ -55,7 +65,7 @@ object AiClient {
             val ordered = AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }
             for (endpoint in ordered) {
                 val which = endpoint.label.substringBefore(" (")
-                val result = post(
+                val result = postWithRetry(
                     url = endpoint.url,
                     apiKey = null,
                     model = endpoint.model,
@@ -84,7 +94,7 @@ object AiClient {
 
         val base = config.resolvedBaseUrl
         val url = if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
-        val (ok, payload) = post(
+        val (ok, payload) = postWithRetry(
             url = url,
             apiKey = config.apiKey,
             model = config.resolvedModel,
@@ -121,7 +131,7 @@ object AiClient {
             var lastError = "No free endpoint answered."
             for (endpoint in AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }) {
                 val which = endpoint.label.substringBefore(" (")
-                val (ok, payload) = post(
+                val (ok, payload) = postWithRetry(
                     url = endpoint.url,
                     apiKey = null,
                     model = endpoint.model,
@@ -246,12 +256,53 @@ object AiClient {
             userPrompt = "Reply with: CleanSweep AI connected.",
         )
 
+    /**
+     * Sends the request, retrying when the service is busy (429/5xx) or the connection broke.
+     * Returns the last answer either way; a caller never sees an exception from here.
+     */
+    private fun postWithRetry(
+        url: String,
+        apiKey: String?,
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+    ): Pair<Boolean, String> {
+        var last: Pair<Boolean, String> = false to "No answer."
+        var attempt = 0
+        while (attempt <= RETRIES) {
+            attempt++
+            attemptListener?.invoke(attempt, RETRIES + 1, "")
+            val result = post(url, apiKey, model, systemPrompt, userPrompt, attempt, RETRIES + 1)
+            last = result
+            if (result.first) return result
+            val retryable = result.second.contains("503") ||
+                result.second.contains("502") ||
+                result.second.contains("504") ||
+                result.second.contains("429") ||
+                result.second.contains("too long to answer") ||
+                result.second.contains("timeout") ||
+                result.second.contains("Connection reset") ||
+                result.second.contains("Unable to resolve host") ||
+                result.second.contains("No internet connection")
+            if (!retryable || attempt > RETRIES) return result
+            // A short pause, longer after each try: providers that say 503 usually recover.
+            try {
+                Thread.sleep(1_200L * attempt)
+            } catch (e: InterruptedException) {
+                return result
+            }
+        }
+        return last
+    }
+
     private fun post(
         url: String,
         apiKey: String?,
         model: String,
         systemPrompt: String,
         userPrompt: String,
+        attempt: Int = 1,
+        attempts: Int = 1,
     ): Pair<Boolean, String> {
         var connection: HttpURLConnection? = null
         try {
@@ -301,13 +352,18 @@ object AiClient {
             val text = stream?.let { readAll(it) }.orEmpty()
 
             if (status !in 200..299) {
-                return false to explain(status, text)
+                val explained = explain(status, text)
+                return false to if (attempts > 1) "$explained (try $attempt of $attempts)" else explained
             }
             return true to extractText(text)
         } catch (e: UnknownHostException) {
             return false to "No internet connection (could not reach the AI service)."
         } catch (e: SocketTimeoutException) {
-            return false to "The AI service took too long to answer. Try again."
+            return false to "The AI service took too long to answer (${READ_TIMEOUT_MS / 1000} s). " +
+                "Big reports on a free service can be slow — try again, or use a paid/faster provider."
+        } catch (e: java.net.SocketException) {
+            return false to "The connection dropped while waiting (${e.message ?: "socket error"}). " +
+                "Mobile data and some Wi-Fi routers cut long requests; try again or switch network."
         } catch (e: Exception) {
             return false to "${e.javaClass.simpleName}: ${e.message ?: "request failed"}"
         } finally {
@@ -337,7 +393,11 @@ object AiClient {
             410 -> "That model has been retired by the provider (HTTP 410). Tap \"Load models\" in " +
                 "AI settings and pick a current one — providers retire model ids every few months."
             413 -> "The report was too large for this model. Turn off \"send app names\" and retry."
-            429 -> "Rate limit or free quota used up (HTTP 429). Wait a minute, or switch provider."
+            429 -> "The provider is rate-limiting you (HTTP 429) — the free quota is used up for now. " +
+                "CleanSweep already retried; wait a minute or switch provider."
+            502, 503, 504 -> "The AI service is overloaded right now (HTTP $status) — that is the " +
+                "provider's side, not your phone or your key. CleanSweep retried automatically; " +
+                "tap Analyse again in a minute, or switch to another provider."
             in 500..599 -> "The AI service had a server error (HTTP $status). Try again shortly."
             else -> "HTTP $status${detail?.let { ": $it" } ?: ""}"
         }

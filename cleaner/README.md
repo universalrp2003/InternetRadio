@@ -4,6 +4,35 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.3 highlights**
+
+- **Tamil menu** — Settings → **Language** switches between English and **தமிழ்**. The whole
+  menu (titles, buttons, cards, settings, dialogs) is translated, and in Tamil the app calls
+  itself **தொலைபேசி காவலர்** ("Phone Guardian"). The launcher label is Tamil too on a Tamil
+  phone, and Android 13+ shows CleanSweep in *Settings → Apps → Language* because the app
+  declares `locales_config`. Anything not yet translated stays in English on purpose rather
+  than showing machine-garbled Tamil.
+- **Author credit** — About now names **ரமேஷ் பிரதாப்** / Ramesh prathap .R with a tappable
+  **universalrp2003@gmail.com**, and shows the app's name in both languages.
+- **The watt reading moves** — an arrow pad (Phone health, and Settings → watt reading) moves
+  the status-bar reading 24 px at a time and remembers the spot, with **Auto** to return it
+  beside the camera. Every phone writes different things up there — VoLTE, VPN, the carrier
+  name, the battery percentage — so the free space is never in the same place twice.
+- **AI keys are saved per provider** — switching from Gemini to Groq and back restores the key
+  *and* the model, so the same key is never typed twice. The AI settings screen shows which
+  providers already have a saved key.
+- **Busy AI providers are handled properly** — HTTP 502/503/504, rate limits and slow answers
+  are retried automatically (up to three attempts with growing pauses), the read timeout is
+  180 s, and the message now says whose fault it is and what to do. The screen shows which
+  attempt is running instead of looking frozen.
+- **New: Mobile & data screen** — operator and SIM names, 5G/4G/3G/2G, the true signal in dBm
+  with four bars and a plain-language quality label, cell towers with cell id / PCI / TAC and
+  which one is in use, public IP + ISP + city (one small request on demand), **ping and
+  jitter** to three public endpoints, a **real speed test** in 1/5/10/25/50/100 MB sizes with
+  an explicit data warning (and a note that only the big sizes show true 5G speed), and
+  **today's data usage** split into mobile and Wi-Fi with the top data-hungry apps — accurate
+  when Usage access is granted, and labelled honestly when it is not.
+
 **v2.2 highlights**
 
 - **Charging watts beside the clock** — the user pointed at the empty part of the status bar

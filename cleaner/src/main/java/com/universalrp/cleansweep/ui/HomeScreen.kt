@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.SignalCellularAlt
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Photo
@@ -61,6 +62,8 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.formatUptime
 import com.universalrp.cleansweep.data.JunkKind
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.DangerRed
 import com.universalrp.cleansweep.ui.theme.AccentViolet
@@ -105,12 +108,12 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    "CleanSweep",
+                    tr(Lang.appName()),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "Cleaner, battery health & security for any Android phone",
+                    Lang.tagline(),
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
@@ -169,8 +172,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                                         color = TextSecondary,
                                     )
                                 }
-                                Text(
-                                    "LIVE",
+                                Text(tr("LIVE"),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = GoodGreen,
                                     fontWeight = FontWeight.Bold,
@@ -196,29 +198,36 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             item { AssistantCard(state, vm) }
 
             item {
-                SectionTitle("Phone health, security & network")
+                SectionTitle(tr("Phone health, security & network"))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
                             icon = Icons.Outlined.BatteryFull,
-                            title = "Phone health",
-                            subtitle = "Battery, heat, CPU, watts",
+                            title = tr("Phone health"),
+                            subtitle = tr("Battery, heat, CPU, watts"),
                             onClick = { vm.navigate(Screen.HEALTH) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.Security,
-                            title = "Security check",
-                            subtitle = "Permissions, risky apps",
+                            title = tr("Security check"),
+                            subtitle = tr("Permissions, risky apps"),
                             onClick = { vm.loadSecurity() },
                             modifier = Modifier.weight(1f),
                         )
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
+                            icon = Icons.Outlined.SignalCellularAlt,
+                            title = tr("Mobile & data"),
+                            subtitle = tr("Signal, speed test, data used"),
+                            onClick = { vm.navigate(Screen.MOBILE); vm.loadMobile() },
+                            modifier = Modifier.weight(1f),
+                        )
+                        QuickCard(
                             icon = Icons.Outlined.Wifi,
-                            title = "Wi-Fi devices",
-                            subtitle = "Who is on your network",
+                            title = tr("Wi-Fi devices"),
+                            subtitle = tr("Who is on your network"),
                             onClick = {
                                 vm.navigate(Screen.NETWORK)
                                 vm.refreshNetworkDetails()
@@ -227,8 +236,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                         )
                         QuickCard(
                             icon = Icons.Outlined.Apps,
-                            title = "Installed apps",
-                            subtitle = "Bloatware, unused apps",
+                            title = tr("Installed apps"),
+                            subtitle = tr("Bloatware, unused apps"),
                             onClick = { vm.loadAppInventory() },
                             modifier = Modifier.weight(1f),
                         )
@@ -250,9 +259,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             item {
-                SectionTitle("Quick cleaning actions")
-                Text(
-                    "Each tile scans for its own kind of junk only — then you tick what to clean.",
+                SectionTitle(tr("Quick cleaning actions"))
+                Text(tr("Each tile scans for its own kind of junk only — then you tick what to clean."),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                     modifier = Modifier.padding(bottom = 10.dp),
@@ -261,15 +269,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
                             icon = Icons.Outlined.DeleteSweep,
-                            title = "Temp & junk",
-                            subtitle = "Only .tmp, .log, leftovers",
+                            title = tr("Temp & junk"),
+                            subtitle = tr("Only .tmp, .log, leftovers"),
                             onClick = { vm.startScan(setOf(JunkKind.RESIDUAL), JunkKind.RESIDUAL.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.Photo,
-                            title = "Thumbnails",
-                            subtitle = "Only image cache files",
+                            title = tr("Thumbnails"),
+                            subtitle = tr("Only image cache files"),
                             onClick = { vm.startScan(setOf(JunkKind.THUMBNAILS), JunkKind.THUMBNAILS.label) },
                             modifier = Modifier.weight(1f),
                         )
@@ -277,15 +285,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
                             icon = Icons.Outlined.Android,
-                            title = "APK files",
-                            subtitle = "Only installer packages",
+                            title = tr("APK files"),
+                            subtitle = tr("Only installer packages"),
                             onClick = { vm.startScan(setOf(JunkKind.APK_FILES), JunkKind.APK_FILES.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.ContentCopy,
-                            title = "Duplicates",
-                            subtitle = "Only identical files",
+                            title = tr("Duplicates"),
+                            subtitle = tr("Only identical files"),
                             onClick = { vm.startScan(setOf(JunkKind.DUPLICATES), JunkKind.DUPLICATES.label) },
                             modifier = Modifier.weight(1f),
                         )
@@ -293,15 +301,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
                             icon = Icons.Outlined.Folder,
-                            title = "Empty folders",
-                            subtitle = "Only empty folders",
+                            title = tr("Empty folders"),
+                            subtitle = tr("Only empty folders"),
                             onClick = { vm.startScan(setOf(JunkKind.EMPTY_FOLDERS), JunkKind.EMPTY_FOLDERS.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.FileDownload,
-                            title = "Old downloads",
-                            subtitle = "Only old Download files",
+                            title = tr("Old downloads"),
+                            subtitle = tr("Only old Download files"),
                             onClick = { vm.startScan(setOf(JunkKind.OLD_DOWNLOADS), JunkKind.OLD_DOWNLOADS.label) },
                             modifier = Modifier.weight(1f),
                         )
@@ -309,15 +317,15 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
                             icon = Icons.Outlined.SdStorage,
-                            title = "Large files",
-                            subtitle = "Only files over the limit",
+                            title = tr("Large files"),
+                            subtitle = tr("Only files over the limit"),
                             onClick = { vm.startScan(setOf(JunkKind.LARGE_FILES), JunkKind.LARGE_FILES.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.Android,
-                            title = "App cache",
-                            subtitle = "Per-app caches, cached",
+                            title = tr("App cache"),
+                            subtitle = tr("Per-app caches, cached"),
                             onClick = { vm.navigate(Screen.APP_CACHE) },
                             modifier = Modifier.weight(1f),
                         )
@@ -406,8 +414,7 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Ask the assistant",
+                    Text(tr("Ask the assistant"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -495,16 +502,16 @@ private fun AiStatusCard(state: UiState, vm: MainViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
                 TextButton(onClick = { vm.openAiSettings() }) {
-                    Text("AI settings", color = AccentCyan, fontWeight = FontWeight.Bold)
+                    Text(tr("AI settings"), color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
                 if (configured) {
                     TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
-                        Text("Check again", color = AccentCyan, fontWeight = FontWeight.Bold)
+                        Text(tr("Check again"), color = AccentCyan, fontWeight = FontWeight.Bold)
                     }
                 }
                 if (!ok) {
                     TextButton(onClick = { vm.useAnotherFreeAi() }) {
-                        Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                        Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -523,8 +530,7 @@ private fun SetupCard(vm: MainViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Storage access needed",
+                Text(tr("Storage access needed"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -538,7 +544,7 @@ private fun SetupCard(vm: MainViewModel) {
             )
             Spacer(Modifier.height(12.dp))
             GradientButton(
-                text = "Allow storage access",
+                text = tr("Allow storage access"),
                 icon = Icons.Outlined.Settings,
                 onClick = { vm.requestAllFilesAccess() },
                 modifier = Modifier.fillMaxWidth(),
@@ -651,8 +657,7 @@ private fun SurfaceHighCard(modifier: Modifier = Modifier, content: @Composable 
 private fun PhoneTipCard() {
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text(
-                "Works on every Android phone",
+            Text(tr("Works on every Android phone"),
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Bold,
                 color = AccentViolet,
@@ -687,8 +692,7 @@ private fun LegacyStorageCard(vm: MainViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Allow storage access to delete files",
+                Text(tr("Allow storage access to delete files"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -703,7 +707,7 @@ private fun LegacyStorageCard(vm: MainViewModel) {
             )
             Spacer(Modifier.height(12.dp))
             GradientButton(
-                text = "Allow storage access",
+                text = tr("Allow storage access"),
                 icon = Icons.Outlined.Warning,
                 onClick = { launcher.launch(vm.legacyStoragePermissions()) },
                 modifier = Modifier.fillMaxWidth(),

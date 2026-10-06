@@ -55,6 +55,7 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.CategoryResult
 import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.data.shortPath
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.Bg
@@ -87,8 +88,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.navigate(com.universalrp.cleansweep.Screen.HOME) }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Scan results",
+            Text(tr("Scan results"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -111,8 +111,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     style = MaterialTheme.typography.displayLarge,
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "Nothing to clean!",
+                Text(tr("Nothing to clean!"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
@@ -230,7 +229,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                 ) {
                     Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Clean", fontWeight = FontWeight.Bold)
+                    Text(tr("Clean"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -239,7 +238,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
     if (showConfirm) {
         AlertDialog(
             onDismissRequest = { showConfirm = false },
-            title = { Text("Delete permanently?") },
+            title = { Text(tr("Delete permanently?")) },
             text = {
                 Text(
                     "CleanSweep will permanently delete $selectedCount selected items and free " +
@@ -252,12 +251,12 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     showConfirm = false
                     vm.cleanSelected()
                 }) {
-                    Text("Delete", color = DangerRed, fontWeight = FontWeight.Bold)
+                    Text(tr("Delete"), color = DangerRed, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirm = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(tr("Cancel"), color = TextSecondary)
                 }
             },
         )
@@ -272,7 +271,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
         // on Android 8/9/10 the delete was refused for want of the storage permission.
         AlertDialog(
             onDismissRequest = { vm.dismissDeleteFailure() },
-            title = { Text("Nothing was deleted") },
+            title = { Text(tr("Nothing was deleted")) },
             text = {
                 Text(
                     "${state.deleteFailureCount} file(s) could not be removed. The system said: " +
@@ -294,12 +293,12 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                         contentColor = Color(0xFF2B1D02),
                     ),
                 ) {
-                    Text("Open permission settings", fontWeight = FontWeight.Bold)
+                    Text(tr("Open permission settings"), fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { vm.dismissDeleteFailure() }) {
-                    Text("Close", color = TextSecondary)
+                    Text(tr("Close"), color = TextSecondary)
                 }
             },
         )
@@ -308,7 +307,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
     state.freedDialogBytes?.let { freed ->
         AlertDialog(
             onDismissRequest = { vm.dismissFreedDialog() },
-            title = { Text("Cleaning complete ✨") },
+            title = { Text(tr("Cleaning complete ✨")) },
             text = {
                 Text(
                     "Freed ${freed.formatBytes()} by removing ${state.freedDialogItems} items. " +
@@ -324,7 +323,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                         contentColor = Color(0xFF052E22),
                     ),
                 ) {
-                    Text("Great!", fontWeight = FontWeight.Bold)
+                    Text(tr("Great!"), fontWeight = FontWeight.Bold)
                 }
             },
         )
@@ -473,8 +472,7 @@ private fun CleaningOverlay(done: Int, total: Int) {
                 .padding(28.dp)
                 .width(280.dp),
         ) {
-            Text(
-                "Cleaning…",
+            Text(tr("Cleaning…"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )

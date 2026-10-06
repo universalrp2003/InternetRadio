@@ -19,7 +19,18 @@ import com.universalrp.cleansweep.data.AppInventoryLoader
 import com.universalrp.cleansweep.data.AppInventoryReport
 import com.universalrp.cleansweep.data.AppRow
 import com.universalrp.cleansweep.data.DeviceHealthReader
+import com.universalrp.cleansweep.data.AppLang
+import com.universalrp.cleansweep.data.DataUsageReport
 import com.universalrp.cleansweep.data.HealthSnapshot
+import com.universalrp.cleansweep.data.IpInfo
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.MobileNet
+import com.universalrp.cleansweep.data.MobileSnapshot
+import com.universalrp.cleansweep.data.PingStats
+import com.universalrp.cleansweep.data.SpeedMeter
+import com.universalrp.cleansweep.data.SpeedProgress
+import com.universalrp.cleansweep.data.SpeedResult
+import com.universalrp.cleansweep.data.UsageStats
 import com.universalrp.cleansweep.data.NetworkReport
 import com.universalrp.cleansweep.data.NetworkScanner
 import com.universalrp.cleansweep.data.SecurityReport
@@ -55,7 +66,7 @@ import android.os.Environment
 
 enum class Screen {
     HOME, SCANNING, RESULTS, APP_CACHE, ASSISTANT, SETTINGS, ABOUT,
-    HEALTH, APPS, SECURITY, NETWORK, AI_SETTINGS, AI_REPORT
+    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT
 }
 
 /** Filter ids for the installed-apps screen. */
@@ -140,6 +151,28 @@ data class UiState(
     val statusPillAllowed: Boolean = false,
     // Wi-Fi permission (Nearby-devices on Android 13+, Location below)
     val wifiPermission: Boolean = false,
+    // Language (English / Tamil) — the whole menu follows it
+    val lang: AppLang = AppLang.EN,
+    // Mobile network, latency, speed test and data usage
+    val mobile: MobileSnapshot? = null,
+    val mobileBusy: Boolean = false,
+    val pingStats: List<PingStats> = emptyList(),
+    val pingBusy: Boolean = false,
+    val pingProgress: Pair<Int, Int>? = null,
+    val ipInfo: IpInfo? = null,
+    val ipBusy: Boolean = false,
+    val speedBusy: Boolean = false,
+    val speedProgress: SpeedProgress? = null,
+    val speedResult: SpeedResult? = null,
+    val speedUploadResult: SpeedResult? = null,
+    val speedSizeMb: Int = 10,
+    val speedIncludeUpload: Boolean = false,
+    val speedError: String? = null,
+    val usage: DataUsageReport? = null,
+    val usageBusy: Boolean = false,
+    // Which attempt the AI is on, so a busy provider is explained instead of looking frozen
+    val aiAttempt: Int = 0,
+    val aiAttempts: Int = 0,
     // Which category a quick action is scanning, so screens can say "Duplicates only"
     val scanScope: String? = null,
     // Which AI answers right now, and whether it really is reachable
@@ -164,6 +197,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
 
     private var scanJob: Job? = null
+    private var speedJob: Job? = null
     private var currentSettings = ScanSettings()
     /** Screens the user actually visited, so the back button can walk them again. */
     private val navStack = ArrayDeque<Screen>()
@@ -223,6 +257,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         // A key that is already saved is enough: fill in its provider and model so the
         // app can use it without another trip to the AI settings screen.
+        viewModelScope.launch {
+            settingsRepo.lang.collect { id ->
+                val lang = AppLang.fromId(id)
+                Lang.set(lang)
+                prefs.edit().putString(Lang.KEY, lang.id).apply()
+                mutate { it.copy(lang = lang) }
+            }
+        }
         val loaded = AiSettings.load(ctx)
         val completed = AiSettings.autoComplete(loaded)
         if (completed != loaded) AiSettings.save(ctx, completed)
@@ -231,6 +273,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshHealth()
         // "Every time you open the app, check that the AI can actually answer."
         refreshAiStatus()
+        // Mobile readings are cheap: read them once at start so the card is never empty.
+        loadMobile()
     }
 
     private fun mutate(block: (UiState) -> UiState) {
@@ -292,6 +336,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val parent = when (current) {
             Screen.AI_REPORT -> Screen.HEALTH
             Screen.AI_SETTINGS -> Screen.SETTINGS
+            Screen.MOBILE -> Screen.HOME
             else -> Screen.HOME
         }
         mutate { it.copy(screen = parent) }
@@ -897,10 +942,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------------- AI
 
+    /**
+     * Switching provider now restores whatever was saved for that provider — key and model —
+     * so moving between Gemini and Groq (or back to the free option) never asks for the same
+     * key twice, which is what the user hit in v2.2.
+     */
     fun selectAiProvider(provider: AiProvider) {
-        val updated = _state.value.aiConfig.copy(provider = provider)
+        val updated = AiSettings.applySaved(ctx, provider)
         AiSettings.save(ctx, updated)
-        mutate { it.copy(aiConfig = updated, aiTestResult = null) }
+        mutate {
+            it.copy(
+                aiConfig = updated,
+                aiEngineLabel = updated.engineLabel,
+                aiTestResult = null,
+                aiStatusText = if (updated.apiKey.isNotBlank()) {
+                    "Saved ${provider.shortLabel} key restored."
+                } else if (provider.needsKey) {
+                    "No key saved for ${provider.shortLabel} yet."
+                } else {
+                    "Free AI needs no key."
+                },
+                aiStatusOk = false,
+            )
+        }
     }
 
     fun setAiIncludeAppNames(value: Boolean) {
@@ -916,6 +980,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveAiConfig(apiKey: String, model: String, baseUrl: String) {
+        // Per-provider copy first, so the next switch finds it even if the app is closed now.
+        AiSettings.saveFor(ctx, _state.value.aiConfig.provider, apiKey.trim(), model.trim())
         val typed = _state.value.aiConfig.copy(
             apiKey = apiKey.trim(),
             model = model.trim(),
@@ -966,6 +1032,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (_state.value.aiStatusChecking) return
         mutate { it.copy(aiEngineLabel = label, aiStatusChecking = true, aiStatusText = null) }
+        AiClient.attemptListener = { attempt, of, _ ->
+            if (of > 1) mutate { it.copy(aiAttempt = attempt, aiAttempts = of) }
+        }
         viewModelScope.launch {
             val result = AiClient.ping(config)
             val answered = result.endpointUrl?.let { url ->
@@ -1094,6 +1163,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun runAiAnalysis() {
         val s = _state.value
         if (s.aiBusy) return
+        AiClient.attemptListener = { attempt, of, _ ->
+            if (of > 1) mutate { it.copy(aiAttempt = attempt, aiAttempts = of) }
+        }
         mutate {
             it.copy(
                 aiBusy = true,
@@ -1101,6 +1173,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 aiAnswer = null,
                 aiFallbackNote = null,
                 aiUsedMs = 0L,
+                aiAttempt = 1,
+                aiAttempts = 1,
                 screen = Screen.AI_REPORT,
             )
         }
@@ -1140,12 +1214,186 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     aiUsedMs = elapsedMs,
                     aiFallbackNote = fallbackNote,
                     aiStatusOk = result.ok,
+                    aiAttempt = 0,
+                    aiAttempts = 0,
                 )
             }
         }
     }
 
     fun openAiSettings() = mutate { it.copy(screen = Screen.AI_SETTINGS) }
+
+    // -------------------------------------------------------------- language
+
+    /** English or Tamil. Applied at once: every screen re-reads the table on recomposition. */
+    fun setLanguage(lang: AppLang) {
+        Lang.set(lang)
+        prefs.edit().putString(Lang.KEY, lang.id).apply()
+        mutate { it.copy(lang = lang, message = if (lang == AppLang.TA) {
+            "மொழி: தமிழ் — ஆப் பெயர் “தொலைபேசி காவலர்”"
+        } else {
+            "Language: English"
+        }) }
+        viewModelScope.launch { settingsRepo.setLang(lang) }
+    }
+
+    // ------------------------------------------------- status-bar reading position
+
+    /**
+     * Moves the charging-watt reading. Every phone blocks that corner with something
+     * different (VoLTE, VPN, carrier name, battery %), so the user decides where it sits.
+     */
+    fun moveStatusPill(dx: Int, dy: Int) = StatusPill.moveBy(ctx, dx, dy)
+
+    fun resetStatusPill() {
+        StatusPill.resetPosition(ctx)
+        mutate { it.copy(message = "Reading back at the automatic spot (beside the camera).") }
+    }
+
+    // ------------------------------------------------------ mobile & data (v2.3)
+
+    fun loadMobile() {
+        if (_state.value.mobileBusy) return
+        mutate { it.copy(mobileBusy = true, screen = _state.value.screen) }
+        viewModelScope.launch {
+            val snapshot = runCatching { MobileNet.snapshot(ctx) }.getOrNull()
+            val usage = runCatching { UsageStats.read(ctx) }.getOrNull()
+            mutate {
+                it.copy(
+                    mobileBusy = false,
+                    mobile = snapshot ?: it.mobile,
+                    usage = usage ?: it.usage,
+                )
+            }
+        }
+    }
+
+    fun phonePermissionGranted(): Boolean = MobileNet.hasPhonePermission(ctx)
+
+    fun phonePermissions(): Array<String> = arrayOf(
+        Manifest.permission.READ_PHONE_STATE,
+        Manifest.permission.ACCESS_FINE_LOCATION,
+    )
+
+    fun onPhonePermissionResult() {
+        loadMobile()
+        refreshNetworkDetails()
+    }
+
+    fun openUsageAccess() = AppCacheRepo.openUsageAccessSettings(ctx)
+
+    /** Latency and jitter to three public endpoints — a few kilobytes, never a speed test. */
+    fun runPing() {
+        if (_state.value.pingBusy) return
+        mutate { it.copy(pingBusy = true, pingStats = emptyList(), pingProgress = 0 to 0) }
+        viewModelScope.launch {
+            val stats = runCatching {
+                MobileNet.ping { done, total -> mutate { it.copy(pingProgress = done to total) } }
+            }.getOrNull().orEmpty()
+            mutate {
+                it.copy(
+                    pingBusy = false,
+                    pingProgress = null,
+                    pingStats = stats,
+                    message = if (stats.all { s -> s.received == 0 }) {
+                        "No ping answers — check the connection."
+                    } else {
+                        null
+                    },
+                )
+            }
+        }
+    }
+
+    /** Public IP, ISP and city: one small request, only when the button is tapped. */
+    fun loadPublicIp() {
+        if (_state.value.ipBusy) return
+        mutate { it.copy(ipBusy = true) }
+        viewModelScope.launch {
+            val info = runCatching { MobileNet.publicIp() }.getOrNull()
+            mutate { it.copy(ipBusy = false, ipInfo = info) }
+        }
+    }
+
+    fun setSpeedSize(mb: Int) = mutate { it.copy(speedSizeMb = mb, speedResult = null, speedUploadResult = null) }
+
+    fun setSpeedIncludeUpload(on: Boolean) = mutate { it.copy(speedIncludeUpload = on) }
+
+    /**
+     * The real speed test. It downloads exactly the number of megabytes the user chose
+     * (1 MB … 100 MB) from Cloudflare's public speed host, so on a metered plan the small
+     * sizes are the honest choice and on an unlimited 5G plan 100 MB is what shows the true
+     * top speed. The screen warns about data before starting; nothing runs on its own.
+     */
+    fun startSpeedTest() {
+        val state = _state.value
+        if (state.speedBusy) return
+        val bytes = state.speedSizeMb.toLong() * 1024L * 1024L
+        val withUpload = state.speedIncludeUpload
+        mutate {
+            it.copy(
+                speedBusy = true,
+                speedError = null,
+                speedResult = null,
+                speedUploadResult = null,
+                speedProgress = SpeedProgress("Starting", 0L, bytes, 0.0, 0L),
+            )
+        }
+        speedJob = viewModelScope.launch {
+            val download = SpeedMeter.download(bytes) { progress ->
+                mutate { it.copy(speedProgress = progress) }
+            }
+            mutate {
+                it.copy(
+                    speedResult = download,
+                    speedError = if (download.ok) null else download.error,
+                    speedProgress = null,
+                )
+            }
+            if (!download.ok || !withUpload) {
+                mutate { it.copy(speedBusy = false) }
+                return@launch
+            }
+            mutate {
+                it.copy(
+                    speedProgress = SpeedProgress("Starting upload", 0L, bytes, 0.0, 0L),
+                )
+            }
+            val upload = SpeedMeter.upload(bytes) { progress ->
+                mutate { it.copy(speedProgress = progress) }
+            }
+            mutate {
+                it.copy(
+                    speedBusy = false,
+                    speedUploadResult = upload,
+                    speedProgress = null,
+                    message = if (upload.ok) null else upload.error,
+                )
+            }
+        }
+    }
+
+    /** Stops a running speed test (the connection is closed and nothing more is downloaded). */
+    fun cancelSpeedTest() {
+        speedJob?.cancel()
+        speedJob = null
+        mutate {
+            it.copy(
+                speedBusy = false,
+                speedProgress = null,
+                speedError = "Test stopped — whatever was downloaded is already counted by your plan.",
+            )
+        }
+    }
+
+    fun loadUsage() {
+        if (_state.value.usageBusy) return
+        mutate { it.copy(usageBusy = true) }
+        viewModelScope.launch {
+            val usage = runCatching { UsageStats.read(ctx) }.getOrNull()
+            mutate { it.copy(usageBusy = false, usage = usage ?: it.usage) }
+        }
+    }
 
     /** Asks the provider for the model list ("Load models" button). */
     fun loadAiModels() {

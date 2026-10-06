@@ -179,10 +179,31 @@ jobs:
             exit 1
           fi
 
+          if grep -q "READ_PHONE_STATE" "$MERGED_CLEANER"; then
+            echo "OK: phone-state permission present for the Mobile & data screen"
+          else
+            echo "FAIL: READ_PHONE_STATE is missing (signal / SIM / network type need it)"
+            exit 1
+          fi
+
+          if grep -q "locales_config" "$MERGED_CLEANER"; then
+            echo "OK: locale config present (English + Tamil)"
+          else
+            echo "FAIL: android:localeConfig is missing"
+            exit 1
+          fi
+
+          if unzip -l "$CLEANER" | grep -q "values-ta"; then
+            echo "OK: Tamil resources are inside the APK"
+          else
+            echo "WARN: no values-ta folder found in the APK (launcher label stays English)"
+          fi
+
           for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
                         SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
                         ChargeMonitorService batteryTimeLabel StatusPill goBack \
-                        defaultSelected useAnotherFreeAi ping AiText; do
+                        defaultSelected useAnotherFreeAi ping AiText MobileNet SpeedMeter \
+                        UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

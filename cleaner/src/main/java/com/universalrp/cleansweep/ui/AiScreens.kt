@@ -63,6 +63,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.ai.AiProvider
@@ -155,7 +156,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 Text("Check now", color = AccentCyan, fontWeight = FontWeight.Bold)
                             }
                             TextButton(onClick = { vm.useAnotherFreeAi() }) {
-                                Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                                Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -180,6 +181,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                             ProviderRow(
                                 provider = entry,
                                 selected = provider == entry,
+                                savedKey = AiSettings.hasSavedKey(context, entry),
                                 onClick = { vm.selectAiProvider(entry) },
                             )
                             Spacer(Modifier.height(6.dp))
@@ -321,7 +323,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                         )
                                         Spacer(Modifier.width(8.dp))
                                     }
-                                    Text("Load models", fontWeight = FontWeight.Bold)
+                                    Text(tr("Load models"), fontWeight = FontWeight.Bold)
                                 }
                                 Button(
                                     onClick = {
@@ -334,7 +336,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                         contentColor = TextPrimary,
                                     ),
                                 ) {
-                                    Text("Test", fontWeight = FontWeight.Bold)
+                                    Text(tr("Test"), fontWeight = FontWeight.Bold)
                                 }
                             }
                             state.aiModelsError?.let { error ->
@@ -397,7 +399,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 contentColor = Color(0xFF03202B),
                             ),
                         ) {
-                            Text("Save settings", fontWeight = FontWeight.Bold)
+                            Text(tr("Save settings"), fontWeight = FontWeight.Bold)
                         }
 
                         Spacer(Modifier.height(12.dp))
@@ -460,7 +462,12 @@ private fun StepHeader(number: Int, text: String) {
 }
 
 @Composable
-private fun ProviderRow(provider: AiProvider, selected: Boolean, onClick: () -> Unit) {
+private fun ProviderRow(
+    provider: AiProvider,
+    selected: Boolean,
+    savedKey: Boolean,
+    onClick: () -> Unit,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -478,10 +485,16 @@ private fun ProviderRow(provider: AiProvider, selected: Boolean, onClick: () -> 
             color = if (selected) AccentCyan else TextPrimary,
             modifier = Modifier.weight(1f),
         )
+        // Shows which providers already have a key saved, so switching between them is
+        // obviously free of any re-typing.
         Text(
-            if (provider.needsKey) "needs key" else "no signup",
+            when {
+                savedKey -> "key saved ✓"
+                provider.needsKey -> "needs key"
+                else -> "no signup"
+            },
             style = MaterialTheme.typography.labelSmall,
-            color = TextSecondary,
+            color = if (savedKey) GoodGreen else TextSecondary,
         )
     }
 }
@@ -607,7 +620,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                 state.health?.let { health ->
                     VitalsGrid(health, state.securityReport?.score, state.storage)
                 } ?: PanelCard(Modifier.fillMaxWidth()) {
-                    Text("Reading the sensors…", Modifier.padding(16.dp), color = TextSecondary)
+                    Text(tr("Reading the sensors…"), Modifier.padding(16.dp), color = TextSecondary)
                 }
             }
 
@@ -680,7 +693,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                                     containerColor = AccentCyan,
                                     contentColor = Color(0xFF03202B),
                                 ),
-                            ) { Text("Set up AI") }
+                            ) { Text(tr("Set up AI")) }
                         }
                     }
                 }
@@ -693,8 +706,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = DangerRed)
                                 Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "What went wrong",
+                                Text(tr("What went wrong"),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -704,10 +716,10 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                             Spacer(Modifier.height(10.dp))
                             Row {
                                 TextButton(onClick = { vm.runAiAnalysis() }) {
-                                    Text("Try again", color = AccentCyan)
+                                    Text(tr("Try again"), color = AccentCyan)
                                 }
                                 TextButton(onClick = { vm.navigate(Screen.AI_SETTINGS) }) {
-                                    Text("AI settings", color = TextSecondary)
+                                    Text(tr("AI settings"), color = TextSecondary)
                                 }
                             }
                         }

@@ -57,6 +57,7 @@ fun AppRoot(vm: MainViewModel) {
             Screen.APPS -> AppsScreen(state, vm)
             Screen.SECURITY -> SecurityScreen(state, vm)
             Screen.NETWORK -> NetworkScreen(state, vm)
+            Screen.MOBILE -> MobileScreen(state, vm)
             Screen.AI_SETTINGS -> AiSettingsScreen(state, vm)
             Screen.AI_REPORT -> AiReportScreen(state, vm)
         }

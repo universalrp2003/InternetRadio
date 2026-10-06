@@ -47,7 +47,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.JunkKind
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
@@ -79,8 +82,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Settings",
+            Text(tr("Settings"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -93,10 +95,45 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // ------------------------------------------------------- language
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        tr("Language"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        Lang.languageNote,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        ModeChip(
+                            label = "English",
+                            selected = state.lang == AppLang.EN,
+                            onClick = { vm.setLanguage(AppLang.EN) },
+                        )
+                        ModeChip(
+                            label = "தமிழ்",
+                            selected = state.lang == AppLang.TA,
+                            onClick = { vm.setLanguage(AppLang.TA) },
+                        )
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        tr("App name") + ": " + Lang.appName(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentCyan,
+                    )
+                }
+            }
+
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Sound effects",
-                    subtitle = "Play a chime when scanning and cleaning",
+                    title = tr("Sound effects"),
+                    subtitle = tr("Play a chime when scanning and cleaning"),
                     checked = state.soundsEnabled,
                     onCheckedChange = { vm.setSoundsEnabled(it) },
                 )
@@ -104,8 +141,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "AI analysis (optional)",
+                    Text(tr("AI analysis (optional)"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -135,7 +171,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                             contentColor = Color(0xFF03202B),
                         ),
                     ) {
-                        Text("Open AI settings", fontWeight = FontWeight.Bold)
+                        Text(tr("Open AI settings"), fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -144,8 +180,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             // for an online/offline choice there instead.
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Assistant answers",
+                    Text(tr("Assistant answers"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -158,12 +193,12 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ModeChip(
-                            label = "On-device",
+                            label = tr("On-device"),
                             selected = !state.assistantOnline,
                             onClick = { vm.setAssistantOnline(false) },
                         )
                         ModeChip(
-                            label = "Online AI",
+                            label = tr("Online AI"),
                             selected = state.assistantOnline,
                             enabled = state.aiConfig.ready,
                             onClick = { vm.setAssistantOnline(true) },
@@ -187,8 +222,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Charging status in the status bar",
-                    subtitle = "Ongoing notification with charging watts, battery % and time to full",
+                    title = tr("Charging status in the status bar"),
+                    subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
                     checked = state.chargeMonitor,
                     onCheckedChange = { vm.setChargeMonitor(it) },
                 )
@@ -200,8 +235,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column {
                     SettingSwitch(
-                        title = "Watt reading beside the clock",
-                        subtitle = "Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging",
+                        title = tr("Watt reading beside the clock"),
+                        subtitle = tr("Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging"),
                         checked = state.statusPill,
                         onCheckedChange = { vm.setStatusPill(it) },
                     )
@@ -222,26 +257,41 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                                     contentColor = Color(0xFF2B1D02),
                                 ),
                             ) {
-                                Text("Allow display over other apps", fontWeight = FontWeight.Bold)
+                                Text(tr("Allow display over other apps"), fontWeight = FontWeight.Bold)
                             }
                         }
                     }
                     if (state.statusPill && state.statusPillAllowed) {
-                        Text(
-                            "Ready. It appears only while the charger is connected, cannot be " +
-                                "tapped, and disappears when you switch this off.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-                        )
+                        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                            Text(
+                                "Ready. It appears only while the charger is connected, cannot be " +
+                                    "tapped, and disappears when you switch this off.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                tr("Where it sits") + " — " + tr(
+                                    "your phone writes VoLTE, VPN, the carrier name and the battery " +
+                                        "percentage up there, so move the reading wherever it is free."
+                                ),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WarnAmber,
+                            )
+                            ReadingMovePad(
+                                onMove = { dx, dy -> vm.moveStatusPill(dx, dy) },
+                                onReset = { vm.resetStatusPill() },
+                                note = tr("Each tap moves it a little; “Auto” puts it back beside the camera."),
+                            )
+                        }
                     }
                 }
             }
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Detailed assistant answers",
-                    subtitle = "Off = the on-device assistant replies in one short line",
+                    title = tr("Detailed assistant answers"),
+                    subtitle = tr("Off = the on-device assistant replies in one short line"),
                     checked = state.assistantVerbose,
                     onCheckedChange = { vm.setAssistantVerbose(it) },
                 )
@@ -252,8 +302,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             // CleanSweep now ticks nothing by itself; these switches are the optional shortcut.
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Preselect after a scan",
+                    Text(tr("Preselect after a scan"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -300,8 +349,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Scan hidden folders",
-                    subtitle = "Look inside folders starting with “.” (more junk, slightly slower)",
+                    title = tr("Scan hidden folders"),
+                    subtitle = tr("Look inside folders starting with “.” (more junk, slightly slower)"),
                     checked = settings.includeHidden,
                     onCheckedChange = { vm.setIncludeHidden(it) },
                 )
@@ -309,8 +358,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        "Duplicate detection minimum size",
+                    Text(tr("Duplicate detection minimum size"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -333,8 +381,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        "Large file threshold",
+                    Text(tr("Large file threshold"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -357,8 +404,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-                    Text(
-                        "Old downloads age",
+                    Text(tr("Old downloads age"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -381,8 +427,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
-                    title = "Only flag APKs of installed apps",
-                    subtitle = "Keeps installers for apps you haven't installed yet",
+                    title = tr("Only flag APKs of installed apps"),
+                    subtitle = tr("Keeps installers for apps you haven't installed yet"),
                     checked = settings.apkOnlyInstalled,
                     onCheckedChange = { vm.setApkInstalledOnly(it) },
                 )
@@ -390,13 +436,11 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Protected folders",
+                    Text(tr("Protected folders"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(
-                        "These folders are never scanned. You can type a folder like “WhatsApp” or “DCIM/Camera”.",
+                    Text(tr("These folders are never scanned. You can type a folder like “WhatsApp” or “DCIM/Camera”."),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
@@ -406,7 +450,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                             value = newExclusion,
                             onValueChange = { newExclusion = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("e.g. WhatsApp", color = TextSecondary) },
+                            placeholder = { Text(tr("e.g. WhatsApp"), color = TextSecondary) },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = TextPrimary,
@@ -424,7 +468,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                             },
                             enabled = newExclusion.isNotBlank(),
                         ) {
-                            Text("Add")
+                            Text(tr("Add"))
                         }
                     }
                     if (settings.excludedPrefixes.isNotEmpty()) {

@@ -52,6 +52,7 @@ import com.universalrp.cleansweep.data.HealthSnapshot
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.formatUptime
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.DangerRed
@@ -93,8 +94,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Phone health",
+            Text(tr("Phone health"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -112,8 +112,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
             if (health == null) {
                 item {
                     PanelCard(Modifier.fillMaxWidth()) {
-                        Text(
-                            "Reading the sensors…",
+                        Text(tr("Reading the sensors…"),
                             Modifier.padding(16.dp),
                             color = TextSecondary,
                         )
@@ -135,8 +134,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentViolet)
                             Spacer(Modifier.width(10.dp))
-                            Text(
-                                "Full analysis with AI",
+                            Text(tr("Full analysis with AI"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                             )
@@ -201,8 +199,7 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
                     tint = if (state.statusPill && state.statusPillAllowed) GoodGreen else AccentCyan,
                 )
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Charging watts beside the clock",
+                Text(tr("Charging watts beside the clock"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -244,9 +241,25 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
                 }
                 if (state.statusPill && !state.statusPillAllowed) {
                     TextButton(onClick = { vm.openOverlaySettings() }) {
-                        Text("Allow overlay", color = WarnAmber, fontWeight = FontWeight.Bold)
+                        Text(tr("Allow overlay"), color = WarnAmber, fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+            if (state.statusPill && state.statusPillAllowed) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    tr(
+                        "Move it anywhere: phones put VoLTE, VPN, the carrier name or the battery " +
+                            "percentage in that strip, so the free space is different on every model."
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                ReadingMovePad(
+                    onMove = { dx, dy -> vm.moveStatusPill(dx, dy) },
+                    onReset = { vm.resetStatusPill() },
+                    note = tr("The position is remembered, and the reading still only appears while charging."),
+                )
             }
         }
     }
@@ -259,8 +272,7 @@ private fun BatteryCard(battery: BatteryReading) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.BatteryFull, contentDescription = null, tint = GoodGreen)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Battery",
+                Text(tr("Battery"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -382,8 +394,7 @@ private fun ThermalCard(health: HealthSnapshot) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Thermostat, contentDescription = null, tint = colour)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Temperature",
+                Text(tr("Temperature"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -448,8 +459,7 @@ private fun CpuCard(health: HealthSnapshot) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Speed, contentDescription = null, tint = AccentCyan)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Processor",
+                Text(tr("Processor"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
@@ -513,8 +523,7 @@ private fun MemoryCard(health: HealthSnapshot) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Memory, contentDescription = null, tint = AccentViolet)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Memory & storage",
+                Text(tr("Memory & storage"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )

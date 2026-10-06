@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +41,7 @@ class SettingsRepo(context: Context) {
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
         val DEFAULT_SELECTED = stringSetPreferencesKey("default_selected_kinds")
         val STATUS_PILL = booleanPreferencesKey("status_pill")
+        val LANG = stringPreferencesKey("app_lang")
     }
 
     val soundsEnabled: Flow<Boolean> = store.data.map { p ->
@@ -99,6 +101,12 @@ class SettingsRepo(context: Context) {
 
     suspend fun setStatusPill(value: Boolean) =
         store.edit { it[Keys.STATUS_PILL] = value }
+
+    /** Menu language: "en" or "ta". */
+    val lang: Flow<String> = store.data.map { p -> p[Keys.LANG] ?: "en" }
+
+    suspend fun setLang(lang: AppLang) =
+        store.edit { it[Keys.LANG] = lang.id }
 
     suspend fun setIncludeHidden(value: Boolean) =
         store.edit { it[Keys.INCLUDE_HIDDEN] = value }

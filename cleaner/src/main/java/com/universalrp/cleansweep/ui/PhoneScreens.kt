@@ -73,6 +73,7 @@ import com.universalrp.cleansweep.data.Finding
 import com.universalrp.cleansweep.data.LanDevice
 import com.universalrp.cleansweep.data.Severity
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.DangerRed
@@ -111,8 +112,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Installed apps",
+            Text(tr("Installed apps"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -148,7 +148,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                             )
                         }
                     },
-                    placeholder = { Text("Search an app or package") },
+                    placeholder = { Text(tr("Search an app or package")) },
                 )
             }
 
@@ -208,8 +208,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
 
             if (report != null && rows.isEmpty() && !state.appInventoryBusy) {
                 item {
-                    Text(
-                        "Nothing matches that filter.",
+                    Text(tr("Nothing matches that filter."),
                         Modifier.fillMaxWidth().padding(24.dp),
                         color = TextSecondary,
                     )
@@ -325,8 +324,7 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
                 InfoRow("Type", if (row.isSystem) "System app (preinstalled)" else "Installed by you")
                 if (row.riskyPermissions.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Permissions worth knowing about",
+                    Text(tr("Permissions worth knowing about"),
                         style = MaterialTheme.typography.labelLarge,
                         color = WarnAmber,
                     )
@@ -367,7 +365,7 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
             }
         },
         dismissButton = {
-            TextButton(onClick = onClose) { Text("Close", color = TextSecondary) }
+            TextButton(onClick = onClose) { Text(tr("Close"), color = TextSecondary) }
         },
     )
 }
@@ -409,8 +407,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Security check",
+            Text(tr("Security check"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -480,8 +477,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentViolet)
                                 Spacer(Modifier.width(10.dp))
-                                Text(
-                                    "Want a second opinion?",
+                                Text(tr("Want a second opinion?"),
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -611,8 +607,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Wi-Fi & network",
+            Text(tr("Wi-Fi & network"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -794,8 +789,7 @@ private fun NetworkPermissionCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Info, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Permission needed for Wi-Fi details",
+                Text(tr("Permission needed for Wi-Fi details"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -823,7 +817,7 @@ private fun NetworkPermissionCard(
                     )
                 }
                 TextButton(onClick = onOpenSettings) {
-                    Text("App settings", color = TextSecondary)
+                    Text(tr("App settings"), color = TextSecondary)
                 }
             }
         }

@@ -56,6 +56,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.ai.AssistantAction
@@ -142,8 +143,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    "CleanSweep Assistant",
+                Text(tr("CleanSweep Assistant"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -175,8 +175,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 16.dp, vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                "Detailed answers",
+            Text(tr("Detailed answers"),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
                 modifier = Modifier.weight(1f),
@@ -229,13 +228,13 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                             onClick = { vm.openAiSettings() },
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                         ) {
-                            Text("Which AI answers?", color = AccentCyan, fontWeight = FontWeight.Bold)
+                            Text(tr("Which AI answers?"), color = AccentCyan, fontWeight = FontWeight.Bold)
                         }
                         TextButton(
                             onClick = { vm.useAnotherFreeAi() },
                             contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
                         ) {
-                            Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                            Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -277,7 +276,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 value = input,
                 onValueChange = { input = it },
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask about your storage…", color = TextSecondary) },
+                placeholder = { Text(tr("Ask about your storage…"), color = TextSecondary) },
                 maxLines = 4,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                 keyboardActions = KeyboardActions(onSend = { send(input) }),
@@ -330,8 +329,7 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
         ) {
             Column {
                 if (!msg.fromUser) {
-                    Text(
-                        "CleanSweep AI",
+                    Text(tr("CleanSweep AI"),
                         style = MaterialTheme.typography.labelSmall,
                         color = AccentCyan,
                         fontWeight = FontWeight.Bold,
@@ -383,8 +381,7 @@ private fun TypingBubble() {
             strokeWidth = 2.dp,
         )
         Spacer(Modifier.width(12.dp))
-        Text(
-            "Thinking on this device…",
+        Text(tr("Thinking on this device…"),
             style = MaterialTheme.typography.bodySmall,
             color = TextSecondary,
         )

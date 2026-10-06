@@ -51,11 +51,18 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.SdStorage
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.OutlineC
 import com.universalrp.cleansweep.ui.theme.SurfaceC
@@ -302,5 +309,49 @@ private fun aiInline(text: String): AnnotatedString = buildAnnotatedString {
             }
         }
         bold = !bold
+    }
+}
+
+/**
+ * The arrow pad that moves the status-bar watt reading. Every phone blocks that strip with
+ * something different — VoLTE, VPN, the carrier name, the battery percentage — so the user
+ * decides where the reading sits, and the position is remembered.
+ */
+@Composable
+fun ReadingMovePad(
+    onMove: (dx: Int, dy: Int) -> Unit,
+    onReset: () -> Unit,
+    note: String,
+) {
+    Column {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TextButton(onClick = { onMove(-24, 0) }) {
+                Icon(Icons.Outlined.ArrowBack, contentDescription = "Move left", tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(24, 0) }) {
+                Icon(Icons.Outlined.ArrowForward, contentDescription = "Move right", tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(0, -12) }) {
+                Icon(Icons.Outlined.ArrowUpward, contentDescription = "Move up", tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(0, 12) }) {
+                Icon(Icons.Outlined.ArrowDownward, contentDescription = "Move down", tint = AccentCyan)
+            }
+            Spacer(Modifier.size(6.dp))
+            TextButton(onClick = onReset) {
+                Icon(Icons.Outlined.RestartAlt, contentDescription = null, tint = GoodGreen)
+                Spacer(Modifier.size(6.dp))
+                Text("Auto", color = GoodGreen, fontWeight = FontWeight.Bold)
+            }
+        }
+        Text(
+            note,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+        )
     }
 }

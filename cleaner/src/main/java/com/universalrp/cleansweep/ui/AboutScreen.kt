@@ -1,6 +1,11 @@
 package com.universalrp.cleansweep.ui
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -24,8 +29,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material3.TextButton
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.Screen
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.tr
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.background
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.TextPrimary
@@ -48,7 +62,7 @@ fun AboutScreen(vm: MainViewModel) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
-                "About CleanSweep",
+                tr("About") + " " + tr(Lang.appName()),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
@@ -61,10 +75,91 @@ fun AboutScreen(vm: MainViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // ------------------------------------------------------ who made this
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        "CleanSweep v1.3",
+                        tr("Author"),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            Modifier
+                                .size(46.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.linearGradient(listOf(AccentCyan, AccentViolet))
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Text(
+                                "ர",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF04202A),
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            // Always both scripts, so the author is recognisable whichever
+                            // language the menu is in.
+                            Text(
+                                "ரமேஷ் பிரதாப்",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                "Ramesh prathap .R",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    val context = LocalContext.current
+                    TextButton(
+                        onClick = {
+                            try {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_SENDTO,
+                                        Uri.parse("mailto:universalrp2003@gmail.com"),
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                // No mail app: the address is on screen to copy.
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Email,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "universalrp2003@gmail.com",
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Text(
+                        tr("App name") + ": " + Lang.appName() +
+                            if (Lang.isTamil) "  (CleanSweep)" else "  (தொலைபேசி காவலர்)",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(tr("CleanSweep v2.3"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,
@@ -93,19 +188,24 @@ fun AboutScreen(vm: MainViewModel) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Outlined.Security, contentDescription = null, tint = AccentViolet)
                         Spacer(Modifier.width(10.dp))
-                        Text(
-                            "Privacy",
+                        Text(tr("Privacy"),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                         )
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "• 100% offline — CleanSweep does not even ask for the INTERNET permission.\n" +
-                            "• No Accessibility service: v1.3 removed it, so CleanSweep cannot read " +
+                        "• Offline by default — scanning, cleaning, health, security and the " +
+                            "assistant all run on this phone. The internet is used for exactly two " +
+                            "things you tap yourself: the AI analysis and the speed test.\n" +
+                            "• No Accessibility service: dropped in v1.3, so CleanSweep cannot read " +
                             "your screen or tap inside other apps.\n" +
-                            "• The assistant runs on this phone as a small rule engine — your questions " +
-                            "and file names never leave the device.\n" +
+                            "• Nothing is uploaded to us — there is no CleanSweep server. An AI " +
+                            "request goes straight from your phone to the provider whose key you " +
+                            "pasted, and “See exactly what was sent” shows the whole request.\n" +
+                            "• Location is asked for only on the Wi-Fi and Mobile screens (Android " +
+                            "hides network and tower details without it); Phone access is used only " +
+                            "on the Mobile screen.\n" +
                             "• No ads, no analytics, no accounts.\n" +
                             "• Files are only deleted after you select them and confirm.",
                         style = MaterialTheme.typography.bodyMedium,
@@ -116,8 +216,7 @@ fun AboutScreen(vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Installing & updating (Play Protect)",
+                    Text(tr("Installing & updating (Play Protect)"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -142,8 +241,7 @@ fun AboutScreen(vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Why some things can't be cleaned",
+                    Text(tr("Why some things can't be cleaned"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -166,8 +264,7 @@ fun AboutScreen(vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(
-                        "Suggested routine",
+                    Text(tr("Suggested routine"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )

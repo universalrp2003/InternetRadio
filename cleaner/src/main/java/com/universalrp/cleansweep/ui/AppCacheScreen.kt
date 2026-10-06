@@ -53,6 +53,7 @@ import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppCacheInfo
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.Bg
 import com.universalrp.cleansweep.ui.theme.DangerRed
@@ -80,8 +81,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "App cache cleaner",
+            Text(tr("App cache cleaner"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -120,8 +120,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "System apps",
+                                Text(tr("System apps"),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = TextSecondary,
                                 )
@@ -171,17 +170,16 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "Select apps",
+                        Text(tr("Select apps"),
                             style = MaterialTheme.typography.labelLarge,
                             color = TextSecondary,
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = { vm.toggleAllApps(true) }) {
-                            Text("All", color = AccentCyan)
+                            Text(tr("All"), color = AccentCyan)
                         }
                         TextButton(onClick = { vm.toggleAllApps(false) }) {
-                            Text("None", color = TextSecondary)
+                            Text(tr("None"), color = TextSecondary)
                         }
                     }
                 }
@@ -242,8 +240,7 @@ private fun UsageAccessCard(vm: MainViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Android, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Usage access needed",
+                Text(tr("Usage access needed"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -257,7 +254,7 @@ private fun UsageAccessCard(vm: MainViewModel) {
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = { vm.requestUsageAccess() }) {
-                Text("Grant usage access", fontWeight = FontWeight.Bold)
+                Text(tr("Grant usage access"), fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -288,13 +285,11 @@ private fun GuidedCleanCard(state: UiState) {
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        "Guided two-tap clean",
+                    Text(tr("Guided two-tap clean"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    Text(
-                        "No Accessibility permission needed — v1.3 dropped it",
+                    Text(tr("No Accessibility permission needed — v1.3 dropped it"),
                         style = MaterialTheme.typography.bodySmall,
                         color = AccentCyan,
                     )
@@ -313,8 +308,7 @@ private fun GuidedCleanCard(state: UiState) {
                 color = TextSecondary,
             )
             Spacer(Modifier.height(10.dp))
-            Text(
-                "1. Tick apps  →  2. Clean cache  →  3. Tap “Clear cache” in Settings  →  4. Back → Next app",
+            Text(tr("1. Tick apps  →  2. Clean cache  →  3. Tap “Clear cache” in Settings  →  4. Back → Next app"),
                 style = MaterialTheme.typography.labelMedium,
                 color = TextPrimary,
                 fontWeight = FontWeight.SemiBold,

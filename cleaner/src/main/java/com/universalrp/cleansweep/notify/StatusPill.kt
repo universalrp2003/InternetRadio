@@ -1,6 +1,7 @@
 package com.universalrp.cleansweep.notify
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Rect
@@ -24,12 +25,21 @@ import android.widget.TextView
  *  * off by default and only drawn after the user allows "Display over other apps",
  *  * transparent to touch (it can never block a tap on the status bar),
  *  * only shown while the charger is connected,
+ *  * **movable**: every phone writes different things up there (the carrier name, VoLTE,
+ *    VPN, battery %), so the arrows in Phone health move the reading anywhere on screen and
+ *    the position is remembered,
  *  * nothing but a number and a watt sign — no notifications, no personal data.
  *
  * Because it is an overlay, a phone can hide it in full-screen apps, and it disappears the
  * moment the user turns the switch off.
  */
 object StatusPill {
+
+    /** Position prefs, in the same plain file the charging service reads. */
+    const val PREFS = "cleansweep_state"
+    const val KEY_DX = "pill_dx"
+    const val KEY_DY = "pill_dy"
+    const val KEY_AUTO = "pill_auto"
 
     private val main = Handler(Looper.getMainLooper())
     private var view: TextView? = null
@@ -38,6 +48,56 @@ object StatusPill {
     /** True when the "Display over other apps" permission is granted. */
     fun canDraw(context: Context): Boolean =
         Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
+
+    /** Where the user last moved it. 0,0 with auto = the middle of the status bar. */
+    fun offsets(context: Context): Pair<Int, Int> {
+        val prefs = prefs(context)
+        return prefs.getInt(KEY_DX, 0) to prefs.getInt(KEY_DY, 0)
+    }
+
+    fun isAuto(context: Context): Boolean = prefs(context).getBoolean(KEY_AUTO, true)
+
+    /**
+     * Moves the reading by a number of screen pixels and remembers it, so the user can push
+     * it out of the way of anything their phone puts up there — or drop it below the status
+     * bar entirely.
+     */
+    fun moveBy(context: Context, dx: Int, dy: Int) {
+        val app = context.applicationContext
+        val (x, y) = offsets(app)
+        prefs(app).edit()
+            .putInt(KEY_DX, x + dx)
+            .putInt(KEY_DY, y + dy)
+            .putBoolean(KEY_AUTO, false)
+            .apply()
+        redraw(app)
+    }
+
+    /** Back to the automatic spot (centred, beside the camera cutout). */
+    fun resetPosition(context: Context) {
+        val app = context.applicationContext
+        prefs(app).edit()
+            .putInt(KEY_DX, 0)
+            .putInt(KEY_DY, 0)
+            .putBoolean(KEY_AUTO, true)
+            .apply()
+        redraw(app)
+    }
+
+    /** Re-reads the position and moves the pill, if it is on screen right now. */
+    fun redraw(context: Context) {
+        val app = context.applicationContext
+        main.post {
+            val pill = view ?: return@main.post
+            val manager = pill.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                ?: return@main.post
+            position(app, manager, pill)
+            pill.post { position(app, manager, pill) }
+        }
+    }
+
+    private fun prefs(context: Context): SharedPreferences =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     /**
      * Shows [text] (or hides the pill when it is null/blank). Safe to call from any thread
@@ -121,6 +181,7 @@ object StatusPill {
     private fun position(context: Context, manager: WindowManager, pill: TextView) {
         val layout = params ?: return
         val screenWidth = context.resources.displayMetrics.widthPixels
+        val screenHeight = context.resources.displayMetrics.heightPixels
         val statusHeight = statusBarHeight(context)
         val width = if (pill.width > 0) pill.width else dp(context, 56)
         val height = if (pill.height > 0) pill.height else dp(context, 16)
@@ -128,6 +189,7 @@ object StatusPill {
 
         // Default: the empty middle of the status bar, between the clock and the icons.
         var x = (screenWidth - width) / 2
+        var y = (statusHeight - height) / 2
 
         // With a punch-hole camera up there, sit beside it instead of behind it.
         val cutout = topCutout(manager)
@@ -142,8 +204,16 @@ object StatusPill {
             if (x + width > screenWidth - margin) x = cutout.left - width - gap
         }
 
+        // The user's own position, when they have moved it: every phone writes different
+        // words up there (VoLTE, VPN, carrier name), so it has to be movable.
+        if (!isAuto(context)) {
+            val (dx, dy) = offsets(context)
+            x += dx
+            y += dy
+        }
+
         layout.x = x.coerceIn(margin, (screenWidth - width - margin).coerceAtLeast(margin))
-        layout.y = ((statusHeight - height) / 2).coerceAtLeast(0)
+        layout.y = y.coerceIn(0, (screenHeight - height - margin).coerceAtLeast(0))
         try {
             manager.updateViewLayout(pill, layout)
         } catch (e: Exception) {
