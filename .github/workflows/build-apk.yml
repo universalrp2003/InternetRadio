@@ -9,6 +9,11 @@ name: Build APK
 on:
   push:
     branches: [ main, "arena/**" ]
+    # A version tag publishes a permanent GitHub Release with the version-named APKs
+    # attached (see the "Publish a GitHub Release" step). One tag covers the whole
+    # workspace, so a datestamp is used instead of one app's version number: the file
+    # names still carry each app's own version.
+    tags: [ "v*" ]
   workflow_dispatch:   # lets you start a build manually from the Actions tab
 
 permissions:

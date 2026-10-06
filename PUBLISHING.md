@@ -124,15 +124,17 @@ Useful facts for the submission:
 
 ## 5. Cutting a release (what the family installs from now on)
 
-The GitHub Release is created automatically by CI when a tag is pushed:
+The GitHub Release is created automatically by CI when a tag starting with `v` is pushed. The
+repository holds five apps with five different versions, so the tag is a **build date**, while
+each APK file name carries its own app version:
 
 ```bash
-git tag v2.6               # once, on the commit you want to publish
-git push origin v2.6
+git tag v2026.10.06          # any v* name; date tags avoid "which app is v2.6?"
+git push origin v2026.10.06
 ```
 
-That runs the normal build, then attaches **`CleanSweep-v2.6.apk`** and the other four release
-APKs to a Release named `v2.6`. Anyone can then install straight from
+That runs the normal build, then attaches **`CleanSweep-v2.6.apk`**, **`Ramesh-Radio-v1.2.apk`**
+and the other three release APKs to a Release. Anyone can then install straight from
 `https://github.com/universalrp2003/InternetRadio/releases` — a link that does not expire.
 
 Inside each app the version stays in the file name, exactly as you asked.
