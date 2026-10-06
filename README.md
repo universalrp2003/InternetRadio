@@ -27,6 +27,11 @@ All releases: <https://github.com/universalrp2003/InternetRadio/releases> · The
 **release** builds (signed with the project keystore, not debuggable), which is what an app
 store will take. The "debug" builds CI also produces are for quick testing only.
 
+Each build also produces the **Google Play bundles** (`*.aab`) as the `store-bundles` CI
+artifact — Play does not accept APKs for new apps. Which apps Play allows, and the whole
+submission pack, is in [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md); the privacy
+policy is [PRIVACY.md](PRIVACY.md).
+
 ## Licence
 
 **GNU GPL-3.0** — Copyright (C) 2026 Ramesh prathap .R (`universalrp2003@gmail.com`).
