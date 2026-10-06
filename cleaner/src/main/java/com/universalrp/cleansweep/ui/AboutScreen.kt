@@ -31,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.outlined.Email
+import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material3.TextButton
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.Screen
@@ -149,9 +150,37 @@ fun AboutScreen(vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                     }
+                    TextButton(
+                        onClick = {
+                            try {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://github.com/universalrp2003"),
+                                    )
+                                )
+                            } catch (e: Exception) {
+                                // No browser: the address is on screen to copy.
+                            }
+                        },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.Public,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "github.com/universalrp2003",
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     Text(
                         tr("App name") + ": " + Lang.appName() +
-                            if (Lang.isTamil) "  (CleanSweep)" else "  (தொலைபேசி காவலர்)",
+                            if (Lang.isTamil) "  (CleanSweep)" else "  (சுத்தம் செய்பவர்)",
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )

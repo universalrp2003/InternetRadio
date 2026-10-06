@@ -63,6 +63,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.AccentViolet
@@ -324,6 +325,8 @@ fun ReadingMovePad(
     onMove: (dx: Int, dy: Int) -> Unit,
     onReset: () -> Unit,
     note: String,
+    dragging: Boolean = false,
+    onToggleDrag: (() -> Unit)? = null,
 ) {
     Column {
         Row(
@@ -332,22 +335,31 @@ fun ReadingMovePad(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             TextButton(onClick = { onMove(-24, 0) }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Move left", tint = AccentCyan)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Move left"), tint = AccentCyan)
             }
             TextButton(onClick = { onMove(24, 0) }) {
-                Icon(Icons.Outlined.ArrowForward, contentDescription = "Move right", tint = AccentCyan)
+                Icon(Icons.Outlined.ArrowForward, contentDescription = tr("Move right"), tint = AccentCyan)
             }
             TextButton(onClick = { onMove(0, -12) }) {
-                Icon(Icons.Outlined.ArrowUpward, contentDescription = "Move up", tint = AccentCyan)
+                Icon(Icons.Outlined.ArrowUpward, contentDescription = tr("Move up"), tint = AccentCyan)
             }
             TextButton(onClick = { onMove(0, 12) }) {
-                Icon(Icons.Outlined.ArrowDownward, contentDescription = "Move down", tint = AccentCyan)
+                Icon(Icons.Outlined.ArrowDownward, contentDescription = tr("Move down"), tint = AccentCyan)
             }
             Spacer(Modifier.size(6.dp))
             TextButton(onClick = onReset) {
                 Icon(Icons.Outlined.RestartAlt, contentDescription = null, tint = GoodGreen)
                 Spacer(Modifier.size(6.dp))
-                Text("Auto", color = GoodGreen, fontWeight = FontWeight.Bold)
+                Text(tr("Auto"), color = GoodGreen, fontWeight = FontWeight.Bold)
+            }
+            if (onToggleDrag != null) {
+                TextButton(onClick = onToggleDrag) {
+                    Text(
+                        if (dragging) tr("Done") else tr("Drag"),
+                        color = if (dragging) AccentViolet else AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
             }
         }
         Text(

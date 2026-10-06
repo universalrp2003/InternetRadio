@@ -13,6 +13,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.TextView
 
@@ -45,6 +46,14 @@ object StatusPill {
     private var view: TextView? = null
     private var params: WindowManager.LayoutParams? = null
 
+    /**
+     * True only while the user is placing the reading with their finger. Outside drag mode the
+     * pill stays [WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE], so it can never swallow a tap
+     * meant for the phone's own status bar.
+     */
+    @Volatile
+    private var draggable = false
+
     /** True when the "Display over other apps" permission is granted. */
     fun canDraw(context: Context): Boolean =
         Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
@@ -64,14 +73,47 @@ object StatusPill {
      */
     fun moveBy(context: Context, dx: Int, dy: Int) {
         val app = context.applicationContext
-        val (x, y) = offsets(app)
-        prefs(app).edit()
+        nudge(app, dx, dy)
+        redraw(app)
+    }
+
+    /** Adds [dx], [dy] to the remembered spot, without touching the window. */
+    private fun nudge(context: Context, dx: Int, dy: Int) {
+        val (x, y) = offsets(context)
+        prefs(context).edit()
             .putInt(KEY_DX, x + dx)
             .putInt(KEY_DY, y + dy)
             .putBoolean(KEY_AUTO, false)
             .apply()
-        redraw(app)
     }
+
+    /**
+     * Drag mode: with it on, the reading itself follows the finger, and the user can drop it
+     * anywhere on the screen — including right under the status bar. Turned off, the pill goes
+     * back to being touch-through.
+     */
+    fun setDraggable(context: Context, on: Boolean) {
+        draggable = on
+        val app = context.applicationContext
+        main.post {
+            val pill = view ?: return@post
+            val layout = params ?: return@post
+            val manager = pill.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+                ?: return@post
+            layout.flags = flags()
+            try {
+                manager.updateViewLayout(pill, layout)
+            } catch (e: Exception) {
+                // The window went away between frames.
+            }
+        }
+    }
+
+    private fun flags(): Int =
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            (if (draggable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+            WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
     /** Back to the automatic spot (centred, beside the camera cutout). */
     fun resetPosition(context: Context) {
@@ -160,13 +202,37 @@ object StatusPill {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            flags(),
             PixelFormat.TRANSLUCENT,
         )
         layout.gravity = Gravity.TOP or Gravity.START
+        // Finger dragging, only while the user asked for it: each move is the same arithmetic
+        // the arrows use, so the two can never disagree about where the reading is.
+        var lastX = 0f
+        var lastY = 0f
+        pill.setOnTouchListener { v, event ->
+            if (!draggable) return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastX = event.rawX
+                    lastY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - lastX).toInt()
+                    val dy = (event.rawY - lastY).toInt()
+                    lastX = event.rawX
+                    lastY = event.rawY
+                    if (dx != 0 || dy != 0) {
+                        nudge(context, dx, dy)
+                        position(context, manager, pill)
+                    }
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> true
+                else -> false
+            }
+        }
         return try {
             manager.addView(pill, layout)
             view = pill

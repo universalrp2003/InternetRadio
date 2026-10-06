@@ -259,6 +259,8 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
                     onMove = { dx, dy -> vm.moveStatusPill(dx, dy) },
                     onReset = { vm.resetStatusPill() },
                     note = tr("The position is remembered, and the reading still only appears while charging."),
+                    dragging = state.pillDragging,
+                    onToggleDrag = { vm.togglePillDrag() },
                 )
             }
         }

@@ -5,5 +5,5 @@
       Tamil (or when the user picks Tamil in Settings → Apps → CleanSweep → Language, which
       locales_config.xml enables on Android 13+).
     -->
-    <string name="app_name">தொலைபேசி காவலர்</string>
+    <string name="app_name">சுத்தம் செய்பவர்</string>
 </resources>

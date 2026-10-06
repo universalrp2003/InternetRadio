@@ -282,6 +282,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                                 onMove = { dx, dy -> vm.moveStatusPill(dx, dy) },
                                 onReset = { vm.resetStatusPill() },
                                 note = tr("Each tap moves it a little; “Auto” puts it back beside the camera."),
+                                dragging = state.pillDragging,
+                                onToggleDrag = { vm.togglePillDrag() },
                             )
                         }
                     }

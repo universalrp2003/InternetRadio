@@ -31,6 +31,7 @@ import com.universalrp.cleansweep.data.SpeedMeter
 import com.universalrp.cleansweep.data.SpeedProgress
 import com.universalrp.cleansweep.data.SpeedResult
 import com.universalrp.cleansweep.data.UsageStats
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.data.NetworkReport
 import com.universalrp.cleansweep.data.NetworkScanner
 import com.universalrp.cleansweep.data.SecurityReport
@@ -149,6 +150,8 @@ data class UiState(
     // Status-bar watt reading: CleanSweep draws it itself (needs "Display over other apps")
     val statusPill: Boolean = false,
     val statusPillAllowed: Boolean = false,
+    // True while the user is placing the status-bar reading with their finger
+    val pillDragging: Boolean = false,
     // Wi-Fi permission (Nearby-devices on Android 13+, Location below)
     val wifiPermission: Boolean = false,
     // Language (English / Tamil) — the whole menu follows it
@@ -165,7 +168,8 @@ data class UiState(
     val speedProgress: SpeedProgress? = null,
     val speedResult: SpeedResult? = null,
     val speedUploadResult: SpeedResult? = null,
-    val speedSizeMb: Int = 10,
+    // 0 = the user has not picked a size yet; the screen asks instead of guessing
+    val speedSizeMb: Int = 0,
     val speedIncludeUpload: Boolean = false,
     val speedError: String? = null,
     val usage: DataUsageReport? = null,
@@ -263,6 +267,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Lang.set(lang)
                 prefs.edit().putString(Lang.KEY, lang.id).apply()
                 mutate { it.copy(lang = lang) }
+            }
+        }
+        // The speed test remembers the size the user chose last time and nothing else.
+        viewModelScope.launch {
+            settingsRepo.speedSizeMb.collect { mb ->
+                if (mb > 0 && mb != _state.value.speedSizeMb) {
+                    mutate { it.copy(speedSizeMb = mb) }
+                }
             }
         }
         val loaded = AiSettings.load(ctx)
@@ -1230,7 +1242,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         Lang.set(lang)
         prefs.edit().putString(Lang.KEY, lang.id).apply()
         mutate { it.copy(lang = lang, message = if (lang == AppLang.TA) {
-            "மொழி: தமிழ் — ஆப் பெயர் “தொலைபேசி காவலர்”"
+            "மொழி: தமிழ் — ஆப் பெயர் “சுத்தம் செய்பவர்”"
         } else {
             "Language: English"
         }) }
@@ -1247,7 +1259,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resetStatusPill() {
         StatusPill.resetPosition(ctx)
-        mutate { it.copy(message = "Reading back at the automatic spot (beside the camera).") }
+        mutate { it.copy(message = tr("Reading back at the automatic spot (beside the camera).")) }
+    }
+
+    /**
+     * Finger placement. With it on, the reading follows the finger across the whole screen, so
+     * the user can drop it exactly where their phone leaves a gap; with it off the overlay is
+     * touch-through again and can never swallow a tap meant for the status bar.
+     */
+    fun togglePillDrag() {
+        val on = !_state.value.pillDragging
+        StatusPill.setDraggable(ctx, on)
+        mutate {
+            it.copy(
+                pillDragging = on,
+                message = if (on) {
+                    tr("Drag mode on — slide the watt reading where you want it, then tap Done.")
+                } else {
+                    tr("Saved. The reading gets its place back every time you charge.")
+                },
+            )
+        }
     }
 
     // ------------------------------------------------------ mobile & data (v2.3)
@@ -1315,7 +1347,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun setSpeedSize(mb: Int) = mutate { it.copy(speedSizeMb = mb, speedResult = null, speedUploadResult = null) }
+    fun setSpeedSize(mb: Int) {
+        mutate { it.copy(speedSizeMb = mb, speedResult = null, speedUploadResult = null) }
+        viewModelScope.launch { settingsRepo.setSpeedSizeMb(mb) }
+    }
 
     fun setSpeedIncludeUpload(on: Boolean) = mutate { it.copy(speedIncludeUpload = on) }
 
@@ -1328,6 +1363,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun startSpeedTest() {
         val state = _state.value
         if (state.speedBusy) return
+        if (state.speedSizeMb <= 0) {
+            // No size has been chosen yet: ask, never guess — this costs the user's data.
+            mutate { it.copy(message = tr("Pick a test size first — that is how much data the test uses.")) }
+            return
+        }
         val bytes = state.speedSizeMb.toLong() * 1024L * 1024L
         val withUpload = state.speedIncludeUpload
         mutate {

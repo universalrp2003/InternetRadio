@@ -8,16 +8,19 @@ and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
 - **Tamil menu** — Settings → **Language** switches between English and **தமிழ்**. The whole
   menu (titles, buttons, cards, settings, dialogs) is translated, and in Tamil the app calls
-  itself **தொலைபேசி காவலர்** ("Phone Guardian"). The launcher label is Tamil too on a Tamil
+  itself **சுத்தம் செய்பவர்** (literally "the cleaner" — the Tamil name of CleanSweep). The launcher label is Tamil too on a Tamil
   phone, and Android 13+ shows CleanSweep in *Settings → Apps → Language* because the app
   declares `locales_config`. Anything not yet translated stays in English on purpose rather
   than showing machine-garbled Tamil.
-- **Author credit** — About now names **ரமேஷ் பிரதாப்** / Ramesh prathap .R with a tappable
-  **universalrp2003@gmail.com**, and shows the app's name in both languages.
-- **The watt reading moves** — an arrow pad (Phone health, and Settings → watt reading) moves
-  the status-bar reading 24 px at a time and remembers the spot, with **Auto** to return it
-  beside the camera. Every phone writes different things up there — VoLTE, VPN, the carrier
-  name, the battery percentage — so the free space is never in the same place twice.
+- **Author credit** — About now names **ரமேஷ் பிரதாப்** / Ramesh prathap .R with tappable
+  **universalrp2003@gmail.com** and **github.com/universalrp2003**, and shows the app's name
+  in both languages.
+- **The watt reading moves — two ways** — an arrow pad (Phone health, and Settings → watt
+  reading) nudges it 24 px at a time, and **Drag** hands the reading to your finger so you can
+  slide it anywhere on the screen and tap **Done**; the spot is remembered, and **Auto**
+  returns it beside the camera. Every phone writes different things up there — VoLTE, VPN, the
+  carrier name, the battery percentage — so the free space is never in the same place twice.
+  Outside drag mode the reading is touch-through and can never block a tap.
 - **AI keys are saved per provider** — switching from Gemini to Groq and back restores the key
   *and* the model, so the same key is never typed twice. The AI settings screen shows which
   providers already have a saved key.
@@ -28,8 +31,10 @@ and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 - **New: Mobile & data screen** — operator and SIM names, 5G/4G/3G/2G, the true signal in dBm
   with four bars and a plain-language quality label, cell towers with cell id / PCI / TAC and
   which one is in use, public IP + ISP + city (one small request on demand), **ping and
-  jitter** to three public endpoints, a **real speed test** in 1/5/10/25/50/100 MB sizes with
-  an explicit data warning (and a note that only the big sizes show true 5G speed), and
+  jitter** to three public endpoints, a **real speed test** in 1/5/10/25/50/100 MB sizes that
+  **asks for the size and never guesses it** — the button is disabled until you choose, your
+  last choice is pre-selected next time, and a mobile-data warning names how much the test
+  will cost (only the big sizes show true 5G speed), and
   **today's data usage** split into mobile and Wi-Fi with the top data-hungry apps — accurate
   when Usage access is granted, and labelled honestly when it is not.
 

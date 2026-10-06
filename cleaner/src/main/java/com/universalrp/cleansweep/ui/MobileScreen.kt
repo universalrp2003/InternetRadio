@@ -535,7 +535,8 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
 
             if (showSizes && !state.speedBusy) {
                 Text(
-                    tr("Test size") + " — " + formatBytesSafe(bytes),
+                    if (state.speedSizeMb > 0) tr("Test size") + " — " + formatBytesSafe(bytes)
+                    else tr("Test size — tap the size you want"),
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -633,12 +634,26 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
                     color = TextPrimary,
                 )
             } else {
+                val chosen = state.speedSizeMb > 0
                 GradientButton(
-                    text = tr("Start test") + " • " + formatBytesSafe(bytes),
+                    text = if (chosen) {
+                        tr("Start test") + " • " + formatBytesSafe(bytes)
+                    } else {
+                        tr("Pick a test size first")
+                    },
                     icon = Icons.Outlined.Speed,
                     onClick = { vm.startSpeedTest() },
                     modifier = Modifier.fillMaxWidth(),
+                    enabled = chosen,
                 )
+                if (!chosen) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        tr("Nothing runs until you pick a size — the test costs that much data."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
             }
 
             state.speedResult?.let { result ->

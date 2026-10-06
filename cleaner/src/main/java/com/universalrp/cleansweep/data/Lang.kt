@@ -31,7 +31,7 @@ object Lang {
 
     /** Where the Tamil name of the app lives, so every screen can show it consistently. */
     private const val APP_NAME_EN = "CleanSweep"
-    private const val APP_NAME_TA = "தொலைபேசி காவலர்"
+    private const val APP_NAME_TA = "சுத்தம் செய்பவர்"
 
     @Volatile
     var current: AppLang = AppLang.EN
@@ -68,9 +68,10 @@ object Lang {
 
     /** Shown in Settings and About. */
     val languageNote: String get() = if (isTamil) {
-        "மெனுவின் மொழி. தமிழ் தேர்ந்தெடுத்தால் பயன்பாட்டின் பெயர் “தொலைபேசி காவலர்” ஆகும்."
+        "மெனுவின் மொழி. தமிழ் தேர்ந்தெடுத்தால் பயன்பாட்டின் பெயர் “சுத்தம் செய்பவர்” ஆகும்."
     } else {
-        "Menu language. Tamil also renames the app to “தொலைபேசி காவலர்” (Phone Guardian)."
+        "Menu language. Tamil also renames the app to “சுத்தம் செய்பவர்” — “the cleaner”. " +
+            "The launcher label follows a Tamil phone too."
     }
 
     /**
@@ -79,9 +80,48 @@ object Lang {
      */
     private val TAMIL: Map<String, String> = mapOf(
         // ------------------------------------------------------------- app chrome
-        "CleanSweep" to "தொலைபேசி காவலர்",
-        "About CleanSweep" to "தொலைபேசி காவலர் பற்றி",
-        "CleanSweep v1.3" to "தொலைபேசி காவலர் v2.3",
+        "CleanSweep" to "சுத்தம் செய்பவர்",
+        "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
+        "CleanSweep v2.3" to "சுத்தம் செய்பவர் v2.3",
+        // ------------------------------------------------------ status-bar reading position
+
+        // ------------------------------------------- longer explanations (v2.3 screens)
+        "Save" to
+            "சேமி",
+        "Everything on this screen is measured on your phone right now. Nothing is uploaded; the ping test sends a few kilobytes and the speed test only runs when you tap it." to
+            "இந்தத் திரையில் உள்ள அனைத்தும் இப்போது உங்கள் போனிலேயே அளக்கப்படுகின்றன. எதுவும் பதிவேற்றப்படுவதில்லை; பிங் சோதனை சில கிலோபைட்டுகளை அனுப்பும், வேகச் சோதனை நீங்கள் தட்டினால் மட்டுமே இயங்கும்.",
+        "dBm is the honest number: −60 is excellent, −100 is barely usable, and a stronger bar count can lie. Values are read from the system, not estimated." to
+            "dBm தான் உண்மையான அளவு: −60 மிகச் சிறந்தது, −100 அரிதாகவே பயன்படும், அதிக பார்கள் பொய் சொல்லலாம். மதிப்புகள் சாதனத்திலிருந்து படிக்கப்படுகின்றன, மதிப்பிடப்படவில்லை.",
+        "Android only reveals tower identity to apps that have Location allowed, and some carriers hide it completely. A dual-SIM phone shows the towers of the SIM that is carrying data." to
+            "இருப்பிட அனுமதி உள்ள ஆப்களுக்கு மட்டுமே ஆண்ட்ராய்டு டவர் தகவலைத் தரும்; சில ஆபரேட்டர்கள் அதை முழுவதுமாக மறைக்கின்றனர். இரட்டை சிம் போனில் தரவு செல்லும் சிம்மின் டவர்கள் காட்டப்படும்.",
+        "Latency (ping) is how long a round trip takes; jitter is how much it wobbles. High jitter makes video calls stutter even when the ping looks fine." to
+            "பிங் என்பது ஒரு சுற்றுப் பயணத்தின் நேரம்; ஜிட்டர் என்பது அது எவ்வளவு ஏறி இறங்குகிறது என்பது. பிங் நன்றாக இருந்தாலும் அதிக ஜிட்டர் வீடியோ அழைப்புகளைத் தடுமாறச் செய்யும்.",
+        "Tap to see the IP and operator the internet sees (one small request)." to
+            "இணையம் பார்க்கும் IP மற்றும் ஆபரேட்டரைப் பார்க்க தட்டவும் (ஒரு சிறிய கோரிக்கை).",
+        "No answer" to
+            "பதில் இல்லை",
+        "This downloads real data and measures how fast it arrived. Small sizes are kind to a metered plan; on an unlimited 5G plan pick the biggest, because the link needs a few seconds before it reaches full speed." to
+            "இது உண்மையான தரவைப் பதிவிறக்கி, எவ்வளவு வேகமாக வந்தது என்பதை அளக்கும். சிறிய அளவுகள் குறைந்த தரவு திட்டத்திற்கு உகந்தவை; வரம்பற்ற 5G திட்டத்தில் மிகப் பெரியதைத் தேர்ந்தெடுக்கவும், ஏனெனில் முழு வேகம் வர சில வினாடிகள் ஆகும்.",
+        "Auto" to "தானியங்கி",
+        "Drag" to "இழுத்து வை",
+        "Pick a test size first" to "முதலில் சோதனை அளவைத் தேர்ந்தெடுக்கவும்",
+        "Test size — tap the size you want" to
+            "சோதனை அளவு — உங்களுக்கு வேண்டிய அளவைத் தட்டவும்",
+        "Pick a test size first — that is how much data the test uses." to
+            "முதலில் சோதனை அளவைத் தேர்ந்தெடுக்கவும் — சோதனை அவ்வளவு தரவைப் பயன்படுத்தும்.",
+        "Nothing runs until you pick a size — the test costs that much data." to
+            "நீங்கள் அளவைத் தேர்ந்தெடுக்கும் வரை எதுவும் இயங்காது — சோதனை அவ்வளவு தரவைச் செலவாக்கும்.",
+        "Done" to "முடிந்தது",
+        "Move left" to "இடது பக்கம் நகர்த்து",
+        "Move right" to "வலது பக்கம் நகர்த்து",
+        "Move up" to "மேலே நகர்த்து",
+        "Move down" to "கீழே நகர்த்து",
+        "Reading back at the automatic spot (beside the camera)." to
+            "வாசிப்பு மீண்டும் தானியங்கி இடத்தில் (கேமரா அருகில்).",
+        "Drag mode on — slide the watt reading where you want it, then tap Done." to
+            "இழுத்து வை இயக்கம் இயக்கத்தில் — வாட்ட்ஸ் வாசிப்பை விரலால் நகர்த்தி, சரியான இடத்தில் வைத்து “முடிந்தது” தட்டவும்.",
+        "Saved. The reading gets its place back every time you charge." to
+            "சேமிக்கப்பட்டது. ஒவ்வொரு முறை சார்ஜ் செய்யும்போதும் வாசிப்பு அதே இடத்தில் வரும்.",
         "Cleaner, battery health & security for any Android phone" to
             "எந்த ஆண்ட்ராய்டு போனுக்கும் க்ளீனர், பேட்டரி ஆரோக்கியம் & பாதுகாப்பு",
         "Settings" to "அமைப்புகள்",
@@ -144,7 +184,6 @@ object Lang {
         "Allow storage access to delete files" to "கோப்புகளை நீக்க சேமிப்பு அனுமதி தேவை",
         "Works on every Android phone" to "எல்லா ஆண்ட்ராய்டு போன்களிலும் வேலை செய்யும்",
         "Preselect after a scan" to "ஸ்கேன் முடிந்ததும் முன்-தேர்வு",
-        "Preselect after a scan" to "ஸ்கேன் முடிந்ததும் முன்-தேர்வு",
 
         // --------------------------------------------------------------- scanning
         "Cancel scan" to "ஸ்கேனை நிறுத்து",
@@ -157,13 +196,13 @@ object Lang {
         "Cleaning…" to "சுத்தம் செய்கிறது…",
 
         // -------------------------------------------------------------- assistant
-        "CleanSweep Assistant" to "தொலைபேசி காவலர் உதவியாளர்",
+        "CleanSweep Assistant" to "சுத்தம் செய்பவர் உதவியாளர்",
         "Detailed answers" to "விரிவான பதில்கள்",
         "Detailed assistant answers" to "விரிவான உதவியாளர் பதில்கள்",
         "Off = the on-device assistant replies in one short line" to
             "ஆஃப் = உதவியாளர் ஒரு சிறு வரியில் பதில் தரும்",
         "Ask about your storage…" to "உங்கள் சேமிப்பைப் பற்றிக் கேளுங்கள்…",
-        "CleanSweep AI" to "தொலைபேசி காவலர் AI",
+        "CleanSweep AI" to "சுத்தம் செய்பவர் AI",
         "Thinking on this device…" to "இந்த போனிலேயே யோசிக்கிறது…",
 
         // ----------------------------------------------------------- health screen
@@ -261,7 +300,6 @@ object Lang {
         // ------------------------------------------------- mobile & data screen
         "Phone permission gives the real numbers" to "Phone அனுமதி உண்மையான எண்களைத் தரும்",
         "Allow and rescan" to "அனுமதித்து மீண்டும் படி",
-        "Signal quality" to "சிக்னல் தரம்",
         "Cell towers in reach" to "அருகில் உள்ள செல் டவர்கள்",
         "in use" to "பயன்பாட்டில்",
         "Check" to "சரிபார்",

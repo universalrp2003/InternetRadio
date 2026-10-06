@@ -42,6 +42,7 @@ class SettingsRepo(context: Context) {
         val DEFAULT_SELECTED = stringSetPreferencesKey("default_selected_kinds")
         val STATUS_PILL = booleanPreferencesKey("status_pill")
         val LANG = stringPreferencesKey("app_lang")
+        val SPEED_MB = intPreferencesKey("speed_size_mb")
     }
 
     val soundsEnabled: Flow<Boolean> = store.data.map { p ->
@@ -107,6 +108,16 @@ class SettingsRepo(context: Context) {
 
     suspend fun setLang(lang: AppLang) =
         store.edit { it[Keys.LANG] = lang.id }
+
+    /**
+     * The size the user picked for the last speed test, or 0 when they have never run one.
+     * The screen asks for a size every time, and this only pre-selects their own last choice
+     * instead of a size CleanSweep invented — a big test on a metered plan costs real money.
+     */
+    val speedSizeMb: Flow<Int> = store.data.map { p -> p[Keys.SPEED_MB] ?: 0 }
+
+    suspend fun setSpeedSizeMb(mb: Int) =
+        store.edit { it[Keys.SPEED_MB] = mb.coerceIn(0, 100) }
 
     suspend fun setIncludeHidden(value: Boolean) =
         store.edit { it[Keys.INCLUDE_HIDDEN] = value }

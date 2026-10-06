@@ -203,7 +203,8 @@ jobs:
                         SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
                         ChargeMonitorService batteryTimeLabel StatusPill goBack \
                         defaultSelected useAnotherFreeAi ping AiText MobileNet SpeedMeter \
-                        UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor; do
+                        UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor \
+                        setDraggable togglePillDrag setSpeedSizeMb speedSizeMb; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
