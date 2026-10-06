@@ -258,18 +258,22 @@ object AppInventoryLoader {
         false
     }
 
+    /**
+     * Op name for "install unknown apps". The constant is hidden from the public SDK,
+     * but the string is part of Android's platform and is what AppOps compares against.
+     */
+    const val OP_REQUEST_INSTALL_PACKAGES = "android:request_install_packages"
+
     /** Whether this app is allowed to install other apps right now (AppOps check). */
     fun canInstallPackages(context: Context, pkg: String): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
         return try {
             val uid = context.packageManager.getApplicationInfo(pkg, 0).uid
             val mode = if (Build.VERSION.SDK_INT >= 29) {
-                appOps.unsafeCheckOpNoThrow(
-                    AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, uid, pkg
-                )
+                appOps.unsafeCheckOpNoThrow(OP_REQUEST_INSTALL_PACKAGES, uid, pkg)
             } else {
                 @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(AppOpsManager.OPSTR_REQUEST_INSTALL_PACKAGES, uid, pkg)
+                appOps.checkOpNoThrow(OP_REQUEST_INSTALL_PACKAGES, uid, pkg)
             }
             mode == AppOpsManager.MODE_ALLOWED
         } catch (e: Exception) {

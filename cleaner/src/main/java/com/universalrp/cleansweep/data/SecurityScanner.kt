@@ -51,6 +51,12 @@ data class SecurityReport(
  */
 object SecurityScanner {
 
+    /**
+     * "Which apps can read notifications" lives in this Settings.Secure key. The Java
+     * constant is hidden from the public SDK, so the key is spelled out here.
+     */
+    private const val ENABLED_NOTIFICATION_LISTENERS = "enabled_notification_listeners"
+
     /** Accessibility services that belong to the phone itself. */
     private val SYSTEM_ACCESSIBILITY = listOf(
         "com.android.", "android.", "com.google.android.marvin", "com.google.android.accessibility",
@@ -91,7 +97,7 @@ object SecurityScanner {
         }
 
         val listeners = enabledServices(
-            context, Settings.Secure.ENABLED_NOTIFICATION_LISTENERS
+            context, ENABLED_NOTIFICATION_LISTENERS
         ).filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
         if (listeners.isNotEmpty()) {
             findings.add(

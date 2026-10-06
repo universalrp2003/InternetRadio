@@ -25,7 +25,6 @@ import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.CleaningServices
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BatteryFull
-import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Security
@@ -149,37 +148,28 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                                     Text(
                                         "Battery ${health.battery.percent}% • " +
                                             (health.battery.temperatureC?.let { "%.1f °C".format(it) }
-                                                ?: "temp n/a"),
+                                                ?: "temp not reported"),
                                         style = MaterialTheme.typography.bodyMedium,
                                         fontWeight = FontWeight.SemiBold,
                                     )
                                     Text(
                                         buildString {
                                             append(health.battery.statusLabel)
-                                            health.battery.powerW?.let {
-                                                append(" • ${"%.1f".format(it)} W")
-                                            }
+                                            health.battery.powerW?.let { append(" • ${"%.1f".format(it)} W") }
                                             health.cpuTempC?.let { append(" • CPU ${"%.0f".format(it)} °C") }
+                                            append(" • uptime ${formatUptime(health.device.uptimeMs)}")
                                         },
                                         style = MaterialTheme.typography.bodySmall,
                                         color = TextSecondary,
                                     )
                                 }
                                 Text(
-                                    "Live",
+                                    "LIVE",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = GoodGreen,
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Uptime ${formatUptime(health.device.uptimeMs)} • " +
-                                    "${health.device.manufacturer} ${health.device.model} • " +
-                                    "Android ${health.device.androidVersion}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
-                            )
                         }
                     }
                 }
@@ -204,7 +194,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                         QuickCard(
                             icon = Icons.Outlined.BatteryFull,
                             title = "Phone health",
-                            subtitle = "Battery, temperature, CPU, watts",
+                            subtitle = "Battery, heat, CPU, watts",
                             onClick = { vm.navigate(Screen.HEALTH) },
                             modifier = Modifier.weight(1f),
                         )
@@ -220,14 +210,17 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                         QuickCard(
                             icon = Icons.Outlined.Wifi,
                             title = "Wi-Fi devices",
-                            subtitle = "See what is on your network",
-                            onClick = { vm.navigate(Screen.NETWORK); vm.refreshNetworkDetails() },
+                            subtitle = "Who is on your network",
+                            onClick = {
+                                vm.navigate(Screen.NETWORK)
+                                vm.refreshNetworkDetails()
+                            },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.Apps,
                             title = "Installed apps",
-                            subtitle = "Sizes, bloatware, unused",
+                            subtitle = "Bloatware, unused apps",
                             onClick = { vm.loadAppInventory() },
                             modifier = Modifier.weight(1f),
                         )
@@ -235,13 +228,13 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     QuickCard(
                         icon = Icons.Outlined.SmartToy,
                         title = if (state.aiConfig.ready) "AI phone analysis" else "Set up AI analysis",
-                        subtitle = if (state.aiConfig.ready)
+                        subtitle = if (state.aiConfig.ready) {
                             "Explain everything in plain words"
-                        else
-                            "Free option needs no signup",
+                        } else {
+                            "The free option needs no signup"
+                        },
                         onClick = {
-                            if (state.aiConfig.ready) vm.runAiAnalysis()
-                            else vm.navigate(Screen.AI_SETTINGS)
+                            if (state.aiConfig.ready) vm.runAiAnalysis() else vm.navigate(Screen.AI_SETTINGS)
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
@@ -249,7 +242,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             item {
-                SectionTitle("Cleaning")
+                SectionTitle("Quick cleaning actions")
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
@@ -320,72 +313,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             item { PhoneTipCard() }
-        }
-    }
-}
-
-/** Entry point for the on-device assistant (v1.3). */
-@Composable
-private fun AssistantCard(state: UiState, vm: MainViewModel) {
-    val totalCache = state.appCaches.sumOf { if (it.cacheBytes > 0L) it.cacheBytes else 0L }
-    val subtitle = when {
-        state.report != null -> "Ask me what the scan found — I work offline"
-        totalCache > 0L -> "${totalCache.formatBytes()} of app cache found — ask me what to do"
-        else -> "Free space, safe deletes, cache help — answers stay on this phone"
-    }
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .clickable { vm.openAssistant() }
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Ask the assistant",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "ON-DEVICE",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF04202A),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(AccentCyan)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
         }
     }
 }
@@ -603,11 +530,11 @@ private fun PhoneTipCard() {
             )
             Spacer(Modifier.height(6.dp))
             Text(
-                "Redmi and other Xiaomi phones (HyperOS/MIUI), Samsung, Oppo, Vivo, Realme, OnePlus, " +
-                    "Motorola, Nokia, Tecno and stock Android — the same app, the same features. " +
-                    "CleanSweep works fully offline and never touches your personal files unless you " +
-                    "select them. WhatsApp media (Settings → Storage) is usually the biggest single " +
-                    "space saver, and your phone's own Security app → Cleaner is a good extra sweep.",
+                "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
+                    "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
+                    "CleanSweep never touches your personal files unless you select them, and the only " +
+                    "thing that ever uses the internet is the AI analysis you start yourself. " +
+                    "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
             )
@@ -616,9 +543,9 @@ private fun PhoneTipCard() {
 }
 
 /**
- * Android 8, 9 and 10 need the runtime storage permission before an app can delete
- * anything. Without it the scan still finds junk and every delete is refused — exactly
- * the "0 MB cleaned" report users saw on phones like the Oppo A3s.
+ * Android 8, 9 and 10 need runtime storage permission before an app can delete
+ * anything. Without it the scan still finds junk and every delete is refused — the
+ * "0 MB cleaned" report users hit on phones like the Oppo A3s.
  */
 @Composable
 private fun LegacyStorageCard(vm: MainViewModel) {
@@ -640,7 +567,7 @@ private fun LegacyStorageCard(vm: MainViewModel) {
             Spacer(Modifier.height(8.dp))
             Text(
                 "This phone runs Android 9 or older, where an app needs the storage permission " +
-                    "before it can delete anything. Until then CleanSweep can find your junk but " +
+                    "before it can delete anything. Until then CleanSweep finds your junk and " +
                     "Android refuses every delete — which is why cleaning reported 0 MB.",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
