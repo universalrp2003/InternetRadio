@@ -70,8 +70,11 @@ jobs:
       # is fetched rather than pasted, so it cannot be mistyped.
       - name: Add the licence file (once)
         run: |
-          if git ls-files --error-unmatch LICENSE >/dev/null 2>&1; then
-            echo "LICENSE is already committed."
+          # Nothing to do when LICENSE is already there in the right shape: the licence text
+          # has to come first, or GitHub and the stores do not recognise the file as GPL-3.0.
+          if git ls-files --error-unmatch LICENSE >/dev/null 2>&1 && \
+             head -c 60 LICENSE | grep -q "GNU GENERAL PUBLIC LICENSE"; then
+            echo "LICENSE is already committed and starts with the licence text."
             exit 0
           fi
           TMP=$(mktemp)
@@ -84,6 +87,12 @@ jobs:
             exit 1
           fi
           {
+            cat "$TMP"
+            echo ""
+            echo "========================================================================"
+            echo ""
+            echo "How to apply this licence to these apps"
+            echo ""
             echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ"
             echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
             echo ""
@@ -98,12 +107,6 @@ jobs:
             echo ""
             echo "You should have received a copy of the GNU General Public License along with"
             echo "this program. If not, see <https://www.gnu.org/licenses/>."
-            echo ""
-            echo "The full text of the licence follows."
-            echo ""
-            echo "========================================================================"
-            echo ""
-            cat "$TMP"
           } > LICENSE
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
