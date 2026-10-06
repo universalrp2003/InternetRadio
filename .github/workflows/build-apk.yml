@@ -35,6 +35,29 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
 
+      # F-Droid's build server (and anyone building locally) prefers a committed wrapper:
+      # it is what pins the Gradle version. CI generates it anyway, so it commits it once.
+      - name: Commit the Gradle wrapper (once)
+        run: |
+          if [ -f gradlew ]; then
+            echo "the wrapper is already committed."
+            exit 0
+          fi
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add gradlew gradlew.bat gradle/wrapper
+          git commit -q -m "CI: commit the Gradle wrapper (pins Gradle 8.14.3 for F-Droid and local builds)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "wrapper committed and pushed."
+              exit 0
+            fi
+            echo "push attempt $attempt failed; retrying..."
+            sleep 6
+          done
+          echo "could not push the wrapper; the build continues without it."
+
       - name: Ensure stable signing keystore
         run: |
           if [ ! -f ci-keystore/release.p12 ]; then
@@ -50,10 +73,14 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Build debug APKs
+      - name: Build the APKs
         run: |
           set -o pipefail
-          gradle assembleDebug --no-daemon 2>&1 | tee build.log
+          # Debug APKs stay the quick family channel. The release pair is what a store will
+          # take: app stores reject an APK with android:debuggable, and F-Droid builds the
+          # release variant as well. Both are signed with the same ci-keystore, so a phone
+          # that already has the debug build updates to the release one normally.
+          gradle assembleDebug assembleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify built APKs
         run: |
@@ -70,6 +97,21 @@ jobs:
           BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
           RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
+
+          # --- v2.6: the release APKs. These are the store-facing pair.
+          APP_REL=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          EQ_REL=$(ls equalizer/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          RADIO_REL=$(ls radio/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          echo "=== release APKs (what the stores take) ==="
+          for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+            if [ -z "$rel" ]; then
+              echo "FAIL: a release APK was not produced - stores cannot use the debug build"
+              exit 1
+            fi
+            echo "OK: $rel"
+          done
 
           echo "=== Package info ==="
           AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
@@ -92,6 +134,19 @@ jobs:
                 exit 1
                 ;;
             esac
+            # A store will not accept a debuggable APK (IzzyOnDroid says so explicitly).
+            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+              if "$AAPT" dump badging "$rel" | grep -q "application-debuggable"; then
+                echo "FAIL: $rel carries the debuggable flag - app stores reject that"
+                exit 1
+              fi
+            done
+            echo "OK: no release APK carries the debuggable flag"
+            APKSIGNER=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1 || true)
+            if [ -n "$APKSIGNER" ]; then
+              echo "--- signing certificate of the release APK (F-Droid AllowedAPKSigningKeys) ---"
+              "$APKSIGNER" verify --print-certs "$CLEANER_REL" | head -6 || true
+            fi
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
@@ -383,25 +438,50 @@ jobs:
             grep -m1 'versionName' "$1" | sed -E 's/.*"([^"]+)".*/\1/'
           }
           rename_apk() {
-            module="$1"; pretty="$2"
-            src=$(ls "$module"/build/outputs/apk/debug/*.apk 2>/dev/null | head -1 || true)
+            module="$1"; pretty="$2"; variant="$3"; suffix="$4"
+            src=$(ls "$module"/build/outputs/apk/"$variant"/*.apk 2>/dev/null | head -1 || true)
             if [ -z "$src" ]; then
               echo "No APK produced for $module — nothing to rename."
               return 0
             fi
             ver=$(version_of "$module/build.gradle.kts")
             if [ -z "$ver" ]; then ver="debug"; fi
-            dst="$(dirname "$src")/${pretty}-v${ver}.apk"
+            dst="$(dirname "$src")/${pretty}-v${ver}${suffix}.apk"
             mv "$src" "$dst"
             echo "renamed: $dst"
           }
-          rename_apk cleaner CleanSweep
-          rename_apk radio Ramesh-Radio
-          rename_apk app Internet-Radio
-          rename_apk builder AppForge
-          rename_apk equalizer PulseEQ
+          rename_apk cleaner   CleanSweep      release ""
+          rename_apk radio     Ramesh-Radio    release ""
+          rename_apk app       Internet-Radio  release ""
+          rename_apk builder   AppForge        release ""
+          rename_apk equalizer PulseEQ         release ""
+          rename_apk cleaner   CleanSweep      debug   "-debug"
+          rename_apk radio     Ramesh-Radio    debug   "-debug"
+          rename_apk app       Internet-Radio  debug   "-debug"
+          rename_apk builder   AppForge        debug   "-debug"
+          rename_apk equalizer PulseEQ         debug   "-debug"
           echo "=== APK file names ==="
-          ls -la */build/outputs/apk/debug/*.apk
+          ls -la */build/outputs/apk/*/*.apk
+
+      # Publishing: when a version tag is pushed, the very APKs verified above are attached
+      # to a GitHub Release. That is what makes an install link that does not expire (Actions
+      # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
+      # and it is the download an alternative store such as IzzyOnDroid needs.
+      - name: Publish a GitHub Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          FILES=$(ls */build/outputs/apk/release/*.apk)
+          echo "release assets:"
+          echo "$FILES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES --title "$TAG" --generate-notes
+          fi
 
       - name: Surface build errors
         if: failure()
@@ -491,28 +571,28 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: internet-radio-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/*/*.apk
 
       - name: Upload CleanSweep APK
         uses: actions/upload-artifact@v4
         with:
           name: cleansweep-apk
-          path: cleaner/build/outputs/apk/debug/*.apk
+          path: cleaner/build/outputs/apk/*/*.apk
 
       - name: Upload AppForge APK
         uses: actions/upload-artifact@v4
         with:
           name: appforge-apk
-          path: builder/build/outputs/apk/debug/*.apk
+          path: builder/build/outputs/apk/*/*.apk
 
       - name: Upload PulseEQ APK
         uses: actions/upload-artifact@v4
         with:
           name: pulseeq-apk
-          path: equalizer/build/outputs/apk/debug/*.apk
+          path: equalizer/build/outputs/apk/*/*.apk
 
       - name: Upload Ramesh Radio APK
         uses: actions/upload-artifact@v4
         with:
           name: ramesh-radio-apk
-          path: radio/build/outputs/apk/debug/*.apk
+          path: radio/build/outputs/apk/*/*.apk

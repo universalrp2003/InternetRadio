@@ -1,0 +1,1 @@
+First published build: 20-band equalizer with peaking biquads, preamp and limiter, presets, spectrum bar and a built-in player.

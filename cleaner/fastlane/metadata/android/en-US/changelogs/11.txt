@@ -1,0 +1,6 @@
+v2.6 - repairs from a phone bug report: scanning no longer crashes or hangs and a scan that
+never started now offers a Start button; "Run the daily check now" works at any hour; the voice
+settings screen is readable again; the Wi-Fi network name is never shown; plugging in the
+charger now really works in the background with the charging card and watts; a Google key can
+search the web for live questions and shows its sources; jitter is labelled next to ping;
+About shows the last crash.

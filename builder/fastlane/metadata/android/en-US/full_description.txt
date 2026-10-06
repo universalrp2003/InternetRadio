@@ -1,0 +1,11 @@
+AppForge lets you build a small app right on the phone: design screens from blocks, preview the
+real thing as a working offline mini-app, then export what you made.
+
+* Blocks for the things small apps actually need — text, headings, buttons, images, lists,
+  input boxes, links, colours and spacing.
+* A live preview you can tap through, so you can see the app before you export it.
+* Export a single HTML file you can open anywhere, or a complete Android Studio project
+  (Gradle, manifest, Kotlin source and its own GitHub Actions workflow) that builds into a
+  real APK.
+
+Everything happens on the phone; there is no account, no upload and no ads.

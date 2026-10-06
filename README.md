@@ -15,7 +15,10 @@ Five Android applications in one Gradle project:
 - **Cloud (easiest):** push to `main`, push an `arena/**` branch, or use *Actions → Build APK → Run workflow*.
   Download the `internet-radio-apk`, `cleansweep-apk`, `appforge-apk`, `pulseeq-apk` and `ramesh-radio-apk` artifacts.
 - **Local:** open the repo root in Android Studio, or run
-  `gradle wrapper && ./gradlew assembleDebug`.
+  `gradle wrapper && ./gradlew assembleDebug`
+- **Publishing:** every store route (F-Droid, IzzyOnDroid, Google Play, your own F-Droid
+  repo, Obtainium) and what each one needs is in [PUBLISHING.md](PUBLISHING.md). Version
+  tags now publish a GitHub Release with the version-named APKs attached..
 
 ## Station list refresh (Ramesh Radio)
 

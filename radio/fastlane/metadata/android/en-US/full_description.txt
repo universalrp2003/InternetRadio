@@ -1,0 +1,17 @@
+Ramesh Radio plays Tamil FM from Tamil Nadu, Sri Lanka, Malaysia, Singapore and the Tamil
+diaspora, plus Tamil and English news radio, and your own audio files — with a real 10-band
+equalizer.
+
+* Live Tamil FM stations, grouped so you can find them quickly, with a "TN towns" chip for
+  city-level FM (Madurai, Puducherry, Kodaikanal, Coimbatore, Tirunelveli and more).
+* Tamil news and world English news, separated from the music stations.
+* A local audio player for the music already on your phone.
+* Favourites and recently played, a sleep timer, and a home-screen widget with
+  play/pause and next/previous.
+* A 10-band equalizer (31 Hz - 16 kHz) with Clear sound (multiband levelling and a limiter),
+  rumble cut and hiss cut — so speech is clear and music has no noise.
+* The station list is shipped inside the app and also searched live in the open
+  Radio-Browser directory, so a station that moved can still be found.
+
+The menu can be in Tamil or English. There are no ads, no accounts and no trackers. The app
+uses the internet for one reason only: to stream the station you chose.

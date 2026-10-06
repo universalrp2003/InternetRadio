@@ -1,0 +1,38 @@
+CleanSweep is a junk cleaner and phone-health app for Android 8 and newer — Redmi and other
+Xiaomi phones (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Pixel and stock
+Android.
+
+It looks for the things that quietly eat storage: leftover temp and residual files, thumbnail
+caches, exact duplicate files, APK installers of apps you already have, folders that are about
+to become empty, old downloads and very large files. Nothing is deleted on its own — every
+scan is a list you review, and only the files you tick are removed. App caches are cleared
+through a guided two-tap flow: CleanSweep opens the app's own storage screen, you tap "Clear
+cache", you come back. There is no Accessibility service anywhere in the app, so it cannot
+read your screen or tap inside other apps, and it never claims a fake "boost".
+
+Beyond cleaning:
+* Battery and hardware board — charge, temperature, voltage, current, real charging watts, CPU
+  temperature and load, RAM and storage.
+* Installed-app list that flags bloatware, unused apps and sideloaded apps.
+* Security review — a score out of 100 with the permission and settings problems behind it.
+* Wi-Fi scanner — how many devices share your network, with a best guess at what each one is
+  (phone, laptop, TV, camera, printer, router). The network name is never shown or sent.
+* Mobile and data screen — operator, 5G/4G, dBm signal, cell towers, public IP, ping and
+  jitter, a speed test in the size you pick, and today's data usage.
+* Spoken warnings — battery low, battery full, running hot, charging started, storage nearly
+  full, charger pulled out early, a charger that is connected but not charging, a worn battery,
+  Wi-Fi/mobile-data changes and a new device on your Wi-Fi. Every event has its own switch,
+  quiet hours silence everything at night, and a once-a-day brief reads the important part out
+  loud. A home-screen widget shows battery, watts, free storage and the last brief.
+* The status-bar charging card shows watts, current, temperature and time to full while the
+  charger is connected, and it starts by itself when you plug in.
+
+Optional AI (off unless you turn it on): with your own key from Google Gemini, NVIDIA,
+OpenRouter, Groq, OpenAI or any OpenAI-compatible endpoint — or the keyless free option —
+CleanSweep can explain a scan or answer a question about your phone. Nothing is sent until you
+tap Analyse or Ask. With a Google key the assistant can search the web for live questions and
+shows the sources it used.
+
+The whole menu is available in English and Tamil, and the AI can answer in either language,
+independently of the menu. No accounts, no ads, no analytics, no tracking. CleanSweep uses the
+internet only for the AI you start yourself and the speed test you start yourself.

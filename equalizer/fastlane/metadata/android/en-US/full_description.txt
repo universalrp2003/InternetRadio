@@ -1,0 +1,13 @@
+PulseEQ is a 20-band equalizer that does its own audio processing instead of borrowing a
+system effect: peaking biquad filters, a preamp and a soft limiter, so a boosted preset does
+not clip.
+
+* 20 bands from 31 Hz to 20 kHz, with presets for music, movies, speech, podcasts, gaming and
+  more — and room to move every band yourself.
+* A spectrum light-bar driven by real audio energy (not a decoration), plus a built-in 20-band
+  player so you can hear the difference immediately.
+* Works with cooperating music players that expose their audio session, and keeps running in
+  the background with a foreground service and a small notification showing the active preset.
+
+PulseEQ asks for no INTERNET permission at all: it never goes online, has no ads and collects
+nothing. It is an equalizer, an audio tool — it does not download music.
