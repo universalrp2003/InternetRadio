@@ -88,9 +88,9 @@ object StatusPill {
     fun redraw(context: Context) {
         val app = context.applicationContext
         main.post {
-            val pill = view ?: return@main.post
+            val pill = view ?: return@post
             val manager = pill.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
-                ?: return@main.post
+                ?: return@post
             position(app, manager, pill)
             pill.post { position(app, manager, pill) }
         }

@@ -327,20 +327,29 @@ object MobileNet {
         }
     }
 
+    /**
+     * 5G cell identity. The fields are read out of the identity's own text so that no
+     * Android-10-only property has to be referenced — a phone on Android 8/9 must never even
+     * touch the CellIdentityNr class.
+     */
     private fun nrTower(cell: CellInfoNr): CellTower {
-        @Suppress("NewApi")
-        val identity = cell.cellIdentity
-        val text = identity.toString()
+        val text = try {
+            cell.cellIdentity.toString()
+        } catch (e: Exception) {
+            ""
+        }
+        fun field(name: String): String? {
+            val raw = text.substringAfter("$name = ", "").substringBefore("]").substringBefore(",").trim()
+            return if (raw.isNotBlank() && raw != text) raw else null
+        }
+        val nci = field("nci")
+        val pci = field("pci")?.toIntOrNull()
+        val tac = field("tac")?.toIntOrNull()
         return CellTower(
             technology = "5G",
-            id = try {
-                val raw = text.substringAfter("nci = ", "").substringBefore("]").trim()
-                if (raw.isNotBlank() && raw != text) raw else null
-            } catch (e: Exception) {
-                null
-            },
-            pci = try { identity.pci } catch (e: Exception) { null },
-            tac = try { identity.tac } catch (e: Exception) { null },
+            id = nci,
+            pci = pci,
+            tac = tac,
             dbm = try {
                 (cell.cellSignalStrength as android.telephony.CellSignalStrengthNr).dbm
             } catch (e: Exception) {
