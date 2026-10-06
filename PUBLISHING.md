@@ -221,6 +221,7 @@ exactly the people who install from F-Droid or a link.
 - [x] Store listing text for all five apps (English + Tamil where written).
 - [x] Privacy policy: [PRIVACY.md](PRIVACY.md).
 - [x] Play copy-paste pack: [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md).
-- [ ] Send screenshots (and the app icon / feature graphic) — I place them.
+- [ ] Send screenshots (and the app icon / feature graphic) — I place them; see
+  [store/README.md](store/README.md) for exactly where they go.
 - [ ] You create the Google Play account ($25) and upload the four bundles.
 - [ ] Optional later: IzzyOnDroid inclusion, or your own F-Droid repo for the family.
