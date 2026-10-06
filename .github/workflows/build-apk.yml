@@ -193,10 +193,23 @@ jobs:
             exit 1
           fi
 
-          if unzip -l "$CLEANER" | grep -q "values-ta"; then
-            echo "OK: Tamil resources are inside the APK"
+          # A compiled APK has no "values-ta" folder — resources live compiled inside
+          # resources.arsc and the strings in the dex. Search both for the actual Tamil app
+          # name, which is the thing the user cares about.
+          if unzip -p "$CLEANER" resources.arsc | grep -qa "சுத்தம் செய்பவர்"; then
+            echo "OK: the Tamil launcher label is inside the APK resources"
           else
-            echo "WARN: no values-ta folder found in the APK (launcher label stays English)"
+            echo "WARN: the Tamil launcher label was not found in resources.arsc"
+          fi
+          if grep -aq "சுத்தம் செய்பவர்" "$WORK/cleaner.dex"; then
+            echo "OK: the Tamil name is in the CleanSweep dex (menu + About)"
+          else
+            echo "WARN: the Tamil name was not found in the CleanSweep dex"
+          fi
+          if grep -aq "தினசரி அறிக்கை" "$WORK/cleaner.dex"; then
+            echo "OK: the Tamil menu (daily brief) is inside the CleanSweep dex"
+          else
+            echo "WARN: the Tamil menu strings were not found in the CleanSweep dex"
           fi
 
           for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
@@ -206,7 +219,7 @@ jobs:
                         UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor \
                         setDraggable togglePillDrag setSpeedSizeMb speedSizeMb \
                         Announcer HealthWatchWorker VoiceScreen speakAnswer runDailyBriefNow \
-                        setVoiceEvent quietHours speakNow offlineFallback; do
+                        setVoiceEvent setQuietHours speakNow offlineFallback; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
