@@ -39,7 +39,9 @@ jobs:
       # it is what pins the Gradle version. CI generates it anyway, so it commits it once.
       - name: Commit the Gradle wrapper (once)
         run: |
-          if [ -f gradlew ]; then
+          # -f gradlew is always true here: the step above just generated it. What matters
+          # is whether git already tracks it.
+          if git ls-files --error-unmatch gradlew >/dev/null 2>&1; then
             echo "the wrapper is already committed."
             exit 0
           fi
