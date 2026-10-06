@@ -219,18 +219,38 @@ jobs:
 
           echo "=== App icons inside the built APKs ==="
           # The Internet Radio module used to borrow Android's stock play icon; a store listing
-          # cannot ship that, so the APK must carry our own launcher icon now.
+          # cannot ship that, so every APK must now carry its own icon resource.
+          #
+          # This is checked through aapt2 badging and not by looking for a file name: release
+          # builds run Android's resource optimisations, which rename resource paths inside the
+          # APK, so `res/.../ic_launcher` legitimately disappears from the zip listing.
+          AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
+          if [ -z "$AAPT" ]; then
+            echo "FAIL: aapt2 not found, cannot verify the app icons"
+            exit 1
+          fi
           for rel in "$CLEANER_REL" "$RADIO_REL" "$APP_REL" "$BUILDER_REL" "$EQ_REL"; do
-            ic=$(unzip -l "$rel" | grep -cE "res/.*/ic_launcher" || true)
-            if [ "$ic" -eq 0 ]; then
-              echo "FAIL: $rel carries no res/.../ic_launcher - a store would reject the listing"
+            bad=$("$AAPT" dump badging "$rel" || true)
+            icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)
+            dens=$(printf '%s\n' "$bad" | grep -c "^application-icon-" || true)
+            case "$icon" in
+              "") echo "FAIL: $rel declares no application icon"; exit 1 ;;
+              *android:*) echo "FAIL: $rel still borrows a platform icon ($icon)"; exit 1 ;;
+            esac
+            if [ "$dens" -eq 0 ]; then
+              echo "FAIL: $rel has no density-specific icon entries"
               exit 1
             fi
-            echo "OK: $rel ships $ic ic_launcher entr(ies)"
+            echo "OK: $rel icon=$icon ($dens density entries)"
           done
+          # And the stock icon must be gone from the source, which is where it used to live.
+          if grep -q "android:drawable/ic_media_play" app/src/main/AndroidManifest.xml; then
+            echo "FAIL: the app module still points at Android's stock play icon"
+            exit 1
+          fi
+          echo "OK: no module borrows a platform icon any more"
 
           echo "=== Package info ==="
-          AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
           if [ -n "$AAPT" ]; then
             "$AAPT" dump badging "$CLEANER" | head -1 || true
             "$AAPT" dump badging "$BUILDER" | head -1 || true
