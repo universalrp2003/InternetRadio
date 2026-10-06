@@ -107,7 +107,8 @@ class ScanEngine(private val context: Context) {
             if (entries.isEmpty() && dir.absolutePath != rootPath) {
                 junkPaths.add(dir.absolutePath)
                 dirChildCount[dir.absolutePath] = 0
-                dir.parent?.let { countJunkChild(it.absolutePath) }
+                // File.parent is the parent *path* (a String); parentFile is a File.
+                dir.parent?.let { countJunkChild(it) }
                 if (JunkKind.EMPTY_FOLDERS in want) {
                     addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
                 }
@@ -218,16 +219,17 @@ class ScanEngine(private val context: Context) {
         // Promote folders that will become empty once their junk children are deleted.
         val snapshot = if (JunkKind.EMPTY_FOLDERS in want) junkPaths.toList() else emptyList()
         for (p in snapshot) {
-            var parent = File(p).parent ?: continue
+            // parentFile, not parent: Java's File.getParent() hands back a String path.
+            var parent = File(p).parentFile ?: continue
             while (parent.absolutePath != rootPath && parent.absolutePath.length > rootPath.length) {
                 val total = dirChildCount[parent.absolutePath] ?: break
                 val junkKids = dirJunkCount[parent.absolutePath] ?: 0
                 if (total == 0 || junkKids < total) break
                 if (junkPaths.add(parent.absolutePath)) {
                     addJunk(emptyDirs, JunkFile(parent.absolutePath, 0L, parent.lastModified()))
-                    parent.parent?.let { countJunkChild(it.absolutePath) }
+                    parent.parentFile?.let { countJunkChild(it.absolutePath) }
                 }
-                parent = parent.parent ?: break
+                parent = parent.parentFile ?: break
             }
         }
 

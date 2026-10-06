@@ -11,7 +11,6 @@ import androidx.work.WorkerParameters
 import com.universalrp.cleansweep.notify.ChargeMonitorService
 import com.universalrp.cleansweep.notify.ChargeNotifier
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 /**
  * Charger plug-in, the way that works on every Android version.
@@ -62,7 +61,9 @@ class ChargerWatchWorker(
         ChargeNotifier.announcePluggedIn(ctx)
 
         var ticks = 0
-        while (ticks < 16 && isActive) {
+        // isStopped is a member of every worker; a worker that has been cancelled or has
+        // run out of time comes back here as stopped, and then this loop ends cleanly.
+        while (ticks < 16 && !isStopped) {
             delay(30_000)
             ticks++
             val now = ChargeNotifier.read(ctx) ?: break

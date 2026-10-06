@@ -41,8 +41,13 @@ object CrashLog {
 
     /** "CleanSweep 2.6 (build 11)" — read from the package, so no build config needed. */
     private fun versionLabel(app: Context): String = try {
+        @Suppress("DEPRECATION")
         val info = app.packageManager.getPackageInfo(app.packageName, 0)
-        "CleanSweep ${info.versionName} (build ${info.longVersionCode})"
+        // versionCode, not longVersionCode: this file must work on Android 8 too, and a
+        // crash recorder that itself crashes is worse than no recorder.
+        @Suppress("DEPRECATION")
+        val code = info.versionCode
+        "CleanSweep ${info.versionName} (build $code)"
     } catch (e: Exception) {
         "CleanSweep"
     }
