@@ -2,6 +2,9 @@
 
 | File | What it is |
 |---|---|
+| `fdroid/README.md` | IzzyOnDroid request text and the F-Droid step-by-step (the chosen route). |
+| `fdroid/metadata/*.yml` | The five recipe files that go into F-Droid's `fdroiddata` repository. |
+| `fdroid/RFP_ISSUE.md` | Paste-ready text for F-Droid's Requests-For-Packaging tracker. |
 | `PLAY_SUBMISSION.md` | The Google Play copy-paste pack: which apps qualify, why CleanSweep cannot go there, the Data safety and content-rating answers, and the upload steps. |
 | `../PRIVACY.md` | The privacy policy Play requires a public URL for. |
 | `<module>/fastlane/metadata/android/<locale>/` | The listing text every store reads: `title.txt`, `short_description.txt`, `full_description.txt` and `changelogs/<versionCode>.txt`. English everywhere, plus Tamil (`ta-IN`) for CleanSweep and Ramesh Radio. |

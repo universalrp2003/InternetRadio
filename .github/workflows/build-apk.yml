@@ -506,6 +506,29 @@ jobs:
             exit 1
           fi
 
+          # Store listing inventory. Warnings only: F-Droid shows a listing without
+          # screenshots, it simply looks bare, and a missing icon is a polish problem, not a
+          # broken build. Printed every run so the gap is always visible.
+          echo "=== Store listing inventory (warnings) ==="
+          for m in app cleaner builder equalizer radio; do
+            d="$m/fastlane/metadata/android"
+            if [ ! -d "$d" ]; then
+              echo "WARN: $m has no fastlane listing at all"
+              continue
+            fi
+            shots=$(ls "$d"/*/images/phoneScreenshots/*.png "$d"/*/images/phoneScreenshots/*.jpg 2>/dev/null | wc -l | tr -d ' ')
+            icon=$(ls "$d"/*/images/icon.png 2>/dev/null | wc -l | tr -d ' ')
+            graphic=$(ls "$d"/*/images/featureGraphic.png 2>/dev/null | wc -l | tr -d ' ')
+            locales=$(ls "$d" | tr '\n' ' ')
+            echo "$m: locales=[$locales] screenshots=$shots icon=$icon featureGraphic=$graphic"
+            if [ "$shots" -lt 2 ]; then
+              echo "WARN: $m has fewer than 2 phone screenshots - the store page will show no gallery"
+            fi
+            if [ "$icon" -eq 0 ]; then
+              echo "WARN: $m has no 512x512 icon.png in its listing"
+            fi
+          done
+
           echo "ALL CHECKS PASSED"
 
       # v2.6: the user asked for the downloaded file to carry the version instead of

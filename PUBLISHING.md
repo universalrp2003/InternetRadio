@@ -1,9 +1,21 @@
 # Publishing these apps to a store — what is ready, what you must do
 
-**Route chosen (6 Oct 2026):** the project is licensed **GNU GPL-3.0**, the `:app` id is
-renamed to `com.universalrp.internetradio`, and the next step is **Google Play** for the
-four apps Play allows — see [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md) for the
-copy-paste pack. Screenshots are still to come.
+**Route chosen (6 Oct 2026, revised):** **free open stores, no Google Play** — the $25 Play
+account is not worth it for these apps, and Play would refuse CleanSweep's All-files access
+anyway. The project is licensed **GNU GPL-3.0**, the `:app` id is
+`com.universalrp.internetradio`, and the submission is prepared end to end:
+
+* **IzzyOnDroid** (fastest, keeps your signing key) — paste-ready request text in
+  [store/fdroid/README.md](store/fdroid/README.md) section A.
+* **F-Droid main repository** — the five recipe files are written in
+  [store/fdroid/metadata/](store/fdroid/metadata/), the steps are in section B, and a
+  paste-ready tracker issue is in [store/fdroid/RFP_ISSUE.md](store/fdroid/RFP_ISSUE.md).
+* Google Play: **skipped on purpose.** [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md)
+  stays in the repo in case you change your mind later; nothing depends on it.
+
+Screenshots still to come — they belong in
+`<module>/fastlane/metadata/android/<locale>/images/phoneScreenshots/`
+(see [store/README.md](store/README.md)).
 
 Short answer:
 
@@ -220,8 +232,12 @@ exactly the people who install from F-Droid or a link.
 - [x] GitHub Release `v2026.10.06` with the version-named APKs (and now bundles).
 - [x] Store listing text for all five apps (English + Tamil where written).
 - [x] Privacy policy: [PRIVACY.md](PRIVACY.md).
-- [x] Play copy-paste pack: [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md).
+- [x] Play copy-paste pack kept for later (not being used): [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md).
+- [x] F-Droid recipes for all five apps: [store/fdroid/metadata/](store/fdroid/metadata/).
+- [x] IzzyOnDroid request text + F-Droid steps: [store/fdroid/README.md](store/fdroid/README.md).
+- [x] RFP tracker issue text: [store/fdroid/RFP_ISSUE.md](store/fdroid/RFP_ISSUE.md).
 - [ ] Send screenshots (and the app icon / feature graphic) — I place them; see
   [store/README.md](store/README.md) for exactly where they go.
-- [ ] You create the Google Play account ($25) and upload the four bundles.
-- [ ] Optional later: IzzyOnDroid inclusion, or your own F-Droid repo for the family.
+- [ ] Open the IzzyOnDroid issue (section A) and, if you want the main repo, the fdroiddata MR
+  or the RFP issue — both need your own free GitLab / Codeberg account, which is the only part
+  I cannot do for you.
