@@ -142,10 +142,25 @@ jobs:
         run: |
           set -e
           # The apps draw their launcher marks as vectors, and stores want PNGs (F-Droid:
-          # 512x512 icon plus a 1024x500 feature graphic). This renders them from the real
-          # vectors, so a fresh clone always ships a correct listing. Pure Python, no Pillow.
-          python3 tools/make_store_assets.py icons
-          bash tools/make_feature_graphics.sh
+          # 512x512 icon plus a 1024x500 feature graphic). The icons are rasterised by pure
+          # Python, so they work anywhere; the graphics need ImageMagick, which is installed
+          # here if the runner does not already have it.
+          set -x
+          python3 --version
+          command -v convert identify || true
+          convert -version 2>/dev/null | head -2 || true
+          if ! command -v convert >/dev/null || ! command -v identify >/dev/null; then
+            echo "Installing ImageMagick and a font for the feature graphics..."
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq imagemagick fonts-dejavu-core
+          fi
+          set +x
+          # tee, so the output lands in store-art.log and the failure report can quote it:
+          # the Actions log endpoint is not always readable from outside.
+          {
+            python3 tools/make_store_assets.py icons
+            bash tools/make_feature_graphics.sh
+          } 2>&1 | tee store-art.log
 
       - name: Build the APKs
         run: |
@@ -663,6 +678,13 @@ jobs:
               tail -80 verify.log || true
               echo '```'
             fi
+            if [ -f store-art.log ]; then
+              echo ""
+              echo "## Store artwork step"
+              echo '```'
+              tail -60 store-art.log || true
+              echo '```'
+            fi
           } > ci-build-failure.md
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
@@ -689,7 +711,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build.log
+          # store-art.log matters when the failure is the artwork step, which runs before
+          # Gradle and therefore leaves no build.log behind.
+          path: |
+            build.log
+            verify.log
+            store-art.log
+          if-no-files-found: warn
 
       - name: Upload Google Play bundles (.aab)
         uses: actions/upload-artifact@v4
