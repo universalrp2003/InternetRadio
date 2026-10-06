@@ -155,6 +155,8 @@ object Lang {
             "தினசரி அறிக்கை: நிறுத்தத்தில்",
         "Voice & daily watch" to
             "குரல் & தினசரி கண்காணிப்பு",
+        "Warnings spoken out loud, quiet hours, and the daily brief." to
+            "எச்சரிக்கைகள் சத்தமாக, அமைதி நேரம், மற்றும் தினசரி அறிக்கை.",
         "Speak to me" to
             "என்னிடம் பேசு",
         "CleanSweep talks: warnings about the battery, heat and the daily brief." to
