@@ -1,13 +1,37 @@
-# CleanSweep — Junk & Cache Cleaner for Android
+# CleanSweep — cleaner, phone health, security & network
 
-A privacy-friendly cleaning app built for **Redmi 13 5G** (HyperOS / MIUI, Android 14)
-and any Android 8+ phone (MIUI/HyperOS, One UI, Pixel, OnePlus, Realme, Vivo…).
-100% offline — it does not even request the INTERNET permission.
+A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi phones
+(HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
+and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
-**v1.3 highlights:** the Accessibility service is **gone**. CleanSweep never asks for the
-Accessibility permission, never reads your screen and never taps inside other apps.
-App caches are cleared with a **guided two-tap flow** instead, and a new **on-device
-assistant** explains your storage and answers cleaning questions offline.
+**v2.0 highlights**
+
+- **Battery & hardware monitor** — charge, temperature, voltage, **charging/discharging
+  current**, **watts**, battery health, charge counter, **CPU temperature**, CPU
+  frequency/load, RAM and storage. Everything the phone itself reports; missing values
+  are labelled "not reported" instead of being guessed.
+- **Fix: "0 MB cleaned" on Android 8/9/10.** Cleaning needs runtime
+  `WRITE_EXTERNAL_STORAGE` on those versions, which v1.3 never asked for — so the scan
+  found junk, deleted nothing, and still showed a success message. v2.0 requests the
+  permission, refuses to scan without it, and when a delete really fails it says
+  **"Nothing was deleted"** with the reason and a button to fix the permission.
+- **Installed apps** — sizes, last-used dates, installer, permissions; tags for
+  preinstalled, unused 30+ days, sideloaded, sensitive-permission and known bloatware
+  stubs. Tap an app for details, **uninstall** or open its settings.
+- **Security review** — accessibility services, notification readers, device admins,
+  "install unknown apps", overlay permission, SMS readers, sideloaded apps, screen lock
+  and patch age, with a 0–100 score and a fix hint for every finding.
+- **Wi-Fi & network** — your Wi-Fi name, IP, gateway, DNS, signal, band and link speed,
+  plus a **device scan that shows how many devices answered on your network** (phones,
+  computers, routers, smart devices) using a TCP probe sweep + the ARP table.
+- **AI analysis (optional)** — Google Gemini, NVIDIA NIM, OpenRouter, Groq, OpenAI, any
+  custom OpenAI-style endpoint (including a model on your own computer), or a **free
+  keyless option** that needs no signup. You paste your own key; the report goes from
+  your phone straight to that provider, and you can see exactly what was sent.
+- **Still no Accessibility service, ever.**
+
+**v1.3 (kept):** the Accessibility service was removed; app caches are cleared with a
+guided two-tap flow, and an **on-device assistant** explains your storage offline.
 
 ## What it cleans
 
@@ -76,13 +100,17 @@ gradle wrapper            # once, if the wrapper is missing
 # APK at cleaner/build/outputs/apk/debug/cleaner-debug.apk
 ```
 
-## Installing on the Redmi 13 5G
+## Installing (any phone)
 
 1. Copy `cleaner-debug.apk` to the phone and open it (allow "install unknown apps").
 2. Launch CleanSweep and tap **Allow storage access** → switch CleanSweep ON.
+   On Android 8/9/10 CleanSweep also asks for the storage permission at first launch —
+   without it no cleaner can delete anything on those versions.
 3. Tap **Scan & clean junk**. Review the selection, then **Clean**.
 4. For app caches: **App cache** → grant *Usage access* → tick apps → **Clean cache** →
    tap **Clear cache** on each app's page, returning to tap **Next app**.
+5. **Phone health** for battery/temperature/watts; **Security check**; **Wi-Fi devices**;
+   **Installed apps**; and **AI analysis** (optionally with your own key in Settings).
 
 ## Honest limitations (Android security)
 
@@ -91,5 +119,16 @@ gradle wrapper            # once, if the wrapper is missing
   instead — two taps per app.
 - `Android/data` and `Android/obb` are locked by the system since Android 11, even for
   cleaners. Redmi's built-in *Security → Cleaner* can reach some of them.
-- Cleaning junk frees real disk space; it does not "boost RAM" or "cool down" the phone,
-  and CleanSweep will never pretend otherwise (ask the assistant — it says the same thing).
+- Cleaning junk frees real disk space; it does not "boost RAM" and it cannot cool a phone
+  down. It *measures* heat honestly (CPU/battery sensors) and explains what is normal.
+- The security review is a **permissions and settings review**, not an antivirus: no file
+  hashes are checked anywhere. A phone can have malware that looks like a normal app.
+  Play Protect (and an online scanner) covers that part.
+- The Wi-Fi device list can only show devices that answer. Sleeping phones, devices that
+  block probes, and routers with "AP isolation" will not appear — the screen says so.
+- A few phone makers hide the battery **current** counter from apps, and some kernels do
+  not expose a CPU temperature sensor. CleanSweep shows "not reported" rather than a
+  made-up number.
+- The optional AI analysis is the only feature that uses the internet. Without a key it
+  uses public keyless endpoints (shared, rate-limited); with a key it uses your own
+  quota. Nothing is ever sent unless you tap **Analyse**.

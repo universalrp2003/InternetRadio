@@ -21,6 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -91,6 +92,46 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     subtitle = "Play a chime when scanning and cleaning",
                     checked = state.soundsEnabled,
                     onCheckedChange = { vm.setSoundsEnabled(it) },
+                )
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "AI analysis (optional)",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (state.aiConfig.provider.needsKey) {
+                            "${state.aiConfig.provider.label} • " +
+                                if (state.aiConfig.apiKey.isBlank()) "no key saved yet"
+                                else "key saved"
+                        } else {
+                            "${state.aiConfig.provider.label} • no key needed"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { vm.navigate(Screen.AI_SETTINGS) },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentCyan,
+                            contentColor = Color(0xFF03202B),
+                        ),
+                    ) {
+                        Text("Open AI settings", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                SettingSwitch(
+                    title = "Detailed assistant answers",
+                    subtitle = "Off = the on-device assistant replies in one short line",
+                    checked = state.assistantVerbose,
+                    onCheckedChange = { vm.setAssistantVerbose(it) },
                 )
             }
 

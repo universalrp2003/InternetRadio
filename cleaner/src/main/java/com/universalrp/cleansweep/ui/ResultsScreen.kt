@@ -63,6 +63,7 @@ import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.SurfaceC
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 
 @Composable
 fun ResultsScreen(state: UiState, vm: MainViewModel) {
@@ -230,6 +231,44 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
 
     if (state.cleaning) {
         CleaningOverlay(done = state.cleanDone, total = state.cleanTotal)
+    }
+
+    if (state.deleteFailureCount > 0) {
+        // The old build showed "0 MB cleaned" here and sounded like a success. It was not:
+        // on Android 8/9/10 the delete was refused for want of the storage permission.
+        AlertDialog(
+            onDismissRequest = { vm.dismissDeleteFailure() },
+            title = { Text("Nothing was deleted") },
+            text = {
+                Text(
+                    "${state.deleteFailureCount} file(s) could not be removed. The system said: " +
+                        "${state.deleteFailureReason ?: "permission denied"}.\n\n" +
+                        "On Android 9 and older this almost always means the storage permission is " +
+                        "missing, so Android refuses every delete even though the scan could see the " +
+                        "files. Grant it, then run the scan again.",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.dismissDeleteFailure()
+                        vm.requestStoragePermission()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WarnAmber,
+                        contentColor = Color(0xFF2B1D02),
+                    ),
+                ) {
+                    Text("Open permission settings", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissDeleteFailure() }) {
+                    Text("Close", color = TextSecondary)
+                }
+            },
+        )
     }
 
     state.freedDialogBytes?.let { freed ->

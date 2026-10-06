@@ -137,6 +137,41 @@ jobs:
             exit 1
           fi
 
+          if [ -n "$MERGED_CLEANER" ]; then
+            if grep -q "WRITE_EXTERNAL_STORAGE" "$MERGED_CLEANER"; then
+              echo "OK: legacy write permission declared (the Android 8/9/10 delete fix)"
+            else
+              echo "FAIL: WRITE_EXTERNAL_STORAGE is missing - cleaning would still report 0 MB on API 26-29"
+              exit 1
+            fi
+            if grep -q "NEARBY_WIFI_DEVICES" "$MERGED_CLEANER" && \
+               grep -q "ACCESS_FINE_LOCATION" "$MERGED_CLEANER"; then
+              echo "OK: Wi-Fi device-scan permissions declared"
+            else
+              echo "FAIL: Wi-Fi scan permissions are missing"
+              exit 1
+            fi
+            if grep -q "android.permission.INTERNET" "$MERGED_CLEANER"; then
+              echo "OK: INTERNET declared (used only for the optional AI analysis)"
+            else
+              echo "FAIL: INTERNET is missing - AI analysis could never work"
+              exit 1
+            fi
+          else
+            echo "FAIL: could not find the merged manifest for :cleaner"
+            exit 1
+          fi
+
+          for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
+                        SecurityScanner NetworkScanner AiClient AiReport; do
+            if grep -aq "$symbol" "$WORK/cleaner.dex"; then
+              echo "OK: $symbol is in the CleanSweep APK"
+            else
+              echo "FAIL: $symbol is missing from the CleanSweep APK"
+              exit 1
+            fi
+          done
+
           echo "=== AppForge checks ==="
           if grep -aq "AppForge" "$WORK/builder.dex"; then
             echo "OK: AppForge APK contains its code"

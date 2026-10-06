@@ -71,12 +71,17 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "A privacy-friendly junk & cache cleaner built for Redmi 13 5G and other " +
-                            "Android 8+ phones running MIUI or HyperOS. It finds residual temp files, " +
+                        "A privacy-friendly cleaner for every Android phone — Redmi and other Xiaomi " +
+                            "phones (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, " +
+                            "Motorola, Nokia, Tecno and stock Android 8+. It finds residual temp files, " +
                             "thumbnail caches, duplicate files, leftover APK installers, empty folders, " +
                             "old downloads and large files — then removes only what you confirm.\n\n" +
-                            "New in 1.3: an on-device assistant that explains your storage and walks you " +
-                            "through cleaning — and the Accessibility service is gone for good.",
+                            "New in 2.0: live battery, temperature, voltage, charging current and watt " +
+                            "readings; an installed-app list that flags bloatware, unused and sideloaded " +
+                            "apps; a security review of permissions and system settings; a Wi-Fi scanner " +
+                            "that shows how many devices share your network; and optional AI analysis " +
+                            "with your own key (or a free keyless option). The Accessibility service " +
+                            "stays gone, and nothing is uploaded unless you tap Analyse.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )
@@ -122,8 +127,10 @@ fun AboutScreen(vm: MainViewModel) {
                             "Samsung One UI, Pixel, OnePlus, Realme, Vivo…), not just Redmi.\n\n" +
                             "• This APK is installed outside Google Play, so Play Protect may show a " +
                             "warning — Android's standard caution for sideloaded apps. CleanSweep " +
-                            "contains no malware, ads or internet access, and v1.3 no longer uses " +
-                            "Accessibility at all. You can safely tap “Install anyway”.\n\n" +
+                            "never uploads anything by itself. It has internet access for one reason " +
+                            "only: the optional AI analysis you start yourself with your own key. It " +
+                            "contains no ads, no trackers and no Accessibility service. You can safely " +
+                            "tap “Install anyway”.\n\n" +
                             "• Builds are signed with one fixed key, so newer APKs install as an " +
                             "update. If an install ever says “app not installed”, uninstall the " +
                             "older copy first (needed once when moving from v1.1 or older).",

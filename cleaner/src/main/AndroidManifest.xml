@@ -9,11 +9,37 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!--
+        Android 8, 9 and 10 (API 26-29) have no "All files access": deleting a scanned
+        file there needs runtime WRITE_EXTERNAL_STORAGE. Without it the scan shows the
+        junk, then deletion silently fails and the app reported "0 MB cleaned" - the bug
+        users hit on phones like the Oppo A3s. From API 30 the All-files-access screen
+        replaces it, so the permission is capped at 29.
+    -->
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="29"
+        tools:ignore="ScopedStorage" />
 
     <!-- Detect whether an APK file belongs to an already-installed app. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- AI analysis (optional, only used when you tap Analyse with your own key). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Wi-Fi details + "who is on my network". Location is requested at runtime and is
+         only used while the network screen is open. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+
+    <!-- Battery / thermal / CPU readings need no permission at all: they come from the
+         system battery broadcast and the kernel's own sysfs files. -->
 
     <!-- Read per-app cache sizes (special app permission, granted from Settings). -->
     <uses-permission

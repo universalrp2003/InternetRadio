@@ -5,7 +5,7 @@ Five Android applications in one Gradle project:
 | Module | App | Description |
 |---|---|---|
 | `:app` | **Internet Radio** | Streams internet radio stations with Media3/ExoPlayer, background playback and a media notification. |
-| `:cleaner` | **CleanSweep v1.3** | Junk & cache cleaner for Redmi/HyperOS and any Android 8+ phone. Scans junk, thumbnails, duplicates, leftover APKs and empty folders, and clears app caches with a **guided two-tap flow** — **no Accessibility service at all** — plus an **on-device assistant** that explains your storage offline. Fully offline: no INTERNET permission. See [cleaner/README.md](cleaner/README.md). |
+| `:cleaner` | **CleanSweep v2.0** | Junk & cache cleaner for **every Android 8+ phone** (Redmi/HyperOS, Samsung, Oppo, Vivo, Realme, OnePlus, Pixel…). Scans junk, thumbnails, duplicates, leftover APKs and empty folders and clears app caches with a **guided two-tap flow** — **no Accessibility service at all**. v2.0 adds a **battery & hardware monitor** (charge, temperature, voltage, current, **watts**, CPU temp/load, RAM), an **installed-app list** that flags bloatware, unused and sideloaded apps, a **security review** of permissions and settings, a **Wi-Fi scanner** that shows how many devices are on your network, and optional **AI analysis** (Gemini / NVIDIA / OpenRouter / Groq / OpenAI / any custom endpoint / free keyless option) with your own key. Fixes the Android 9 "0 MB cleaned" storage-permission bug. See [cleaner/README.md](cleaner/README.md). |
 | `:builder` | **AppForge v1.0** | Build an app on your phone: design screens from blocks, preview the real thing as a working offline mini-app, then export a single HTML app or a complete Android Studio project (with its own GitHub Actions workflow) that builds into an APK. See [builder/README.md](builder/README.md). |
 | `:radio` | **Ramesh Radio v1.1** | Tamil FM from Tamil Nadu, Sri Lanka, Malaysia, Singapore and the Tamil diaspora, plus Tamil and English **news** radio, a **local audio file player**, favourites/recently-played, a **"TN towns" chip** for city-level FM (Madurai, Puducherry, Kodaikanal, Coimbatore, Tirunelveli …), a sleep timer, a **home-screen widget** (play/pause, next/previous) and a **10-band equalizer (31 Hz – 16 kHz)** with Clear sound (multiband levelling + limiter), rumble cut and hiss cut. Station lists come from the shipped seed plus live search of the open Radio-Browser directory. See [radio/README.md](radio/README.md). |
 | `:equalizer` | **PulseEQ v1.0** | 20-band sound equalizer with its own DSP (peaking biquads + preamp + soft limiter), presets for music/movies/speech/podcast/gaming and more, LED light-bar spectrum driven by real audio energy, a built-in 20-band player, cooperating-player session support, and a foreground service that keeps it running in the background. No INTERNET permission. See [equalizer/README.md](equalizer/README.md). |
@@ -30,9 +30,12 @@ Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
 
 ## What's new
 
-- **CleanSweep v1.3** — the optional Accessibility service was removed: no screen reading, no automated
-  taps, no Accessibility permission. App caches are cleared through the official Settings buttons with a
-  "Next app" guide, and a new offline assistant answers questions about your storage.
+- **CleanSweep v2.0** — becomes a full phone-care app for every Android phone, not just Redmi: battery,
+  temperature, voltage, charging current and watt readings; an installed-app manager that flags bloatware,
+  unused and sideloaded apps; a security review; a Wi-Fi scanner that counts the devices on your network;
+  and optional AI analysis with your own key. It also fixes the bug where cleaning reported "0 MB cleaned"
+  on Android 9 phones such as the Oppo A3s (missing runtime storage permission). Still no Accessibility
+  service and still fully offline except the AI analysis you start yourself.
 - **AppForge v1.0** — a new offline app builder module (`builder/`) whose exports are real, working
   apps (HTML) and real, buildable Android projects (Kotlin + Gradle + CI workflow).
 - **Ramesh Radio v1.1** — the radio + news + local-player module (`radio/`, formerly *Tamilnadu FM

@@ -47,6 +47,12 @@ fun AppRoot(vm: MainViewModel) {
             Screen.ASSISTANT -> AssistantScreen(state, vm)
             Screen.SETTINGS -> SettingsScreen(state, vm)
             Screen.ABOUT -> AboutScreen(vm)
+            Screen.HEALTH -> HealthScreen(state, vm)
+            Screen.APPS -> AppsScreen(state, vm)
+            Screen.SECURITY -> SecurityScreen(state, vm)
+            Screen.NETWORK -> NetworkScreen(state, vm)
+            Screen.AI_SETTINGS -> AiSettingsScreen(state, vm)
+            Screen.AI_REPORT -> AiReportScreen(state, vm)
         }
 
         SnackbarHost(

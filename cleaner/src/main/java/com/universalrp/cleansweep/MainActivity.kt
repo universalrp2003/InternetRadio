@@ -1,8 +1,13 @@
 package com.universalrp.cleansweep
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -12,8 +17,18 @@ import com.universalrp.cleansweep.ui.AppRoot
 import com.universalrp.cleansweep.ui.theme.CleanSweepTheme
 
 class MainActivity : ComponentActivity() {
+
+    /**
+     * Android 8/9/10 only: deleting a scanned file needs runtime WRITE_EXTERNAL_STORAGE.
+     * Asking here (once) is what makes the cleaner actually free space on phones like the
+     * Oppo A3s, where the app used to report "0 MB cleaned" over and over.
+     */
+    private val storagePermission =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        requestLegacyStorageIfNeeded()
         setContent {
             CleanSweepTheme {
                 val vm: MainViewModel = viewModel()
@@ -32,5 +47,17 @@ class MainActivity : ComponentActivity() {
                 AppRoot(vm)
             }
         }
+    }
+
+    private fun requestLegacyStorageIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 30) return
+        val permissions = arrayOf(
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.WRITE_EXTERNAL_STORAGE,
+        )
+        val missing = permissions.any {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing) storagePermission.launch(permissions)
     }
 }
