@@ -43,6 +43,21 @@ object Lang {
         current = lang
     }
 
+    /**
+     * The language as stored on this phone. Compose screens get it from the ViewModel, but a
+     * worker or a service can wake up in a fresh process where [current] is still the default —
+     * this reads the mirror the settings screen writes.
+     */
+    fun languageIn(context: android.content.Context): AppLang = try {
+        AppLang.fromId(
+            context.applicationContext
+                .getSharedPreferences(PREFS, android.content.Context.MODE_PRIVATE)
+                .getString(KEY, null)
+        )
+    } catch (e: Exception) {
+        AppLang.EN
+    }
+
     fun appName(): String = if (isTamil) APP_NAME_TA else APP_NAME_EN
 
     /** The tagline under the app title. */
@@ -102,6 +117,96 @@ object Lang {
             "பதில் இல்லை",
         "This downloads real data and measures how fast it arrived. Small sizes are kind to a metered plan; on an unlimited 5G plan pick the biggest, because the link needs a few seconds before it reaches full speed." to
             "இது உண்மையான தரவைப் பதிவிறக்கி, எவ்வளவு வேகமாக வந்தது என்பதை அளக்கும். சிறிய அளவுகள் குறைந்த தரவு திட்டத்திற்கு உகந்தவை; வரம்பற்ற 5G திட்டத்தில் மிகப் பெரியதைத் தேர்ந்தெடுக்கவும், ஏனெனில் முழு வேகம் வர சில வினாடிகள் ஆகும்.",
+
+        // ------------------------------------------------------- voice & daily watch
+        "Speaking… if you hear nothing, check that a text-to-speech engine is installed." to
+            "பேசுகிறேன்… எதுவும் கேட்கவில்லை என்றால், உங்கள் போனில் text-to-speech இன்ஜின் நிறுவப்பட்டுள்ளதா எனப் பார்க்கவும்.",
+        "No text-to-speech engine is available on this phone." to
+            "இந்தப் போனில் text-to-speech இன்ஜின் இல்லை.",
+        "Taking today's reading…" to
+            "இன்றைய அளவீட்டை எடுக்கிறேன்…",
+        "The daily check could not run right now." to
+            "தினசரி சோதனையை இப்போது இயக்க முடியவில்லை.",
+        "Add an API key (or pick the free AI) and ask again." to
+            "API சாவியைச் சேர்க்கவும் (அல்லது இலவச AI-ஐத் தேர்ந்தெடுக்கவும்), பிறகு மீண்டும் கேளுங்கள்.",
+        "No speech recogniser is installed on this phone — the keyboard still works." to
+            "இந்தப் போனில் பேச்சு அறியும் கருவி இல்லை — கீபோர்டு இன்னும் வேலை செய்யும்.",
+        "Ask CleanSweep…" to
+            "சுத்தம் செய்பவரிடம் கேளுங்கள்…",
+        "The speech recogniser could not be opened." to
+            "பேச்சு அறியும் கருவியைத் திறக்க முடியவில்லை.",
+        "Speak" to
+            "பேசு",
+        "Read aloud" to
+            "சத்தமாகப் படி",
+        "EN" to
+            "EN",
+        "த" to
+            "த",
+        "Daily brief" to
+            "தினசரி அறிக்கை",
+        "Once a day CleanSweep checks the battery, temperature, storage, junk and security, says a short summary out loud and keeps the full report here." to
+            "ஒரு நாளைக்கு ஒரு முறை பேட்டரி, வெப்பம், சேமிப்பு, குப்பை, பாதுகாப்பு அனைத்தையும் சுத்தம் செய்பவர் சோதித்து, சுருக்கத்தைச் சத்தமாகச் சொல்லி, முழு அறிக்கையை இங்கே வைக்கும்.",
+        "Run the daily check now" to
+            "இப்போதே தினசரி சோதனையை இயக்கு",
+        "Daily brief: on" to
+            "தினசரி அறிக்கை: இயக்கத்தில்",
+        "Daily brief: off" to
+            "தினசரி அறிக்கை: நிறுத்தத்தில்",
+        "Voice & daily watch" to
+            "குரல் & தினசரி கண்காணிப்பு",
+        "Speak to me" to
+            "என்னிடம் பேசு",
+        "CleanSweep talks: warnings about the battery, heat and the daily brief." to
+            "சுத்தம் செய்பவர் பேசும்: பேட்டரி, வெப்பம் பற்றிய எச்சரிக்கைகள் மற்றும் தினசரி அறிக்கை.",
+        "Voice is off. Nothing will be spoken, at any hour." to
+            "குரல் நிறுத்தத்தில் உள்ளது. எந்த நேரத்திலும் எதுவும் பேசப்படாது.",
+        "Hear the voice" to
+            "குரலைக் கேள்",
+        "Speaking uses Android's own text-to-speech engine. If your phone has a Tamil voice installed, Tamil text is spoken in Tamil; otherwise the English wording is spoken instead of reading Tamil in an English accent." to
+            "பேசுவதற்கு ஆண்ட்ராய்டின் சொந்த text-to-speech இன்ஜின் பயன்படுகிறது. உங்கள் போனில் தமிழ்க் குரல் நிறுவப்பட்டிருந்தால் தமிழ் உரை தமிழிலேயே பேசப்படும்; இல்லையெனில் தமிழை ஆங்கில உச்சரிப்பில் படிக்காமல் ஆங்கில வாக்கியம் பேசப்படும்.",
+        "Quiet hours" to
+            "அமைதி நேரம்",
+        "Nothing is spoken between these hours — not even important warnings. Anything you ask for yourself is still spoken when you ask." to
+            "இந்த நேரங்களுக்கு இடையில் எதுவும் பேசப்படாது — முக்கியமான எச்சரிக்கைகள் கூட. நீங்கள் நேரடியாகக் கேட்பதை மட்டும் அப்போதே பேசும்.",
+        "to" to
+            "முதல்",
+        "All day" to
+            "நாள் முழுவதும்",
+        "It is quiet time right now, so warnings are paused." to
+            "இப்போது அமைதி நேரம், எனவே எச்சரிக்கைகள் நிறுத்தப்பட்டுள்ளன.",
+        "What CleanSweep may say" to
+            "சுத்தம் செய்பவர் என்ன சொல்லலாம்",
+        "Battery low" to
+            "பேட்டரி குறைவு",
+        "Under %s%%, while the phone is running on the battery." to
+            "போன் பேட்டரியில் இயங்கும்போது %s%%-க்குக் கீழே.",
+        "Battery full" to
+            "பேட்டரி முழுவதும்",
+        "When the charge reaches 100% — a reminder to unplug." to
+            "சார்ஜ் 100% ஆனதும் — சார்ஜரைக் கழற்ற நினைவூட்டல்.",
+        "Running hot" to
+            "சூடாக இயங்குகிறது",
+        "Battery above %s°C or the processor above %s°C." to
+            "பேட்டரி %s°C-க்கு மேல் அல்லது செயலி %s°C-க்கு மேல்.",
+        "Charging started" to
+            "சார்ஜ் தொடங்கியது",
+        "A short word when the charger goes in — off keeps plug-ins silent." to
+            "சார்ஜர் இணைந்ததும் ஒரு சிறு வாசகம் — நிறுத்தினால் எதுவும் பேசாது.",
+        "One short spoken summary a day, with the details in a notification." to
+            "ஒரு நாளைக்கு ஒரு சிறு பேச்சுச் சுருக்கம்; விவரங்கள் அறிவிப்பில்.",
+        "Read AI answers aloud" to
+            "AI பதில்களைச் சத்தமாகப் படி",
+        "Speak the answer when you ask the assistant something." to
+            "நீங்கள் உதவியாளரிடம் கேட்கும்போது பதிலைப் பேசும்.",
+        "Daily full check" to
+            "தினசரி முழு சோதனை",
+        "Once a day CleanSweep reads the battery, temperature, storage, junk and security, asks the AI for a two-sentence summary when a key is saved, speaks it and posts the full report." to
+            "ஒரு நாளைக்கு ஒரு முறை பேட்டரி, வெப்பம், சேமிப்பு, குப்பை, பாதுகாப்பு அனைத்தையும் படித்து, சாவி சேமிக்கப்பட்டிருந்தால் AI-யிடம் இரண்டு வாக்கியச் சுருக்கம் கேட்டு, அதைப் பேசி, முழு அறிக்கையை அறிவிப்பாக அனுப்பும்.",
+        "Run it at" to
+            "இயக்கும் நேரம்",
+        "Privacy: the microphone is used only when you tap the mic button in the assistant, the phone's own recogniser turns your words into text, and CleanSweep never records or keeps audio. Voice announcements are made on the phone and can be switched off here at any time." to
+            "தனியுரிமை: உதவியாளரில் உள்ள மைக் பொத்தானைத் தட்டும்போது மட்டுமே மைக் பயன்படுகிறது; போனின் சொந்த பேச்சு அறியும் கருவி உங்கள் வார்த்தைகளை உரையாக மாற்றும்; சுத்தம் செய்பவர் ஒருபோதும் ஒலியைப் பதிவு செய்யாது, வைத்திருக்காது. குரல் அறிவிப்புகள் போனிலேயே நிகழ்கின்றன; இங்கே எப்போது வேண்டுமானாலும் நிறுத்தலாம்.",
         "Auto" to "தானியங்கி",
         "Drag" to "இழுத்து வை",
         "Pick a test size first" to "முதலில் சோதனை அளவைத் தேர்ந்தெடுக்கவும்",

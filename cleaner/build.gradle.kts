@@ -17,8 +17,8 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "2.3"
+        versionCode = 9
+        versionName = "2.4"
     }
 
     signingConfigs {
@@ -71,4 +71,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+
+    // The hourly health watch (battery low/full, overheating, the daily brief). WorkManager
+    // survives reboots and is the only scheduler Google allows for this kind of background work.
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
 }

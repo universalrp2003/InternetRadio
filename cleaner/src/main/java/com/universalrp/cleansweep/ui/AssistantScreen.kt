@@ -30,7 +30,9 @@ import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,8 +51,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -70,6 +75,7 @@ import com.universalrp.cleansweep.ui.theme.SurfaceHigh
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.WarnAmber
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.voice.Announcer
 
 /**
  * The on-device assistant chat.
@@ -82,6 +88,7 @@ import com.universalrp.cleansweep.ui.theme.TextSecondary
 @Composable
 fun AssistantScreen(state: UiState, vm: MainViewModel) {
     var input by remember { mutableStateOf("") }
+    val context = LocalContext.current
     val listState = rememberLazyListState()
     val showChips = state.assistantMessages.size < 4
     val suggestions = remember(
@@ -105,6 +112,54 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
         if (q.isEmpty()) return
         vm.askAssistant(q)
         input = ""
+    }
+
+    // The phone's own speech recogniser turns speech into words. CleanSweep asks it for a
+    // transcript and nothing more — no RECORD_AUDIO permission, no audio kept anywhere.
+    // `listening` is only a label: the app has no way to hear whether the mic is live.
+    var listening by remember { mutableStateOf(false) }
+    val recognizer = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        listening = false
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            val said = result.data
+                ?.getStringArrayListExtra(android.speech.RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                .orEmpty()
+            if (said.isNotBlank()) {
+                input = said
+                send(said)
+            }
+        }
+    }
+    val voiceAvailable = remember { Announcer.speechAvailable(context) }
+    fun listen() {
+        if (!voiceAvailable) {
+            vm.notifyMessage(
+                tr("No speech recogniser is installed on this phone — the keyboard still works.")
+            )
+            return
+        }
+        val intent = android.content.Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
+            )
+            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, tr("Ask CleanSweep…"))
+            putExtra(
+                android.speech.RecognizerIntent.EXTRA_LANGUAGE,
+                if (state.lang == com.universalrp.cleansweep.data.AppLang.TA) "ta-IN" else "en-IN",
+            )
+            putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        }
+        listening = true
+        try {
+            recognizer.launch(intent)
+        } catch (e: Exception) {
+            listening = false
+            vm.notifyMessage(tr("The speech recogniser could not be opened."))
+        }
     }
 
     Column(
@@ -288,7 +343,20 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                     cursorColor = AccentCyan,
                 ),
             )
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
+            IconButton(
+                onClick = { listen() },
+                enabled = !state.assistantTyping && !listening,
+                modifier = Modifier
+                    .size(48.dp)
+                    .padding(bottom = 2.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Mic,
+                    contentDescription = tr("Speak"),
+                    tint = if (listening) AccentViolet else AccentCyan,
+                )
+            }
             val canSend = input.isNotBlank() && !state.assistantTyping
             IconButton(
                 onClick = { send(input) },
@@ -358,6 +426,27 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                             contentDescription = null,
                             tint = AccentCyan,
                             modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+                if (!msg.fromUser && msg.text.isNotBlank()) {
+                    // Ask for this particular answer to be read out — allowed at any hour,
+                    // because the user asked for it just now.
+                    TextButton(
+                        onClick = { vm.speakAnswer(msg.text) },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                    ) {
+                        Icon(
+                            Icons.Outlined.VolumeUp,
+                            contentDescription = tr("Read aloud"),
+                            tint = TextSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            tr("Read aloud"),
+                            color = TextSecondary,
+                            style = MaterialTheme.typography.labelSmall,
                         )
                     }
                 }

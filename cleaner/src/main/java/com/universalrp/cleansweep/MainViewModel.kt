@@ -49,6 +49,8 @@ import com.universalrp.cleansweep.data.StorageInfoProvider
 import com.universalrp.cleansweep.data.hasAllFilesAccess
 import com.universalrp.cleansweep.notify.ChargeMonitorService
 import com.universalrp.cleansweep.notify.StatusPill
+import com.universalrp.cleansweep.voice.Announcer
+import com.universalrp.cleansweep.work.HealthWatchWorker
 import android.provider.Settings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -67,7 +69,7 @@ import android.os.Environment
 
 enum class Screen {
     HOME, SCANNING, RESULTS, APP_CACHE, ASSISTANT, SETTINGS, ABOUT,
-    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT
+    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT, VOICE
 }
 
 /** Filter ids for the installed-apps screen. */
@@ -188,6 +190,23 @@ data class UiState(
     val aiFallbackNote: String? = null,
     val aiUsedModel: String = "",
     val aiUsedMs: Long = 0L,
+    // ---------------------------------------------------------------- voice & daily watch
+    /** The master voice switch (Settings → Voice). */
+    val voiceOn: Boolean = true,
+    val voiceQuietStart: Int = Announcer.DEFAULT_QUIET_START,
+    val voiceQuietEnd: Int = Announcer.DEFAULT_QUIET_END,
+    val voiceBatteryLow: Boolean = true,
+    val voiceBatteryFull: Boolean = true,
+    val voiceOverheat: Boolean = true,
+    val voiceCharging: Boolean = true,
+    val voiceDaily: Boolean = true,
+    val voiceAnswers: Boolean = true,
+    val dailyScanOn: Boolean = true,
+    val dailyHour: Int = Announcer.DEFAULT_DAILY_HOUR,
+    /** What the last daily brief said — shown on the Home screen. */
+    val lastBrief: String = "",
+    /** The last thing the offline engine could not answer, kept for "Ask the AI". */
+    val assistantPendingQuestion: String = "",
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -281,6 +300,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val completed = AiSettings.autoComplete(loaded)
         if (completed != loaded) AiSettings.save(ctx, completed)
         mutate { it.copy(aiConfig = completed, aiEngineLabel = completed.engineLabel) }
+        // Voice + daily watch: read the switches, and make sure the hourly worker is alive
+        // whenever the user wants warnings or the daily brief.
+        loadVoiceSettings()
+        if (Announcer.enabled(ctx) || Announcer.dailyScanOn(ctx)) HealthWatchWorker.schedule(ctx)
         refresh()
         refreshHealth()
         // "Every time you open the app, check that the AI can actually answer."
@@ -299,6 +322,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate {
             it.copy(
                 hasAllFilesAccess = hasAllFilesAccess(),
+                lastBrief = Announcer.lastBrief(ctx),
                 storage = runCatching { StorageInfoProvider.read() }.getOrNull(),
                 usageAccess = AppCacheRepo.hasUsageAccess(ctx),
                 legacyStorageOk = legacyStorageGranted(),
@@ -348,6 +372,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val parent = when (current) {
             Screen.AI_REPORT -> Screen.HEALTH
             Screen.AI_SETTINGS -> Screen.SETTINGS
+            Screen.VOICE -> Screen.SETTINGS
             Screen.MOBILE -> Screen.HOME
             else -> Screen.HOME
         }
@@ -357,6 +382,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun requestAllFilesAccess() = StorageAccess.requestAllFilesAccess(ctx)
 
     fun dismissMessage() = mutate { it.copy(message = null) }
+
+    /** Shows a one-line message in the snackbar — used by the voice buttons. */
+    fun notifyMessage(text: String) = mutate { it.copy(message = text) }
 
     // ------------------------------------------------------------------ scan
 
@@ -595,14 +623,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun assistantSuggestions(): List<String> = Assistant.suggestionChips(assistantContext())
 
-    fun askAssistant(question: String) {
+    fun askAssistant(question: String, forceAi: Boolean = false) {
         val q = question.trim()
         if (q.isEmpty() || _state.value.assistantTyping) return
         val userMsg = AssistantMessage(fromUser = true, text = q)
         mutate { it.copy(assistantMessages = it.assistantMessages + userMsg, assistantTyping = true) }
         viewModelScope.launch {
             val state = _state.value
-            if (state.assistantOnline && state.aiConfig.ready) {
+            if (state.aiConfig.ready && (forceAi || state.assistantOnline)) {
                 // Online mode: your provider answers, with the same on-device numbers as
                 // context so it cannot drift away from reality.
                 val context = assistantContext()
@@ -624,8 +652,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                 }
                 val (result, fallbackNote, elapsedMs) = askWithFallback(
-                    systemPrompt = "You are CleanSweep's helper inside an Android cleaning app. " +
-                        "Answer in under 200 words, plain language, using only the phone facts given.",
+                    // v2.4: the assistant answers *any* question — general knowledge, how-to,
+                    // maths, whatever the user types. The phone facts below are context it may
+                    // use, not a fence: the user asked for an assistant that is not restricted.
+                    systemPrompt = "You are the assistant inside CleanSweep, an Android phone-care " +
+                        "app. Answer any question the user asks, on any topic, helpfully and " +
+                        "accurately. Use the phone facts provided when the question is about " +
+                        "this phone, storage, battery or the app; otherwise just answer the " +
+                        "question on its own merits. Reply in the language the user wrote in. " +
+                        "Keep it under 250 words, plain language, no markdown headings.",
                     userPrompt = "$facts\nQuestion from the user: $q",
                 )
                 val reply = AssistantMessage(
@@ -645,14 +680,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     },
                 )
                 mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
+                if (result.ok) speakAnswer(result.text)
+                return@launch
+            }
+            // The offline engine first. When it cannot answer *and* the user has an AI
+            // instead of a dead end the bubble offers to ask the real AI (v2.4).
+            val local = Assistant.answer(q, assistantContext(), _state.value.assistantVerbose)
+            if (local.meta == null && local.action == AssistantAction.NONE &&
+                _state.value.aiConfig.ready
+            ) {
+                mutate { it.copy(assistantPendingQuestion = q, screen = Screen.ASSISTANT) }
+                val prompt = Assistant.offlineFallback(q)
+                    .copy(meta = "On-device engine · tap to ask the AI")
+                mutate {
+                    it.copy(assistantMessages = it.assistantMessages + prompt, assistantTyping = false)
+                }
                 return@launch
             }
             // A short beat so the reply feels like a considered answer rather than
             // a canned string — the whole engine still runs locally and instantly.
             delay(420)
-            val reply = Assistant.answer(q, assistantContext(), _state.value.assistantVerbose)
-                .copy(meta = "On-device engine · works with no internet")
-            mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
+            val reply = local.copy(meta = "On-device engine · works with no internet")
+            mutate {
+                it.copy(
+                    assistantMessages = it.assistantMessages + reply,
+                    assistantTyping = false,
+                    assistantPendingQuestion = "",
+                )
+            }
+            speakAnswer(reply.text)
         }
     }
 
@@ -665,6 +721,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 else mutate { it.copy(message = "Scan first and I'll show you the results here.") }
             }
             AssistantAction.OPEN_SETTINGS -> navigate(Screen.SETTINGS)
+            AssistantAction.ASK_AI -> askPendingWithAi()
             AssistantAction.NONE -> Unit
         }
     }
@@ -672,6 +729,142 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun clearAssistant() {
         val msg = Assistant.welcome(assistantContext(), _state.value.assistantVerbose)
         mutate { it.copy(assistantMessages = listOf(msg), assistantTyping = false) }
+    }
+
+    // ================================================================ voice & daily watch
+
+    /**
+     * Speaks an assistant answer when the user asked for spoken replies. Long answers are cut
+     * to the useful part — nobody wants two minutes of bullet points read to them.
+     */
+    fun speakAnswer(text: String) {
+        val s = _state.value
+        if (!s.voiceOn || !s.voiceAnswers) return
+        val short = Announcer.shorten(text, 420)
+        if (short.isBlank()) return
+        Announcer.speakNow(ctx, short)
+    }
+
+    /** The "hear the voice" button in Settings: always allowed, ignores quiet hours. */
+    fun testVoice() {
+        val tamil = Lang.current == AppLang.TA
+        val english = "Hello. This is CleanSweep. I will tell you when your battery is low or full, " +
+            "when your phone is running hot, and I will read out the daily brief."
+        val tamilText = "வணக்கம். இது சுத்தம் செய்பவர். பேட்டரி குறையும்போது, முழுவதும் சார்ஜ் ஆகும்போது, " +
+            "போன் சூடாகும்போது நான் சொல்வேன்; தினசரி அறிக்கையையும் படித்துக் காட்டுவேன்."
+        val text = if (tamil && Announcer.canSpeak(ctx)) tamilText else english
+        val spoke = Announcer.speakNow(ctx, text)
+        mutate {
+            it.copy(
+                message = if (spoke) {
+                    tr("Speaking… if you hear nothing, check that a text-to-speech engine is installed.")
+                } else {
+                    tr("No text-to-speech engine is available on this phone.")
+                },
+            )
+        }
+    }
+
+    fun setVoiceOn(on: Boolean) {
+        Announcer.setEnabled(ctx, on)
+        if (on) HealthWatchWorker.schedule(ctx) else HealthWatchWorker.cancel(ctx)
+        mutate { it.copy(voiceOn = on) }
+    }
+
+    fun setVoiceEvent(event: Announcer.Event, on: Boolean) {
+        Announcer.setAllows(ctx, event, on)
+        // Turning any voice event on means the hourly watch must be alive; the charging
+        // announcement additionally needs the charging monitor, which reads the same switches.
+        if (on) HealthWatchWorker.schedule(ctx)
+        mutate {
+            it.copy(
+                voiceBatteryLow = Announcer.allows(ctx, Announcer.Event.BATTERY_LOW),
+                voiceBatteryFull = Announcer.allows(ctx, Announcer.Event.BATTERY_FULL),
+                voiceOverheat = Announcer.allows(ctx, Announcer.Event.OVERHEAT),
+                voiceCharging = Announcer.allows(ctx, Announcer.Event.CHARGING),
+                voiceDaily = Announcer.allows(ctx, Announcer.Event.DAILY),
+                voiceAnswers = Announcer.allows(ctx, Announcer.Event.ANSWER),
+            )
+        }
+    }
+
+    fun setQuietHours(start: Int, end: Int) {
+        Announcer.setQuietHours(ctx, start, end)
+        mutate { it.copy(voiceQuietStart = Announcer.quietStart(ctx), voiceQuietEnd = Announcer.quietEnd(ctx)) }
+    }
+
+    fun setDailyScanOn(on: Boolean) {
+        Announcer.setDailyScanOn(ctx, on)
+        if (on) HealthWatchWorker.schedule(ctx) else HealthWatchWorker.cancel(ctx)
+        mutate { it.copy(dailyScanOn = on) }
+    }
+
+    fun setDailyHour(hour: Int) {
+        Announcer.setDailyHour(ctx, hour)
+        mutate { it.copy(dailyHour = Announcer.dailyHour(ctx)) }
+    }
+
+    /** Runs the daily brief right now, so the user can hear it without waiting for 8 pm. */
+    fun runDailyBriefNow() {
+        mutate { it.copy(message = tr("Taking today's reading…")) }
+        HealthWatchWorker.schedule(ctx)
+        viewModelScope.launch {
+            // The worker waits for the brief (and possibly a slow AI answer) — never on the
+            // main thread, or the app would look frozen while it works.
+            val ran = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                HealthWatchWorker.runNow(ctx)
+            }
+            mutate {
+                it.copy(
+                    lastBrief = Announcer.lastBrief(ctx),
+                    message = if (ran) null else tr("The daily check could not run right now."),
+                )
+            }
+        }
+    }
+
+    /** Re-reads everything the voice settings screen shows. */
+    private fun loadVoiceSettings() {
+        mutate {
+            it.copy(
+                voiceOn = Announcer.enabled(ctx),
+                voiceQuietStart = Announcer.quietStart(ctx),
+                voiceQuietEnd = Announcer.quietEnd(ctx),
+                voiceBatteryLow = Announcer.allows(ctx, Announcer.Event.BATTERY_LOW),
+                voiceBatteryFull = Announcer.allows(ctx, Announcer.Event.BATTERY_FULL),
+                voiceOverheat = Announcer.allows(ctx, Announcer.Event.OVERHEAT),
+                voiceCharging = Announcer.allows(ctx, Announcer.Event.CHARGING),
+                voiceDaily = Announcer.allows(ctx, Announcer.Event.DAILY),
+                voiceAnswers = Announcer.allows(ctx, Announcer.Event.ANSWER),
+                dailyScanOn = Announcer.dailyScanOn(ctx),
+                dailyHour = Announcer.dailyHour(ctx),
+                lastBrief = Announcer.lastBrief(ctx),
+            )
+        }
+    }
+
+    /**
+     * The voice button in the assistant. Android's own recogniser turns speech into text —
+     * CleanSweep never records or stores audio, it only receives the words the user chose to
+     * dictate, exactly like typing them.
+     */
+    fun voiceInput(text: String) {
+        val said = text.trim()
+        if (said.isEmpty()) return
+        askAssistant(said)
+    }
+
+    /** "Ask the AI" on a bubble the offline engine could not answer. */
+    fun askPendingWithAi() {
+        val q = _state.value.assistantPendingQuestion.ifBlank {
+            _state.value.assistantMessages.lastOrNull { it.fromUser }?.text.orEmpty()
+        }
+        if (q.isBlank()) return
+        if (!_state.value.aiConfig.ready) {
+            mutate { it.copy(screen = Screen.AI_SETTINGS, message = tr("Add an API key (or pick the free AI) and ask again.")) }
+            return
+        }
+        askAssistant(q, forceAi = true)
     }
 
     private fun assistantContext(): AssistantContext {

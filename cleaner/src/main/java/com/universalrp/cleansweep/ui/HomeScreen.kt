@@ -28,11 +28,14 @@ import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Security
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.SdStorage
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.VolumeOff
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -62,6 +65,7 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.formatUptime
 import com.universalrp.cleansweep.data.JunkKind
+import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.Lang
 import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
@@ -118,6 +122,23 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                     color = TextSecondary,
                 )
             }
+            // One tap between தமிழ் and English, right where the eye already is. The full
+            // choice (and the note about the launcher name) stays in Settings → Language.
+            TextButton(onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) }) {
+                Text(
+                    if (state.lang == AppLang.TA) tr("EN") else tr("த"),
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+            IconButton(onClick = { vm.navigate(Screen.VOICE) }) {
+                Icon(
+                    if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
+                    contentDescription = "Voice",
+                    tint = if (state.voiceOn) AccentCyan else TextSecondary,
+                )
+            }
             IconButton(onClick = { vm.navigate(Screen.SETTINGS) }) {
                 Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = TextSecondary)
             }
@@ -137,6 +158,69 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             item { StorageCard(state) }
+
+            // The daily brief card: what CleanSweep found for you today, and the switch that
+            // turns the whole daily watch on or off without digging into Settings.
+            item {
+                PanelCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                            Icon(
+                                Icons.Outlined.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = AccentCyan,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                tr("Daily brief"),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (state.voiceOn) {
+                                Icon(
+                                    Icons.Outlined.VolumeUp,
+                                    contentDescription = null,
+                                    tint = AccentCyan,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            if (state.lastBrief.isNotBlank()) state.lastBrief
+                            else tr(
+                                "Once a day CleanSweep checks the battery, temperature, storage, " +
+                                    "junk and security, says a short summary out loud and keeps " +
+                                    "the full report here."
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                        ) {
+                            TextButton(onClick = { vm.runDailyBriefNow() }) {
+                                Text(
+                                    tr("Run the daily check now"),
+                                    color = AccentCyan,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            TextButton(onClick = { vm.navigate(Screen.VOICE) }) {
+                                Text(
+                                    if (state.dailyScanOn) tr("Daily brief: on") else tr("Daily brief: off"),
+                                    color = if (state.dailyScanOn) GoodGreen else TextSecondary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
 
             if (!state.legacyStorageOk) {
                 item { LegacyStorageCard(vm) }

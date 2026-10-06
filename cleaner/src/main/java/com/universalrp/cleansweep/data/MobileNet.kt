@@ -59,6 +59,10 @@ data class MobileSnapshot(
     val qualityTone: Int,
     val is5g: Boolean,
     val isVpn: Boolean,
+    /** True when the connection carrying the traffic right now is mobile data. */
+    val activeOnMobile: Boolean = false,
+    /** True when the connection carrying the traffic right now is Wi-Fi. */
+    val activeOnWifi: Boolean = false,
     val towers: List<CellTower>,
     val needsPhonePermission: Boolean,
     val permissionHint: String?,
@@ -130,13 +134,16 @@ object MobileNet {
 
         val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         var isVpn = false
+        var activeOnMobile = false
+        var activeOnWifi = false
 
         try {
             val active = connectivity?.activeNetwork
             val caps = active?.let { connectivity.getNetworkCapabilities(it) }
             isVpn = caps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
-            val onMobile = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
-            if (!onMobile && !isVpn) {
+            activeOnMobile = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+            activeOnWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            if (!activeOnMobile && !isVpn) {
                 notes.add("Mobile data is not the active connection right now — these readings are the last known ones.")
             }
         } catch (e: Exception) {
@@ -280,6 +287,8 @@ object MobileNet {
             qualityTone = tone,
             is5g = is5g,
             isVpn = isVpn,
+            activeOnMobile = activeOnMobile,
+            activeOnWifi = activeOnWifi,
             towers = towers,
             needsPhonePermission = !allowed,
             permissionHint = if (allowed) {
@@ -409,7 +418,10 @@ object MobileNet {
     suspend fun ping(
         samples: Int = 8,
         onSample: (done: Int, total: Int) -> Unit = { _, _ -> },
-    ): List<PingStats> {
+    ): List<PingStats> = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        // IO, always: opening a socket on the main thread throws NetworkOnMainThreadException,
+        // which looked exactly like "no answer, 100% loss" on every target (v2.3 bug fixed
+        // here). Every sample below is a real network call.
         val perTarget = samples.coerceIn(4, 12)
         val results = mutableListOf<PingStats>()
         val total = PING_TARGETS.size * perTarget
@@ -445,7 +457,7 @@ object MobileNet {
                 )
             )
         }
-        return results
+        results
     }
 
     private fun connectTimeMs(host: String, port: Int): Double? {
@@ -466,36 +478,123 @@ object MobileNet {
         }
     }
 
-    /** Public IP, ISP and city — one small request, only when the user taps the button. */
-    suspend fun publicIp(): IpInfo = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+    /**
+     * Public IP, ISP and city — one small request, only when the user taps the button.
+     *
+     * Four independent providers are tried in turn, because a single one is not enough in
+     * practice: Cloudflare answers 403 through some VPNs and carriers (exactly what the user
+     * hit on Airtel + VPN), and a provider being down must not turn into "no answer".
+     */
+    suspend fun publicIp(): IpInfo =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            var lastError = "No provider answered."
+            for (endpoint in IP_ENDPOINTS) {
+                val text = httpGet(endpoint.url)
+                if (text == null) {
+                    lastError = "${endpoint.label}: no answer"
+                    continue
+                }
+                if (text.isHttpError()) {
+                    lastError = "${endpoint.label}: ${text.take(40)}"
+                    continue
+                }
+                val info = endpoint.parse(text)
+                if (info != null && !info.ip.isNullOrBlank()) return@withContext info
+                lastError = "${endpoint.label}: unexpected reply"
+            }
+            IpInfo(null, null, null, null, null, null, lastError)
+        }
+
+    /** One small GET with an honest User-Agent; null when nothing answered. */
+    private fun httpGet(url: String): String? {
         var connection: java.net.HttpURLConnection? = null
-        try {
-            connection = (java.net.URL("https://speed.cloudflare.com/meta").openConnection()
-                as java.net.HttpURLConnection).apply {
+        return try {
+            connection = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
                 requestMethod = "GET"
-                connectTimeout = 12_000
-                readTimeout = 12_000
-                setRequestProperty("Accept", "application/json")
+                connectTimeout = 10_000
+                readTimeout = 10_000
+                setRequestProperty("Accept", "application/json, text/plain, */*")
+                // Some providers reject requests with no User-Agent at all.
+                setRequestProperty("User-Agent", "CleanSweep/2.4 (Android)")
             }
             val status = connection.responseCode
-            val text = (if (status in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()?.use { it.readText() }.orEmpty()
-            if (status !in 200..299) {
-                return@withContext IpInfo(null, null, null, null, null, null, "HTTP $status")
-            }
-            val json = org.json.JSONObject(text)
-            IpInfo(
-                ip = json.optString("clientIp").takeIf { it.isNotBlank() },
-                isp = json.optString("asOrganization").takeIf { it.isNotBlank() },
-                asn = json.optString("asn").takeIf { it.isNotBlank() },
-                city = json.optString("city").takeIf { it.isNotBlank() },
-                country = json.optString("country").takeIf { it.isNotBlank() },
-                network = json.optString("httpProtocol").takeIf { it.isNotBlank() },
-            )
+            val body = (if (status in 200..299) connection.inputStream else connection.errorStream)
+                ?.bufferedReader()?.use { it.readText() }.orEmpty().trim()
+            if (status in 200..299) body else "HTTP $status"
         } catch (e: Exception) {
-            IpInfo(null, null, null, null, null, null, "${e.javaClass.simpleName}: ${e.message ?: "no answer"}")
+            null
         } finally {
-            connection?.disconnect()
+            try {
+                connection?.disconnect()
+            } catch (e: Exception) {
+                // Nothing to do.
+            }
         }
     }
+
+    /** "HTTP 403" and friends are status lines, not IP data. */
+    private fun String.isHttpError(): Boolean = startsWith("HTTP ")
+
+    private data class IpEndpoint(
+        val label: String,
+        val url: String,
+        val parse: (String) -> IpInfo?,
+    )
+
+    private val IP_ENDPOINTS: List<IpEndpoint> = listOf(
+        IpEndpoint("Cloudflare", "https://speed.cloudflare.com/meta") { text ->
+            try {
+                val json = org.json.JSONObject(text)
+                IpInfo(
+                    ip = json.optString("clientIp").takeIf { it.isNotBlank() },
+                    isp = json.optString("asOrganization").takeIf { it.isNotBlank() },
+                    asn = json.optString("asn").takeIf { it.isNotBlank() },
+                    city = json.optString("city").takeIf { it.isNotBlank() },
+                    country = json.optString("country").takeIf { it.isNotBlank() },
+                    network = json.optString("httpProtocol").takeIf { it.isNotBlank() },
+                )
+            } catch (e: Exception) {
+                null
+            }
+        },
+        IpEndpoint("ipinfo.io", "https://ipinfo.io/json") { text ->
+            try {
+                val json = org.json.JSONObject(text)
+                val org = json.optString("org").takeIf { it.isNotBlank() }
+                IpInfo(
+                    ip = json.optString("ip").takeIf { it.isNotBlank() },
+                    isp = org?.substringAfter(" ", org),
+                    asn = org?.substringBefore(" ")?.takeIf { it.startsWith("AS") },
+                    city = json.optString("city").takeIf { it.isNotBlank() },
+                    country = json.optString("country").takeIf { it.isNotBlank() },
+                    network = null,
+                )
+            } catch (e: Exception) {
+                null
+            }
+        },
+        IpEndpoint("ipapi.co", "https://ipapi.co/json/") { text ->
+            try {
+                val json = org.json.JSONObject(text)
+                IpInfo(
+                    ip = json.optString("ip").takeIf { it.isNotBlank() },
+                    isp = json.optString("org").takeIf { it.isNotBlank() },
+                    asn = json.optString("asn").takeIf { it.isNotBlank() },
+                    city = json.optString("city").takeIf { it.isNotBlank() },
+                    country = json.optString("country_name").takeIf { it.isNotBlank() },
+                    network = null,
+                )
+            } catch (e: Exception) {
+                null
+            }
+        },
+        IpEndpoint("ipify", "https://api.ipify.org?format=json") { text ->
+            try {
+                val ip = org.json.JSONObject(text).optString("ip").takeIf { it.isNotBlank() }
+                if (ip == null) null else IpInfo(ip, null, null, null, null, null)
+            } catch (e: Exception) {
+                null
+            }
+        },
+    )
 }

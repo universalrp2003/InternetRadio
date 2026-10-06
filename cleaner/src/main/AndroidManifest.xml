@@ -62,6 +62,18 @@
     <!-- Battery / thermal / CPU readings need no permission at all: they come from the
          system battery broadcast and the kernel's own sysfs files. -->
 
+    <!--
+      Voice. Android 11+ hides other apps' activities unless the app says what it is looking
+      for, so this one query is what lets the assistant's microphone button find the phone's
+      own speech recogniser. No RECORD_AUDIO permission is requested and no audio is ever
+      stored by CleanSweep: the recogniser returns text, which is exactly like typing it.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <!-- Read per-app cache sizes (special app permission, granted from Settings). -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"

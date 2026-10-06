@@ -17,6 +17,7 @@ import com.universalrp.cleansweep.MainActivity
 import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.voice.Announcer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -73,7 +74,40 @@ class ChargeMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         update()
+        announcePluggedIn()
         return START_STICKY
+    }
+
+    /**
+     * A short word when the charger goes in — the user asked for CleanSweep to come alive on
+     * plug-in. It waits for a real reading first (a phone reports 0 W for the first seconds)
+     * and says nothing when the voice switch, the event switch or quiet hours say no.
+     */
+    private var announcedPlug = false
+
+    private fun announcePluggedIn() {
+        if (announcedPlug) return
+        scope.launch {
+            // Give the charger a moment to report current/watts.
+            delay(6_000)
+            if (announcedPlug) return@launch
+            val battery = BatteryReader.read(this@ChargeMonitorService)
+            if (!battery.charging) return@launch
+            announcedPlug = true
+            val percent = battery.percent
+            val watts = battery.powerW
+            val timeLeft = batteryTimeLabel(battery)
+            val english = buildString {
+                append("Charging started at $percent percent.")
+                if (watts != null) append(" " + "%.1f".format(watts) + " watts now.")
+                if (timeLeft != null) append(" " + timeLeft + ".")
+            }
+            val tamil = buildString {
+                append("சார்ஜ் தொடங்கியது — $percent சதவீதம்.")
+                if (watts != null) append(" இப்போது " + "%.1f".format(watts) + " வாட்ஸ்.")
+            }
+            Announcer.speak(this@ChargeMonitorService, english, tamil, Announcer.Event.CHARGING)
+        }
     }
 
     private fun update() {

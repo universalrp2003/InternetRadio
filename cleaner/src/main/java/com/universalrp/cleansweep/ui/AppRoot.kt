@@ -60,6 +60,7 @@ fun AppRoot(vm: MainViewModel) {
             Screen.MOBILE -> MobileScreen(state, vm)
             Screen.AI_SETTINGS -> AiSettingsScreen(state, vm)
             Screen.AI_REPORT -> AiReportScreen(state, vm)
+            Screen.VOICE -> VoiceScreen(state, vm)
         }
 
         SnackbarHost(

@@ -20,8 +20,11 @@ data class AssistantMessage(
     val meta: String? = null,
 )
 
-/** Optional one-tap follow-up that the assistant can offer with an answer. */
-enum class AssistantAction { NONE, SCAN, OPEN_APP_CACHE, OPEN_RESULTS, OPEN_SETTINGS }
+/**
+ * What a one-tap follow-up button does. [ASK_AI] is v2.4: when the offline engine cannot
+ * answer, the app offers to ask the real AI instead of pretending the question is invalid.
+ */
+enum class AssistantAction { NONE, SCAN, OPEN_APP_CACHE, OPEN_RESULTS, OPEN_SETTINGS, ASK_AI }
 
 /**
  * A snapshot of everything the assistant is allowed to know.
@@ -418,6 +421,27 @@ object Assistant {
         }
         return AssistantMessage(false, text, actionLabel = "Open app cache", action = AssistantAction.OPEN_APP_CACHE)
     }
+
+    /**
+     * A question the fixed on-device topics cannot answer. v2.4: instead of a dead end, the
+     * assistant offers to ask the real AI (which answers anything) and keeps the useful
+     * on-device idea as a second option.
+     */
+    fun offlineFallback(question: String): AssistantMessage = AssistantMessage(
+        false,
+        buildString {
+            append("That one needs the AI, and the AI is not answering right now.\n\n")
+            append("Tap “Ask the AI” and CleanSweep will send your question again — with the ")
+            append("phone facts it can read — the moment a provider answers.")
+            if (question.isNotBlank()) {
+                append("\n\nYour question: “")
+                append(question.take(120))
+                append("”")
+            }
+        },
+        actionLabel = "Ask the AI",
+        action = AssistantAction.ASK_AI,
+    )
 
     private fun fallback(ctx: AssistantContext): AssistantMessage {
         val ideas = suggestionChips(ctx).take(3)

@@ -256,8 +256,11 @@ private fun MobileStatusCard(state: UiState, vm: MainViewModel) {
 
 private fun com.universalrp.cleansweep.data.MobileSnapshot.dataEnabledString(): String = when {
     dataEnabled && roaming -> "Mobile data is ON and roaming is allowed — watch your bill."
+    dataEnabled && activeOnMobile -> "Mobile data is ON and carrying your traffic."
+    dataEnabled && activeOnWifi -> "Mobile data is ON — Wi-Fi is carrying your traffic right now."
     dataEnabled -> "Mobile data is ON."
-    else -> "Mobile data looks OFF (Wi-Fi may be carrying you)."
+    activeOnWifi -> "Mobile data is switched off. You are on Wi-Fi."
+    else -> "Mobile data is switched off."
 }
 
 /** Four little bars, filled to the reported level. */
