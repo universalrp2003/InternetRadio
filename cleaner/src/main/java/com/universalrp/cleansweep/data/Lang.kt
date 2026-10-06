@@ -231,6 +231,8 @@ object Lang {
             "நீங்கள் படிக்க அல்லது ஸ்கிரீன்ஷாட் எடுக்க மட்டுமே இங்கே உள்ளது.",
         "Clear" to
             "அழி",
+        "Free software under the GNU GPL v3" to
+            "GNU GPL v3 இன் கீழ் இலவச மென்பொருள்",
         "Speak to me" to
             "என்னிடம் பேசு",
         "CleanSweep talks: warnings about the battery, heat and the daily brief." to

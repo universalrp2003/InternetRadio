@@ -13,10 +13,13 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.internetradio"
+        // Was the placeholder com.example.internetradio: a store listing must own its id, so
+        // this is the author's own. The Kotlin namespace is unchanged, which is why the
+        // existing source files do not have to move.
+        applicationId = "com.universalrp.internetradio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 1
+        versionCode = 2
         versionName = "1.0"
     }
 

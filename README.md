@@ -27,6 +27,13 @@ All releases: <https://github.com/universalrp2003/InternetRadio/releases> · The
 **release** builds (signed with the project keystore, not debuggable), which is what an app
 store will take. The "debug" builds CI also produces are for quick testing only.
 
+## Licence
+
+**GNU GPL-3.0** — Copyright (C) 2026 Ramesh prathap .R (`universalrp2003@gmail.com`).
+The full text is in [LICENSE](LICENSE); the apps show the notice in **About**. See
+[PRIVACY.md](PRIVACY.md) for what the apps do and do not do with your data, and
+[store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md) for the Google Play upload pack.
+
 ## Building
 
 - **Cloud (easiest):** push to `main`, push an `arena/**` branch, or use *Actions → Build APK → Run workflow*.

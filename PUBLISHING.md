@@ -1,5 +1,10 @@
 # Publishing these apps to a store — what is ready, what you must do
 
+**Route chosen (6 Oct 2026):** the project is licensed **GNU GPL-3.0**, the `:app` id is
+renamed to `com.universalrp.internetradio`, and the next step is **Google Play** for the
+four apps Play allows — see [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md) for the
+copy-paste pack. Screenshots are still to come.
+
 Short answer:
 
 * **F-Droid** — possible for all five apps, but **F-Droid signs the APK with its own key**.
@@ -36,17 +41,17 @@ ready so that submitting is a matter of copying a file and pressing a button.
 
 Still required before any submission:
 
-1. **A licence file.** F-Droid and IzzyOnDroid only accept software under a recognised free
-   licence (GPL-3.0, Apache-2.0, MIT, LGPL-3.0 …). The repo has none yet — this is the one
-   decision only you can make. (`License:` in the store metadata must match it.)
-2. **Version tags** for each release you want published (I add them once you say go).
-3. **Screenshots** (2 or more) if you want the store pages to look complete. Send me the
-   phone screenshots and I will drop them into the right folders. Without them the pages
-   simply show no gallery.
-4. **The `:app` module's application id** is still the placeholder `com.example.internetradio`.
-   F-Droid wants an id that belongs to you. Renaming it to something like
-   `com.universalrp.internetradio` is a one-line change, but it makes it a *different app*:
-   anyone who installed the old one must uninstall it first.
+1. ~~**A licence file.**~~ **Done — GNU GPL-3.0.** CI commits the verbatim licence text as
+   `LICENSE` on the next build (copyright (C) 2026 Ramesh prathap .R), and the About screen now
+   carries the GPL notice. Store metadata must say `License: GPL-3.0-only`.
+2. ~~**Version tags.**~~ **Done** — `v2026.10.06` published the first GitHub Release.
+3. **Screenshots** — still to come. Send the phone screenshots and I will drop them into
+   `fastlane/metadata/android/<locale>/images/phoneScreenshots/` for every app, and you can
+   upload the same files to Play. Play also needs a **512×512 icon** and a **1024×500 feature
+   graphic** (the repo's launcher icon is a vector, which the Play uploader will not take).
+4. ~~**The placeholder application id.**~~ **Done** — `:app` is now
+   `com.universalrp.internetradio`. Anyone with the old build must uninstall it once; it counts
+   as a new app.
 
 ---
 
@@ -209,10 +214,13 @@ exactly the people who install from F-Droid or a link.
 
 ## 9. Checklist
 
-- [ ] Choose the licence and add `LICENSE` (I will do it the same hour you decide).
-- [ ] Say which apps go public and whether to rename `com.example.internetradio`.
-- [ ] Send screenshots for the store pages (optional but recommended).
-- [ ] Tag the release (`v2.6`) so the GitHub Release and the permanent link exist.
-- [ ] Ask IzzyOnDroid to include the apps (Codeberg issue — one per app).
-- [ ] Decide on the self-hosted F-Droid repo for the family (I build the CI job).
-- [ ] Only if you want Play: create the account, and we ship the other four apps there.
+- [x] Licence: **GNU GPL-3.0** — committed by CI, GPL notice in About.
+- [x] Application id renamed to `com.universalrp.internetradio`.
+- [x] Release APKs + `.aab` bundles built and verified non-debuggable.
+- [x] GitHub Release `v2026.10.06` with the version-named APKs (and now bundles).
+- [x] Store listing text for all five apps (English + Tamil where written).
+- [x] Privacy policy: [PRIVACY.md](PRIVACY.md).
+- [x] Play copy-paste pack: [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md).
+- [ ] Send screenshots (and the app icon / feature graphic) — I place them.
+- [ ] You create the Google Play account ($25) and upload the four bundles.
+- [ ] Optional later: IzzyOnDroid inclusion, or your own F-Droid repo for the family.

@@ -65,6 +65,61 @@ jobs:
           done
           echo "could not push the wrapper; the build continues without it."
 
+      # The project is GPL-3.0 (the author's choice). F-Droid and IzzyOnDroid both require the
+      # licence text in the repository, so this commits the verbatim SPDX copy once. The text
+      # is fetched rather than pasted, so it cannot be mistyped.
+      - name: Add the licence file (once)
+        run: |
+          if git ls-files --error-unmatch LICENSE >/dev/null 2>&1; then
+            echo "LICENSE is already committed."
+            exit 0
+          fi
+          TMP=$(mktemp)
+          curl -fsSL https://raw.githubusercontent.com/spdx/license-list-data/main/text/GPL-3.0-only.txt -o "$TMP" \
+            || curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt -o "$TMP" || true
+          SIZE=$(wc -c < "$TMP" | tr -d ' ')
+          echo "fetched $SIZE bytes of licence text"
+          if [ "$SIZE" -lt 20000 ]; then
+            echo "FAIL: the licence text did not download completely - refusing to commit a partial licence"
+            exit 1
+          fi
+          {
+            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ"
+            echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
+            echo ""
+            echo "This program is free software: you can redistribute it and/or modify it under"
+            echo "the terms of the GNU General Public License as published by the Free Software"
+            echo "Foundation, either version 3 of the License, or (at your option) any later"
+            echo "version."
+            echo ""
+            echo "This program is distributed in the hope that it will be useful, but WITHOUT ANY"
+            echo "WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A"
+            echo "PARTICULAR PURPOSE. See the GNU General Public License for more details."
+            echo ""
+            echo "You should have received a copy of the GNU General Public License along with"
+            echo "this program. If not, see <https://www.gnu.org/licenses/>."
+            echo ""
+            echo "The full text of the licence follows."
+            echo ""
+            echo "========================================================================"
+            echo ""
+            cat "$TMP"
+          } > LICENSE
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add LICENSE
+          git commit -q -m "Add the licence: GNU GPL v3 (Copyright (C) 2026 Ramesh prathap .R)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "licence committed and pushed."
+              exit 0
+            fi
+            echo "push attempt $attempt failed; retrying..."
+            sleep 6
+          done
+          echo "could not push the licence; the build continues without it."
+
       - name: Ensure stable signing keystore
         run: |
           if [ ! -f ci-keystore/release.p12 ]; then
@@ -87,7 +142,9 @@ jobs:
           # take: app stores reject an APK with android:debuggable, and F-Droid builds the
           # release variant as well. Both are signed with the same ci-keystore, so a phone
           # that already has the debug build updates to the release one normally.
-          gradle assembleDebug assembleRelease --no-daemon 2>&1 | tee build.log
+          # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
+          # apps since 2021); the APKs are what everyone else takes.
+          gradle assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify built APKs
         run: |
@@ -111,6 +168,19 @@ jobs:
           BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           EQ_REL=$(ls equalizer/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           RADIO_REL=$(ls radio/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          echo "=== Google Play bundles (.aab) ==="
+          for b in "app|Internet-Radio" "cleaner|CleanSweep" "builder|AppForge" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
+            mod="${b%%|*}"; pretty="${b##*|}"
+            aab=$(ls "$mod"/build/outputs/bundle/release/*.aab 2>/dev/null | head -1 || true)
+            if [ -z "$aab" ]; then
+              echo "FAIL: no .aab bundle for $mod - Google Play cannot take an APK"
+              exit 1
+            fi
+            ver=$(grep -m1 'versionName' "$mod/build.gradle.kts" | sed -E 's/.*"([^"]+)".*/\1/')
+            mv "$aab" "$(dirname "$aab")/${pretty}-v${ver}.aab"
+            echo "OK: ${pretty}-v${ver}.aab inside the build"
+          done
+
           echo "=== release APKs (what the stores take) ==="
           for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
             if [ -z "$rel" ]; then
@@ -481,7 +551,7 @@ jobs:
         run: |
           set -e
           TAG="${GITHUB_REF_NAME}"
-          FILES=$(ls */build/outputs/apk/release/*.apk)
+          FILES="$(ls */build/outputs/apk/release/*.apk) $(ls */build/outputs/bundle/release/*.aab)"
           echo "release assets:"
           echo "$FILES"
           if gh release view "$TAG" >/dev/null 2>&1; then
@@ -573,6 +643,12 @@ jobs:
         with:
           name: build-log
           path: build.log
+
+      - name: Upload Google Play bundles (.aab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-bundles
+          path: "*/build/outputs/bundle/release/*.aab"
 
       - name: Upload Internet Radio APK
         uses: actions/upload-artifact@v4

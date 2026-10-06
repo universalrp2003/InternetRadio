@@ -178,6 +178,13 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                     }
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Free software under the GNU GPL v3") + "\n" +
+                            "github.com/universalrp2003/InternetRadio",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentCyan,
+                    )
                     Text(
                         tr("App name") + ": " + Lang.appName() +
                             if (Lang.isTamil) "  (CleanSweep)" else "  (சுத்தம் செய்பவர்)",
