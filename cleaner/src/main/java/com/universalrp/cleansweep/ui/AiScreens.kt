@@ -859,7 +859,6 @@ private fun splitAnswer(answer: String): List<AiSection> {
 }
 
 @Composable
-@Composable
 private fun ModeChip2(label: String, selected: Boolean, onClick: () -> Unit) {
     Text(
         label,
@@ -874,6 +873,7 @@ private fun ModeChip2(label: String, selected: Boolean, onClick: () -> Unit) {
     )
 }
 
+@Composable
 private fun AiSectionCard(section: AiSection) {
     val headingState = headingTone(section.heading)
     PanelCard(Modifier.fillMaxWidth()) {
