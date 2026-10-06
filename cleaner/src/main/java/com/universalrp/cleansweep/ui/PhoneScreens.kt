@@ -630,7 +630,8 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
             // Only ask while there is really nothing to show: once the phone reports the
             // Wi-Fi name / router address, the card goes away for good.
             val canReadName = report?.wifi?.ssid != null || report?.wifi?.gateway != null
-            val needsPermissionCard = !state.wifiPermission && !canReadName && !report?.wifi?.connected.equals(false)
+            val connectedToWifi = report?.wifi?.connected == true
+            val needsPermissionCard = connectedToWifi && !state.wifiPermission && !canReadName
             if (needsPermissionCard) {
                 item {
                     NetworkPermissionCard(

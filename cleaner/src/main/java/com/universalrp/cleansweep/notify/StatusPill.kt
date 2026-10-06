@@ -70,49 +70,52 @@ object StatusPill {
 
     private fun show(context: Context, text: String) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-        var pill = view
-        if (pill == null) {
-            pill = TextView(context).apply {
-                setTextColor(Color.parseColor("#E8FBFF"))
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
-                typeface = Typeface.DEFAULT_BOLD
-                includeFontPadding = false
-                setPadding(dp(context, 6), dp(context, 1), dp(context, 6), dp(context, 1))
-                background = GradientDrawable().apply {
-                    cornerRadius = dp(context, 7).toFloat()
-                    setColor(Color.parseColor("#B8000000"))
-                    setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
-                }
-            }
-            val layout = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                } else {
-                    @Suppress("DEPRECATION")
-                    WindowManager.LayoutParams.TYPE_PHONE
-                },
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT,
-            )
-            layout.gravity = Gravity.TOP or Gravity.START
-            try {
-                manager.addView(pill, layout)
-            } catch (e: Exception) {
-                // Some phones refuse the window; then there is simply no pill.
-                return
-            }
-            view = pill
-            params = layout
-        }
+        val pill = view ?: createPill(context, manager) ?: return
         if (pill.text != text) pill.text = text
         position(context, manager, pill)
         // And once more after the text has been measured, so it lands in the right place.
         pill.post { position(context, manager, pill) }
+    }
+
+    /** Adds the window; returns null when the phone refuses to let us draw there. */
+    private fun createPill(context: Context, manager: WindowManager): TextView? {
+        val pill = TextView(context).apply {
+            setTextColor(Color.parseColor("#E8FBFF"))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
+            typeface = Typeface.DEFAULT_BOLD
+            includeFontPadding = false
+            setPadding(dp(context, 6), dp(context, 1), dp(context, 6), dp(context, 1))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(context, 7).toFloat()
+                setColor(Color.parseColor("#B8000000"))
+                setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
+            }
+        }
+        val layout = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            },
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        )
+        layout.gravity = Gravity.TOP or Gravity.START
+        return try {
+            manager.addView(pill, layout)
+            view = pill
+            params = layout
+            pill
+        } catch (e: Exception) {
+            // Some phones refuse the window; then there is simply no pill.
+            null
+        }
     }
 
     private fun position(context: Context, manager: WindowManager, pill: TextView) {
