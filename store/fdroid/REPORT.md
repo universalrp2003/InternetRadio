@@ -126,13 +126,22 @@ Every store wants the same three things, and two of them no longer need anything
 
 `store/asset-preview.png` shows all of it in one image.
 
-## So, your move
+## So, your move (route decided: F-Droid)
 
-Tell me which of these you want and I will do my half:
+You picked the **F-Droid main repository** with the honest AI disclosure. What is left:
 
-* **F-Droid submission** — I polish the MR text, you paste it, I place the screenshots when you
-  re-send them.
-* **GitHub Releases only** — nothing to do, it already works; I keep tagging releases.
-* **Own F-Droid repo on GitHub Pages** — I set it up in CI, you add the URL on the phones.
-* **IzzyOnDroid anyway, told truthfully** — I will write it with the honest AI answers, but go in
-  expecting a refusal under the policy quoted above, so that nobody wastes an evening on it.
+1. **You:** fix the GitHub repository description (Settings → General → Description). It says
+   *"first build"* today, and F-Droid's policy requires a repository that explains what it is.
+   My token gets `403` on repository settings, so this one is genuinely yours.
+2. **You:** free account at <https://gitlab.com>, fork `fdroid/fdroiddata`, upload the five files
+   from `store/fdroid/metadata/`, open the merge request with the text from
+   `store/fdroid/README.md` section B (it already includes the AI disclosure). The no-account
+   alternative is one issue on the F-Droid Requests-For-Packaging tracker with
+   `store/fdroid/RFP_ISSUE.md`.
+3. **You:** re-attach the nine phone screenshots to a message so I can crop the private parts and
+   place them with `tools/make_screenshots.py`.
+4. **Me:** already done — recipes, MR text, disclosured issue text, icons, feature graphics, the
+   screenshot tool, and the CI checks that keep the listing complete. After the MR, if a reviewer
+   asks for a change, tell me and I will change the recipe and push.
+
+Screenshots aside, the F-Droid submission is ready to send today.
