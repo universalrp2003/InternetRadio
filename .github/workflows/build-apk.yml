@@ -138,6 +138,15 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
+      - name: Make the store icons
+        run: |
+          set -e
+          # The apps draw their launcher marks as vectors, and stores want PNGs (F-Droid:
+          # 512x512 icon plus a 1024x500 feature graphic). This renders them from the real
+          # vectors, so a fresh clone always ships a correct listing. Pure Python, no Pillow.
+          python3 tools/make_store_assets.py icons
+          bash tools/make_feature_graphics.sh
+
       - name: Build the APKs
         run: |
           set -o pipefail
@@ -191,6 +200,18 @@ jobs:
               exit 1
             fi
             echo "OK: $rel"
+          done
+
+          echo "=== App icons inside the built APKs ==="
+          # The Internet Radio module used to borrow Android's stock play icon; a store listing
+          # cannot ship that, so the APK must carry our own launcher icon now.
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$APP_REL" "$BUILDER_REL" "$EQ_REL"; do
+            ic=$(unzip -l "$rel" | grep -cE "res/.*/ic_launcher" || true)
+            if [ "$ic" -eq 0 ]; then
+              echo "FAIL: $rel carries no res/.../ic_launcher - a store would reject the listing"
+              exit 1
+            fi
+            echo "OK: $rel ships $ic ic_launcher entr(ies)"
           done
 
           echo "=== Package info ==="
@@ -525,7 +546,7 @@ jobs:
               echo "WARN: $m has fewer than 2 phone screenshots - the store page will show no gallery"
             fi
             if [ "$icon" -eq 0 ]; then
-              echo "WARN: $m has no 512x512 icon.png in its listing"
+              echo "WARN: $m has no 512x512 icon.png in its listing - 'Make the store icons' should have written it"
             fi
           done
 
