@@ -450,21 +450,36 @@ private fun PingCard(state: UiState, vm: MainViewModel) {
                             color = TextSecondary,
                         )
                     }
-                    Text(
+                    // v2.6: the user asked where the jitter is. It was there, but as an
+                    // unlabelled "±4 ms" next to the ping — now both are named, so nobody
+                    // has to guess which number is which.
+                    Column(horizontalAlignment = Alignment.End) {
                         if (stats.received == 0) {
-                            tr("no answer")
+                            Text(
+                                tr("no answer"),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = DangerRed,
+                            )
                         } else {
-                            "%.0f ms".format(stats.avgMs) + " • ±" + "%.0f ms".format(stats.jitterMs)
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Bold,
-                        color = when {
-                            stats.received == 0 -> DangerRed
-                            stats.avgMs < 60 && stats.jitterMs < 20 -> GoodGreen
-                            stats.avgMs < 150 -> WarnAmber
-                            else -> DangerRed
-                        },
-                    )
+                            val tone = when {
+                                stats.avgMs < 60 && stats.jitterMs < 20 -> GoodGreen
+                                stats.avgMs < 150 -> WarnAmber
+                                else -> DangerRed
+                            }
+                            Text(
+                                tr("Ping") + " " + "%.0f ms".format(stats.avgMs),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = tone,
+                            )
+                            Text(
+                                tr("Jitter") + " ±" + "%.0f ms".format(stats.jitterMs),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
                 }
                 Text(
                     "min %.0f • avg %.0f • max %.0f ms • loss %d%%".format(

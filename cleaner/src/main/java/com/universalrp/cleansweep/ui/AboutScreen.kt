@@ -48,7 +48,7 @@ import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 @Composable
-fun AboutScreen(vm: MainViewModel) {
+fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
     Column(
         Modifier
             .fillMaxSize()
@@ -189,7 +189,7 @@ fun AboutScreen(vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(tr("CleanSweep v2.5"),
+                    Text(tr("CleanSweep v2.6"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,
@@ -311,6 +311,44 @@ fun AboutScreen(vm: MainViewModel) {
                     )
                 }
             }
+            // v2.6: a crash used to be invisible — "CleanSweep keeps stopping" with nothing
+            // to act on. The app now keeps the last one on the phone and shows it here.
+            if (state.lastCrash.isNotBlank()) {
+                PanelCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            tr("Last crash"),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = com.universalrp.cleansweep.ui.theme.WarnAmber,
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            tr(
+                                "The last time CleanSweep stopped by itself. Nothing is sent " +
+                                    "anywhere — this is here so you can read it out or screenshot it."
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            state.lastCrash.take(1400),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        TextButton(onClick = { vm.clearCrashReport() }) {
+                            Text(
+                                tr("Clear"),
+                                color = AccentCyan,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                }
+            }
+
             Spacer(Modifier.height(8.dp))
         }
     }

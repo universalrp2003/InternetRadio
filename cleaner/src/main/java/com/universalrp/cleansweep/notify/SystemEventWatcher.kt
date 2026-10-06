@@ -30,7 +30,7 @@ class SystemEventWatcher : BroadcastReceiver() {
         when (intent?.action) {
             ConnectivityManager.CONNECTIVITY_ACTION -> networkChange(app)
             Intent.ACTION_POWER_DISCONNECTED -> unplugged(app)
-            Intent.ACTION_POWER_CONNECTED -> idleChargerCheck(app)
+            Intent.ACTION_POWER_CONNECTED -> pluggedIn(app)
         }
     }
 
@@ -90,6 +90,22 @@ class SystemEventWatcher : BroadcastReceiver() {
             "சார்ஜர் ${battery.percent} சதவீதத்திலேயே கழற்றப்பட்டது. முடிந்தால் இன்னும் சிறிது நேரம் இணைத்து வைக்கவும்.",
             Announcer.Event.UNPLUGGED_EARLY,
         )
+    }
+
+    /**
+     * The charger went in. v2.6: this is the trigger the user asked for — the app comes awake,
+     * shows the charging card with the real watts, and says what is happening, all while the
+     * phone is in the background. The job does the work (a receiver is not allowed to start a
+     * foreground service on Android 12+), and it is the same job the charging watcher uses, so
+     * the two receivers cannot double up.
+     */
+    private fun pluggedIn(context: Context) {
+        if (ChargeMonitorService.cardEnabled(context) ||
+            Announcer.allows(context, Announcer.Event.CHARGING)
+        ) {
+            com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(context)
+        }
+        idleChargerCheck(context)
     }
 
     /**

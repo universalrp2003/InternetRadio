@@ -60,8 +60,17 @@ class ScanEngine(private val context: Context) {
         val large = categories.getValue(JunkKind.LARGE_FILES)
 
         val junkPaths = HashSet<String>()
-        val childrenByDir = HashMap<String, MutableList<String>>()
+        // How many children each directory has, and how many of them are junk. Keeping two
+        // ints per directory instead of the name of every file on the phone is what keeps
+        // this scan inside a phone's memory limit on a full 100 GB volume — the lists this
+        // replaced were the difference between a finished scan and an out-of-memory crash.
+        val dirChildCount = HashMap<String, Int>()
+        val dirJunkCount = HashMap<String, Int>()
         val bySize = HashMap<Long, MutableList<String>>()
+
+        fun countJunkChild(parentPath: String) {
+            dirJunkCount[parentPath] = (dirJunkCount[parentPath] ?: 0) + 1
+        }
 
         var filesScanned = 0L
         var dirsScanned = 0L
@@ -97,22 +106,22 @@ class ScanEngine(private val context: Context) {
 
             if (entries.isEmpty() && dir.absolutePath != rootPath) {
                 junkPaths.add(dir.absolutePath)
-                childrenByDir[dir.absolutePath] = mutableListOf()
+                dirChildCount[dir.absolutePath] = 0
+                dir.parent?.let { countJunkChild(it.absolutePath) }
                 if (JunkKind.EMPTY_FOLDERS in want) {
                     addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
                 }
                 continue
             }
 
-            val childNames = ArrayList<String>(entries.size)
-            childrenByDir[dir.absolutePath] = childNames
-            val isRoot = dir.absolutePath == rootPath
+            val dirPath = dir.absolutePath
+            dirChildCount[dirPath] = entries.size
+            val isRoot = dirPath == rootPath
 
             for (f in entries) {
                 val abs = f.absolutePath
                 val name = f.name
                 val lower = name.lowercase()
-                childNames.add(name)
 
                 if (f.isDirectory) {
                     if (isRoot && name.equals("Android", ignoreCase = true)) continue
@@ -142,6 +151,7 @@ class ScanEngine(private val context: Context) {
                     JUNK_FILENAMES.contains(lower) || JUNK_EXTENSIONS.contains(ext) ||
                         lower.startsWith("~$") -> {
                         junkPaths.add(abs)
+                        countJunkChild(dirPath)
                         if (JunkKind.RESIDUAL in want) {
                             addJunk(residual, JunkFile(abs, size, mod))
                         }
@@ -152,6 +162,7 @@ class ScanEngine(private val context: Context) {
                             val installed = isInstalledApk(abs)
                             if (!cfg.apkOnlyInstalled || installed) {
                                 junkPaths.add(abs)
+                                countJunkChild(dirPath)
                                 addJunk(
                                     apks,
                                     JunkFile(
@@ -166,6 +177,7 @@ class ScanEngine(private val context: Context) {
                     }
                     abs.contains("/.thumbnails/") -> {
                         junkPaths.add(abs)
+                        countJunkChild(dirPath)
                         if (JunkKind.THUMBNAILS in want) {
                             addJunk(thumbs, JunkFile(abs, size, mod))
                         }
@@ -207,18 +219,15 @@ class ScanEngine(private val context: Context) {
         val snapshot = if (JunkKind.EMPTY_FOLDERS in want) junkPaths.toList() else emptyList()
         for (p in snapshot) {
             var parent = File(p).parent ?: continue
-            while (parent != rootPath && parent.length > rootPath.length) {
-                val children = childrenByDir[parent] ?: break
-                if (children.isEmpty()) break
-                val allJunk = children.all { name ->
-                    (parent + File.separator + name) in junkPaths
+            while (parent.absolutePath != rootPath && parent.absolutePath.length > rootPath.length) {
+                val total = dirChildCount[parent.absolutePath] ?: break
+                val junkKids = dirJunkCount[parent.absolutePath] ?: 0
+                if (total == 0 || junkKids < total) break
+                if (junkPaths.add(parent.absolutePath)) {
+                    addJunk(emptyDirs, JunkFile(parent.absolutePath, 0L, parent.lastModified()))
+                    parent.parent?.let { countJunkChild(it.absolutePath) }
                 }
-                if (!allJunk) break
-                if (junkPaths.add(parent)) {
-                    val df = File(parent)
-                    addJunk(emptyDirs, JunkFile(parent, 0L, df.lastModified()))
-                }
-                parent = File(parent).parent ?: break
+                parent = parent.parent ?: break
             }
         }
 

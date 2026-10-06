@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.Lang
 import java.util.Locale
@@ -35,6 +36,13 @@ object Announcer {
     const val PREFS = "cleansweep_state"
 
     const val KEY_ON = "voice_on"
+
+    /**
+     * Prefer a natural online voice over the phone's robotic offline one. On by default —
+     * the user asked whether a better voice was possible, and this is the honest way to get
+     * one: the phone's own cloud voice, no key, no account, no audio stored anywhere.
+     */
+    const val KEY_ONLINE = "voice_online"
     const val KEY_QUIET_START = "voice_quiet_start"
     const val KEY_QUIET_END = "voice_quiet_end"
     const val KEY_LOW = "voice_battery_low"
@@ -115,6 +123,22 @@ object Announcer {
     @Volatile
     private var tamilVoice = false
 
+    /**
+     * v2.6 — the natural voice. The phone's built-in engine ships a robotic, offline voice;
+     * the same engine also installs better, "network" voices (Google's cloud voices appear
+     * here). When the user turns this on, the best available voice for the language is
+     * chosen instead, and if the network is down the engine fails — at which point the app
+     * puts the offline voice back and says the same line again, so nothing ever goes silent.
+     */
+    @Volatile
+    private var usingNetworkVoice = false
+
+    @Volatile
+    private var networkRetried = false
+
+    @Volatile
+    private var lastSpoken: String? = null
+
     /** Said before the engine finished starting, spoken as soon as it is up. */
     private val pending = ArrayDeque<Pair<String, Boolean>>()
 
@@ -124,6 +148,19 @@ object Announcer {
     // ------------------------------------------------------------------ switches
 
     fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, true)
+
+    /** Voices installed by the phone's engine that need a network connection. */
+    fun onlineVoice(context: Context): Boolean = prefs(context).getBoolean(KEY_ONLINE, true)
+
+    fun setOnlineVoice(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_ONLINE, on).apply()
+        // Re-pick the voice the next time something is said.
+        try {
+            tts?.let { applyLanguage(it, context) }
+        } catch (e: Exception) {
+            // The next utterance will retry.
+        }
+    }
 
     fun setEnabled(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_ON, on).apply()
@@ -175,8 +212,15 @@ object Announcer {
 
     fun lastBrief(context: Context): String = prefs(context).getString(KEY_LAST_BRIEF, "").orEmpty()
 
-    fun saveBrief(context: Context, date: String, text: String) {
-        prefs(context).edit().putString(KEY_LAST_DAILY, date).putString(KEY_LAST_BRIEF, text).apply()
+    /**
+     * Stores the brief. @param markDay is false for a run the user asked for by hand: the
+     * brief is saved and shown, but the day is not counted as done, so the scheduled brief
+     * still happens at its own hour.
+     */
+    fun saveBrief(context: Context, date: String, text: String, markDay: Boolean = true) {
+        val edit = prefs(context).edit().putString(KEY_LAST_BRIEF, text)
+        if (markDay) edit.putString(KEY_LAST_DAILY, date)
+        edit.apply()
     }
 
     fun lastDailyDate(context: Context): String = prefs(context).getString(KEY_LAST_DAILY, "").orEmpty()
@@ -232,11 +276,13 @@ object Announcer {
         return utter(ctx, speaking, flush = true)
     }
 
-    /** Points the engine at the right locale before speaking. */
+    /** Points the engine at the right locale (and voice) before speaking. */
     private fun prepareVoice(context: Context, lang: AppLang) {
         val engine = tts ?: return
         try {
-            engine.setLanguage(if (lang == AppLang.TA) TAMIL else Locale.US)
+            val locale = if (lang == AppLang.TA) TAMIL else Locale.US
+            engine.setLanguage(locale)
+            if (onlineVoice(context)) pickNaturalVoice(engine, locale)
         } catch (e: Exception) {
             // Keep whatever voice is loaded.
         }
@@ -261,6 +307,7 @@ object Announcer {
     }
 
     private fun say(engine: TextToSpeech, text: String, flush: Boolean): Boolean = try {
+        lastSpoken = text
         val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
         engine.speak(text, mode, null, "cleansweep-" + System.currentTimeMillis())
         true
@@ -290,6 +337,7 @@ object Announcer {
     }
 
     private fun ensureEngine(context: Context): TextToSpeech? {
+        prefsContext = context.applicationContext
         tts?.let { return it }
         synchronized(this) {
             tts?.let { return it }
@@ -313,7 +361,10 @@ object Announcer {
                         override fun onDone(utteranceId: String?) = Unit
 
                         @Suppress("OVERRIDE_DEPRECATION")
-                        override fun onError(utteranceId: String?) = Unit
+                        override fun onError(utteranceId: String?) = recoverFromVoiceError()
+
+                        override fun onError(utteranceId: String?, errorCode: Int) =
+                            recoverFromVoiceError()
                     })
                 } catch (e: Exception) {
                     // Old engines without a progress listener still speak.
@@ -333,10 +384,64 @@ object Announcer {
             tamilVoice = wanted == TAMIL && result != TextToSpeech.LANG_MISSING_DATA &&
                 result != TextToSpeech.LANG_NOT_SUPPORTED
             if (wanted == TAMIL && !tamilVoice) engine.setLanguage(Locale.US)
+            usingNetworkVoice = false
+            if (onlineVoice(context)) {
+                pickNaturalVoice(engine, if (tamilVoice) TAMIL else Locale.US)
+            }
         } catch (e: Exception) {
             tamilVoice = false
         }
     }
+
+    /**
+     * Chooses the best voice the engine has for this language, preferring one that needs the
+     * network (those are the good ones), then the highest quality. Does nothing when the
+     * engine has no such voice — the phone keeps its offline voice and the user hears no
+     * difference, which is the honest outcome.
+     */
+    private fun pickNaturalVoice(engine: TextToSpeech, locale: Locale) {
+        try {
+            val voices = engine.voices ?: return
+            val wanted = locale.language
+            val candidates = voices.filter { it.locale.language.equals(wanted, ignoreCase = true) }
+            if (candidates.isEmpty()) return
+            val best = candidates.sortedWith(
+                compareByDescending<Voice> { it.isNetworkConnectionRequired }
+                    .thenByDescending { it.quality }
+                    .thenBy { it.name }
+            ).firstOrNull() ?: return
+            engine.voice = best
+            usingNetworkVoice = best.isNetworkConnectionRequired
+        } catch (e: Exception) {
+            // Any trouble here just means the default voice is used.
+            usingNetworkVoice = false
+        }
+    }
+
+    /**
+     * A cloud voice with no network fails silently: the line is simply never heard. When that
+     * happens the offline voice is put back and the same sentence is said once more, so the
+     * user hears the warning either way.
+     */
+    private fun recoverFromVoiceError() {
+        if (!usingNetworkVoice || networkRetried) return
+        networkRetried = true
+        val engine = tts ?: return
+        val text = lastSpoken ?: return
+        try {
+            usingNetworkVoice = false
+            engine.voice = null
+            val lang = prefsContext?.let { Lang.languageIn(it) } ?: AppLang.EN
+            engine.setLanguage(if (lang == AppLang.TA) TAMIL else Locale.US)
+            say(engine, text, flush = true)
+        } catch (e: Exception) {
+            // Nothing more to try: the on-screen text is still there.
+        }
+    }
+
+    /** The last context the engine was built for, used by the recovery path above. */
+    @Volatile
+    private var prefsContext: Context? = null
 
     /** True when the engine really has a Tamil voice installed. */
     private fun ensureTamilVoice(context: Context): Boolean {

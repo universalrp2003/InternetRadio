@@ -30,9 +30,14 @@ class ChargingWatcher : BroadcastReceiver() {
         val service = Intent(app, ChargeMonitorService::class.java)
         if (action == Intent.ACTION_POWER_DISCONNECTED) {
             app.stopService(service)
-            StatusPill.remove()
+            ChargeNotifier.clear(app)
             return
         }
-        ChargeMonitorService.sync(app, true)
+        // v2.6: a broadcast receiver may no longer start a foreground service on Android 12+.
+        // Starting one anyway and swallowing the refusal is why plugging in the charger used
+        // to do nothing at all. A receiver *is* allowed to schedule a job, so the job does it:
+        // it starts the service when the system lets it, and shows the very same charging card
+        // from inside itself when it does not.
+        com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)
     }
 }

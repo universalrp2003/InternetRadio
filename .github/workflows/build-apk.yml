@@ -227,7 +227,8 @@ jobs:
                         Announcer HealthWatchWorker VoiceScreen speakAnswer runDailyBriefNow \
                         setVoiceEvent setQuietHours speakNow offlineFallback \
                         SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
-                        setUnplugStartHour; do
+                        setUnplugStartHour ChargerWatchWorker ChargeNotifier canSearchWeb \
+                        setOnlineVoice openScanner CrashLog; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
@@ -332,6 +333,14 @@ jobs:
             echo "FAIL: the widget receiver is missing from the merged manifest"
             exit 1
           fi
+          # v1.2 rule: the language menu reads தமிழ் and it is the first selection.
+          if grep -aq "தமிழ்" "$WORK/radio.dex"; then
+            echo "OK: the தமிழ் menu label is inside the radio APK"
+          else
+            echo "FAIL: the தமிழ் menu label is missing from the radio APK"
+            exit 1
+          fi
+
           if unzip -l "$RADIO" | grep -q "res/xml/radio_widget_info.xml" || \
              unzip -l "$RADIO" | grep -q "res/.*/radio_widget_info.xml"; then
             echo "OK: the widget info is packaged in the APK"
@@ -363,6 +372,36 @@ jobs:
           fi
 
           echo "ALL CHECKS PASSED"
+
+      # v2.6: the user asked for the downloaded file to carry the version instead of
+      # "cleaner-debug.apk". The name is read from each module's own versionName, so it can
+      # never drift away from the app version, and the old generic name is gone afterwards.
+      - name: Give the APKs versioned file names
+        run: |
+          set -e
+          version_of() {
+            grep -m1 'versionName' "$1" | sed -E 's/.*"([^"]+)".*/\1/'
+          }
+          rename_apk() {
+            module="$1"; pretty="$2"
+            src=$(ls "$module"/build/outputs/apk/debug/*.apk 2>/dev/null | head -1 || true)
+            if [ -z "$src" ]; then
+              echo "No APK produced for $module — nothing to rename."
+              return 0
+            fi
+            ver=$(version_of "$module/build.gradle.kts")
+            if [ -z "$ver" ]; then ver="debug"; fi
+            dst="$(dirname "$src")/${pretty}-v${ver}.apk"
+            mv "$src" "$dst"
+            echo "renamed: $dst"
+          }
+          rename_apk cleaner CleanSweep
+          rename_apk radio Ramesh-Radio
+          rename_apk app Internet-Radio
+          rename_apk builder AppForge
+          rename_apk equalizer PulseEQ
+          echo "=== APK file names ==="
+          ls -la */build/outputs/apk/debug/*.apk
 
       - name: Surface build errors
         if: failure()

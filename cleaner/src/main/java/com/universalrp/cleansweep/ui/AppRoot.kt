@@ -52,7 +52,7 @@ fun AppRoot(vm: MainViewModel) {
             Screen.APP_CACHE -> AppCacheScreen(state, vm)
             Screen.ASSISTANT -> AssistantScreen(state, vm)
             Screen.SETTINGS -> SettingsScreen(state, vm)
-            Screen.ABOUT -> AboutScreen(vm)
+            Screen.ABOUT -> AboutScreen(state, vm)
             Screen.HEALTH -> HealthScreen(state, vm)
             Screen.APPS -> AppsScreen(state, vm)
             Screen.SECURITY -> SecurityScreen(state, vm)

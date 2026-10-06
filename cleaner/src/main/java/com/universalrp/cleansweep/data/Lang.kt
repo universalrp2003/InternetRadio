@@ -97,7 +97,7 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.5" to "சுத்தம் செய்பவர் v2.5",
+        "CleanSweep v2.6" to "சுத்தம் செய்பவர் v2.6",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)
@@ -189,6 +189,48 @@ object Lang {
             "நெட்வொர்க் ஸ்கேனைப் பயன்படுத்தும்; இது இயக்கத்தில் இருந்து நீங்கள் ஸ்கேன் செய்தால் மட்டும் பேசும்.",
         "Early-unplug reminders only after" to
             "முன்கூட்டிய கழற்றல் நினைவூட்டல் இந்த நேரத்திற்குப் பிறகு மட்டும்",
+
+        // ------------------------------------------------------------- v2.6
+        "Scanning your storage…" to
+            "உங்கள் சேமிப்பை ஸ்கேன் செய்கிறது…",
+        "Starting…" to
+            "தொடங்குகிறது…",
+        "files scanned" to
+            "கோப்புகள் ஸ்கேன்",
+        "junk found" to
+            "குப்பை கண்டறியப்பட்டது",
+        "Nothing is scanning right now." to
+            "இப்போது எதுவும் ஸ்கேன் ஆகவில்லை.",
+        "Start the scan" to
+            "ஸ்கேனைத் தொடங்கு",
+        "Ping" to
+            "பிங்",
+        "Jitter" to
+            "ஜிட்டர்",
+        "Wi-Fi connected" to
+            "Wi-Fi இணைக்கப்பட்டுள்ளது",
+        "Natural voice (online)" to
+            "இயற்கையான குரல் (ஆன்லைன்)",
+        "Sounds far more human than the phone's built-in robot voice: Android's own " +
+            "cloud voice reads the sentence instead of the offline one. Only the words " +
+            "being spoken leave the phone — never a file, never a message." to
+            "போனின் இயந்திரக் குரலைவிட மிக இயற்கையாக ஒலிக்கும்: சொல்லப்படும் வாக்கியத்தை " +
+            "Android-ன் கிளவுட் குரலே படிக்கும். பேசப்படும் வார்த்தைகள் மட்டுமே போனை விட்டு " +
+            "வெளியேறும் — கோப்புகளோ செய்திகளோ அல்ல.",
+        "Works in Tamil and English. If the phone has no cloud voice installed, or the " +
+            "network is out, the offline voice reads the same line instead — " +
+            "announcements never go silent. No API key is used for this." to
+            "தமிழ், ஆங்கிலம் இரண்டும் வேலை செய்யும். கிளவுட் குரல் நிறுவப்படவில்லை என்றாலோ " +
+            "இணையம் இல்லாவிட்டாலோ, அதே வரியை ஆஃப்லைன் குரல் படிக்கும் — அறிவிப்புகள் " +
+            "ஒருபோதும் அமைதியாகாது. இதற்கு API விசை தேவையில்லை.",
+        "Last crash" to
+            "கடைசி செயலிழப்பு",
+        "The last time CleanSweep stopped by itself. Nothing is sent " +
+            "anywhere — this is here so you can read it out or screenshot it." to
+            "CleanSweep தானாக நின்ற கடைசி முறை. இது எங்கும் அனுப்பப்படுவதில்லை — " +
+            "நீங்கள் படிக்க அல்லது ஸ்கிரீன்ஷாட் எடுக்க மட்டுமே இங்கே உள்ளது.",
+        "Clear" to
+            "அழி",
         "Speak to me" to
             "என்னிடம் பேசு",
         "CleanSweep talks: warnings about the battery, heat and the daily brief." to

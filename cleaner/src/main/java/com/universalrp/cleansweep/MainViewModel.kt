@@ -59,6 +59,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import androidx.core.content.ContextCompat
 import android.Manifest
@@ -194,6 +195,8 @@ data class UiState(
     // ---------------------------------------------------------------- voice & daily watch
     /** The master voice switch (Settings → Voice). */
     val voiceOn: Boolean = true,
+    /** v2.6: use the phone's natural cloud voice instead of the robotic offline one. */
+    val onlineVoice: Boolean = true,
     val voiceQuietStart: Int = Announcer.DEFAULT_QUIET_START,
     val voiceQuietEnd: Int = Announcer.DEFAULT_QUIET_END,
     val voiceBatteryLow: Boolean = true,
@@ -218,6 +221,8 @@ data class UiState(
     val lastBrief: String = "",
     /** "auto" | "en" | "ta" — the language the AI answers in. */
     val aiAnswerLanguage: String = "auto",
+    /** The last crash, kept on the phone and shown in About (v2.6). Empty when clean. */
+    val lastCrash: String = "",
     /** The last thing the offline engine could not answer, kept for "Ask the AI". */
     val assistantPendingQuestion: String = "",
 )
@@ -328,11 +333,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var widgetTick = 0
 
     private fun mutate(block: (UiState) -> UiState) {
-        _state.update { s -> block(s).let { it.copy(revision = it.revision + 1) } }
+        val next = _state.updateAndGet { s -> block(s).let { it.copy(revision = it.revision + 1) } }
         // Keep the home-screen widget in step, but not on every single keystroke of state:
         // one refresh every few mutations is plenty for a battery/storage readout.
+        //
+        // Never while a scan is running, though: the scan reports progress from an IO thread
+        // several times a second, and pushing a widget update (binder call + battery and
+        // storage reads) into that loop stole the thread the scan was walking the disk on.
+        // The widget shows the same numbers, so refreshing it while the app is idle is enough.
         widgetTick++
-        if (widgetTick % 8 == 0) CleanSweepWidget.refresh(ctx)
+        if (widgetTick % 8 == 0 && next.progress == null) {
+            try {
+                CleanSweepWidget.refresh(ctx)
+            } catch (t: Throwable) {
+                // A missing widget host must never be able to kill the app.
+            }
+        }
     }
 
     // ------------------------------------------------------------------ basics
@@ -343,6 +359,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 hasAllFilesAccess = hasAllFilesAccess(),
                 lastBrief = Announcer.lastBrief(ctx),
                 aiAnswerLanguage = AiSettings.answerLanguage(ctx),
+                lastCrash = CrashLog.last(ctx),
                 storage = runCatching { StorageInfoProvider.read() }.getOrNull(),
                 usageAccess = AppCacheRepo.hasUsageAccess(ctx),
                 legacyStorageOk = legacyStorageGranted(),
@@ -357,6 +374,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.screen == Screen.APP_CACHE && _state.value.usageAccess) {
             loadAppCaches()
         }
+    }
+
+    /**
+     * Opens the scanner straight from the home-screen widget's "Clean" button. Android does
+     * not allow a widget tap to start the scan itself, so the app does it the moment it is
+     * in front — otherwise the screen sat at "Starting…" with nothing running, which is
+     * exactly what the user saw on the phone.
+     */
+    fun openScanner() {
+        if (scanJob?.isActive == true) {
+            mutate { it.copy(screen = Screen.SCANNING) }
+            return
+        }
+        startScan()
     }
 
     fun navigate(screen: Screen) {
@@ -403,6 +434,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun dismissMessage() = mutate { it.copy(message = null) }
 
+    /** Clears the stored crash report once the user has read it. */
+    fun clearCrashReport() {
+        CrashLog.clear(ctx)
+        mutate { it.copy(lastCrash = "") }
+    }
+
     /** Shows a one-line message in the snackbar — used by the voice buttons. */
     fun notifyMessage(text: String) = mutate { it.copy(message = text) }
 
@@ -436,18 +473,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         scanJob = viewModelScope.launch {
             try {
                 val report = engine.scan(root, cfg, kinds) { p ->
-                    mutate { it.copy(progress = p) }
+                    try {
+                        mutate { it.copy(progress = p) }
+                    } catch (t: Throwable) {
+                        // A repaint problem is not a reason to abandon a scan.
+                    }
                 }
                 mutate { it.copy(screen = Screen.RESULTS, report = report, progress = null) }
             } catch (e: CancellationException) {
                 mutate { it.copy(screen = Screen.HOME, progress = null) }
-            } catch (e: Exception) {
+            } catch (t: Throwable) {
+                // Catching Throwable and not just Exception is deliberate: on a very full
+                // phone a scan used to end with an out-of-memory error, which is an Error and
+                // not an Exception — so it escaped this handler and MIUI showed "CleanSweep
+                // keeps stopping". Now the app stays open and says what happened.
+                val reason = when (t) {
+                    is OutOfMemoryError ->
+                        "The phone ran out of memory while reading the storage. Close a few " +
+                            "apps and scan again — nothing was deleted."
+                    else -> "Scan failed: ${t.message ?: t.javaClass.simpleName}"
+                }
                 mutate {
-                    it.copy(
-                        screen = Screen.HOME,
-                        progress = null,
-                        message = "Scan failed: ${e.message ?: "unknown error"}"
-                    )
+                    it.copy(screen = Screen.HOME, progress = null, message = reason)
                 }
             }
         }
@@ -679,9 +726,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "app. Answer any question the user asks, on any topic, helpfully and " +
                         "accurately. Use the phone facts provided when the question is about " +
                         "this phone, storage, battery or the app; otherwise just answer the " +
-                        "question on its own merits. " + answerLanguageRule() +
+                        "question on its own merits. " +
+                        "If you have a web-search tool available, use it for anything that " +
+                        "changes from day to day — today's news, prices, scores, weather, " +
+                        "election results, what version of something is current — and say where " +
+                        "the information came from. If you have no way to look something up, " +
+                        "say that in one short sentence and then give the best answer you have " +
+                        "from what you know; never refuse the question and never say you are " +
+                        "not allowed to discuss a topic. " + answerLanguageRule() +
                         " Keep it under 250 words, plain language, no markdown headings.",
                     userPrompt = "$facts\nQuestion from the user: $q",
+                    allowSearch = true,
                 )
                 val reply = AssistantMessage(
                     fromUser = false,
@@ -814,6 +869,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    /** The switch for the natural (network) voice: see Announcer.setOnlineVoice. */
+    fun setOnlineVoice(on: Boolean) {
+        Announcer.setOnlineVoice(ctx, on)
+        mutate { it.copy(onlineVoice = on) }
+    }
+
     fun setVoiceOn(on: Boolean) {
         Announcer.setEnabled(ctx, on)
         if (on) HealthWatchWorker.schedule(ctx) else HealthWatchWorker.cancel(ctx)
@@ -895,6 +956,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate {
             it.copy(
                 voiceOn = Announcer.enabled(ctx),
+                onlineVoice = Announcer.onlineVoice(ctx),
                 voiceQuietStart = Announcer.quietStart(ctx),
                 voiceQuietEnd = Announcer.quietEnd(ctx),
                 voiceBatteryLow = Announcer.allows(ctx, Announcer.Event.BATTERY_LOW),
@@ -1399,10 +1461,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun askWithFallback(
         systemPrompt: String,
         userPrompt: String,
+        /** Assistant questions may need live information; reports never do. */
+        allowSearch: Boolean = false,
     ): Triple<AiClient.Result, String?, Long> {
         val started = System.currentTimeMillis()
         val config = _state.value.aiConfig
-        val first = AiClient.ask(config, systemPrompt, userPrompt)
+        val first = AiClient.ask(config, systemPrompt, userPrompt, allowSearch = allowSearch)
         if (first.ok) {
             rememberEndpoint(first)
             return Triple(first, null, System.currentTimeMillis() - started)
@@ -1414,7 +1478,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 includeAppNames = config.includeAppNames,
                 includeNetwork = config.includeNetwork,
             )
-            val second = AiClient.ask(freeLane, systemPrompt, userPrompt)
+            val second = AiClient.ask(freeLane, systemPrompt, userPrompt, allowSearch = false)
             if (second.ok) {
                 rememberEndpoint(second)
                 return Triple(second, first.error, System.currentTimeMillis() - started)
@@ -1765,7 +1829,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(aiDeviceBusy = true, aiDeviceResult = null) }
         viewModelScope.launch {
             val listing = buildString {
-                appendLine("Wi-Fi network: \"${report.wifi.ssid ?: "name hidden"}\"")
+                // The network name is deliberately left out: it is the one detail the user
+                // asked never to show, and it is not needed to identify a device.
+                appendLine("Wi-Fi network name: not sent (CleanSweep never shares it)")
                 appendLine("Devices that answered (ip | hostname | MAC vendor | open ports | CleanSweep guess):")
                 report.devices.forEach { device ->
                     appendLine(

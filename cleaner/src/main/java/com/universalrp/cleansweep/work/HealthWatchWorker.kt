@@ -67,9 +67,14 @@ class HealthWatchWorker(
         val ctx = applicationContext
         // A worker can start in a fresh process, so read the language from prefs first.
         Lang.set(Lang.languageIn(ctx))
+        // The user tapped "Run the daily check now": do it whatever the hour, whatever the
+        // daily switch and however many briefs today has already had. Without this the
+        // button quietly did nothing before the configured evening hour — which is exactly
+        // what the phone showed.
+        val forced = inputData.getBoolean(KEY_FORCE, false)
         try {
-            warnings(ctx)
-            daily(ctx)
+            if (!forced) warnings(ctx)
+            daily(ctx, forced)
         } catch (e: Exception) {
             // Never let a bad read kill the schedule: try again next hour.
             return Result.retry()
@@ -189,13 +194,16 @@ class HealthWatchWorker(
 
     // ------------------------------------------------------------------ the daily brief
 
-    private suspend fun daily(ctx: Context) {
-        if (!Announcer.dailyScanOn(ctx)) return
-        val calendar = Calendar.getInstance()
-        val hour = calendar.get(Calendar.HOUR_OF_DAY)
-        if (hour < Announcer.dailyHour(ctx)) return
+    private suspend fun daily(ctx: Context, forced: Boolean = false) {
+        if (!forced) {
+            if (!Announcer.dailyScanOn(ctx)) return
+            val calendar = Calendar.getInstance()
+            val hour = calendar.get(Calendar.HOUR_OF_DAY)
+            if (hour < Announcer.dailyHour(ctx)) return
+            val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+            if (Announcer.lastDailyDate(ctx) == today) return
+        }
         val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        if (Announcer.lastDailyDate(ctx) == today) return
 
         val tamil = Lang.languageIn(ctx) == AppLang.TA
 
@@ -316,7 +324,8 @@ class HealthWatchWorker(
             }
         }
 
-        Announcer.saveBrief(ctx, today, full)
+        // A hand-run brief keeps the day free, so the evening brief still arrives.
+        Announcer.saveBrief(ctx, today, full, markDay = !forced)
         notify(ctx, full, spokenFinal)
         Announcer.speak(
             ctx,
@@ -400,6 +409,9 @@ class HealthWatchWorker(
         const val NOTIFICATION_ID = 7103
         private const val UNIQUE = "cleansweep_health_watch"
 
+        /** Set when the worker was started by the "Run the daily check now" button. */
+        const val KEY_FORCE = "force_run"
+
         /**
          * One hourly wake-up. WorkManager keeps it across reboots and respects Doze, and an
          * hourly period cannot be missed by more than a little — which is all a daily brief
@@ -426,7 +438,9 @@ class HealthWatchWorker(
          * and no hand-built WorkerParameters, which Android does not allow.
          */
         suspend fun runNow(context: Context): Boolean = try {
-            val oneOff = androidx.work.OneTimeWorkRequestBuilder<HealthWatchWorker>().build()
+            val oneOff = androidx.work.OneTimeWorkRequestBuilder<HealthWatchWorker>()
+                .setInputData(androidx.work.workDataOf(KEY_FORCE to true))
+                .build()
             WorkManager.getInstance(context.applicationContext)
                 .enqueue(oneOff)
                 .result

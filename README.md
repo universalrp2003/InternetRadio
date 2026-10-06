@@ -30,6 +30,26 @@ Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
 
 ## What's new
 
+- **CleanSweep v2.6** — the "repair everything" round, from the phone's own bug report:
+  the **scan no longer crashes or hangs** (the widget refresh is out of the scan loop, the
+  engine keeps counts instead of every file name, an out-of-memory scan is caught and
+  explained, and the scanner screen offers a **Start the scan** button if a scan was never
+  actually running), the **"Run the daily check now" button works at any hour** (it used to
+  return silently before the evening brief time), the **voice screen is readable** (one
+  broken card was drawing every Tamil label on top of the others), the **Wi-Fi network name
+  is never shown or sent**, **plugging in the charger now really works in the background**
+  (a receiver may not start a foreground service on Android 12+, so a job does it, shows the
+  charging card with the real watts and speaks the details), the **AI can answer live
+  questions** — a Google key now searches the web and shows its sources instead of refusing
+  "today's latest news" — **jitter is labelled next to ping**, the **downloaded APK carries
+  the version in its file name** (`CleanSweep-v2.6.apk`), and the voice can use the phone's
+  **natural online voice** instead of the robotic offline one, with the offline voice as the
+  fallback. The last crash is recorded on the phone and shown in **About**, so the next bug
+  report can name the real cause.
+- **Ramesh Radio v1.2** — the language menu now reads **தமிழ்** and it is the **first and
+  default selection**, so the app opens on Tamil instead of "All". Nothing else in the radio
+  changed.
+
 - **CleanSweep v2.5** — a **home-screen widget** (battery, watts, free storage, the last brief,
   plus **Clean** and **Read brief** buttons), a **separate AI answer language** (auto / English
   / Tamil, independent of the menu), and five more spoken warnings — storage below 1 GB,

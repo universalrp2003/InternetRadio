@@ -153,7 +153,9 @@ object Category {
         CUSTOM -> "My stations"
         RECENT -> "Recent"
         TOWNS -> "TN towns"
-        TAMIL -> "Tamil FM"
+        // v1.2: the user asked for the language menu to read தமிழ், in Tamil, and to be the
+        // first thing selected when the app opens — not "All".
+        TAMIL -> "தமிழ்"
         TAMIL_FM -> "Tamil worldwide"
         TAMIL_NEWS -> "Tamil news"
         TAMIL_DEVOTIONAL -> "Bakthi"

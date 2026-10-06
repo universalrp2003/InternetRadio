@@ -206,6 +206,26 @@ data class AiConfig(
 
     /** True when a key is already saved, so the app can just use it. */
     val hasSavedKey: Boolean get() = apiKey.isNotBlank()
+
+    /**
+     * v2.6 — can this provider search the web while it answers?
+     *
+     * Only Google can, and only through its own endpoint: the OpenAI-compatible one has no
+     * tools. That is why "what is today's news?" used to come back as a refusal — the model
+     * was asked about something after its training date with no way to look it up. With
+     * Google Search switched on it answers for real, and the app shows the sources.
+     */
+    val canSearchWeb: Boolean
+        get() = (provider == AiProvider.GEMINI || provider == AiProvider.CUSTOM) &&
+            resolvedBaseUrl.contains("generativelanguage.googleapis.com")
+
+    /** The native Google endpoint behind the OpenAI-compatible one, or null if not Google. */
+    val googleNativeBase: String?
+        get() {
+            if (!canSearchWeb) return null
+            val base = resolvedBaseUrl.removeSuffix("/openai").trimEnd('/')
+            return base.ifBlank { null }
+        }
 }
 
 object AiSettings {

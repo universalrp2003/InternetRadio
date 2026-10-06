@@ -37,7 +37,8 @@ enum class Tab { RADIO, NEWS, LOCAL, EQUALIZER, MORE }
 data class UiState(
     val tab: Tab = Tab.RADIO,
     val query: String = "",
-    val category: String = Category.ALL,
+    /** v1.2: the app opens on தமிழ், the user's own language — not on "All channels". */
+    val category: String = Category.TAMIL,
     val stations: List<RadioStation> = emptyList(),
     val visible: List<RadioStation> = emptyList(),
     val favourites: Set<String> = emptySet(),

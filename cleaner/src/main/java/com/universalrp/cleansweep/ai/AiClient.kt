@@ -49,6 +49,12 @@ object AiClient {
         config: AiConfig,
         systemPrompt: String,
         userPrompt: String,
+        /**
+         * v2.6: ask the provider to search the web when it can. Used for the assistant, where
+         * the question can be "today's latest news" and an answer from memory is worthless —
+         * not for the phone reports, which are about numbers this app measured itself.
+         */
+        allowSearch: Boolean = false,
     ): Result = withContext(Dispatchers.IO) {
         if (!config.ready) {
             return@withContext Result(
@@ -57,6 +63,22 @@ object AiClient {
                 providerLabel = config.provider.label,
                 error = "Add your API key in AI settings first (or switch to the free option).",
             )
+        }
+
+        // Google can look things up; the OpenAI-style endpoint cannot. Try the searching
+        // endpoint first and quietly fall back to the plain one, so an older model or a
+        // locked-down key still answers.
+        if (allowSearch && config.canSearchWeb) {
+            val grounded = postGoogleWithSearch(config, systemPrompt, userPrompt)
+            if (grounded.first) {
+                val parts = grounded.second
+                return@withContext Result(
+                    ok = true,
+                    text = parts,
+                    providerLabel = config.provider.label + " (with web search)",
+                    model = config.resolvedModel,
+                )
+            }
         }
 
         if (config.provider == AiProvider.FREE) {
@@ -255,6 +277,157 @@ object AiClient {
             systemPrompt = "You are a test. Answer in five words or fewer.",
             userPrompt = "Reply with: CleanSweep AI connected.",
         )
+
+    /**
+     * Google's own `generateContent` endpoint with the Google Search tool switched on.
+     *
+     * Returns (ok, text). The text carries the answer, and — when the model used the search
+     * tool — a short "Sources:" line built from what it actually read, so the user can see
+     * where a live answer came from instead of having to trust it.
+     */
+    private fun postGoogleWithSearch(
+        config: AiConfig,
+        systemPrompt: String,
+        userPrompt: String,
+    ): Pair<Boolean, String> {
+        val base = config.googleNativeBase ?: return false to "This provider cannot search."
+        val key = config.apiKey.trim()
+        if (key.isBlank()) return false to "No key saved."
+        val model = config.resolvedModel.trim().removePrefix("models/")
+        val url = "$base/models/$model:generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8")
+
+        val body = JSONObject().apply {
+            put(
+                "systemInstruction",
+                JSONObject().put(
+                    "parts",
+                    JSONArray().put(JSONObject().put("text", systemPrompt)),
+                ),
+            )
+            put(
+                "contents",
+                JSONArray().put(
+                    JSONObject().apply {
+                        put("role", "user")
+                        put("parts", JSONArray().put(JSONObject().put("text", userPrompt)))
+                    }
+                ),
+            )
+            // The whole point: the model may look things up before it answers.
+            put("tools", JSONArray().put(JSONObject().put("google_search", JSONObject())))
+            put(
+                "generationConfig",
+                JSONObject().apply {
+                    put("temperature", 0.4)
+                    put("maxOutputTokens", 2400)
+                },
+            )
+        }.toString()
+
+        var last = false to "No answer."
+        for (attempt in 1..(RETRIES + 1)) {
+            attemptListener?.invoke(attempt, RETRIES + 1, "")
+            last = postJson(url, body, bearer = null)
+            if (last.first) return last
+            val retryable = listOf("429", "502", "503", "504", "timeout", "Unable to resolve host")
+                .any { last.second.contains(it) }
+            if (!retryable || attempt > RETRIES) return last
+            try {
+                Thread.sleep(1_200L * attempt)
+            } catch (e: InterruptedException) {
+                return last
+            }
+        }
+        return last
+    }
+
+    /** A raw JSON POST with optional bearer auth; used by the Google search call. */
+    private fun postJson(url: String, body: String, bearer: String?): Pair<Boolean, String> {
+        var connection: HttpURLConnection? = null
+        try {
+            connection = (URL(url).openConnection() as HttpURLConnection).apply {
+                requestMethod = "POST"
+                connectTimeout = CONNECT_TIMEOUT_MS
+                readTimeout = READ_TIMEOUT_MS
+                doOutput = true
+                setRequestProperty("Content-Type", "application/json; charset=utf-8")
+                setRequestProperty("Accept", "application/json")
+                setRequestProperty("User-Agent", "CleanSweep/2.6 (Android)")
+                if (!bearer.isNullOrBlank()) {
+                    setRequestProperty("Authorization", "Bearer ${bearer.trim()}")
+                }
+            }
+            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
+                writer.write(body)
+                writer.flush()
+            }
+            val status = connection.responseCode
+            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
+            val text = stream?.let { readAll(it) }.orEmpty()
+            if (status !in 200..299) {
+                return false to explain(status, text)
+            }
+            return true to extractGoogleText(text)
+        } catch (e: UnknownHostException) {
+            return false to "No internet connection (could not reach the AI service)."
+        } catch (e: SocketTimeoutException) {
+            return false to "The AI service took too long to answer (${READ_TIMEOUT_MS / 1000} s)."
+        } catch (e: Exception) {
+            return false to "${e.javaClass.simpleName}: ${e.message ?: "request failed"}"
+        } finally {
+            connection?.disconnect()
+        }
+    }
+
+    /**
+     * Pulls the answer out of a generateContent reply and appends the pages the model used,
+     * when it searched. Grounded answers arrive as several parts; all of them are kept.
+     */
+    private fun extractGoogleText(body: String): String {
+        return try {
+            val json = JSONObject(body)
+            val candidates = json.optJSONArray("candidates")
+            val builder = StringBuilder()
+            var sources = listOf<String>()
+            if (candidates != null && candidates.length() > 0) {
+                val candidate = candidates.getJSONObject(0)
+                val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
+                if (parts != null) {
+                    for (i in 0 until parts.length()) {
+                        val piece = parts.optJSONObject(i)?.optString("text").orEmpty()
+                        if (piece.isNotBlank()) builder.append(piece)
+                    }
+                }
+                sources = readSources(candidate)
+            }
+            val answer = builder.toString().trim().ifBlank { body.take(4000) }
+            if (sources.isEmpty()) {
+                answer
+            } else {
+                answer + "\n\n" + "Sources:" + "\n" + sources.joinToString("\n") { "- $it" }
+            }
+        } catch (e: Exception) {
+            body.take(4000)
+        }
+    }
+
+    private fun readSources(candidate: JSONObject): List<String> {
+        val out = LinkedHashSet<String>()
+        try {
+            val metadata = candidate.optJSONObject("groundingMetadata") ?: return emptyList()
+            val chunks = metadata.optJSONArray("groundingChunks") ?: return emptyList()
+            for (i in 0 until chunks.length()) {
+                val web = chunks.optJSONObject(i)?.optJSONObject("web") ?: continue
+                val uri = web.optString("uri").takeIf { it.isNotBlank() } ?: continue
+                val title = web.optString("title").takeIf { it.isNotBlank() }
+                out.add(if (title != null) "$title ($uri)" else uri)
+                if (out.size >= 4) break
+            }
+        } catch (e: Exception) {
+            // A reply without sources is still a reply.
+        }
+        return out.toList()
+    }
 
     /**
      * Sends the request, retrying when the service is busy (429/5xx) or the connection broke.

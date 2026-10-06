@@ -85,11 +85,12 @@ fun RadioScreen(vm: MainViewModel, state: UiState) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 val chips = listOf(
+                    // தமிழ் first: it is the default selection, so the app opens on Tamil.
+                    Category.TAMIL,
                     Category.ALL,
                     Category.FAVOURITES,
                     Category.RECENT,
                     Category.TOWNS,
-                    Category.TAMIL,
                     Category.TAMIL_FM,
                     Category.TAMIL_DEVOTIONAL,
                     Category.TAMIL_NEWS,
@@ -108,7 +109,9 @@ fun RadioScreen(vm: MainViewModel, state: UiState) {
 
         // Continue where you left off
         val last = vm.lastPlayed()
-        if (last != null && state.query.isBlank() && state.category == Category.ALL) {
+        if (last != null && state.query.isBlank() &&
+            (state.category == Category.ALL || state.category == Category.TAMIL)
+        ) {
             item {
                 PanelCard(
                     Modifier

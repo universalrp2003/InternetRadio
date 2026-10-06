@@ -4,6 +4,42 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.6 highlights**
+
+- **The scan is fixed** — and honestly: the crash could not be reproduced from here, so three
+  real causes were removed instead of guessed at. The home-screen widget is no longer
+  refreshed from inside the scan loop (that was a binder call and two file reads on the
+  thread walking the disk), the scan engine now keeps two counters per folder instead of the
+  name of every file on the phone (the old maps are what an out-of-memory crash on a full
+  phone would come from), and everything in the scan path — including `OutOfMemoryError`,
+  which is an `Error` and so escaped the old handler — is caught and explained on screen
+  instead of letting MIUI say "CleanSweep keeps stopping". The scanner screen also offers a
+  **Start the scan** button if it is opened with nothing running (the widget's Clean button
+  used to do exactly that), and **About → Last crash** shows the last exception with the
+  phone and app version, kept on the phone only.
+- **"Run the daily check now" does something now** — it was returning early whenever the
+  clock was before the configured daily hour (20:00 by default) and whenever a brief had
+  already run that day. A run you ask for is now a real run, at any hour, and it does not
+  consume the day, so the evening brief still arrives.
+- **The voice screen is readable** — `PanelCard` is a plain surface, not a column, so the six
+  new cards' rows were painting on top of each other. Every card now stacks its own content.
+- **The charger works in the background** — Android 12+ refuses a foreground-service start
+  from a broadcast receiver, which is why plugging in was silent. The plug-in broadcast now
+  schedules an expedited job; the job starts the charging service when the system allows it
+  and, when it does not, shows the same card (watts, current, voltage, °C, time to full) and
+  speaks the same line itself while the cable is in.
+- **The AI answers live questions** — with a Google key the assistant asks Google's own
+  endpoint with **Search** switched on, so "today's latest news" is answered from the web (up
+  to four sources are shown under the answer), and the prompt now says plainly: never refuse
+  a question, and if you cannot look something up, say so and answer anyway. The plain
+  OpenAI-style request remains the fallback.
+- **A more natural voice** — the phone's own cloud voice is preferred over the robotic
+  offline one, with the offline voice as the automatic fallback if the network is out. No API
+  key, no account, and only the sentence being spoken leaves the phone.
+- **Smaller fixes the phone asked for** — **jitter is now labelled next to ping**, the
+  **Wi-Fi network name is never shown and never sent** to the AI, and the built APK is named
+  **`CleanSweep-v2.6.apk`** instead of `cleaner-debug.apk`.
+
 **v2.5 highlights**
 
 - **A home-screen widget** — battery % and charging watts, free storage, the last daily brief

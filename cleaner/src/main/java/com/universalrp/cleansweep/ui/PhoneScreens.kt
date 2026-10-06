@@ -646,8 +646,10 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 Spacer(Modifier.width(10.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        loaded.wifi.ssid?.let { "Wi-Fi \"$it\"" }
-                                            ?: if (loaded.wifi.connected) "Wi-Fi (name hidden)" else loaded.wifi.transport,
+                                        // v2.6, at the user's request: CleanSweep does not
+                                        // print the Wi-Fi network name at all. The rest of the
+                                        // reading — signal, band, router, DNS — is unchanged.
+                                        if (loaded.wifi.connected) tr("Wi-Fi connected") else loaded.wifi.transport,
                                         style = MaterialTheme.typography.titleMedium,
                                         fontWeight = FontWeight.Bold,
                                     )

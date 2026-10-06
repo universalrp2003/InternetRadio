@@ -94,6 +94,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
         ) {
             // ------------------------------------------------------------ master switch
             PanelCard(Modifier.fillMaxWidth()) {
+              Column(Modifier.fillMaxWidth()) {
                 VoiceSwitch(
                     title = tr("Speak to me"),
                     subtitle = if (state.voiceOn) {
@@ -132,6 +133,36 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     color = TextSecondary,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+              }
+            }
+
+            // ------------------------------------------------------------ voice quality (v2.6)
+            // The phone's own engine is the fallback and always works offline; the online voice
+            // is opt-in because it sends the sentence (never files, never the key) to the
+            // configured AI provider and speaks the returned audio.
+            PanelCard(Modifier.fillMaxWidth()) {
+              Column(Modifier.fillMaxWidth()) {
+                VoiceSwitch(
+                    title = tr("Natural voice (online)"),
+                    subtitle = tr(
+                        "Sounds far more human than the phone's built-in robot voice: Android's own " +
+                            "cloud voice reads the sentence instead of the offline one. Only the words " +
+                            "being spoken leave the phone — never a file, never a message."
+                    ),
+                    checked = state.onlineVoice,
+                    onCheckedChange = { vm.setOnlineVoice(it) },
+                )
+                Text(
+                    tr(
+                        "Works in Tamil and English. If the phone has no cloud voice installed, or the " +
+                            "network is out, the offline voice reads the same line instead — " +
+                            "announcements never go silent. No API key is used for this."
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+              }
             }
 
             // ------------------------------------------------------------ quiet hours
@@ -206,6 +237,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
 
             // ------------------------------------------------------------ what gets said
             PanelCard(Modifier.fillMaxWidth()) {
+              Column(Modifier.fillMaxWidth()) {
                 Text(
                     tr("What CleanSweep may say"),
                     style = MaterialTheme.typography.bodyMedium,
@@ -311,10 +343,12 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     checked = state.voiceAnswers,
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.ANSWER, it) },
                 )
+              }
             }
 
             // ------------------------------------------------------------ the daily check
             PanelCard(Modifier.fillMaxWidth()) {
+              Column(Modifier.fillMaxWidth()) {
                 VoiceSwitch(
                     title = tr("Daily full check"),
                     subtitle = tr(
@@ -366,6 +400,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
                     )
                 }
+              }
             }
 
             Text(
