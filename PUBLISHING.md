@@ -236,7 +236,10 @@ exactly the people who install from F-Droid or a link.
 - [x] F-Droid recipes for all five apps: [store/fdroid/metadata/](store/fdroid/metadata/).
 - [x] IzzyOnDroid request text + F-Droid steps: [store/fdroid/README.md](store/fdroid/README.md).
 - [x] RFP tracker issue text: [store/fdroid/RFP_ISSUE.md](store/fdroid/RFP_ISSUE.md).
-- [ ] Send screenshots (and the app icon / feature graphic) — I place them; see
+- [x] Store icons (512x512) and feature graphics (1024x500) for all five apps, generated from
+  the real launcher vectors and rebuilt by CI: `tools/make_store_assets.py`,
+  `tools/make_feature_graphics.sh`, preview in [store/asset-preview.png](store/asset-preview.png).
+- [ ] Send screenshots — I place them with `tools/make_screenshots.py`; see
   [store/README.md](store/README.md) for exactly where they go.
 - [ ] Open the IzzyOnDroid issue (section A) and, if you want the main repo, the fdroiddata MR
   or the RFP issue — both need your own free GitLab / Codeberg account, which is the only part

@@ -114,6 +114,18 @@ Both of these are free and need no new account:
    piece of work (index signing key to keep, a Pages branch to publish), it is not
    discoverability, and it is entirely your call. Say the word and I will build it.
 
+## Where the artwork stands (done, 6 Oct)
+
+Every store wants the same three things, and two of them no longer need anything from you:
+
+| Piece | State |
+|---|---|
+| 512x512 icon | **Done** for all five apps, generated from the real launcher vectors by `tools/make_store_assets.py`. Internet Radio's stock Android play icon is gone: it has a launcher mark of its own now, with bitmap fallbacks for its older minimum version. |
+| 1024x500 feature graphic | **Done** for all five, via `tools/make_feature_graphics.sh`, using each app's own background colour, accent colour and fastlane description. Both scripts run in CI, so a fresh checkout always has them. |
+| Phone screenshots | **Waiting on you** - the nine screenshots are not on my disk, because attachments do not survive between messages. Re-attach them and `tools/make_screenshots.py` places them (1080x1920, numbered, right locale), after the private parts are cropped. |
+
+`store/asset-preview.png` shows all of it in one image.
+
 ## So, your move
 
 Tell me which of these you want and I will do my half:
