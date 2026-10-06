@@ -4,6 +4,33 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.4 highlights**
+
+- **CleanSweep talks** — battery low, battery full, "running hot", "charging started" and a
+  **daily brief** can be spoken out loud. Every one of them has its own switch, and a **quiet
+  hours** window (default 22:00–7:00) silences the voice at night — the app cannot talk over
+  your sleep even if a warning fires. Anything you ask for yourself is still spoken when you
+  ask. If the phone has a Tamil text-to-speech voice, Tamil text is spoken in Tamil.
+- **The assistant takes dictation** — a mic button in the chat uses Android's own speech
+  recogniser (no RECORD_AUDIO permission, no audio stored), and any answer can be read aloud
+  with the "Read aloud" button. Answers are also saved per provider.
+- **The AI answers anything now** — the assistant is no longer limited to cleaning topics. The
+  on-device facts about your phone are handed to the model as context; when the on-device
+  engine cannot answer, the bubble offers **Ask the AI** instead of a dead end.
+- **The daily full check** — once a day at the hour you choose, CleanSweep reads the battery,
+  temperature, storage, junk and security findings, asks your AI for a two-sentence summary
+  when a key is saved, says it out loud and posts the full report as a notification. There is
+  a "run the daily check now" button on Home and in Settings → Voice.
+- **Charging, on its own** — plugging in starts the charging card *and* the spoken line
+  ("Charging started at 42 percent, 12.4 watts now"), even when the app is closed.
+- **Fixes** — the ping/jitter test said "no answer, 100% loss" on every target because socket
+  calls ran on the UI thread; it now runs on the IO dispatcher and answers properly. The public
+  IP check no longer gives up with **HTTP 403** when Cloudflare blocks your VPN — it tries four
+  providers (Cloudflare, ipinfo, ipapi, ipify) and names the one that answered. "Mobile data
+  looks OFF" no longer appears when data is on and Wi-Fi happens to be carrying the traffic.
+- **One-tap language switch** — the Home top bar has a **த/EN** button, next to a speaker
+  button that jumps straight to the voice settings.
+
 **v2.3 highlights**
 
 - **Tamil menu** — Settings → **Language** switches between English and **தமிழ்**. The whole

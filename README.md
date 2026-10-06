@@ -30,6 +30,17 @@ Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
 
 ## What's new
 
+- **CleanSweep v2.4** — the app now **speaks**: battery low, battery full, "running hot",
+  charging started and a **daily brief** are announced out loud, each behind its own switch,
+  with **quiet hours** (22:00–7:00 by default) so nothing talks while you sleep. The assistant
+  takes **dictation** through the phone's own recogniser and can **read any answer aloud**, and
+  it now answers **any question**, not only cleaning topics. A **daily full check** reads
+  battery, temperature, storage, junk and security, asks your AI for a two-sentence summary,
+  speaks it and posts the full report as a notification. Plugging in the charger starts the
+  **charging details and the spoken line by itself**. Fixes: the **ping/jitter test** was
+  measuring nothing (sockets on the UI thread) and now works, the **public IP** check survives
+  VPN-blocked Cloudflare by trying four providers, and "mobile data looks OFF" no longer shows
+  when data is on. Plus a one-tap **த/EN** language button on Home.
 - **CleanSweep v2.3** — speaks Tamil: one switch turns the whole menu into Tamil and renames
   the app to சுத்தம் செய்பவர் — “the cleaner” (the launcher label follows a Tamil phone too). The About screen
   now credits the author, ரமேஷ் பிரதாப் / Ramesh prathap .R, with a tappable

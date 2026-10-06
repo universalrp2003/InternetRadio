@@ -204,7 +204,9 @@ jobs:
                         ChargeMonitorService batteryTimeLabel StatusPill goBack \
                         defaultSelected useAnotherFreeAi ping AiText MobileNet SpeedMeter \
                         UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor \
-                        setDraggable togglePillDrag setSpeedSizeMb speedSizeMb; do
+                        setDraggable togglePillDrag setSpeedSizeMb speedSizeMb \
+                        Announcer HealthWatchWorker VoiceScreen speakAnswer runDailyBriefNow \
+                        setVoiceEvent quietHours speakNow offlineFallback; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

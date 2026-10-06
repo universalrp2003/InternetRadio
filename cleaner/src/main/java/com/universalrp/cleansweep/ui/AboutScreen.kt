@@ -189,7 +189,7 @@ fun AboutScreen(vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(tr("CleanSweep v2.3"),
+                    Text(tr("CleanSweep v2.4"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,
