@@ -50,6 +50,7 @@ import com.universalrp.cleansweep.data.hasAllFilesAccess
 import com.universalrp.cleansweep.notify.ChargeMonitorService
 import com.universalrp.cleansweep.notify.StatusPill
 import com.universalrp.cleansweep.voice.Announcer
+import com.universalrp.cleansweep.widget.CleanSweepWidget
 import com.universalrp.cleansweep.work.HealthWatchWorker
 import android.provider.Settings
 import kotlinx.coroutines.CancellationException
@@ -201,10 +202,22 @@ data class UiState(
     val voiceCharging: Boolean = true,
     val voiceDaily: Boolean = true,
     val voiceAnswers: Boolean = true,
+    val voiceStorageLow: Boolean = true,
+    val voiceUnplugged: Boolean = true,
+    val voiceChargerIdle: Boolean = true,
+    val voiceBatteryHealth: Boolean = true,
+    /** Off by default: a phone that hops between Wi-Fi and data must not narrate it. */
+    val voiceNetworkChange: Boolean = false,
+    val voiceNewDevice: Boolean = true,
+    val voiceUnplugStart: Int = Announcer.DEFAULT_UNPLUG_START,
+    /** MACs seen on the last network scan, so a genuinely new device can be announced. */
+    val knownNetworkMacs: Set<String> = emptySet(),
     val dailyScanOn: Boolean = true,
     val dailyHour: Int = Announcer.DEFAULT_DAILY_HOUR,
     /** What the last daily brief said — shown on the Home screen. */
     val lastBrief: String = "",
+    /** "auto" | "en" | "ta" — the language the AI answers in. */
+    val aiAnswerLanguage: String = "auto",
     /** The last thing the offline engine could not answer, kept for "Ask the AI". */
     val assistantPendingQuestion: String = "",
 )
@@ -312,8 +325,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         loadMobile()
     }
 
+    private var widgetTick = 0
+
     private fun mutate(block: (UiState) -> UiState) {
         _state.update { s -> block(s).let { it.copy(revision = it.revision + 1) } }
+        // Keep the home-screen widget in step, but not on every single keystroke of state:
+        // one refresh every few mutations is plenty for a battery/storage readout.
+        widgetTick++
+        if (widgetTick % 8 == 0) CleanSweepWidget.refresh(ctx)
     }
 
     // ------------------------------------------------------------------ basics
@@ -323,6 +342,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             it.copy(
                 hasAllFilesAccess = hasAllFilesAccess(),
                 lastBrief = Announcer.lastBrief(ctx),
+                aiAnswerLanguage = AiSettings.answerLanguage(ctx),
                 storage = runCatching { StorageInfoProvider.read() }.getOrNull(),
                 usageAccess = AppCacheRepo.hasUsageAccess(ctx),
                 legacyStorageOk = legacyStorageGranted(),
@@ -659,8 +679,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "app. Answer any question the user asks, on any topic, helpfully and " +
                         "accurately. Use the phone facts provided when the question is about " +
                         "this phone, storage, battery or the app; otherwise just answer the " +
-                        "question on its own merits. Reply in the language the user wrote in. " +
-                        "Keep it under 250 words, plain language, no markdown headings.",
+                        "question on its own merits. " + answerLanguageRule() +
+                        " Keep it under 250 words, plain language, no markdown headings.",
                     userPrompt = "$facts\nQuestion from the user: $q",
                 )
                 val reply = AssistantMessage(
@@ -742,7 +762,36 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (!s.voiceOn || !s.voiceAnswers) return
         val short = Announcer.shorten(text, 420)
         if (short.isBlank()) return
-        Announcer.speakNow(ctx, short)
+        // Read it in the language it is actually written in, not the menu language: an
+        // English answer should not be handed to a Tamil voice.
+        Announcer.speakNow(ctx, short, languageOf(short))
+    }
+
+    /** True when the text is mostly Tamil script. */
+    private fun isTamilText(text: String): Boolean {
+        var tamil = 0
+        var latin = 0
+        for (ch in text) {
+            when {
+                ch.code in 0x0B80..0x0BFF -> tamil++
+                ch in 'a'..'z' || ch in 'A'..'Z' -> latin++
+            }
+        }
+        return tamil > 0 && tamil >= latin
+    }
+
+    private fun languageOf(text: String): AppLang = if (isTamilText(text)) AppLang.TA else AppLang.EN
+
+    /** The sentence handed to the model that decides the answer language. */
+    private fun answerLanguageRule(): String = when (AiSettings.answerLanguage(ctx)) {
+        "ta" -> "Always reply in Tamil, whatever language the question is written in."
+        "en" -> "Always reply in English, whatever language the question is written in."
+        else -> "Reply in the language the user wrote in."
+    }
+
+    fun setAnswerLanguage(value: String) {
+        AiSettings.setAnswerLanguage(ctx, value)
+        mutate { it.copy(aiAnswerLanguage = value) }
     }
 
     /** The "hear the voice" button in Settings: always allowed, ignores quiet hours. */
@@ -784,9 +833,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 voiceCharging = Announcer.allows(ctx, Announcer.Event.CHARGING),
                 voiceDaily = Announcer.allows(ctx, Announcer.Event.DAILY),
                 voiceAnswers = Announcer.allows(ctx, Announcer.Event.ANSWER),
+                voiceStorageLow = Announcer.allows(ctx, Announcer.Event.STORAGE_LOW),
+                voiceUnplugged = Announcer.allows(ctx, Announcer.Event.UNPLUGGED_EARLY),
+                voiceChargerIdle = Announcer.allows(ctx, Announcer.Event.CHARGER_IDLE),
+                voiceBatteryHealth = Announcer.allows(ctx, Announcer.Event.BATTERY_HEALTH),
+                voiceNetworkChange = Announcer.allows(ctx, Announcer.Event.NETWORK_CHANGE),
+                voiceNewDevice = Announcer.allows(ctx, Announcer.Event.NEW_DEVICE),
             )
         }
     }
+
+    fun setUnplugStartHour(hour: Int) {
+        Announcer.setUnplugStartHour(ctx, hour)
+        mutate { it.copy(voiceUnplugStart = Announcer.unplugStartHour(ctx)) }
+    }
+
+    /**
+     * The AI answer language: "auto" follows what the user types, "en"/"ta" force one.
+     * Deliberately separate from the menu language — the menu may be English while the
+     * answers are wanted in Tamil.
+     */
+    fun answerLanguage(): String = AiSettings.answerLanguage(ctx)
 
     fun setQuietHours(start: Int, end: Int) {
         Announcer.setQuietHours(ctx, start, end)
@@ -836,6 +903,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 voiceCharging = Announcer.allows(ctx, Announcer.Event.CHARGING),
                 voiceDaily = Announcer.allows(ctx, Announcer.Event.DAILY),
                 voiceAnswers = Announcer.allows(ctx, Announcer.Event.ANSWER),
+                voiceStorageLow = Announcer.allows(ctx, Announcer.Event.STORAGE_LOW),
+                voiceUnplugged = Announcer.allows(ctx, Announcer.Event.UNPLUGGED_EARLY),
+                voiceChargerIdle = Announcer.allows(ctx, Announcer.Event.CHARGER_IDLE),
+                voiceBatteryHealth = Announcer.allows(ctx, Announcer.Event.BATTERY_HEALTH),
+                voiceNetworkChange = Announcer.allows(ctx, Announcer.Event.NETWORK_CHANGE),
+                voiceNewDevice = Announcer.allows(ctx, Announcer.Event.NEW_DEVICE),
+                voiceUnplugStart = Announcer.unplugStartHour(ctx),
                 dailyScanOn = Announcer.dailyScanOn(ctx),
                 dailyHour = Announcer.dailyHour(ctx),
                 lastBrief = Announcer.lastBrief(ctx),
@@ -1141,6 +1215,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         else -> null
                     },
                 )
+            }
+            // New device on the network: the scan just listed them, so anything that was not
+            // in the previous scan is genuinely new. Only spoken when the switch allows it.
+            if (report != null && report.devices.isNotEmpty()) {
+                val known = _state.value.knownNetworkMacs
+                val fresh = report.devices.filter { it.mac != null && it.mac !in known }
+                if (known.isNotEmpty() && fresh.isNotEmpty()) {
+                    Announcer.speak(
+                        ctx,
+                        if (fresh.size == 1) {
+                            "A new device joined your Wi-Fi network."
+                        } else {
+                            "${fresh.size} new devices joined your Wi-Fi network."
+                        },
+                        if (fresh.size == 1) {
+                            "உங்கள் Wi-Fi நெட்வொர்க்கில் ஒரு புதிய சாதனம் இணைந்துள்ளது."
+                        } else {
+                            "உங்கள் Wi-Fi நெட்வொர்க்கில் ${fresh.size} புதிய சாதனங்கள் இணைந்துள்ளன."
+                        },
+                        Announcer.Event.NEW_DEVICE,
+                    )
+                }
+                mutate {
+                    it.copy(
+                        knownNetworkMacs = known + report.devices.mapNotNull { device -> device.mac },
+                    )
+                }
             }
         }
     }

@@ -97,7 +97,7 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.4" to "சுத்தம் செய்பவர் v2.4",
+        "CleanSweep v2.5" to "சுத்தம் செய்பவர் v2.5",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)
@@ -157,6 +157,38 @@ object Lang {
             "குரல் & தினசரி கண்காணிப்பு",
         "Warnings spoken out loud, quiet hours, and the daily brief." to
             "எச்சரிக்கைகள் சத்தமாக, அமைதி நேரம், மற்றும் தினசரி அறிக்கை.",
+        "Answer language" to
+            "பதில் மொழி",
+        "Which language the AI writes in. Separate from the menu language — you can read English menus and still get Tamil answers." to
+            "AI எந்த மொழியில் எழுத வேண்டும். மெனுவின் மொழியிலிருந்து இது தனி — ஆங்கில மெனுவுடன் தமிழ் பதில்களும் பெறலாம்.",
+        "Same as I type" to
+            "நான் எழுதும் மொழியே",
+        "Storage nearly full" to
+            "சேமிப்பு கிட்டத்தட்ட நிரம்பியது",
+        "Under 1 GB free — the warning that gets worse the longer it waits." to
+            "1 GB-க்குக் கீழே காலி — தாமதமாகும்போது மோசமாகும் எச்சரிக்கை.",
+        "Charger removed early" to
+            "சார்ஜர் முன்பே கழற்றப்பட்டது",
+        "Unplugged below %s%%, and only after the hour you set below." to
+            "%s%%-க்குக் கீழே கழற்றினால், நீங்கள் கீழே அமைத்த நேரத்திற்குப் பிறகு மட்டும்.",
+        "Charger connected but not charging" to
+            "சார்ஜர் இணைந்துள்ளது, ஆனால் சார்ஜ் ஆகவில்லை",
+        "A worn cable or weak charger shows as plugged in and delivers nothing." to
+            "தேய்ந்த கேபிள் அல்லது பலவீனமான சார்ஜர் இணைந்ததுபோலக் காட்டும், ஆனால் எதுவும் தராது.",
+        "Battery health looks worn" to
+            "பேட்டரி ஆரோக்கியம் பலவீனமாக உள்ளது",
+        "Said at most once a week, and only when the kernel reports the real capacity." to
+            "வாரத்திற்கு ஒரு முறைக்கு மேல் அல்ல; கர்னல் உண்மையான திறனைத் தெரிவித்தால் மட்டும்.",
+        "Wi-Fi ⇄ mobile data switches" to
+            "Wi-Fi ⇄ மொபைல் டேட்டா மாற்றங்கள்",
+        "Off by default: a phone that hops networks would otherwise talk all day." to
+            "இயல்பாக நிறுத்தத்தில்: நெட்வொர்க் மாறிக்கொண்டே இருக்கும் போன் நாள் முழுவதும் பேசும்.",
+        "New device joined my Wi-Fi" to
+            "என் Wi-Fi-ல் புதிய சாதனம் இணைந்தது",
+        "Uses the network scan; spoken only when it is on and you run a scan." to
+            "நெட்வொர்க் ஸ்கேனைப் பயன்படுத்தும்; இது இயக்கத்தில் இருந்து நீங்கள் ஸ்கேன் செய்தால் மட்டும் பேசும்.",
+        "Early-unplug reminders only after" to
+            "முன்கூட்டிய கழற்றல் நினைவூட்டல் இந்த நேரத்திற்குப் பிறகு மட்டும்",
         "Speak to me" to
             "என்னிடம் பேசு",
         "CleanSweep talks: warnings about the battery, heat and the daily brief." to

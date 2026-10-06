@@ -121,6 +121,49 @@ class HealthWatchWorker(
             }
         }
 
+        // Storage nearly full — the one warning that gets more painful the longer it waits.
+        val storage = health?.storage
+        if (storage != null && storage.free in 1 until Announcer.LOW_STORAGE_BYTES) {
+            val last = prefs.getLong(Announcer.KEY_LAST_STORAGE, 0L)
+            if (now - last > 12 * 60 * 60 * 1000L) {
+                prefs.edit().putLong(Announcer.KEY_LAST_STORAGE, now).apply()
+                val freeGb = "%.1f".format(storage.free / 1024.0 / 1024.0 / 1024.0)
+                Announcer.speak(
+                    ctx,
+                    "Storage is nearly full — only $freeGb gigabytes free. Open CleanSweep and clean some junk.",
+                    "சேமிப்பு கிட்டத்தட்ட நிரம்பிவிட்டது — $freeGb ஜிகாபைட் மட்டுமே காலி. " +
+                        "சுத்தம் செய்பவரைத் திறந்து குப்பையை அகற்றவும்.",
+                    Announcer.Event.STORAGE_LOW,
+                )
+            }
+        }
+
+        // Battery health: how much of the original capacity is left. Said at most once a week,
+        // because it is a slow fact, not an emergency.
+        val healthPercent = health?.battery?.estimatedCapacityMah?.takeIf { it > 0f }?.let { _ ->
+            try {
+                val design = designCapacityMah(ctx)
+                val estimated = health.battery.estimatedCapacityMah ?: 0f
+                if (design != null && design > 0f) (estimated / design * 100f).toInt() else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+        if (healthPercent != null && healthPercent in 1..84) {
+            val last = prefs.getLong(Announcer.KEY_LAST_HEALTH, 0L)
+            if (now - last > 7 * 24 * 60 * 60 * 1000L) {
+                prefs.edit().putLong(Announcer.KEY_LAST_HEALTH, now).apply()
+                Announcer.speak(
+                    ctx,
+                    "Battery health notice: your battery now holds about $healthPercent percent of its " +
+                        "original capacity, so it drains faster than when it was new.",
+                    "பேட்டரி ஆரோக்கியம்: உங்கள் பேட்டரி புதியதாக இருந்ததில் சுமார் $healthPercent " +
+                        "சதவீதம் மட்டுமே தேக்க முடிகிறது, எனவே விரைவாகக் குறையும்.",
+                    Announcer.Event.BATTERY_HEALTH,
+                )
+            }
+        }
+
         // Running hot — battery or CPU.
         val batteryHot = battery.temperatureC?.let { it >= Announcer.HOT_BATTERY_C } == true
         val cpuHot = (health?.cpuTempC ?: 0f) >= Announcer.HOT_CPU_C
@@ -281,6 +324,28 @@ class HealthWatchWorker(
             spokenFinal,
             Announcer.Event.DAILY,
         )
+    }
+
+    /**
+     * The capacity the battery was designed with, straight from the kernel when the phone
+     * exposes it. Returns null when it is unknown — in that case CleanSweep says nothing
+     * about battery health rather than guessing.
+     */
+    private fun designCapacityMah(ctx: Context): Float? {
+        val candidates = listOf(
+            "/sys/class/power_supply/battery/charge_full_design",
+            "/sys/class/power_supply/BATTERY/charge_full_design",
+        )
+        for (path in candidates) {
+            try {
+                val raw = File(path).readText().trim().toFloatOrNull() ?: continue
+                val mah = if (raw > 100_000f) raw / 1000f else raw
+                if (mah in 500f..20_000f) return mah
+            } catch (e: Exception) {
+                // Try the next one.
+            }
+        }
+        return null
     }
 
     private fun batteryTimeLabelOrNull(battery: com.universalrp.cleansweep.data.BatteryReading): String? =

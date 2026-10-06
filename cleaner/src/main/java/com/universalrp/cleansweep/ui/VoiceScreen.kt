@@ -16,8 +16,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.Battery3Bar
 import androidx.compose.material.icons.outlined.BatteryAlert
 import androidx.compose.material.icons.outlined.BatteryFull
+import androidx.compose.material.icons.outlined.Devices
+import androidx.compose.material.icons.outlined.ElectricalServices
+import androidx.compose.material.icons.outlined.PowerOff
+import androidx.compose.material.icons.outlined.SdStorage
+import androidx.compose.material.icons.outlined.SwapHoriz
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.PlayArrow
@@ -249,6 +255,55 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.DAILY, it) },
                 )
                 VoiceSwitch(
+                    title = tr("Storage nearly full"),
+                    subtitle = tr("Under 1 GB free — the warning that gets worse the longer it waits."),
+                    icon = Icons.Outlined.SdStorage,
+                    tint = WarnAmber,
+                    checked = state.voiceStorageLow,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.STORAGE_LOW, it) },
+                )
+                VoiceSwitch(
+                    title = tr("Charger removed early"),
+                    subtitle = tr("Unplugged below %s%%, and only after the hour you set below.")
+                        .format(Announcer.UNPLUG_BEFORE_PERCENT),
+                    icon = Icons.Outlined.PowerOff,
+                    tint = WarnAmber,
+                    checked = state.voiceUnplugged,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.UNPLUGGED_EARLY, it) },
+                )
+                VoiceSwitch(
+                    title = tr("Charger connected but not charging"),
+                    subtitle = tr("A worn cable or weak charger shows as plugged in and delivers nothing."),
+                    icon = Icons.Outlined.ElectricalServices,
+                    tint = WarnAmber,
+                    checked = state.voiceChargerIdle,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.CHARGER_IDLE, it) },
+                )
+                VoiceSwitch(
+                    title = tr("Battery health looks worn"),
+                    subtitle = tr("Said at most once a week, and only when the kernel reports the real capacity."),
+                    icon = Icons.Outlined.Battery3Bar,
+                    tint = WarnAmber,
+                    checked = state.voiceBatteryHealth,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.BATTERY_HEALTH, it) },
+                )
+                VoiceSwitch(
+                    title = tr("Wi-Fi ⇄ mobile data switches"),
+                    subtitle = tr("Off by default: a phone that hops networks would otherwise talk all day."),
+                    icon = Icons.Outlined.SwapHoriz,
+                    tint = AccentCyan,
+                    checked = state.voiceNetworkChange,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NETWORK_CHANGE, it) },
+                )
+                VoiceSwitch(
+                    title = tr("New device joined my Wi-Fi"),
+                    subtitle = tr("Uses the network scan; spoken only when it is on and you run a scan."),
+                    icon = Icons.Outlined.Devices,
+                    tint = AccentCyan,
+                    checked = state.voiceNewDevice,
+                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NEW_DEVICE, it) },
+                )
+                VoiceSwitch(
                     title = tr("Read AI answers aloud"),
                     subtitle = tr("Speak the answer when you ask the assistant something."),
                     icon = Icons.Outlined.RecordVoiceOver,
@@ -271,6 +326,22 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     onCheckedChange = { vm.setDailyScanOn(it) },
                 )
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    Text(
+                        tr("Early-unplug reminders only after"),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(5, 6, 7, 8, 9).forEach { hour ->
+                            ModeChipExtra(
+                                label = "%02d:00".format(hour),
+                                selected = state.voiceUnplugStart == hour,
+                                onClick = { vm.setUnplugStartHour(hour) },
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
                     Text(
                         tr("Run it at"),
                         style = MaterialTheme.typography.bodySmall,

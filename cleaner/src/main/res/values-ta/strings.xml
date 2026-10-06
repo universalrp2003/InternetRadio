@@ -6,4 +6,7 @@
       locales_config.xml enables on Android 13+).
     -->
     <string name="app_name">சுத்தம் செய்பவர்</string>
+    <string name="widget_description">பேட்டரி, சேமிப்பு மற்றும் தினசரி அறிக்கை — ஒரே தட்டலில்</string>
+    <string name="widget_clean">சுத்தம்</string>
+    <string name="widget_speak">அறிக்கையைப் படி</string>
 </resources>

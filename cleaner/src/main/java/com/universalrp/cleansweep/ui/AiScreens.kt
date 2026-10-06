@@ -202,6 +202,43 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
 
             // --------------------------------------------------- 2. key and model
             item {
+                // ---- the language the AI answers in (separate from the menu language) ----
+                PanelCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Text(
+                            tr("Answer language"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            tr(
+                                "Which language the AI writes in. Separate from the menu language — " +
+                                    "you can read English menus and still get Tamil answers."
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(10.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            ModeChip2(
+                                label = tr("Same as I type"),
+                                selected = state.aiAnswerLanguage == "auto",
+                                onClick = { vm.setAnswerLanguage("auto") },
+                            )
+                            ModeChip2(
+                                label = "English",
+                                selected = state.aiAnswerLanguage == "en",
+                                onClick = { vm.setAnswerLanguage("en") },
+                            )
+                            ModeChip2(
+                                label = "தமிழ்",
+                                selected = state.aiAnswerLanguage == "ta",
+                                onClick = { vm.setAnswerLanguage("ta") },
+                            )
+                        }
+                    }
+                }
+
                 PanelCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         StepHeader(2, "Paste the key")
@@ -822,6 +859,21 @@ private fun splitAnswer(answer: String): List<AiSection> {
 }
 
 @Composable
+@Composable
+private fun ModeChip2(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        modifier = Modifier
+            .clip(MaterialTheme.shapes.medium)
+            .background(if (selected) AccentCyan else SurfaceHigh)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 7.dp),
+        color = if (selected) Color(0xFF03202B) else TextPrimary,
+        style = MaterialTheme.typography.labelMedium,
+        fontWeight = FontWeight.SemiBold,
+    )
+}
+
 private fun AiSectionCard(section: AiSection) {
     val headingState = headingTone(section.heading)
     PanelCard(Modifier.fillMaxWidth()) {

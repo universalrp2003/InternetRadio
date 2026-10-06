@@ -30,6 +30,12 @@ Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
 
 ## What's new
 
+- **CleanSweep v2.5** — a **home-screen widget** (battery, watts, free storage, the last brief,
+  plus **Clean** and **Read brief** buttons), a **separate AI answer language** (auto / English
+  / Tamil, independent of the menu), and five more spoken warnings — storage below 1 GB,
+  charger pulled out early, **charger connected but not charging**, battery health worn, and
+  **a new device on your Wi-Fi** (Wi-Fi ⇄ mobile-data changes are available too, off by
+  default). Every one has its own switch and respects quiet hours.
 - **CleanSweep v2.4** — the app now **speaks**: battery low, battery full, "running hot",
   charging started and a **daily brief** are announced out loud, each behind its own switch,
   with **quiet hours** (22:00–7:00 by default) so nothing talks while you sleep. The assistant

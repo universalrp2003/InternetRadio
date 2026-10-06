@@ -43,6 +43,13 @@ object Announcer {
     const val KEY_CHARGE = "voice_charging"
     const val KEY_DAILY = "voice_daily"
     const val KEY_ANSWERS = "voice_answers"
+    const val KEY_STORAGE = "voice_storage"
+    const val KEY_UNPLUGGED = "voice_unplugged"
+    const val KEY_UNPLUGGED_START = "voice_unplug_start"
+    const val KEY_NET_CHANGE = "voice_net_change"
+    const val KEY_NEW_DEVICE = "voice_new_device"
+    const val KEY_BATTERY_HEALTH = "voice_battery_health"
+    const val KEY_IDLE_CHARGE = "voice_idle_charge"
     const val KEY_DAILY_ON = "daily_scan_on"
     const val KEY_DAILY_HOUR = "daily_hour"
 
@@ -51,12 +58,24 @@ object Announcer {
     const val KEY_LAST_FULL = "last_full_at"
     const val KEY_LAST_LOW = "last_low_at"
     const val KEY_LAST_HOT = "last_hot_at"
+    const val KEY_LAST_STORAGE = "last_storage_at"
+    const val KEY_LAST_HEALTH = "last_health_at"
+    const val KEY_LAST_IDLE = "last_idle_at"
 
     /** Battery below this speaks a warning while unplugged. */
     const val LOW_PERCENT = 20
 
     /** Battery temperature (°C) that counts as too hot. */
     const val HOT_BATTERY_C = 45.0
+
+    /** Free storage below this speaks a warning. */
+    const val LOW_STORAGE_BYTES = 1024L * 1024L * 1024L
+
+    /** Unplugging before this percentage counts as "removed early". */
+    const val UNPLUG_BEFORE_PERCENT = 90
+
+    /** Default: only complain about an early unplug after this hour of the day. */
+    const val DEFAULT_UNPLUG_START = 6
 
     /** CPU temperature (°C) that counts as too hot. */
     const val HOT_CPU_C = 75.0
@@ -76,6 +95,12 @@ object Announcer {
         CHARGING(KEY_CHARGE),
         DAILY(KEY_DAILY),
         ANSWER(KEY_ANSWERS),
+        STORAGE_LOW(KEY_STORAGE),
+        UNPLUGGED_EARLY(KEY_UNPLUGGED),
+        NETWORK_CHANGE(KEY_NET_CHANGE),
+        NEW_DEVICE(KEY_NEW_DEVICE),
+        BATTERY_HEALTH(KEY_BATTERY_HEALTH),
+        CHARGER_IDLE(KEY_IDLE_CHARGE),
 
         /** The "hear the voice" button in Settings: always allowed. */
         TEST(null),
@@ -136,6 +161,14 @@ object Announcer {
 
     fun dailyHour(context: Context): Int = prefs(context).getInt(KEY_DAILY_HOUR, DEFAULT_DAILY_HOUR)
 
+    /** Earliest hour at which an early-unplug reminder may be spoken. */
+    fun unplugStartHour(context: Context): Int =
+        prefs(context).getInt(KEY_UNPLUGGED_START, DEFAULT_UNPLUG_START)
+
+    fun setUnplugStartHour(context: Context, hour: Int) {
+        prefs(context).edit().putInt(KEY_UNPLUGGED_START, hour.coerceIn(0, 23)).apply()
+    }
+
     fun setDailyHour(context: Context, hour: Int) {
         prefs(context).edit().putInt(KEY_DAILY_HOUR, hour.coerceIn(0, 23)).apply()
     }
@@ -176,10 +209,37 @@ object Announcer {
      * Says something the user just asked for (an assistant answer, the test button). Quiet
      * hours do not apply — but the master switch still does.
      */
-    fun speakNow(context: Context, text: String): Boolean {
+    fun speakNow(context: Context, text: String): Boolean = speakNow(context, text, null)
+
+    /**
+     * The same, but in an explicit language: an AI answer is spoken in the language it was
+     * written in, whatever the menu language happens to be.
+     */
+    fun speakNow(context: Context, text: String, language: AppLang?): Boolean {
         val ctx = context.applicationContext
         if (!enabled(ctx)) return false
-        return utter(ctx, text, flush = true)
+        val wanted = language ?: Lang.languageIn(ctx)
+        val speaking = if (wanted == AppLang.TA) {
+            if (ensureTamilVoice(ctx)) text else null
+        } else {
+            text
+        }
+        // A Tamil answer on a phone with no Tamil voice is not read out in an English accent:
+        // the caller already fell back to the English wording for the UI, so stay silent here
+        // and let the on-screen text be the answer.
+        if (speaking == null) return false
+        prepareVoice(ctx, wanted)
+        return utter(ctx, speaking, flush = true)
+    }
+
+    /** Points the engine at the right locale before speaking. */
+    private fun prepareVoice(context: Context, lang: AppLang) {
+        val engine = tts ?: return
+        try {
+            engine.setLanguage(if (lang == AppLang.TA) TAMIL else Locale.US)
+        } catch (e: Exception) {
+            // Keep whatever voice is loaded.
+        }
     }
 
     /** Picks Tamil only when Tamil is the app language *and* the phone has a Tamil voice. */

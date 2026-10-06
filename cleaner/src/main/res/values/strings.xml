@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">CleanSweep</string>
+    <!-- Home-screen widget (v2.4). -->
+    <string name="widget_description">Battery, storage and the daily brief, one tap away</string>
+    <string name="widget_clean">Clean</string>
+    <string name="widget_speak">Read brief</string>
     <!-- v1.3: no accessibility service description needed; CleanSweep declares no accessibility service. -->
 </resources>

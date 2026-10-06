@@ -33,6 +33,7 @@
     <!-- Wi-Fi details + "who is on my network". Location is requested at runtime and is
          only used while the network screen is open. -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <!-- (ACCESS_NETWORK_STATE above is also what the Wi-Fi/mobile-data voice warning reads.) -->
 
     <!--
       Mobile & data screen: the operator, the SIM names, "5G or 4G" and the real signal in
@@ -126,6 +127,34 @@
             android:name=".notify.ChargingWatcher"
             android:exported="true">
             <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+          v2.4 instant warnings: Wi-Fi/mobile-data changes, an early unplug, and a charger that
+          is connected but delivering nothing. Each one is behind its own switch and behind
+          quiet hours; the user can turn every one of them off.
+        -->
+        <!-- Home-screen widget: battery, storage, the last daily brief, Clean and Read aloud. -->
+        <receiver
+            android:name=".widget.CleanSweepWidget"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+                <action android:name="com.universalrp.cleansweep.WIDGET_SPEAK" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_cleansweep_info" />
+        </receiver>
+
+        <receiver
+            android:name=".notify.SystemEventWatcher"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>

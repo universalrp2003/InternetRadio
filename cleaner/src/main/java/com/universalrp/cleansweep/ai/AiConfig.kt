@@ -212,6 +212,21 @@ object AiSettings {
 
     private const val PREFS = "cleansweep_ai"
 
+    /** Separate from the menu language: the user may read the menu in English and want Tamil
+     *  answers, or the other way round. */
+    const val KEY_ANSWER_LANGUAGE = "answer_language"
+
+    /** "auto" (follow what I type), "en" (always English) or "ta" (always Tamil). */
+    fun answerLanguage(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_ANSWER_LANGUAGE, "auto") ?: "auto"
+
+    fun setAnswerLanguage(context: Context, value: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_ANSWER_LANGUAGE, value)
+            .apply()
+    }
+
     /**
      * Public, keyless endpoints, tried in this order by the Free provider. Kilo's gateway
      * allows about 200 free requests an hour per IP, which makes it the most reliable of

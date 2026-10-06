@@ -4,6 +4,20 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.5 highlights**
+
+- **A home-screen widget** — battery % and charging watts, free storage, the last daily brief
+  in one line, and two buttons: **Clean** (opens the scanner) and **Read brief** (speaks it).
+- **More warnings, each with its own switch** — storage below 1 GB, charger removed before 90%
+  (only after the hour you set, 06:00 by default), **charger connected but not charging**
+  (the worn-cable case, checked 25 s after plugging in), battery health dropping below 85% of
+  the original capacity (at most once a week, and only when the kernel exposes the real
+  design capacity), **Wi-Fi ⇄ mobile data changes** (off by default — a phone that hops
+  networks would otherwise talk all day) and **a new device joining your Wi-Fi** (spoken after
+  a network scan, compared against the devices seen last time).
+- **The AI has its own language setting** — "Same as I type", always English, or always Tamil,
+  independent of the menu language. Answers are read aloud in the language they are written in.
+
 **v2.4 highlights**
 
 - **CleanSweep talks** — battery low, battery full, "running hot", "charging started" and a

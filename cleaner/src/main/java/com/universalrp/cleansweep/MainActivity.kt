@@ -38,6 +38,15 @@ class MainActivity : ComponentActivity() {
             CleanSweepTheme {
                 val vm: MainViewModel = viewModel()
 
+                // The widget's "Clean" button opens the app on the scanner (Android does not
+                // allow starting that work straight from a widget tap).
+                DisposableEffect(Unit) {
+                    if (intent?.action == com.universalrp.cleansweep.widget.CleanSweepWidget.ACTION_CLEAN) {
+                        vm.navigate(Screen.SCANNING)
+                    }
+                    onDispose { }
+                }
+
                 // Refresh permissions/storage info every time the user comes back
                 // from a Settings screen (files access, usage access).
                 val lifecycleOwner = LocalLifecycleOwner.current

@@ -212,6 +212,12 @@ jobs:
             echo "WARN: the Tamil menu strings were not found in the CleanSweep dex"
           fi
 
+          if unzip -l "$CLEANER" | grep -q "res/layout/widget_cleansweep"; then
+            echo "OK: the home-screen widget layout is inside the APK"
+          else
+            echo "WARN: the widget layout is missing from the APK"
+          fi
+
           for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
                         SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
                         ChargeMonitorService batteryTimeLabel StatusPill goBack \
@@ -219,7 +225,9 @@ jobs:
                         UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor \
                         setDraggable togglePillDrag setSpeedSizeMb speedSizeMb \
                         Announcer HealthWatchWorker VoiceScreen speakAnswer runDailyBriefNow \
-                        setVoiceEvent setQuietHours speakNow offlineFallback; do
+                        setVoiceEvent setQuietHours speakNow offlineFallback \
+                        SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
+                        setUnplugStartHour; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
