@@ -307,6 +307,29 @@ jobs:
 
       # Commits whatever failed into ci-build-failure.md, so the reason is
       # readable straight from the repository (and from a phone).
+      # A green build should not leave yesterday's failure report lying around.
+      - name: Clear the stale failure report
+        if: success()
+        run: |
+          if [ ! -f ci-build-failure.md ]; then
+            echo "No stale report."
+            exit 0
+          fi
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git rm -q -f ci-build-failure.md
+          git commit -q -m "CI: clear the build failure report (build is green again)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "Stale report removed."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying…"
+            sleep 6
+          done
+          echo "Could not push the cleanup commit; the report will be removed by the next run."
+
       - name: Publish build failure excerpt
         if: failure()
         run: |
