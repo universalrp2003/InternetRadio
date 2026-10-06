@@ -27,6 +27,9 @@ object AiClient {
         val text: String,
         val providerLabel: String,
         val error: String? = null,
+        /** Which keyless endpoint answered, so the app can reuse the one that works. */
+        val endpointUrl: String? = null,
+        val model: String = "",
     )
 
     private const val CONNECT_TIMEOUT_MS = 30_000
@@ -48,7 +51,10 @@ object AiClient {
 
         if (config.provider == AiProvider.FREE) {
             var lastError = "No free endpoint answered."
-            for (endpoint in AiSettings.KEYLESS) {
+            // Try the endpoint that worked last time first.
+            val ordered = AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }
+            for (endpoint in ordered) {
+                val which = endpoint.label.substringBefore(" (")
                 val result = post(
                     url = endpoint.url,
                     apiKey = null,
@@ -60,7 +66,9 @@ object AiClient {
                     return@withContext Result(
                         ok = true,
                         text = result.second,
-                        providerLabel = "Free • ${endpoint.label}",
+                        providerLabel = "Free AI • $which",
+                        endpointUrl = endpoint.url,
+                        model = endpoint.model,
                     )
                 }
                 lastError = "${endpoint.label}: ${result.second}"
@@ -84,10 +92,91 @@ object AiClient {
             userPrompt = userPrompt,
         )
         if (ok) {
-            Result(ok = true, text = payload, providerLabel = config.provider.label)
+            Result(
+                ok = true,
+                text = payload,
+                providerLabel = config.provider.label,
+                model = config.resolvedModel,
+            )
         } else {
-            Result(ok = false, text = "", providerLabel = config.provider.label, error = payload)
+            Result(
+                ok = false,
+                text = "",
+                providerLabel = config.provider.label,
+                error = payload,
+                model = config.resolvedModel,
+            )
         }
+    }
+
+    /**
+     * "Is my AI actually usable right now?" — the check the app runs when it opens.
+     * For a keyed provider it asks for the model list (cheap, no tokens); for the free
+     * option it sends a two-word prompt to each keyless endpoint until one answers.
+     * Returns the label of whatever answered, plus the endpoint url when it is the free
+     * option, so the app can remember it.
+     */
+    suspend fun ping(config: AiConfig): Result = withContext(Dispatchers.IO) {
+        if (config.provider == AiProvider.FREE) {
+            var lastError = "No free endpoint answered."
+            for (endpoint in AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }) {
+                val which = endpoint.label.substringBefore(" (")
+                val (ok, payload) = post(
+                    url = endpoint.url,
+                    apiKey = null,
+                    model = endpoint.model,
+                    systemPrompt = "You are a health check. Answer with one word.",
+                    userPrompt = "Reply with: ready",
+                )
+                if (ok) {
+                    return@withContext Result(
+                        ok = true,
+                        text = payload,
+                        providerLabel = "Free AI • $which",
+                        endpointUrl = endpoint.url,
+                        model = endpoint.model,
+                    )
+                }
+                lastError = "$which: $payload"
+            }
+            return@withContext Result(
+                ok = false,
+                text = "",
+                providerLabel = "Free AI",
+                error = lastError,
+            )
+        }
+
+        if (!config.ready) {
+            return@withContext Result(
+                ok = false,
+                text = "",
+                providerLabel = config.provider.label,
+                error = "No key saved yet.",
+            )
+        }
+
+        val (models, listError) = listModels(config)
+        if (models.isNotEmpty()) {
+            val modelOk = config.resolvedModel in models ||
+                models.any { it.equals(config.resolvedModel, ignoreCase = true) }
+            return@withContext Result(
+                ok = modelOk,
+                text = "",
+                providerLabel = config.provider.label,
+                error = if (modelOk) {
+                    null
+                } else {
+                    "\"${config.resolvedModel}\" is not among the ${models.size} models this key " +
+                        "can use. Tap Load models and pick a current one."
+                },
+                model = config.resolvedModel,
+            )
+        }
+
+        // Some providers do not implement GET /models — fall back to one tiny question.
+        val probe = test(config)
+        if (probe.ok) probe.copy(error = null) else probe.copy(error = listError ?: probe.error)
     }
 
     /**

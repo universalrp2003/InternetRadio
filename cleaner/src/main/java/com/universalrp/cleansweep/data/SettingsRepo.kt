@@ -38,6 +38,8 @@ class SettingsRepo(context: Context) {
         val CHARGE_MONITOR = booleanPreferencesKey("charge_monitor")
         val ASSISTANT_ONLINE = booleanPreferencesKey("assistant_online")
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
+        val DEFAULT_SELECTED = stringSetPreferencesKey("default_selected_kinds")
+        val STATUS_PILL = booleanPreferencesKey("status_pill")
     }
 
     val soundsEnabled: Flow<Boolean> = store.data.map { p ->
@@ -74,8 +76,29 @@ class SettingsRepo(context: Context) {
             oldDownloadDays = p[Keys.OLD_DAYS] ?: 30,
             apkOnlyInstalled = p[Keys.APK_INSTALLED_ONLY] ?: false,
             excludedPrefixes = (p[Keys.EXCLUDED] ?: emptySet()).mapNotNull { normalize(it) }.toSet(),
+            defaultSelected = (p[Keys.DEFAULT_SELECTED] ?: emptySet())
+                .mapNotNull { name -> JunkKind.entries.firstOrNull { it.name == name } }
+                .toSet(),
         )
     }
+
+    /**
+     * Remembers which categories to tick automatically after a scan. CleanSweep ships with
+     * none of them on, so a fresh scan shows everything unticked and you decide.
+     */
+    suspend fun setDefaultSelected(kind: JunkKind, on: Boolean) {
+        store.edit { prefs ->
+            val set = (prefs[Keys.DEFAULT_SELECTED] ?: emptySet()).toMutableSet()
+            if (on) set.add(kind.name) else set.remove(kind.name)
+            prefs[Keys.DEFAULT_SELECTED] = set
+        }
+    }
+
+    /** Small "charging watts" pill drawn in the empty part of the status bar (off by default). */
+    val statusPill: Flow<Boolean> = store.data.map { p -> p[Keys.STATUS_PILL] ?: false }
+
+    suspend fun setStatusPill(value: Boolean) =
+        store.edit { it[Keys.STATUS_PILL] = value }
 
     suspend fun setIncludeHidden(value: Boolean) =
         store.edit { it[Keys.INCLUDE_HIDDEN] = value }

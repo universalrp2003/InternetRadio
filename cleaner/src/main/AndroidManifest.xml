@@ -45,6 +45,13 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!--
+      The "watt reading beside the clock" the user asked for: Android offers no API for a
+      third-party status-bar item, so CleanSweep draws one tiny, touch-through overlay in
+      the empty part of the status bar. Off by default; needs "Display over other apps".
+    -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
     <!-- Battery / thermal / CPU readings need no permission at all: they come from the
          system battery broadcast and the kernel's own sysfs files. -->
 
@@ -90,5 +97,18 @@
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="Battery charging timer shown in the status bar while the phone charges" />
         </service>
+
+        <!--
+          Plug in the charger and the status-bar card / watt reading appear on their own —
+          no need to open the app first. Ignored while both switches are off.
+        -->
+        <receiver
+            android:name=".notify.ChargingWatcher"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
+                <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

@@ -1,9 +1,14 @@
 package com.universalrp.cleansweep.data
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.Build
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -294,6 +299,53 @@ object NetworkScanner {
         "FC02E9" to "Xiaomi", "FCA13E" to "Xiaomi", "FC64BA" to "Xiaomi",
     )
 
+    /**
+     * True when Android will let us read the Wi-Fi name. Below Android 13 that needs
+     * Location; from 13 on either Nearby-devices or Location is enough. The old build
+     * only looked at Location, so a phone where the user allowed just "Nearby devices"
+     * kept showing the permission card forever — that is the bug this fixes.
+     */
+    fun wifiPermissionGranted(context: Context): Boolean {
+        fun granted(permission: String) =
+            ContextCompat.checkSelfPermission(context, permission) ==
+                PackageManager.PERMISSION_GRANTED
+        return if (Build.VERSION.SDK_INT >= 33) {
+            granted(Manifest.permission.NEARBY_WIFI_DEVICES) ||
+                granted(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else {
+            granted(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+    }
+
+    /**
+     * The Wi-Fi network itself. Important when a VPN app is running: the "active"
+     * network is then the VPN, and asking only about it is why CleanSweep used to say
+     * "Wi-Fi (name hidden)" on a phone whose Wi-Fi was perfectly readable.
+     */
+    private fun wifiNetwork(
+        connectivity: ConnectivityManager?,
+    ): Pair<Network?, NetworkCapabilities?> {
+        if (connectivity == null) return null to null
+        return try {
+            val active = connectivity.activeNetwork
+            val activeCaps = active?.let { connectivity.getNetworkCapabilities(it) }
+            if (activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true) {
+                return active to activeCaps
+            }
+            val wifi = connectivity.allNetworks.firstOrNull { candidate ->
+                connectivity.getNetworkCapabilities(candidate)
+                    ?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }
+            if (wifi != null) {
+                wifi to connectivity.getNetworkCapabilities(wifi)
+            } else {
+                active to activeCaps
+            }
+        } catch (e: Exception) {
+            null to null
+        }
+    }
+
     fun details(context: Context): WifiDetails {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE)
             as? WifiManager
@@ -306,20 +358,29 @@ object NetworkScanner {
         var gateway: String? = null
         var dns: List<String> = emptyList()
         var needsPermission = false
+        var wifiLink = false
+        var wifiCaps: NetworkCapabilities? = null
 
         try {
-            val network = connectivity?.activeNetwork
-            val capabilities = network?.let { connectivity.getNetworkCapabilities(it) }
-            if (capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true) {
-                transport = "Wi-Fi"
-            } else if (capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) == true) {
-                transport = "Mobile data"
-            } else if (capabilities?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET) == true) {
-                transport = "Ethernet"
-            } else if (capabilities != null) {
-                transport = "Other"
+            val active = connectivity?.activeNetwork
+            val activeCaps = active?.let { connectivity.getNetworkCapabilities(it) }
+            val vpnActive = activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_VPN) == true
+            val (wifiNet, caps) = wifiNetwork(connectivity)
+            wifiCaps = caps
+            wifiLink = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            transport = when {
+                wifiLink && vpnActive -> "Wi-Fi • through a VPN app"
+                wifiLink -> "Wi-Fi"
+                activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true -> "Mobile data"
+                activeCaps?.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) == true -> "Ethernet"
+                vpnActive -> "VPN"
+                activeCaps != null -> "Other"
+                else -> "Not connected"
             }
-            val link = network?.let { connectivity?.getLinkProperties(it) }
+            // With a VPN running, your real LAN address lives on the Wi-Fi network, not on
+            // the VPN one — so read the addresses from the Wi-Fi link whenever there is one.
+            val link = (if (wifiLink) wifiNet else active)
+                ?.let { connectivity?.getLinkProperties(it) }
             link?.linkAddresses?.forEach { address ->
                 val host = address.address
                 if (host is Inet4Address && ip == null) {
@@ -350,9 +411,7 @@ object NetworkScanner {
         // card reappear even after the user had allowed it.
         if (Build.VERSION.SDK_INT >= 29) {
             try {
-                val network = connectivity?.activeNetwork
-                val capabilities = network?.let { connectivity.getNetworkCapabilities(it) }
-                val transportInfo = capabilities?.transportInfo
+                val transportInfo = wifiCaps?.transportInfo
                 if (transportInfo is android.net.wifi.WifiInfo) {
                     val raw = transportInfo.ssid
                     if (raw != null && raw != "<unknown ssid>") {
@@ -386,10 +445,7 @@ object NetworkScanner {
                         rawSsid.startsWith("\"") && rawSsid.endsWith("\"") -> rawSsid.trim('"')
                         else -> rawSsid
                     }
-                    if (ssid == null) {
-                        ssid = legacySsid
-                        if (legacySsid == null) needsPermission = true
-                    }
+                    if (ssid == null) ssid = legacySsid
                     val rawBssid = info.bssid
                     if (bssid == null &&
                         rawBssid != null &&
@@ -428,8 +484,12 @@ object NetworkScanner {
             null
         }
 
+        // Only complain about permission when the name is genuinely unreadable *and* the
+        // permission is really missing.
+        needsPermission = ssid == null && !wifiPermissionGranted(context)
+
         return WifiDetails(
-            connected = transport == "Wi-Fi" || transport == "Ethernet",
+            connected = wifiLink || transport == "Ethernet",
             transport = transport,
             ssid = ssid,
             bssid = bssid,

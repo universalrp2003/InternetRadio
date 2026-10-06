@@ -30,11 +30,18 @@ class ScanEngine(private val context: Context) {
         private const val HASH_CHUNK = 65536L
     }
 
+    /**
+     * @param kinds when not null, only these categories are collected — that is what the
+     *   "Quick cleaning actions" tiles use, so tapping "Duplicates" scans for duplicates
+     *   instead of running a full sweep and showing everything.
+     */
     suspend fun scan(
         root: File,
         cfg: ScanSettings,
+        kinds: Set<JunkKind>? = null,
         onProgress: (ScanProgress) -> Unit,
     ): ScanReport = withContext(Dispatchers.IO) {
+        val want: Set<JunkKind> = kinds ?: JunkKind.entries.toSet()
         val categories = mapOf(
             JunkKind.RESIDUAL to CategoryResult(JunkKind.RESIDUAL),
             JunkKind.THUMBNAILS to CategoryResult(JunkKind.THUMBNAILS),
@@ -91,7 +98,9 @@ class ScanEngine(private val context: Context) {
             if (entries.isEmpty() && dir.absolutePath != rootPath) {
                 junkPaths.add(dir.absolutePath)
                 childrenByDir[dir.absolutePath] = mutableListOf()
-                addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
+                if (JunkKind.EMPTY_FOLDERS in want) {
+                    addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
+                }
                 continue
             }
 
@@ -133,39 +142,48 @@ class ScanEngine(private val context: Context) {
                     JUNK_FILENAMES.contains(lower) || JUNK_EXTENSIONS.contains(ext) ||
                         lower.startsWith("~$") -> {
                         junkPaths.add(abs)
-                        addJunk(residual, JunkFile(abs, size, mod))
+                        if (JunkKind.RESIDUAL in want) {
+                            addJunk(residual, JunkFile(abs, size, mod))
+                        }
                         consumed = true
                     }
                     lower.endsWith(".apk") || lower.endsWith(".apks") || lower.endsWith(".xapk") -> {
-                        val installed = isInstalledApk(abs)
-                        if (!cfg.apkOnlyInstalled || installed) {
-                            junkPaths.add(abs)
-                            addJunk(
-                                apks,
-                                JunkFile(
-                                    abs, size, mod,
-                                    note = if (installed) "App already installed" else "App not installed"
+                        if (JunkKind.APK_FILES in want) {
+                            val installed = isInstalledApk(abs)
+                            if (!cfg.apkOnlyInstalled || installed) {
+                                junkPaths.add(abs)
+                                addJunk(
+                                    apks,
+                                    JunkFile(
+                                        abs, size, mod,
+                                        note = if (installed) "App already installed"
+                                        else "App not installed"
+                                    )
                                 )
-                            )
+                            }
                         }
                         consumed = true
                     }
                     abs.contains("/.thumbnails/") -> {
                         junkPaths.add(abs)
-                        addJunk(thumbs, JunkFile(abs, size, mod))
+                        if (JunkKind.THUMBNAILS in want) {
+                            addJunk(thumbs, JunkFile(abs, size, mod))
+                        }
                         consumed = true
                     }
                 }
 
                 if (!consumed) {
-                    if (size >= cfg.dupMinBytes) {
+                    if (JunkKind.DUPLICATES in want && size >= cfg.dupMinBytes) {
                         bySize.getOrPut(size) { mutableListOf() }.add(abs)
                     }
-                    if (size >= cfg.largeThresholdBytes) {
-                        addJunk(large, JunkFile(abs, size, mod, selected = false))
+                    if (JunkKind.LARGE_FILES in want && size >= cfg.largeThresholdBytes) {
+                        addJunk(large, JunkFile(abs, size, mod))
                     }
-                    if (abs.startsWith(downloadPrefix) && mod in 1 until oldCutoff) {
-                        addJunk(oldDownloads, JunkFile(abs, size, mod, selected = false))
+                    if (JunkKind.OLD_DOWNLOADS in want && abs.startsWith(downloadPrefix) &&
+                        mod in 1 until oldCutoff
+                    ) {
+                        addJunk(oldDownloads, JunkFile(abs, size, mod))
                     }
                 }
             }
@@ -186,7 +204,7 @@ class ScanEngine(private val context: Context) {
         }
 
         // Promote folders that will become empty once their junk children are deleted.
-        val snapshot = junkPaths.toList()
+        val snapshot = if (JunkKind.EMPTY_FOLDERS in want) junkPaths.toList() else emptyList()
         for (p in snapshot) {
             var parent = File(p).parent ?: continue
             while (parent != rootPath && parent.length > rootPath.length) {
@@ -207,7 +225,11 @@ class ScanEngine(private val context: Context) {
         // Duplicate detection: group by exact size, then hash head+tail of the file.
         val digest = MessageDigest.getInstance("MD5")
         var hashed = 0
-        val sizeGroups = bySize.entries.filter { it.value.size > 1 }.sortedByDescending { it.key }
+        val sizeGroups = if (JunkKind.DUPLICATES in want) {
+            bySize.entries.filter { it.value.size > 1 }.sortedByDescending { it.key }
+        } else {
+            emptyList()
+        }
         for ((size, paths) in sizeGroups) {
             if (hashed >= MAX_HASHED_FILES) break
             val byHash = HashMap<String, MutableList<String>>()
@@ -245,13 +267,20 @@ class ScanEngine(private val context: Context) {
             )
         )
 
-        ScanReport(
+        val report = ScanReport(
             categories = listOf(residual, thumbs, duplicates, apks, emptyDirs, oldDownloads, large)
                 .filter { it.files.isNotEmpty() },
             filesScanned = filesScanned,
             dirsScanned = dirsScanned,
             completedAt = System.currentTimeMillis(),
         )
+        // CleanSweep ticks nothing on its own: a fresh scan is a list for you to choose from.
+        // Settings → "Preselect after a scan" is the opt-in shortcut, per category.
+        report.categories.forEach { category ->
+            val preset = category.kind in cfg.defaultSelected
+            category.files.forEach { file -> file.selected = preset }
+        }
+        report
     }
 
     private fun isExcluded(path: String, prefixes: Set<String>): Boolean =

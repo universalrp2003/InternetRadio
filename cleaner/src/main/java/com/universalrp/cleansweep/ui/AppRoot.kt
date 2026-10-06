@@ -1,5 +1,6 @@
 package com.universalrp.cleansweep.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +40,11 @@ fun AppRoot(vm: MainViewModel) {
             .fillMaxSize()
             .background(Bg)
     ) {
+        // The system back button walks back through the screens that were opened instead
+        // of closing the whole app — that was the v2.1 bug ("back closes the application").
+        // Only Home lets Android leave the app.
+        BackHandler(enabled = state.screen != Screen.HOME) { vm.goBack() }
+
         when (state.screen) {
             Screen.HOME -> HomeScreen(state, vm)
             Screen.SCANNING -> ScanScreen(state, vm)

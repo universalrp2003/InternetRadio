@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Send
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Wifi
@@ -60,11 +61,13 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.ai.AssistantAction
 import com.universalrp.cleansweep.ai.AssistantMessage
 import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.OutlineC
 import com.universalrp.cleansweep.ui.theme.SurfaceC
 import com.universalrp.cleansweep.ui.theme.SurfaceHigh
 import com.universalrp.cleansweep.ui.theme.TextPrimary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 /**
@@ -116,7 +119,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Box(
@@ -145,10 +148,20 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "Offline AI • answers stay on this phone",
+                    when {
+                        state.assistantOnline && state.aiConfig.ready ->
+                            "Online AI • ${state.aiConfig.engineLabel}"
+                        state.assistantOnline ->
+                            "Online AI is unavailable — answers use the on-device engine"
+                        else ->
+                            "On-device engine • answers stay on this phone"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = AccentCyan,
                 )
+            }
+            IconButton(onClick = { vm.openAiSettings() }) {
+                Icon(Icons.Outlined.Settings, contentDescription = "Which AI answers", tint = TextSecondary)
             }
             IconButton(onClick = { vm.clearAssistant() }) {
                 Icon(Icons.Outlined.DeleteSweep, contentDescription = "Clear chat", tint = TextSecondary)
@@ -186,14 +199,46 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             item {
+                val ready = state.aiConfig.ready
                 Text(
-                    "No internet needed — this assistant is a small rule engine that runs on your phone and reads only the numbers shown in this app.",
+                    when {
+                        state.assistantOnline && ready && state.aiStatusOk ->
+                            "Online AI answers through ${state.aiEngineLabel}. Each reply shows the " +
+                                "provider, the model and how long it took."
+                        state.assistantOnline && ready ->
+                            "Online AI is on, but the provider did not answer the last check" +
+                                (state.aiStatusText?.let { ": $it" } ?: ".") +
+                                " Replies fall back to the on-device engine until it does."
+                        else ->
+                            "On-device engine — a small rule engine that runs on your phone and " +
+                                "reads only the numbers shown in this app. No internet needed."
+                    },
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
+                    color = if (state.assistantOnline && ready && !state.aiStatusOk) WarnAmber
+                    else TextSecondary,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(bottom = 2.dp),
                 )
+                if (!ready || (state.assistantOnline && !state.aiStatusOk)) {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        TextButton(
+                            onClick = { vm.openAiSettings() },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        ) {
+                            Text("Which AI answers?", color = AccentCyan, fontWeight = FontWeight.Bold)
+                        }
+                        TextButton(
+                            onClick = { vm.useAnotherFreeAi() },
+                            contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp),
+                        ) {
+                            Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             items(state.assistantMessages) { msg ->
@@ -293,11 +338,15 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                     )
                     Spacer(Modifier.height(4.dp))
                 }
-                Text(
-                    msg.text,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = TextPrimary,
-                )
+                AiText(msg.text)
+                msg.meta?.let { meta ->
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        meta,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
                 if (msg.actionLabel != null && msg.action != AssistantAction.NONE) {
                     Spacer(Modifier.height(2.dp))
                     TextButton(

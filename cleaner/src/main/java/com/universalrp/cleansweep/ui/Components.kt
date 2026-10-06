@@ -22,8 +22,16 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +61,7 @@ import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.OutlineC
 import com.universalrp.cleansweep.ui.theme.SurfaceC
+import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 fun JunkKind.icon(): ImageVector = when (this) {
@@ -225,5 +234,75 @@ fun StatusDot(active: Boolean, label: String) {
         )
         Box(Modifier.size(8.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+    }
+}
+
+/**
+ * AI answers come back dressed in markdown (**bold**, "- " bullets, "##" headings).
+ * This renders them as tidy text with real bold runs and clean bullets, so the screen
+ * never shows a wall of asterisks like the old build did.
+ */
+@Composable
+fun AiText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = TextPrimary,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+) {
+    val lines = remember(text) { aiLines(text) }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        lines.forEach { line ->
+            Row(verticalAlignment = Alignment.Top) {
+                if (line.kind == 1) {
+                    Text(
+                        "•",
+                        style = style,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                }
+                Text(
+                    text = aiInline(line.text),
+                    style = style,
+                    color = if (line.kind == 2) AccentCyan else color,
+                    fontWeight = if (line.kind == 2) FontWeight.Bold else null,
+                )
+            }
+        }
+    }
+}
+
+private data class AiLine(val kind: Int, val text: String)
+
+/** kind: 0 = normal, 1 = bullet, 2 = heading. */
+private fun aiLines(raw: String): List<AiLine> = raw
+    .replace("\r", "")
+    .lines()
+    .mapNotNull { original ->
+        val trimmed = original.trim()
+        if (trimmed.isEmpty()) return@mapNotNull null
+        if (trimmed.all { it == '-' || it == '_' || it == '*' }) return@mapNotNull null
+        val heading = trimmed.startsWith("#")
+        var body = trimmed.trimStart('#').trim()
+        val bullet = body.startsWith("- ") || body.startsWith("* ") || body.startsWith("• ")
+        if (bullet) body = body.substring(2).trim()
+        when {
+            heading -> AiLine(2, body)
+            bullet -> AiLine(1, body)
+            else -> AiLine(0, body)
+        }
+    }
+
+/** Turns **bold** runs into real bold text and drops stray back-ticks. */
+private fun aiInline(text: String): AnnotatedString = buildAnnotatedString {
+    var bold = false
+    text.replace("`", "").replace("__", "**").split("**").forEach { chunk ->
+        if (chunk.isNotEmpty()) {
+            withStyle(SpanStyle(fontWeight = if (bold) FontWeight.Bold else null)) {
+                append(chunk)
+            }
+        }
+        bold = !bold
     }
 }

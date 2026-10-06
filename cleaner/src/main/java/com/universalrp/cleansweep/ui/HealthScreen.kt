@@ -25,12 +25,17 @@ import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Bolt
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Thermostat
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -85,7 +90,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
@@ -116,6 +121,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                 }
             } else {
                 item { BatteryCard(health.battery) }
+                item { StatusBarPillCard(state, vm) }
                 item { ThermalCard(health) }
                 item { CpuCard(health) }
                 item { MemoryCard(health) }
@@ -177,6 +183,75 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
     }
 }
 
+/**
+ * The user circled the empty part of the status bar and asked for the charging watts to be
+ * shown there. Android has no way for an app to add a real system status-bar item, so
+ * CleanSweep draws a tiny reading itself — this card is where it is switched on, with an
+ * honest explanation of what it can and cannot do.
+ */
+@Composable
+private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (state.statusPill && state.statusPillAllowed) Icons.Outlined.CheckCircle
+                    else Icons.Outlined.Bolt,
+                    contentDescription = null,
+                    tint = if (state.statusPill && state.statusPillAllowed) GoodGreen else AccentCyan,
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Charging watts beside the clock",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                when {
+                    state.statusPill && state.statusPillAllowed ->
+                        "On. The reading appears in the empty space at the top (beside the front " +
+                            "camera) only while the charger is connected. It cannot be tapped and " +
+                            "shows nothing but watts."
+                    state.statusPill ->
+                        "Switched on, but Android still needs “Display over other apps” before " +
+                            "anything can be drawn there."
+                    else ->
+                        "Android does not let normal apps add items to the system status bar. " +
+                            "CleanSweep draws its own tiny reading instead — watts while charging, " +
+                            "in the empty space next to the clock."
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = {
+                        if (state.statusPill) vm.setStatusPill(false) else vm.setStatusPill(true)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (state.statusPill) SurfaceHigh else AccentCyan,
+                        contentColor = if (state.statusPill) TextSecondary else Color(0xFF03202B),
+                    ),
+                ) {
+                    Text(
+                        if (state.statusPill) "Turn it off" else "Show watts in the status bar",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                if (state.statusPill && !state.statusPillAllowed) {
+                    TextButton(onClick = { vm.openOverlaySettings() }) {
+                        Text("Allow overlay", color = WarnAmber, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun BatteryCard(battery: BatteryReading) {
     PanelCard(Modifier.fillMaxWidth()) {
@@ -207,12 +282,24 @@ private fun BatteryCard(battery: BatteryReading) {
             Bar(value = if (battery.percent >= 0) battery.percent / 100f else 0f,
                 color = if (battery.charging) GoodGreen else AccentCyan)
             batteryTimeLabel(battery)?.let { estimate ->
-                Text(
-                    estimate,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AccentCyan,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        estimate,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (battery.charging) {
+                        Text(
+                            battery.powerW?.let { "%.1f W".format(it) }
+                                ?: battery.currentA?.let { "%.2f A".format(it) } ?: "",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GoodGreen,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
                 if (battery.charging && battery.percent >= 80) {
                     Text(
                         "Above 80% charging slows down on purpose — that is how lithium batteries " +

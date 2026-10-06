@@ -108,7 +108,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
@@ -406,7 +406,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
@@ -586,7 +586,11 @@ private fun scoreColor(score: Int): Color = when {
 fun NetworkScreen(state: UiState, vm: MainViewModel) {
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
-    ) { vm.refresh() }
+    ) {
+        // The old build only refreshed the flags here, so the card stayed on screen and the
+        // button looked dead. Now the details are read again the moment the dialog closes.
+        vm.onWifiPermissionResult()
+    }
 
     LaunchedEffect(Unit) {
         if (state.networkReport == null) vm.refreshNetworkDetails()
@@ -604,7 +608,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
@@ -625,10 +629,16 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
         ) {
             // Only ask while there is really nothing to show: once the phone reports the
             // Wi-Fi name / router address, the card goes away for good.
-            val needsPermissionCard = state.locationPermission.not() ||
-                (report != null && report.wifi.ssid == null && report.wifi.gateway == null)
+            val canReadName = report?.wifi?.ssid != null || report?.wifi?.gateway != null
+            val needsPermissionCard = !state.wifiPermission && !canReadName && !report?.wifi?.connected.equals(false)
             if (needsPermissionCard) {
-                item { NetworkPermissionCard { permissionLauncher.launch(vm.networkPermissions()) } }
+                item {
+                    NetworkPermissionCard(
+                        granted = false,
+                        onRequest = { permissionLauncher.launch(vm.networkPermissions()) },
+                        onOpenSettings = { vm.requestNetworkPermission() },
+                    )
+                }
             }
 
             report?.let { loaded ->
@@ -709,25 +719,41 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Spacer(Modifier.height(8.dp))
-                            if (loaded.devices.size > 1 && state.aiConfig.ready) {
+                            if (loaded.devices.size > 1) {
                                 GradientButton(
-                                    text = if (state.aiDeviceBusy) {
-                                        "Identifying…"
-                                    } else {
-                                        "Identify with AI"
+                                    text = when {
+                                        state.aiDeviceBusy -> "Identifying…"
+                                        state.aiConfig.ready -> "Identify with AI"
+                                        else -> "Set up AI to identify"
                                     },
                                     icon = Icons.Outlined.SmartToy,
-                                    onClick = { vm.identifyDevicesWithAi() },
+                                    onClick = {
+                                        // With no provider this explains itself instead of
+                                        // being a button that does nothing.
+                                        if (state.aiConfig.ready) {
+                                            vm.identifyDevicesWithAi()
+                                        } else {
+                                            vm.openAiSettings()
+                                        }
+                                    },
                                     enabled = !state.aiDeviceBusy,
                                     modifier = Modifier.fillMaxWidth(),
                                 )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    if (state.aiConfig.ready) {
+                                        "The AI sees the same table (ports, names, MAC vendors) and " +
+                                            "says what each device probably is, with its confidence."
+                                    } else {
+                                        "CleanSweep's own guess is on each card below. Add a free AI " +
+                                            "key to get a second opinion with reasons."
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
                                 state.aiDeviceResult?.let { result ->
                                     Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        result,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = TextPrimary,
-                                    )
+                                    AiText(result, style = MaterialTheme.typography.bodySmall)
                                 }
                                 Spacer(Modifier.height(8.dp))
                             }
@@ -757,7 +783,11 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
 }
 
 @Composable
-private fun NetworkPermissionCard(onRequest: () -> Unit) {
+private fun NetworkPermissionCard(
+    granted: Boolean,
+    onRequest: () -> Unit,
+    onOpenSettings: () -> Unit,
+) {
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -778,14 +808,22 @@ private fun NetworkPermissionCard(onRequest: () -> Unit) {
                 color = TextSecondary,
             )
             Spacer(Modifier.height(10.dp))
-            Button(
-                onClick = onRequest,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentCyan,
-                    contentColor = Color(0xFF03202B),
-                ),
-            ) {
-                Text("Allow and rescan", fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(
+                    onClick = onRequest,
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentCyan,
+                        contentColor = Color(0xFF03202B),
+                    ),
+                ) {
+                    Text(
+                        if (granted) "Allowed — tap to rescan" else "Allow and rescan",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                TextButton(onClick = onOpenSettings) {
+                    Text("App settings", color = TextSecondary)
+                }
             }
         }
     }

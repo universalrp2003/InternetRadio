@@ -35,6 +35,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -144,12 +145,42 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "${report.totalCount} items in ${report.categories.size} categories • " +
+                            (state.scanScope?.let { "$it only • " } ?: "") +
+                                "${report.totalCount} items in ${report.categories.size} categories • " +
                                 "${report.filesScanned} files scanned",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                // Nothing is ticked automatically any more: you pick, then Clean.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val everythingTicked = report.categories.isNotEmpty() &&
+                        report.categories.all { it.allSelected }
+                    TextButton(
+                        onClick = { vm.toggleAll(!everythingTicked) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            if (everythingTicked) "Clear selection" else "Select all",
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Text(
+                        if (selectedCount == 0) {
+                            "Tick what you want removed — CleanSweep deletes nothing on its own."
+                        } else {
+                            "$selectedCount of ${report.totalCount} ticked"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selectedCount == 0) WarnAmber else TextSecondary,
+                    )
                 }
             }
 
@@ -176,12 +207,16 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "${selectedCount} items selected",
+                        if (selectedCount == 0) "Nothing selected yet" else "$selectedCount items selected",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        selectedBytes.formatBytes() + " can be freed",
+                        if (selectedCount == 0) {
+                            "Tick items above, then tap Clean"
+                        } else {
+                            selectedBytes.formatBytes() + " can be freed"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )

@@ -35,6 +35,9 @@ import com.universalrp.cleansweep.data.StorageAccess
 import com.universalrp.cleansweep.data.StorageInfo
 import com.universalrp.cleansweep.data.StorageInfoProvider
 import com.universalrp.cleansweep.data.hasAllFilesAccess
+import com.universalrp.cleansweep.notify.ChargeMonitorService
+import com.universalrp.cleansweep.notify.StatusPill
+import android.provider.Settings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -132,6 +135,22 @@ data class UiState(
     // Assistant mode + charging notification
     val assistantOnline: Boolean = false,
     val chargeMonitor: Boolean = true,
+    // Status-bar watt reading: CleanSweep draws it itself (needs "Display over other apps")
+    val statusPill: Boolean = false,
+    val statusPillAllowed: Boolean = false,
+    // Wi-Fi permission (Nearby-devices on Android 13+, Location below)
+    val wifiPermission: Boolean = false,
+    // Which category a quick action is scanning, so screens can say "Duplicates only"
+    val scanScope: String? = null,
+    // Which AI answers right now, and whether it really is reachable
+    val aiEngineLabel: String = "",
+    val aiStatusText: String? = null,
+    val aiStatusOk: Boolean = false,
+    val aiStatusChecking: Boolean = false,
+    val aiFallbackOffered: Boolean = false,
+    val aiFallbackNote: String? = null,
+    val aiUsedModel: String = "",
+    val aiUsedMs: Long = 0L,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -146,6 +165,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var scanJob: Job? = null
     private var currentSettings = ScanSettings()
+    /** Screens the user actually visited, so the back button can walk them again. */
+    private val navStack = ArrayDeque<Screen>()
+    private var lastAiCheckMs = 0L
     private val manualQueue = ArrayDeque<String>()
 
     private val prefs = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
@@ -176,7 +198,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             settingsRepo.chargeMonitor.collect { on ->
                 mutate { it.copy(chargeMonitor = on) }
-                com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, on)
+                // Mirrored into plain prefs for ChargingWatcher / the service.
+                prefs.edit().putBoolean(ChargeMonitorService.CARD_KEY, on).apply()
+                ChargeMonitorService.sync(ctx, on)
             }
         }
         val lastMs = prefs.getLong("last_clean_ms", 0L)
@@ -188,9 +212,25 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             mutate { it.copy(lastClean = stats) }
         }
-        mutate { it.copy(aiConfig = AiSettings.load(ctx)) }
+        viewModelScope.launch {
+            settingsRepo.statusPill.collect { on ->
+                // The foreground service reads this mirror, so keep it in plain prefs too.
+                prefs.edit().putBoolean(ChargeMonitorService.PILL_KEY, on).apply()
+                mutate { it.copy(statusPill = on, statusPillAllowed = StatusPill.canDraw(ctx)) }
+                if (!on) StatusPill.remove()
+                ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+            }
+        }
+        // A key that is already saved is enough: fill in its provider and model so the
+        // app can use it without another trip to the AI settings screen.
+        val loaded = AiSettings.load(ctx)
+        val completed = AiSettings.autoComplete(loaded)
+        if (completed != loaded) AiSettings.save(ctx, completed)
+        mutate { it.copy(aiConfig = completed, aiEngineLabel = completed.engineLabel) }
         refresh()
         refreshHealth()
+        // "Every time you open the app, check that the AI can actually answer."
+        refreshAiStatus()
     }
 
     private fun mutate(block: (UiState) -> UiState) {
@@ -207,14 +247,55 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 usageAccess = AppCacheRepo.hasUsageAccess(ctx),
                 legacyStorageOk = legacyStorageGranted(),
                 locationPermission = locationGranted(),
+                wifiPermission = NetworkScanner.wifiPermissionGranted(ctx),
+                statusPillAllowed = StatusPill.canDraw(ctx),
             )
         }
+        // Coming back from the AI settings screen (or any other) re-tests the provider,
+        // but at most every 15 minutes so the app is not chatty.
+        if (System.currentTimeMillis() - lastAiCheckMs > 15 * 60_000L) refreshAiStatus()
         if (_state.value.screen == Screen.APP_CACHE && _state.value.usageAccess) {
             loadAppCaches()
         }
     }
 
-    fun navigate(screen: Screen) = mutate { it.copy(screen = screen) }
+    fun navigate(screen: Screen) {
+        val current = _state.value.screen
+        if (screen != current && current != Screen.HOME && current != Screen.SCANNING) {
+            navStack.addLast(current)
+            while (navStack.size > 12) navStack.removeFirst()
+        }
+        mutate { it.copy(screen = screen) }
+    }
+
+    /**
+     * The system back button / gesture. The build the user tested closed the whole app from
+     * every screen; now back walks the screens that were actually visited and only leaves
+     * the app from Home. Back from a running scan cancels the scan.
+     */
+    fun goBack() {
+        val current = _state.value.screen
+        if (current == Screen.SCANNING) {
+            cancelScan()
+            return
+        }
+        if (current == Screen.HOME) return
+        while (navStack.isNotEmpty()) {
+            val previous = navStack.removeLast()
+            if (previous == Screen.SCANNING) continue
+            if (previous == Screen.RESULTS && _state.value.report == null) continue
+            mutate { it.copy(screen = previous) }
+            return
+        }
+        // Screens reached straight from an action (AI report from Phone health, the AI
+        // settings from a card) still get a sensible parent instead of exiting the app.
+        val parent = when (current) {
+            Screen.AI_REPORT -> Screen.HEALTH
+            Screen.AI_SETTINGS -> Screen.SETTINGS
+            else -> Screen.HOME
+        }
+        mutate { it.copy(screen = parent) }
+    }
 
     fun requestAllFilesAccess() = StorageAccess.requestAllFilesAccess(ctx)
 
@@ -222,7 +303,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ------------------------------------------------------------------ scan
 
-    fun startScan() {
+    /**
+     * @param kinds when set, only this category is hunted for. The quick tiles pass their
+     *   own category so "Duplicates" scans for duplicates instead of everything.
+     */
+    fun startScan(kinds: Set<JunkKind>? = null, scopeLabel: String? = null) {
         if (!hasAllFilesAccess()) {
             StorageAccess.requestAllFilesAccess(ctx)
             mutate { it.copy(message = "Please allow “All files access” for CleanSweep, then tap Scan again.") }
@@ -240,12 +325,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         com.universalrp.cleansweep.data.SoundFx.play(ctx, com.universalrp.cleansweep.R.raw.sound_scan)
-        mutate { it.copy(screen = Screen.SCANNING, progress = null) }
+        mutate { it.copy(screen = Screen.SCANNING, progress = null, scanScope = scopeLabel) }
         val root = Environment.getExternalStorageDirectory()
         val cfg = currentSettings
         scanJob = viewModelScope.launch {
             try {
-                val report = engine.scan(root, cfg) { p ->
+                val report = engine.scan(root, cfg, kinds) { p ->
                     mutate { it.copy(progress = p) }
                 }
                 mutate { it.copy(screen = Screen.RESULTS, report = report, progress = null) }
@@ -265,7 +350,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun cancelScan() {
         scanJob?.cancel()
-        mutate { it.copy(screen = Screen.HOME, progress = null) }
+        mutate { it.copy(screen = Screen.HOME, progress = null, scanScope = null) }
     }
 
     // ------------------------------------------------------- selection edits
@@ -281,6 +366,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleCategory(kind: JunkKind, selected: Boolean) {
         _state.value.report?.categories?.firstOrNull { it.kind == kind }?.setAll(selected)
         mutate { it }
+    }
+
+    /** "Select all" / "Clear" for the whole result list. */
+    fun toggleAll(selected: Boolean) {
+        _state.value.report?.categories?.forEach { it.setAll(selected) }
+        mutate { it }
+    }
+
+    /** How many items are ticked right now (used by the Select all button). */
+    fun allSelected(): Boolean {
+        val report = _state.value.report ?: return false
+        val files = report.categories.flatMap { it.files }
+        return files.isNotEmpty() && files.all { it.selected }
     }
 
     // ------------------------------------------------------------------ clean
@@ -468,8 +566,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         )
                     }
                 }
-                val result = AiClient.ask(
-                    config = state.aiConfig,
+                val (result, fallbackNote, elapsedMs) = askWithFallback(
                     systemPrompt = "You are CleanSweep's helper inside an Android cleaning app. " +
                         "Answer in under 200 words, plain language, using only the phone facts given.",
                     userPrompt = "$facts\nQuestion from the user: $q",
@@ -479,9 +576,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     text = if (result.ok) {
                         result.text
                     } else {
-                        "I could not reach the AI provider (${result.error ?: "unknown error"}). " +
+                        "I could not reach the AI provider (${result.error ?: "unknown error"}).\n\n" +
                             "Here is the on-device answer instead:\n\n" +
                             Assistant.answer(q, context, state.assistantVerbose).text
+                    },
+                    // The bubble says who answered and which model — no mystery AI.
+                    meta = if (result.ok) {
+                        answerMeta(result, elapsedMs, fallbackNote)
+                    } else {
+                        "On-device engine · ${state.aiConfig.engineLabel} did not answer"
                     },
                 )
                 mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
@@ -491,6 +594,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             // a canned string — the whole engine still runs locally and instantly.
             delay(420)
             val reply = Assistant.answer(q, assistantContext(), _state.value.assistantVerbose)
+                .copy(meta = "On-device engine · works with no internet")
             mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
         }
     }
@@ -553,6 +657,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             ctx, Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
 
+    /** Android 13+ also accepts Nearby-devices for the Wi-Fi name. */
+    fun wifiPermissionGranted(): Boolean = NetworkScanner.wifiPermissionGranted(ctx)
+
     /** Wi-Fi details need Location below Android 13 and Nearby-devices from 13 up. */
     fun networkPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= 33) {
         arrayOf(
@@ -563,10 +670,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
     }
 
+    /**
+     * Fallback for when Android refuses to show the permission dialog again (the user said
+     * "don't allow" twice): the app's own settings page is the only place left.
+     */
     fun requestNetworkPermission() {
-        // The screen launches the runtime dialog; if the user denied twice we can only
-        // send them to the app's settings page.
         StorageAccess.openAppInfo(ctx, ctx.packageName)
+    }
+
+    /** Re-reads the Wi-Fi name after the permission dialog closes. */
+    fun onWifiPermissionResult() {
+        mutate { it.copy(wifiPermission = NetworkScanner.wifiPermissionGranted(ctx)) }
+        refreshNetworkDetails()
     }
 
     // ---------------------------------------------------------------- health
@@ -581,17 +696,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setChargeMonitor(enabled: Boolean) {
         viewModelScope.launch { settingsRepo.setChargeMonitor(enabled) }
-        com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, enabled)
+        // Mirrored so ChargingWatcher knows whether to start the monitor on its own.
+        prefs.edit().putBoolean(ChargeMonitorService.CARD_KEY, enabled).apply()
+        ChargeMonitorService.sync(ctx, enabled)
     }
+
+    /**
+     * The watt reading in the status bar. Android will not let any app write there without
+     * "Display over other apps", so switching this on for the first time opens that page.
+     */
+    fun setStatusPill(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setStatusPill(enabled) }
+        prefs.edit().putBoolean(ChargeMonitorService.PILL_KEY, enabled).apply()
+        if (!enabled) StatusPill.remove()
+        ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+        if (enabled && !StatusPill.canDraw(ctx)) {
+            mutate {
+                it.copy(
+                    message = "Allow “Display over other apps” and the watt reading will " +
+                        "appear beside the clock while charging.",
+                )
+            }
+            openOverlaySettings()
+        } else if (enabled) {
+            mutate { it.copy(message = "Watt reading on — it appears while the charger is connected.") }
+        }
+    }
+
+    fun openOverlaySettings() {
+        try {
+            ctx.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${ctx.packageName}"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        } catch (e: Exception) {
+            StorageAccess.openAppInfo(ctx, ctx.packageName)
+        }
+    }
+
+    fun refreshStatusPillPermission() =
+        mutate { it.copy(statusPillAllowed = StatusPill.canDraw(ctx)) }
 
     fun setAssistantOnline(enabled: Boolean) {
         if (enabled && !_state.value.aiConfig.ready) {
             mutate {
-                it.copy(message = "Add an AI provider in AI settings first — then Online AI can answer.")
+                it.copy(
+                    message = "Online AI needs a provider first — add a free key, or use the " +
+                        "free no-key option in AI settings.",
+                )
             }
             return
         }
         viewModelScope.launch { settingsRepo.setAssistantOnline(enabled) }
+        if (enabled) {
+            mutate { it.copy(message = "Online AI on — answers come from ${it.aiConfig.engineLabel}") }
+        }
     }
 
     // ------------------------------------------------------------ app inventory
@@ -755,13 +916,160 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun saveAiConfig(apiKey: String, model: String, baseUrl: String) {
-        val updated = _state.value.aiConfig.copy(
+        val typed = _state.value.aiConfig.copy(
             apiKey = apiKey.trim(),
             model = model.trim(),
             baseUrl = baseUrl.trim(),
         )
+        // A pasted key carries its own provider prefix and a model id that works, so the
+        // user never has to guess either one — and the assistant switches to it at once.
+        val updated = AiSettings.autoComplete(typed)
         AiSettings.save(ctx, updated)
-        mutate { it.copy(aiConfig = updated, message = "AI settings saved") }
+        mutate {
+            it.copy(
+                aiConfig = updated,
+                aiEngineLabel = updated.engineLabel,
+                message = if (updated.hasSavedKey) {
+                    "${updated.provider.shortLabel} saved — checking it now…"
+                } else {
+                    "AI settings saved"
+                },
+            )
+        }
+        if (updated.ready) {
+            if (!_state.value.assistantOnline) setAssistantOnline(true)
+            refreshAiStatus(announce = true)
+        }
+    }
+
+    /**
+     * "Is my AI ready?" — the check the app runs every time it opens, as the user asked for.
+     * For the free lane it tries the keyless endpoints in turn and remembers the one that
+     * answered; for a key it asks the provider for its model list, so a retired model or a
+     * refused key is reported in plain words before a question is ever asked.
+     */
+    fun refreshAiStatus(announce: Boolean = false) {
+        val config = _state.value.aiConfig
+        lastAiCheckMs = System.currentTimeMillis()
+        val label = config.engineLabel
+        if (!config.ready) {
+            mutate {
+                it.copy(
+                    aiEngineLabel = label,
+                    aiStatusChecking = false,
+                    aiStatusOk = false,
+                    aiStatusText = "No AI set up yet — add a free key, or tap “Use the free AI”.",
+                    aiFallbackOffered = true,
+                )
+            }
+            return
+        }
+        if (_state.value.aiStatusChecking) return
+        mutate { it.copy(aiEngineLabel = label, aiStatusChecking = true, aiStatusText = null) }
+        viewModelScope.launch {
+            val result = AiClient.ping(config)
+            val answered = result.endpointUrl?.let { url ->
+                config.copy(freeEndpointUrl = url).engineLabel
+            } ?: label
+            mutate {
+                it.copy(
+                    aiStatusChecking = false,
+                    aiStatusOk = result.ok,
+                    aiStatusText = result.error,
+                    aiFallbackOffered = !result.ok,
+                    aiEngineLabel = answered,
+                    message = when {
+                        !announce -> it.message
+                        result.ok -> "${result.providerLabel} is ready"
+                        else -> null
+                    },
+                )
+            }
+            if (result.ok) rememberEndpoint(result)
+        }
+    }
+
+    /**
+     * "If the AI you picked does not work, give me another free one." Switches to the
+     * keyless lane, forgets the endpoint that failed and tests again immediately. The saved
+     * key stays put, so switching back to Gemini later needs no re-typing.
+     */
+    fun useAnotherFreeAi() {
+        val current = _state.value.aiConfig
+        val updated = current.copy(
+            provider = AiProvider.FREE,
+            model = "",
+            freeEndpointUrl = "",
+        )
+        AiSettings.save(ctx, updated)
+        mutate {
+            it.copy(
+                aiConfig = updated,
+                aiEngineLabel = updated.engineLabel,
+                aiStatusText = "Trying the free AI lane…",
+                aiStatusOk = false,
+                message = "Trying the free AI lane (no key needed)…",
+            )
+        }
+        if (!_state.value.assistantOnline) setAssistantOnline(true)
+        lastAiCheckMs = 0L
+        refreshAiStatus(announce = true)
+    }
+
+    /**
+     * One place that asks the AI and, if the chosen provider does not answer, quietly tries
+     * the free keyless lane before giving up. The caller is told who answered and what went
+     * wrong first, so the UI can be honest about it instead of pretending.
+     */
+    private suspend fun askWithFallback(
+        systemPrompt: String,
+        userPrompt: String,
+    ): Triple<AiClient.Result, String?, Long> {
+        val started = System.currentTimeMillis()
+        val config = _state.value.aiConfig
+        val first = AiClient.ask(config, systemPrompt, userPrompt)
+        if (first.ok) {
+            rememberEndpoint(first)
+            return Triple(first, null, System.currentTimeMillis() - started)
+        }
+        if (config.provider != AiProvider.FREE) {
+            val freeLane = AiConfig(
+                provider = AiProvider.FREE,
+                freeEndpointUrl = config.freeEndpointUrl,
+                includeAppNames = config.includeAppNames,
+                includeNetwork = config.includeNetwork,
+            )
+            val second = AiClient.ask(freeLane, systemPrompt, userPrompt)
+            if (second.ok) {
+                rememberEndpoint(second)
+                return Triple(second, first.error, System.currentTimeMillis() - started)
+            }
+        }
+        return Triple(first, null, System.currentTimeMillis() - started)
+    }
+
+    /** "Gemini · gemini-2.5-flash · 1.4 s" — printed under every AI answer. */
+    private fun answerMeta(
+        result: AiClient.Result,
+        elapsedMs: Long,
+        fallbackNote: String?,
+    ): String = buildString {
+        append(result.providerLabel)
+        if (result.model.isNotBlank()) append(" · ").append(result.model)
+        if (elapsedMs > 0L) append(" · ").append("%.1f s".format(elapsedMs / 1000.0))
+        if (fallbackNote != null) {
+            append("\nYour provider did not answer first (").append(fallbackNote.take(120)).append(")")
+        }
+    }
+
+    /** Remembers the keyless endpoint that answered so the next request starts there. */
+    private fun rememberEndpoint(result: AiClient.Result) {
+        val url = result.endpointUrl ?: return
+        val current = _state.value.aiConfig
+        if (current.freeEndpointUrl == url && current.engineLabel.isNotBlank()) return
+        val updated = current.copy(freeEndpointUrl = url)
+        AiSettings.save(ctx, updated)
+        mutate { it.copy(aiConfig = updated, aiEngineLabel = updated.engineLabel) }
     }
 
     fun testAiConnection() {
@@ -791,6 +1099,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 aiBusy = true,
                 aiError = null,
                 aiAnswer = null,
+                aiFallbackNote = null,
+                aiUsedMs = 0L,
                 screen = Screen.AI_REPORT,
             )
         }
@@ -816,8 +1126,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
             mutate { it.copy(aiPromptPreview = prompt) }
 
-            val result = AiClient.ask(
-                config = config,
+            val (result, fallbackNote, elapsedMs) = askWithFallback(
                 systemPrompt = AiReport.systemPrompt(),
                 userPrompt = prompt,
             )
@@ -827,6 +1136,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     aiAnswer = if (result.ok) result.text else null,
                     aiError = if (result.ok) null else result.error,
                     aiUsedProvider = result.providerLabel,
+                    aiUsedModel = result.model,
+                    aiUsedMs = elapsedMs,
+                    aiFallbackNote = fallbackNote,
+                    aiStatusOk = result.ok,
                 )
             }
         }
@@ -883,8 +1196,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     )
                 }
             }
-            val result = AiClient.ask(
-                config = config,
+            val (result, fallbackNote, elapsedMs) = askWithFallback(
                 systemPrompt = """
                     You identify devices on a home Wi-Fi network from the evidence given.
                     For each line say what the device probably is (phone, laptop, desktop, tablet,
@@ -898,7 +1210,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             mutate {
                 it.copy(
                     aiDeviceBusy = false,
-                    aiDeviceResult = if (result.ok) result.text else result.error,
+                    aiDeviceResult = if (result.ok) {
+                        result.text + "\n\n— " + answerMeta(result, elapsedMs, fallbackNote)
+                    } else {
+                        result.error
+                    },
                 )
             }
         }
@@ -926,6 +1242,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setApkInstalledOnly(v: Boolean) =
         viewModelScope.launch { settingsRepo.setApkInstalledOnly(v) }
+
+    /** Which categories come pre-ticked after a scan (none, by default). */
+    fun setDefaultSelected(kind: JunkKind, on: Boolean) =
+        viewModelScope.launch { settingsRepo.setDefaultSelected(kind, on) }
 
     fun addExclusion(raw: String) =
         viewModelScope.launch { settingsRepo.addExclusion(raw) }

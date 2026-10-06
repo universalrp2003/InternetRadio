@@ -39,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -48,6 +49,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.DeleteSweep
+import androidx.compose.material.icons.outlined.FileDownload
+import androidx.compose.material.icons.outlined.Photo
+import androidx.compose.material.icons.outlined.Android
+import androidx.compose.material.icons.outlined.ContentCopy
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.SdStorage
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -56,7 +67,9 @@ import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.formatUptime
+import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.DangerRed
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.OutlineC
@@ -175,6 +188,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            item { AiStatusCard(state, vm) }
+
             item {
                 GradientButton(
                     text = if (state.report != null) "Scan again" else "Scan & clean junk",
@@ -243,20 +258,42 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
 
             item {
                 SectionTitle("Quick cleaning actions")
+                Text(
+                    "Each tile scans for its own kind of junk only — then you tick what to clean.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(bottom = 10.dp),
+                )
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         QuickCard(
+                            icon = Icons.Outlined.DeleteSweep,
+                            title = "Temp & junk",
+                            subtitle = "Only .tmp, .log, leftovers",
+                            onClick = { vm.startScan(setOf(JunkKind.RESIDUAL), JunkKind.RESIDUAL.label) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        QuickCard(
+                            icon = Icons.Outlined.Photo,
+                            title = "Thumbnails",
+                            subtitle = "Only image cache files",
+                            onClick = { vm.startScan(setOf(JunkKind.THUMBNAILS), JunkKind.THUMBNAILS.label) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        QuickCard(
                             icon = Icons.Outlined.Android,
-                            title = "App cache",
-                            subtitle = "Clear caches of installed apps",
-                            onClick = { vm.navigate(Screen.APP_CACHE) },
+                            title = "APK files",
+                            subtitle = "Only installer packages",
+                            onClick = { vm.startScan(setOf(JunkKind.APK_FILES), JunkKind.APK_FILES.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
                             icon = Icons.Outlined.ContentCopy,
                             title = "Duplicates",
-                            subtitle = "Find identical files",
-                            onClick = { vm.startScan() },
+                            subtitle = "Only identical files",
+                            onClick = { vm.startScan(setOf(JunkKind.DUPLICATES), JunkKind.DUPLICATES.label) },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -264,15 +301,31 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                         QuickCard(
                             icon = Icons.Outlined.Folder,
                             title = "Empty folders",
-                            subtitle = "Remove useless folders",
-                            onClick = { vm.startScan() },
+                            subtitle = "Only empty folders",
+                            onClick = { vm.startScan(setOf(JunkKind.EMPTY_FOLDERS), JunkKind.EMPTY_FOLDERS.label) },
                             modifier = Modifier.weight(1f),
                         )
                         QuickCard(
+                            icon = Icons.Outlined.FileDownload,
+                            title = "Old downloads",
+                            subtitle = "Only old Download files",
+                            onClick = { vm.startScan(setOf(JunkKind.OLD_DOWNLOADS), JunkKind.OLD_DOWNLOADS.label) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        QuickCard(
                             icon = Icons.Outlined.SdStorage,
                             title = "Large files",
-                            subtitle = "Review very big files",
-                            onClick = { vm.startScan() },
+                            subtitle = "Only files over the limit",
+                            onClick = { vm.startScan(setOf(JunkKind.LARGE_FILES), JunkKind.LARGE_FILES.label) },
+                            modifier = Modifier.weight(1f),
+                        )
+                        QuickCard(
+                            icon = Icons.Outlined.Android,
+                            title = "App cache",
+                            subtitle = "Per-app caches, cached",
+                            onClick = { vm.navigate(Screen.APP_CACHE) },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -321,7 +374,13 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
 @Composable
 private fun AssistantCard(state: UiState, vm: MainViewModel) {
     val totalCache = state.appCaches.sumOf { if (it.cacheBytes > 0L) it.cacheBytes else 0L }
+    // Which engine is answering *now*. The old build hard-coded "ON-DEVICE" even after
+    // the user switched to Online AI, which is exactly what the screenshot complained about.
+    val online = state.assistantOnline && state.aiConfig.ready
+    val badge = if (online) "ONLINE AI" else "ON-DEVICE"
+    val badgeColor = if (online) GoodGreen else AccentCyan
     val subtitle = when {
+        online -> "Answered by ${state.aiEngineLabel} — tap to ask or change"
         state.report != null -> "Ask me what the scan found — I work offline"
         totalCache > 0L -> "${totalCache.formatBytes()} of app cache found — ask me what to do"
         else -> "Free space, safe deletes, cache help — answers stay on this phone"
@@ -361,13 +420,13 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
                     )
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "ON-DEVICE",
+                        badge,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color(0xFF04202A),
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .clip(RoundedCornerShape(8.dp))
-                            .background(AccentCyan)
+                            .background(badgeColor)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     )
                 }
@@ -379,6 +438,83 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
                 )
             }
             Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
+        }
+    }
+}
+
+/**
+ * "Is my AI actually able to answer?" — checked on every app start. Green when the chosen
+ * provider answered a moment ago, red with the real reason when it did not, and always
+ * with a one-tap way out: fix the settings, check again, or switch to a free AI.
+ */
+@Composable
+private fun AiStatusCard(state: UiState, vm: MainViewModel) {
+    val configured = state.aiConfig.ready
+    val ok = configured && state.aiStatusOk
+    val accent = when {
+        !configured -> WarnAmber
+        ok -> GoodGreen
+        else -> DangerRed
+    }
+    PanelCard(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+    ) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = accent,
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when {
+                            state.aiStatusChecking -> "Checking your AI…"
+                            ok -> "AI ready"
+                            configured -> "AI is not answering"
+                            else -> "AI is not set up"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        when {
+                            state.aiStatusChecking -> "Asking ${state.aiEngineLabel} for a quick hello."
+                            ok -> state.aiEngineLabel + " answered. Every answer will show its model."
+                            configured -> state.aiStatusText
+                                ?: "The provider did not answer. You can try a free AI instead."
+                            else -> state.aiStatusText
+                                ?: "Add a free Gemini key, or use the free no-key option."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                }
+            }
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextButton(onClick = { vm.openAiSettings() }) {
+                    Text("AI settings", color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+                if (configured) {
+                    TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
+                        Text("Check again", color = AccentCyan, fontWeight = FontWeight.Bold)
+                    }
+                }
+                if (!ok) {
+                    TextButton(onClick = { vm.useAnotherFreeAi() }) {
+                        Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

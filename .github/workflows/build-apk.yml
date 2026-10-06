@@ -172,9 +172,17 @@ jobs:
             exit 1
           fi
 
+          if grep -q "SYSTEM_ALERT_WINDOW" "$MERGED_CLEANER"; then
+            echo "OK: overlay permission present for the status-bar watt reading"
+          else
+            echo "FAIL: SYSTEM_ALERT_WINDOW is missing (the watt reading needs it)"
+            exit 1
+          fi
+
           for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
                         SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
-                        ChargeMonitorService batteryTimeLabel; do
+                        ChargeMonitorService batteryTimeLabel StatusPill goBack \
+                        defaultSelected useAnotherFreeAi ping AiText; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

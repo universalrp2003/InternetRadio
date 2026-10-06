@@ -84,6 +84,32 @@ class ChargeMonitorService : Service() {
         } catch (e: Exception) {
             // If notifications were switched off, there is nothing to show.
         }
+        updateStatusPill()
+    }
+
+    /**
+     * Keeps the little watt reading in the empty part of the status bar in step with the
+     * notification. It only appears when the user switched it on *and* allowed "Display
+     * over other apps"; while charging stops, the pill is taken away again.
+     */
+    private fun updateStatusPill() {
+        val wanted = getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(PILL_KEY, false)
+        if (!wanted || !StatusPill.canDraw(this)) {
+            StatusPill.remove()
+            return
+        }
+        val battery = BatteryReader.read(this)
+        if (!battery.charging) {
+            StatusPill.remove()
+            return
+        }
+        val text = when {
+            battery.powerW != null -> "\u26A1 %.1f W".format(battery.powerW)
+            battery.currentA != null -> "\u26A1 %.2f A".format(battery.currentA)
+            else -> "\u26A1 ${battery.percent}%"
+        }
+        StatusPill.update(this, text)
     }
 
     private fun buildNotification(): Notification {
@@ -154,6 +180,8 @@ class ChargeMonitorService : Service() {
     }
 
     override fun onDestroy() {
+        // Unplugged or switched off: the status-bar reading goes with it.
+        StatusPill.remove()
         try {
             unregisterReceiver(batteryReceiver)
         } catch (e: Exception) {
@@ -174,6 +202,11 @@ class ChargeMonitorService : Service() {
     companion object {
         const val CHANNEL_ID = "cleansweep_charging"
         const val NOTIFICATION_ID = 4201
+
+        /** These switches live outside DataStore so a service or receiver can read them. */
+        const val PILL_PREFS = "cleansweep_state"
+        const val PILL_KEY = "status_pill"
+        const val CARD_KEY = "charge_monitor"
 
         /** Starts or stops the monitor to match the current charger state. */
         fun sync(context: Context, enabled: Boolean) {

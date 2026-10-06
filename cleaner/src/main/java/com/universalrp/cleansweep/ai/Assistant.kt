@@ -12,6 +12,12 @@ data class AssistantMessage(
     val actionLabel: String? = null,
     val action: AssistantAction = AssistantAction.NONE,
     val atMs: Long = System.currentTimeMillis(),
+    /**
+     * Which engine produced this answer — "Gemini · gemini-2.5-flash · 1.2 s" or
+     * "On-device engine · works with no internet". Shown under the bubble so the user
+     * always knows who is talking.
+     */
+    val meta: String? = null,
 )
 
 /** Optional one-tap follow-up that the assistant can offer with an answer. */

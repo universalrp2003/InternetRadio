@@ -77,7 +77,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(

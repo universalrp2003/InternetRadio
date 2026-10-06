@@ -125,9 +125,39 @@ enum class AiProvider(
             CUSTOM -> ""
         }
 
+    /** Short name used for the badge that says which AI answered. */
+    val shortLabel: String
+        get() = when (this) {
+            FREE -> "Free AI"
+            GEMINI -> "Gemini"
+            NVIDIA -> "NVIDIA NIM"
+            OPENROUTER -> "OpenRouter"
+            GROQ -> "Groq"
+            OPENAI -> "OpenAI"
+            CUSTOM -> "Custom AI"
+        }
+
     companion object {
         fun fromId(id: String): AiProvider =
             entries.firstOrNull { it.id == id } ?: GEMINI
+
+        /**
+         * Which provider a pasted key obviously belongs to. Keys are prefixed by the
+         * service that made them, so CleanSweep can select the right provider for you
+         * instead of asking you to pick one from a list.
+         */
+        fun forKey(key: String): AiProvider? {
+            val k = key.trim()
+            if (k.isEmpty()) return null
+            return when {
+                k.startsWith("AIza") -> GEMINI
+                k.startsWith("nvapi-") -> NVIDIA
+                k.startsWith("sk-or-") -> OPENROUTER
+                k.startsWith("gsk_") -> GROQ
+                k.startsWith("sk-proj-") || k.startsWith("sk-") -> OPENAI
+                else -> null
+            }
+        }
     }
 }
 
@@ -146,6 +176,12 @@ data class AiConfig(
     /** Sending app names gives much better advice; the switch lets you turn it off. */
     val includeAppNames: Boolean = true,
     val includeNetwork: Boolean = true,
+    /**
+     * The keyless endpoint that last answered (Kilo, Pollinations or OVHcloud). Remembering
+     * it means the next question goes straight to the one that works instead of retrying
+     * the busy ones every time.
+     */
+    val freeEndpointUrl: String = "",
 ) {
     val resolvedModel: String get() = model.trim().ifBlank { provider.defaultModel }
     val resolvedBaseUrl: String get() = baseUrl.trim().ifBlank { provider.baseUrl }.trimEnd('/')
@@ -155,6 +191,21 @@ data class AiConfig(
             AiProvider.CUSTOM -> resolvedBaseUrl.isNotBlank() && resolvedModel.isNotBlank()
             else -> apiKey.isNotBlank() && resolvedModel.isNotBlank()
         }
+
+    /** "Gemini · gemini-2.5-flash" — shown wherever the app says which AI is answering. */
+    val engineLabel: String
+        get() = when (provider) {
+            AiProvider.FREE -> {
+                val endpoint = AiSettings.KEYLESS.firstOrNull { it.url == freeEndpointUrl }
+                val which = endpoint?.let { it.label.substringBefore(" (") } ?: "best available free"
+                "Free AI · $which"
+            }
+            AiProvider.CUSTOM -> "Custom · ${resolvedModel.ifBlank { "no model set" }}"
+            else -> "${provider.shortLabel} · ${resolvedModel.ifBlank { "no model set" }}"
+        }
+
+    /** True when a key is already saved, so the app can just use it. */
+    val hasSavedKey: Boolean get() = apiKey.isNotBlank()
 }
 
 object AiSettings {
@@ -193,7 +244,29 @@ object AiSettings {
             baseUrl = prefs.getString("base_url", "") ?: "",
             includeAppNames = prefs.getBoolean("include_app_names", true),
             includeNetwork = prefs.getBoolean("include_network", true),
+            freeEndpointUrl = prefs.getString("free_endpoint_url", "") ?: "",
         )
+    }
+
+    /**
+     * Fills the gaps in a saved configuration: a pasted key picks its provider and a
+     * default model, so "I already put my key in" really does mean the app can use it
+     * without another visit to the settings screen.
+     */
+    fun autoComplete(config: AiConfig): AiConfig {
+        var updated = config
+        if (updated.model.isBlank() && updated.provider.defaultModel.isNotBlank()) {
+            updated = updated.copy(model = updated.provider.defaultModel)
+        }
+        if (updated.provider == AiProvider.FREE && updated.hasSavedKey) {
+            AiProvider.forKey(updated.apiKey)?.let { guessed ->
+                updated = updated.copy(
+                    provider = guessed,
+                    model = updated.model.ifBlank { guessed.defaultModel },
+                )
+            }
+        }
+        return updated
     }
 
     fun save(context: Context, config: AiConfig) {
@@ -204,6 +277,7 @@ object AiSettings {
             .putString("base_url", config.baseUrl.trim())
             .putBoolean("include_app_names", config.includeAppNames)
             .putBoolean("include_network", config.includeNetwork)
+            .putString("free_endpoint_url", config.freeEndpointUrl.trim())
             .apply()
     }
 

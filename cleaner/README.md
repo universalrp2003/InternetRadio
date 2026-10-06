@@ -4,6 +4,39 @@ A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
 and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
 
+**v2.2 highlights**
+
+- **Charging watts beside the clock** — the user pointed at the empty part of the status bar
+  and asked for the watt reading there. Android has no API for a third-party status-bar
+  item, so CleanSweep draws its own tiny `⚡ 3.9 W` reading in that gap (it even steps around
+  the front-camera cutout). It is off by default, needs "Display over other apps", only
+  appears while charging, and cannot be tapped. The ongoing charging card stays too.
+- **The back button works** — from any screen the system back gesture now walks back through
+  the screens you opened instead of closing the whole app; only Home lets Android exit.
+- **Quick cleaning does exactly what it says** — the tiles now scan *only* their own
+  category: Temp & junk, Thumbnails, APK files, Duplicates, Empty folders, Old downloads,
+  Large files. No more full scan for a duplicate hunt.
+- **You choose what to clean** — nothing is ticked after a scan any more. Every list starts
+  empty with "Tick what you want removed"; **Select all / Clear** is one tap away, and
+  Settings → **Preselect after a scan** is where you opt into automatic ticking per category
+  (Thumbnail cache, Temp files, APK files, Duplicates…).
+- **The AI is checked every time the app opens** — the Home screen shows a green "AI ready"
+  card with the live engine (`Gemini · gemini-2.5-flash`). If the provider does not answer,
+  it says why in plain words and offers **Use a free AI**, which switches to the keyless
+  lane and remembers the endpoint that answered.
+- **Every answer says who produced it** — the assistant bubble, the AI report and the device
+  identification all print the provider, the model and how long it took. If your provider
+  fails mid-question, a free AI answers instead and the app says so.
+- **A saved key is used automatically** — paste any key and CleanSweep recognises the
+  provider from its prefix (AIza… = Gemini, sk-or-… = OpenRouter, gsk_… = Groq, nvapi-… =
+  NVIDIA), fills in a current model and switches the assistant to Online AI in one step.
+- **Wi-Fi permission fixed for real** — the card now only appears when the details are
+  genuinely unreadable, "Allow and rescan" re-reads the network the moment the dialog
+  closes, the Wi-Fi name is found even while a VPN is running, and Android 13+ is happy with
+  Nearby-devices alone (Location is no longer demanded).
+- **Markdown is rendered** — AI answers no longer show raw `**asterisks**`; bullets, bold
+  runs and headings are drawn properly.
+
 **v2.1 highlights**
 
 - **Charging card in the status bar** — while the charger is connected an ongoing

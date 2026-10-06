@@ -128,7 +128,7 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 40.dp))
         Spacer(Modifier.height(32.dp))
         Text(
-            "Scanning your storage…",
+            state.scanScope?.let { "$it scan — only that kind of junk" } ?: "Scanning your storage…",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,

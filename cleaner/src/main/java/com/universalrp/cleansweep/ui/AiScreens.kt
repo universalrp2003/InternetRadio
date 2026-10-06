@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -101,7 +102,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HEALTH) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextSecondary)
             }
             Text(
@@ -116,6 +117,51 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            // ------------------------------- which AI is answering right now (live check)
+            item {
+                PanelCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (state.aiStatusOk) Icons.Outlined.CheckCircle
+                                else Icons.Outlined.Warning,
+                                contentDescription = null,
+                                tint = if (state.aiStatusOk) GoodGreen else WarnAmber,
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    if (state.aiStatusChecking) "Checking…"
+                                    else if (state.aiStatusOk) "Working: ${state.aiEngineLabel}"
+                                    else "Not answering yet",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    state.aiStatusText
+                                        ?: if (state.aiConfig.ready) {
+                                            "Tested when the app opened and after every change."
+                                        } else {
+                                            "Pick a provider below — a pasted key selects it for you."
+                                        },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
+                                Text("Check now", color = AccentCyan, fontWeight = FontWeight.Bold)
+                            }
+                            TextButton(onClick = { vm.useAnotherFreeAi() }) {
+                                Text("Use a free AI", color = GoodGreen, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            }
+
             // ------------------------------------------------ 1. pick a provider
             item {
                 PanelCard(Modifier.fillMaxWidth()) {
@@ -523,7 +569,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HEALTH) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextSecondary)
             }
             Text(
@@ -579,13 +625,36 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                         Spacer(Modifier.height(4.dp))
+                        val who = state.aiUsedProvider.ifBlank { state.aiConfig.engineLabel }
+                        val modelText = state.aiUsedModel
                         Text(
-                            "Provider: ${state.aiUsedProvider.ifBlank { state.aiConfig.provider.label }}" +
-                                " • app names: " +
-                                if (state.aiConfig.includeAppNames) "included" else "not included",
+                            "Answered by: $who" + (if (modelText.isNotBlank()) " · $modelText" else ""),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                         )
+                        val timingText = if (state.aiUsedMs > 0L) {
+                            "Took %.1f s • ".format(state.aiUsedMs / 1000.0)
+                        } else {
+                            ""
+                        }
+                        Text(
+                            timingText +
+                                "app names: " +
+                                (if (state.aiConfig.includeAppNames) "included" else "not included") +
+                                " • network: " +
+                                (if (state.aiConfig.includeNetwork) "included" else "not included"),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        state.aiFallbackNote?.let { note ->
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                "Your provider did not answer first, so a free AI replied. " +
+                                    "Reason: $note",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WarnAmber,
+                            )
+                        }
                         if (state.aiBusy) {
                             Spacer(Modifier.height(12.dp))
                             CircularProgressIndicator(color = AccentCyan)
@@ -780,13 +849,9 @@ private fun AiSectionCard(section: AiSection) {
                             .background(tone)
                     )
                     Spacer(Modifier.width(10.dp))
-                    Text(
+                    AiText(
                         cleaned,
-                        style = if (bullet) {
-                            MaterialTheme.typography.bodyMedium
-                        } else {
-                            MaterialTheme.typography.bodyMedium
-                        },
+                        style = MaterialTheme.typography.bodyMedium,
                         color = if (tone == TextSecondary) TextPrimary else tone,
                     )
                 }

@@ -47,6 +47,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
@@ -54,6 +55,7 @@ import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.SurfaceHigh
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.WarnAmber
 import kotlin.math.roundToInt
 
@@ -74,7 +76,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
             Text(
@@ -108,16 +110,23 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        if (state.aiConfig.provider.needsKey) {
-                            "${state.aiConfig.provider.label} • " +
-                                if (state.aiConfig.apiKey.isBlank()) "no key saved yet"
-                                else "key saved"
-                        } else {
-                            "${state.aiConfig.provider.label} • no key needed"
+                        when {
+                            !state.aiConfig.ready -> "No provider set up yet — tap below"
+                            state.aiConfig.provider.needsKey -> "Key saved • ${state.aiConfig.engineLabel}"
+                            else -> state.aiConfig.engineLabel
                         },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
+                    if (state.aiStatusChecking || state.aiStatusText != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            if (state.aiStatusChecking) "Checking ${state.aiConfig.engineLabel}…"
+                            else state.aiStatusText ?: "",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (state.aiStatusOk || state.aiStatusChecking) GoodGreen else WarnAmber,
+                        )
+                    }
                     Spacer(Modifier.height(10.dp))
                     Button(
                         onClick = { vm.navigate(Screen.AI_SETTINGS) },
@@ -160,14 +169,19 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                             onClick = { vm.setAssistantOnline(true) },
                         )
                     }
-                    if (!state.aiConfig.ready && state.assistantOnline) {
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "No AI provider is set up, so answers fall back to the on-device engine.",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = WarnAmber,
-                        )
-                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        when {
+                            !state.assistantOnline ->
+                                "Answers come from the on-device engine — no internet, nothing sent."
+                            state.aiConfig.ready ->
+                                "Answers will come from ${state.aiConfig.engineLabel}."
+                            else ->
+                                "No AI provider is set up, so answers fall back to the on-device engine."
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (state.assistantOnline && state.aiConfig.ready) GoodGreen else TextSecondary,
+                    )
                 }
             }
 
@@ -180,6 +194,50 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 )
             }
 
+            // The little watt reading the user asked to see next to the clock. Android has
+            // no API for a third-party status-bar item, so CleanSweep draws this itself and
+            // says so plainly.
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column {
+                    SettingSwitch(
+                        title = "Watt reading beside the clock",
+                        subtitle = "Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging",
+                        checked = state.statusPill,
+                        onCheckedChange = { vm.setStatusPill(it) },
+                    )
+                    if (state.statusPill && !state.statusPillAllowed) {
+                        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                            Text(
+                                "Android needs “Display over other apps” before anything can be " +
+                                    "drawn there. Allow it, come back, and the reading appears " +
+                                    "beside the front camera.",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WarnAmber,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { vm.openOverlaySettings() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = WarnAmber,
+                                    contentColor = Color(0xFF2B1D02),
+                                ),
+                            ) {
+                                Text("Allow display over other apps", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    if (state.statusPill && state.statusPillAllowed) {
+                        Text(
+                            "Ready. It appears only while the charger is connected, cannot be " +
+                                "tapped, and disappears when you switch this off.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                        )
+                    }
+                }
+            }
+
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
                     title = "Detailed assistant answers",
@@ -187,6 +245,57 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     checked = state.assistantVerbose,
                     onCheckedChange = { vm.setAssistantVerbose(it) },
                 )
+            }
+
+            // "In quick cleaning do exactly what I select… after scan don't select anything,
+            // user must select and clean — and give an option to choose defaults."
+            // CleanSweep now ticks nothing by itself; these switches are the optional shortcut.
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(
+                        "Preselect after a scan",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        "Everything is unticked after a scan, so you always choose what goes. " +
+                            "Switch on the categories you are happy to have ticked for you.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    JunkKind.entries.forEach { kind ->
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    kind.label,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    if (kind.reviewOnly) {
+                                        "Review list — may hold your own files"
+                                    } else {
+                                        "Safe to sweep: ${kind.description.lowercase().take(58)}"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = if (kind.reviewOnly) WarnAmber else TextSecondary,
+                                )
+                            }
+                            Switch(
+                                checked = kind in settings.defaultSelected,
+                                onCheckedChange = { vm.setDefaultSelected(kind, it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color(0xFF03202B),
+                                    checkedTrackColor = AccentCyan,
+                                ),
+                            )
+                        }
+                    }
+                }
             }
 
             PanelCard(Modifier.fillMaxWidth()) {
