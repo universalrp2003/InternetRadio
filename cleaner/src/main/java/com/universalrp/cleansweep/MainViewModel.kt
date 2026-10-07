@@ -1377,7 +1377,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     }
                     checked++
                 }
-                kotlinx.coroutines.ensureActive()
+                coroutineContext.ensureActive()
                 val done = MalwareReport(
                     checked = checked,
                     hits = hits.toList(),
