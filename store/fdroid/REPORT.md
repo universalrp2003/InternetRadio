@@ -133,11 +133,13 @@ You picked the **F-Droid main repository** with the honest AI disclosure. What i
 1. **You:** fix the GitHub repository description (Settings → General → Description). It says
    *"first build"* today, and F-Droid's policy requires a repository that explains what it is.
    My token gets `403` on repository settings, so this one is genuinely yours.
-2. **You:** free account at <https://gitlab.com>, fork `fdroid/fdroiddata`, upload the five files
-   from `store/fdroid/metadata/`, open the merge request with the text from
-   `store/fdroid/README.md` section B (it already includes the AI disclosure). The no-account
-   alternative is one issue on the F-Droid Requests-For-Packaging tracker with
-   `store/fdroid/RFP_ISSUE.md`.
+2. **Done:** ~~free account at <https://gitlab.com>, fork `fdroid/fdroiddata`, upload the five
+   files from `store/fdroid/metadata/`, open the merge request~~ — instead the request went to
+   the F-Droid Requests-For-Packaging tracker as the no-MR route: **fdroid/rfp#4512**,
+   <https://gitlab.com/fdroid/rfp/-/work_items/4512>, opened 7 Oct 2026 and verified from this
+   side. A maintainer triages it, adds labels, and either packs the five apps or asks questions.
+   If they ask for the metadata files, they are in `store/fdroid/metadata/`; if they ask for a
+   merge request instead, the text is in `store/fdroid/README.md` section B.
 3. **You:** re-attach the nine phone screenshots to a message so I can crop the private parts and
    place them with `tools/make_screenshots.py`.
 4. **Me:** already done — recipes, MR text, disclosured issue text, icons, feature graphics, the

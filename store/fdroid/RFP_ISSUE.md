@@ -1,5 +1,9 @@
 # Paste-ready text: F-Droid "Requests For Packaging" issue
 
+> **Filed: fdroid/rfp#4512 on 7 Oct 2026** — <https://gitlab.com/fdroid/rfp/-/work_items/4512>.
+> The body that was actually pasted is the shorter `ISSUE_BODY.md`; this longer variant stays
+> for reference. The tracker is read-only for us now unless a maintainer asks a question.
+
 Open <https://gitlab.com/fdroid/rfp/-/issues/new> and paste the block below. One issue can cover
 all five apps because they live in the same repository.
 

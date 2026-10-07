@@ -1,3 +1,7 @@
+<!-- FILED: this exact text is fdroid/rfp#4512, opened 7 Oct 2026.
+     https://gitlab.com/fdroid/rfp/-/work_items/4512  Do not edit it to mean something else;
+     if a maintainer asks a question, answer in the thread, and record the answer here. -->
+
 Hello, and thank you for F-Droid. I am the developer of these five apps and I would like to
 request packaging for them. They share one Gradle project, one module each.
 
