@@ -196,7 +196,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(tr("CleanSweep v2.10"),
+                    Text(tr("CleanSweep v2.11"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,

@@ -67,6 +67,10 @@ object SecurityScanner {
     private val KNOWN_STORES = listOf(
         "vending", "packageinstaller", "galaxyapps", "appstore", "market", "appgallery",
         "getapps", "huawei", "amazon", "aptoide", "samsung", "miui", "coloros", "vivo",
+        // v2.11: F-Droid and Aurora are legitimate stores, and Xiaomi's own store
+        // reports as com.xiaomi.discover — flagging them cried wolf on every phone
+        // that uses them.
+        "fdroid", "xiaomi", "aurora", "microsoft",
     )
 
     /** App names that mean a root tool — word-boundary, so "Rootless" never matches. */
@@ -280,7 +284,8 @@ object SecurityScanner {
                     title = if (suspiciousInstallers.size == 1) "1 app came from an unusual installer"
                     else "${suspiciousInstallers.size} apps came from an unusual installer",
                     detail = "The installer package is the app that put this one on your phone. " +
-                        "Browser or file-manager installs show up here.",
+                        "Browser or file-manager installs show up here. The Play Store, " +
+                        "F-Droid, Aurora and your phone maker's own store are never listed.",
                     severity = Severity.LOW,
                     count = suspiciousInstallers.size,
                     samples = suspiciousInstallers.map { "${it.label} ← ${it.installer}" },

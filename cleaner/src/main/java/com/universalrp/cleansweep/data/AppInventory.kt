@@ -95,6 +95,10 @@ object BloatRules {
     private val TRUSTED_INSTALLER_HINTS = listOf(
         "vending", "packageinstaller", "galaxyapps", "appstore", "appstore",
         "market", "appgallery", "getapps", "microsoft", "android",
+        // v2.11: same stores the security scanner trusts — F-Droid installs are
+        // not "sideloaded", and Xiaomi's store reports as com.xiaomi.discover.
+        "fdroid", "xiaomi", "aurora", "amazon", "aptoide", "samsung",
+        "miui", "coloros", "vivo", "huawei",
     )
 
     /** Permissions that deserve a second look, with a plain-language label. */
