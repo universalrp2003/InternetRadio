@@ -86,6 +86,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                 runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
             }) { Text("Source code · GNU GPL v3") }
+            com.universalrp.updates.AppUpdates.Control("CleanSweep")
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(

@@ -774,6 +774,7 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
             }
         }
 
+        item { com.universalrp.updates.AppUpdates.Control("Ramesh-Radio") }
         // About
         item {
             PanelCard(Modifier.fillMaxWidth()) {

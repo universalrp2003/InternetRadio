@@ -75,6 +75,7 @@ object WebLookup {
      */
     suspend fun lookup(query: String): Lookup = coroutineScope {
         val q = query.trim().take(300)
+        if (NewsLookup.applies(q)) return@coroutineScope Lookup(NewsLookup.fetch(q))
         if (q.isEmpty()) return@coroutineScope Lookup(emptyList())
         // v2.11: chit-chat ("hi you know who is...") makes a terrible search query — it
         // once surfaced "List of megaprojects in India" for a CM question. Search the
@@ -215,7 +216,7 @@ object WebLookup {
 
     /** "... tamilnadu cm" / "... india pm" — the same question without "of". */
     private val OFFICE_TRAILING_PATTERN =
-        Regex("""(?i)\b([a-z][a-z .'\-]{2,40}?)\s+(cm|pm)\b""")
+        Regex("""(?i)\b([a-z][a-z .'\-]{2,40}?)\s+(chief minister|prime minister|vice president|president|governor|chief justice|mayor|cm|pm)\b""")
 
     /** Question scaffolding ("who is the current ...") stripped off the place name. */
     private val OFFICE_SCAFFOLD =
@@ -283,7 +284,8 @@ object WebLookup {
      * the model's prompt cut and the bubble's 220-char evidence line alike.
      */
     private fun prioritizeDecisive(text: String): String {
-        val sentences = text.split(Regex("(?<=[!?])\\s+|(?<=[a-z]\\.)\\s+(?=[A-Z])")).filter { it.isNotBlank() }
+        // A year-ending sentence is also a boundary; single-letter initials are not.
+        val sentences = text.split(Regex("(?<=[!?])\\s+|(?<=[a-z0-9]\\.)\\s+(?=[A-Z])")).filter { it.isNotBlank() }
         if (sentences.size < 2) return text
         val (key, rest) = sentences.partition { s ->
             s.contains(Regex("(?i)\\bincumbent\\b|currently (held|the)|is the current"))

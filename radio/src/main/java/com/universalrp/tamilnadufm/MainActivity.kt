@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TamilFmTheme {
+                com.universalrp.updates.AppUpdates.Control("Ramesh-Radio", automatic = true)
                 val vm: MainViewModel = viewModel()
                 AppRoot(vm, controller.value)
             }

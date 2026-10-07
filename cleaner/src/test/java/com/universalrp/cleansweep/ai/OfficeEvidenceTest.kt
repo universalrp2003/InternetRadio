@@ -5,6 +5,11 @@ import org.junit.Test
 
 class OfficeEvidenceTest {
     private val question = "who is the current chief minister of Tamil Nadu"
+    @Test fun realLeadWithPartyMustReturnPerson() {
+        val lead = "There have been four instances of President's rule in Tamil Nadu, most recently in 1991. C. Joseph Vijay of the Tamilaga Vettri Kazhagam is the incumbent Chief Minister since 10 May 2026."
+        assertEquals("C. Joseph Vijay", OfficeEvidence.incumbent(lead))
+        assertFalse(OfficeEvidence.answer(question, "a guess", lead).contains("identifies Tamilaga"))
+    }
     @Test fun missingEvidenceMustNotRepeatModelGuess() {
         val result = OfficeEvidence.answer(question, "M. K. Stalin is current", "The chief minister heads the government.")
         assertTrue(result.contains("could not verify"))

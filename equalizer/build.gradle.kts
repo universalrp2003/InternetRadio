@@ -9,6 +9,7 @@ plugins {
 val stableKeystore = rootProject.file("ci-keystore/release.p12")
 
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.universalrp.pulseeq"
     compileSdk = 36
 
@@ -16,8 +17,8 @@ android {
         applicationId = "com.universalrp.pulseeq"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {

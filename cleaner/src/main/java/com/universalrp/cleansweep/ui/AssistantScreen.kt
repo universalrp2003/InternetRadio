@@ -90,6 +90,8 @@ import com.universalrp.cleansweep.voice.Announcer
 fun AssistantScreen(state: UiState, vm: MainViewModel) {
     var input by remember { mutableStateOf("") }
     val context = LocalContext.current
+    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val focus = androidx.compose.ui.platform.LocalFocusManager.current
     val listState = rememberLazyListState()
     val showChips = state.assistantMessages.size < 4
     val suggestions = remember(
@@ -111,6 +113,8 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
     fun send(text: String) {
         val q = text.trim()
         if (q.isEmpty()) return
+        keyboard?.hide()
+        focus.clearFocus(force = true)
         vm.askAssistant(q)
         input = ""
     }
@@ -214,6 +218,8 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = AccentCyan,
+                    maxLines = 2,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
             // v2.7: the mute for voice replies, right in the chat — the setting also exists

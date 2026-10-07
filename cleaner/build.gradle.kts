@@ -10,6 +10,7 @@ plugins {
 val stableKeystore = rootProject.file("ci-keystore/release.p12")
 
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.universalrp.cleansweep"
     compileSdk = 36
 
@@ -17,8 +18,8 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 17
-        versionName = "2.12"
+        versionCode = 18
+        versionName = "2.13"
     }
 
     signingConfigs {
@@ -61,6 +62,7 @@ android {
 
 dependencies {
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")

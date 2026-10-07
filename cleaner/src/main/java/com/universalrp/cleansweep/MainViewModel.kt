@@ -772,10 +772,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 var liveMeta = ""
                 var liveSources = emptyList<String>()
                 var officeText = ""
+                var fetchedSnippets = emptyList<WebLookup.Snippet>()
                 var liveBlock = if (today.isNotBlank()) "Today's date is $today." else ""
                 if (state.aiWebLookup) {
                     val lookup = runCatching { WebLookup.lookup(q) }.getOrNull()
                     val snippets = lookup?.snippets.orEmpty()
+                    fetchedSnippets = snippets
                     // v2.11: the office lead doubles as the verification source.
                     officeText = lookup?.office?.text.orEmpty()
                     if (snippets.isNotEmpty()) {
@@ -835,7 +837,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 val rawAnswer = if (result.ok) result.text else
                     "I could not reach the AI provider (${result.error ?: "unknown error"}).\n\n" +
                         Assistant.answer(q, context, state.assistantVerbose).text
-                val answerText = com.universalrp.cleansweep.ai.OfficeEvidence.answer(q, rawAnswer, officeText)
+                val answerText = if (com.universalrp.cleansweep.ai.NewsLookup.applies(q))
+                    com.universalrp.cleansweep.ai.NewsLookup.answer(fetchedSnippets)
+                else com.universalrp.cleansweep.ai.OfficeEvidence.answer(q, rawAnswer, officeText)
                 val reply = AssistantMessage(
                     fromUser = false,
                     text = answerText,

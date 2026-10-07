@@ -10,7 +10,7 @@ object OfficeEvidence {
     private val name = """((?:(?:[A-Z]\.|[A-Z][\p{L}'’\-]+)\s+){0,5}[A-Z][\p{L}'’\-]+)"""
     private val patterns = listOf(
         Regex("""(?i:the incumbent is|current incumbent is|currently held by)\s+""" + name),
-        Regex(name + """\s+(?i:is the current|is the incumbent)\b"""),
+        Regex(name + """(?:\s+of\s+(?:the\s+)?[A-Z][\p{L}’\x27 .\-]+)?\s+(?i:is the current|is the incumbent)\b"""),
     )
     fun incumbent(text: String): String? = patterns.firstNotNullOfOrNull {
         it.find(text)?.groupValues?.get(1)?.trim()

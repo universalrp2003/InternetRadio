@@ -72,3 +72,6 @@ the date above updated.
 
 Ramesh prathap .R — universalrp2003@gmail.com
 Source code and issue tracker: <https://github.com/universalrp2003/InternetRadio>
+
+## Update checks (CleanSweep, Ramesh Radio, PulseEQ)
+These apps check GitHub published releases at most once a day on launch, with an off switch and manual check in About/More. GitHub receives normal connection metadata, including your IP address. No app inventory or audio is sent. Opening a release/download is user initiated. PulseEQ now has Internet permission for these checks; audio processing stays on-device.

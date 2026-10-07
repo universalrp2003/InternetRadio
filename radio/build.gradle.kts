@@ -9,6 +9,7 @@ plugins {
 val stableKeystore = rootProject.file("ci-keystore/release.p12")
 
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.universalrp.tamilnadufm"
     compileSdk = 36
 
@@ -16,8 +17,8 @@ android {
         applicationId = "com.universalrp.tamilnadufm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.4"
+        versionCode = 5
+        versionName = "1.5"
     }
 
     signingConfigs {

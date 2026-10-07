@@ -30,6 +30,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             PulseTheme {
+                com.universalrp.updates.AppUpdates.Control("PulseEQ", automatic = true)
                 val vm: EqViewModel = viewModel()
                 EqRoot(vm)
             }
