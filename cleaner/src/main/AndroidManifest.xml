@@ -150,11 +150,13 @@
                 android:resource="@xml/widget_cleansweep_info" />
         </receiver>
 
+        <!-- v2.10: CONNECTIVITY_CHANGE was removed — Android 8+ never delivers it to
+             manifest receivers, so the filter was dead. The Wi-Fi/mobile-data warning
+             now runs in the hourly HealthWatchWorker pass instead. -->
         <receiver
             android:name=".notify.SystemEventWatcher"
             android:exported="true">
             <intent-filter>
-                <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>

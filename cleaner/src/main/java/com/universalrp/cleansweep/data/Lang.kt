@@ -97,7 +97,7 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.9" to "சுத்தம் செய்பவர் v2.9",
+        "CleanSweep v2.10" to "சுத்தம் செய்பவர் v2.10",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)

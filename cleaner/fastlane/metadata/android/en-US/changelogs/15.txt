@@ -1,0 +1,2 @@
+Fixed the Wi-Fi/mobile-data voice warning, which never fired: Android 8+ does not deliver that broadcast to apps, so the hourly check now watches the connection itself. Works on every supported Android version, old and new.
+Full old-Android audit: storage, notification, overlay, installer and language code paths verified with version guards for Android 8 through 15.

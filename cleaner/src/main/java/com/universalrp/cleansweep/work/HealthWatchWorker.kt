@@ -6,6 +6,8 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Environment
 import androidx.core.app.NotificationCompat
@@ -85,6 +87,8 @@ class HealthWatchWorker(
     // ------------------------------------------------------------------ warnings
 
     private fun warnings(ctx: Context) {
+        // Wi-Fi ⇄ mobile data changed — first, so a bad battery read cannot skip it.
+        networkTransportChanged(ctx)
         val battery = try {
             BatteryReader.read(ctx)
         } catch (e: Exception) {
@@ -189,6 +193,52 @@ class HealthWatchWorker(
                     Announcer.Event.OVERHEAT,
                 )
             }
+        }
+    }
+
+    /**
+     * Wi-Fi ⇄ mobile data. v2.10: this used to listen to CONNECTIVITY_ACTION from the
+     * manifest — but Android 8+ never delivers that broadcast to manifest receivers,
+     * so the warning was dead on every supported phone. The hourly pass checks the
+     * transport itself instead: late by minutes, but alive on every Android version.
+     * Off by default: the switch lives in the voice screen.
+     */
+    private fun networkTransportChanged(ctx: Context) {
+        if (!Announcer.allows(ctx, Announcer.Event.NETWORK_CHANGE)) return
+        val connectivity = ctx.getSystemService(Context.CONNECTIVITY_SERVICE)
+            as? ConnectivityManager ?: return
+        val caps = try {
+            connectivity.activeNetwork?.let { connectivity.getNetworkCapabilities(it) }
+        } catch (e: Exception) {
+            null
+        }
+        val onWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+        val onMobile = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
+        val now = when {
+            onMobile -> "mobile"
+            onWifi -> "wifi"
+            else -> "none"
+        }
+        // Same key the old receiver used, so a stored value carries over.
+        val prefs = Announcer.prefs(ctx)
+        val before = prefs.getString(KEY_LAST_TRANSPORT, "")
+        if (before == now) return
+        prefs.edit().putString(KEY_LAST_TRANSPORT, now).apply()
+        // Nothing to say the first time we ever look, or while going offline.
+        if (before.isNullOrBlank() || now == "none") return
+        when (now) {
+            "mobile" -> Announcer.speak(
+                ctx,
+                "You are now on mobile data. This uses your data plan.",
+                "இப்போது மொபைல் டேட்டாவில் உள்ளீர்கள். இது உங்கள் தரவுத் திட்டத்தைப் பயன்படுத்தும்.",
+                Announcer.Event.NETWORK_CHANGE,
+            )
+            "wifi" -> Announcer.speak(
+                ctx,
+                "You are back on Wi-Fi.",
+                "நீங்கள் மீண்டும் Wi-Fi-ல் உள்ளீர்கள்.",
+                Announcer.Event.NETWORK_CHANGE,
+            )
         }
     }
 
@@ -411,6 +461,9 @@ class HealthWatchWorker(
 
         /** Set when the worker was started by the "Run the daily check now" button. */
         const val KEY_FORCE = "force_run"
+
+        /** Last Wi-Fi/mobile transport the hourly pass saw (moved from SystemEventWatcher). */
+        private const val KEY_LAST_TRANSPORT = "last_transport"
 
         /**
          * One hourly wake-up. WorkManager keeps it across reboots and respects Doze, and an

@@ -275,7 +275,7 @@ object WebLookup {
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.9 (Android)")
+                setRequestProperty("User-Agent", "CleanSweep/2.10 (Android)")
             }
             if (connection.responseCode !in 200..299) return ""
             connection.inputStream?.let { readAll(it) }.orEmpty()
