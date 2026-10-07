@@ -623,6 +623,11 @@ private fun Fader(
 
 @Composable
 fun MoreScreen(vm: MainViewModel, state: UiState) {
+    val aboutContext = androidx.compose.ui.platform.LocalContext.current
+    val installedVersion = androidx.compose.runtime.remember {
+        runCatching { aboutContext.packageManager.getPackageInfo(aboutContext.packageName, 0).versionName }.getOrNull() ?: "unknown"
+    }
+
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
 
@@ -780,13 +785,13 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Version 1.1 • Tamil FM, world news, home-screen widget and a 10-band equalizer",
+                        "Version $installedVersion • Tamil FM, world news, home-screen widget and a 10-band equalizer",
                         style = MaterialTheme.typography.labelMedium,
                         color = TextSecondary,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Built by Ramesh prathap .R",
+                        "Author: ரமேஷ் பிரதாப் • Ramesh prathap .R",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary,
                         fontWeight = FontWeight.SemiBold,
@@ -813,6 +818,14 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Free software under the GNU GPL v3\nApp: Ramesh Radio (Tamilnadu FM Radio)", color = TextSecondary)
+                    androidx.compose.material3.TextButton(onClick = {
+                        runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO,
+                            android.net.Uri.parse("mailto:universalrp2003@gmail.com"))) }
+                    }) { Text("universalrp2003@gmail.com", color = Teal) }
+                    Text("Privacy & permissions", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Internet access is needed for live streams and directory searches. Local audio is selected on your phone. Notifications and the foreground playback service keep audio controls available while listening. Favourites and settings stay on this device. Stream and directory servers receive your requests; offline station listings do not make streams playable offline.", color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
                     Row {
                         IconChip(Icons.Filled.Share, "Share app") { vm.shareApp() }

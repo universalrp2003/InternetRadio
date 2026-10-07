@@ -283,7 +283,7 @@ object WebLookup {
      * the model's prompt cut and the bubble's 220-char evidence line alike.
      */
     private fun prioritizeDecisive(text: String): String {
-        val sentences = text.split(Regex("(?<=[.!?])\\s+")).filter { it.isNotBlank() }
+        val sentences = text.split(Regex("(?<=[!?])\\s+|(?<=[a-z]\\.)\\s+(?=[A-Z])")).filter { it.isNotBlank() }
         if (sentences.size < 2) return text
         val (key, rest) = sentences.partition { s ->
             s.contains(Regex("(?i)\\bincumbent\\b|currently (held|the)|is the current"))
@@ -325,13 +325,33 @@ object WebLookup {
         // first suggestion for a garbled phrase is usually a person or a place.
         for (title in wikiOpensearch(phrase)) {
             if (!title.lowercase().contains(office)) continue
+            if (title.startsWith("List of", ignoreCase = true) ||
+                title.contains("deputy", ignoreCase = true) ||
+                title.contains("former", ignoreCase = true)) continue
             // A longer extract: the incumbent sentence sits past the first paragraph,
             // and the plain 700-char cut once hid it. The decisive sentence is moved
             // to the front so neither the model nor the 220-char bubble line can miss it.
-            val summary = runCatching { wikiSummary(title, 1500) }.getOrNull()
+            val summary = runCatching { officeLead(title) }.getOrNull()
             if (summary != null) return summary.copy(text = prioritizeDecisive(summary.text))
         }
         return null
+    }
+
+    /** Read the entire lead before selecting evidence; REST summaries can omit the holder. */
+    private fun officeLead(title: String): Snippet? {
+        val encoded = URLEncoder.encode(title, "UTF-8")
+        val body = get("https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&redirects=1&format=json&titles=$encoded")
+        val pages = runCatching { JSONObject(body).getJSONObject("query").getJSONObject("pages") }.getOrNull()
+        if (pages != null) {
+            val keys = pages.keys()
+            while (keys.hasNext()) {
+                val page = pages.optJSONObject(keys.next()) ?: continue
+                val text = page.optString("extract").trim()
+                if (text.isNotEmpty()) return Snippet("Wikipedia: $title", prioritizeDecisive(text),
+                    "https://en.wikipedia.org/wiki/" + encoded.replace("+", "_"))
+            }
+        }
+        return wikiSummary(title, Int.MAX_VALUE)
     }
 
     private fun titleWords(text: String): String =
@@ -363,7 +383,7 @@ object WebLookup {
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.11 (Android)")
+                setRequestProperty("User-Agent", "CleanSweep/2.12 (Android)")
             }
             if (connection.responseCode !in 200..299) return ""
             connection.inputStream?.let { readAll(it) }.orEmpty()

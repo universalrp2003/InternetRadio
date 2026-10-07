@@ -14,8 +14,8 @@ RepoType: git
 Repo: https://github.com/universalrp2003/InternetRadio.git
 
 Builds:
-  - versionName: '2.11'
-    versionCode: 16
+  - versionName: '2.12'
+    versionCode: 17
     commit: v2026.10.06
     subdir: cleaner
     sudo:
@@ -32,5 +32,5 @@ MaintainerNotes: >
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
-CurrentVersion: '2.6'
-CurrentVersionCode: 11
+CurrentVersion: '2.12'
+CurrentVersionCode: 17

@@ -1,0 +1,2 @@
+Added a clearly labelled source-code link.
+About now shows the installed version and includes bilingual author credit, email, license, features and privacy/permission information.

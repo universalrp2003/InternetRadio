@@ -1,0 +1,2 @@
+Added a clearly labelled source-code link.
+Current-officeholder answers now require explicit live evidence; missing evidence no longer falls back to a name from model memory. Full article leads are read before evidence selection. Name initials are preserved. Spoken answers use the checked text. About shows the installed version.

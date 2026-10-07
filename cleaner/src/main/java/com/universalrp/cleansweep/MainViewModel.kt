@@ -831,17 +831,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     userPrompt = "$facts\n$liveBlock\nQuestion from the user: $q",
                     allowSearch = true,
                 )
-                // v2.11: deterministic backstop. A small model has now twice named a former
-                // holder while quoting the very sentence that dates them out ("served 2021
-                // to 2026" → "current since 2021") — so when the office article names an
-                // incumbent the answer never mentions, the bubble says so plainly.
-                val answerText = if (result.ok) {
-                    verifyAgainstOffice(result.text, officeText)
-                } else {
+                // Apply the same evidence gate to provider responses and offline fallbacks.
+                val rawAnswer = if (result.ok) result.text else
                     "I could not reach the AI provider (${result.error ?: "unknown error"}).\n\n" +
-                        "Here is the on-device answer instead:\n\n" +
                         Assistant.answer(q, context, state.assistantVerbose).text
-                }
+                val answerText = com.universalrp.cleansweep.ai.OfficeEvidence.answer(q, rawAnswer, officeText)
                 val reply = AssistantMessage(
                     fromUser = false,
                     text = answerText,
@@ -851,12 +845,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } else {
                         "On-device engine · ${state.aiConfig.engineLabel} did not answer"
                     },
-                    // The evidence travels with the answer; a failed call shows the
-                    // on-device fallback instead, which had no live evidence.
-                    sources = if (result.ok) liveSources else emptyList(),
+                    // Evidence is retained even when the provider failed: the office
+                    // gate can still answer from a successfully fetched article.
+                    sources = liveSources,
                 )
                 mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
-                if (result.ok) speakAnswer(result.text)
+                if (result.ok) speakAnswer(answerText)
                 return@launch
             }
             // The offline engine first. When it cannot answer *and* the user has an AI
@@ -965,44 +959,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val cut = text.take(max).substringBeforeLast(' ')
         val kept = if (cut.length < max - 40) text.take(max) else cut
         return kept.trimEnd(',', ';', ':', ' ') + "…"
-    }
-
-    /** An incumbent pulled from an office article's lead: name + optional since-date. */
-    private data class Incumbent(val name: String, val since: String?)
-
-    private val INCUMBENT_IS =
-        Regex("""(?i)\bthe incumbent is ([A-Z][A-Za-z.'\-() ]{1,58}?)(\.|,| since | of the |$)""")
-    private val IS_THE_CURRENT =
-        Regex("""(?i)\b([A-Z][A-Za-z.'\-() ]{1,58}?) is the (?:current|incumbent) """)
-    private val CURRENTLY_HELD_BY =
-        Regex("""(?i)\bcurrently held by ([A-Z][A-Za-z.'\-() ]{1,58}?)(\.|,|$)""")
-
-    /**
-     * v2.11 backstop for "who is the current X": pulls the incumbent out of the office
-     * lead and, when the answer never mentions that name, appends a plain correction.
-     * Fail-open — anything unparseable returns the answer untouched.
-     */
-    private fun verifyAgainstOffice(answer: String, officeText: String): String {
-        val incumbent = extractIncumbent(officeText) ?: return answer
-        val parts = incumbent.name.split(Regex("[ .()'\\-]+")).filter { it.length > 2 }
-        if (parts.isEmpty()) return answer
-        if (parts.any { answer.contains(it, ignoreCase = true) }) return answer
-        val since = incumbent.since?.let { " (since $it)" } ?: ""
-        return answer + "\n\n⚠ Live-check: the office article quoted above names ${incumbent.name}$since " +
-            "as the current holder, but this answer does not mention that name — " +
-            "trust the article, not the paragraph above."
-    }
-
-    private fun extractIncumbent(officeText: String): Incumbent? {
-        if (officeText.isBlank()) return null
-        val name = INCUMBENT_IS.find(officeText)?.groupValues?.get(1)?.trim()
-            ?: IS_THE_CURRENT.find(officeText)?.groupValues?.get(1)?.trim()
-            ?: CURRENTLY_HELD_BY.find(officeText)?.groupValues?.get(1)?.trim()
-            ?: return null
-        if (name.length < 3 || name.length > 60) return null
-        val since = Regex("""(?i)\bsince (\d{1,2} [A-Za-z]+ \d{4})""").find(officeText)
-            ?.groupValues?.get(1)
-        return Incumbent(name, since)
     }
 
     fun setAnswerLanguage(value: String) {

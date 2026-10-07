@@ -49,6 +49,10 @@ import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 @Composable
 fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
+    val sourceContext = androidx.compose.ui.platform.LocalContext.current
+    val installedVersion = androidx.compose.runtime.remember {
+        runCatching { sourceContext.packageManager.getPackageInfo(sourceContext.packageName, 0).versionName }.getOrNull() ?: "unknown"
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -78,6 +82,10 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             // ------------------------------------------------------ who made this
+            androidx.compose.material3.TextButton(onClick = {
+                runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
+            }) { Text("Source code · GNU GPL v3") }
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -196,7 +204,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(tr("CleanSweep v2.11"),
+                    Text("CleanSweep v$installedVersion",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = AccentCyan,

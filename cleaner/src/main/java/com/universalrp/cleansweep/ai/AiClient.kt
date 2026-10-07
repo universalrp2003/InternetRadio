@@ -352,7 +352,7 @@ object AiClient {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.11 (Android)")
+                setRequestProperty("User-Agent", "CleanSweep/2.12 (Android)")
                 if (!bearer.isNullOrBlank()) {
                     setRequestProperty("Authorization", "Bearer ${bearer.trim()}")
                 }
