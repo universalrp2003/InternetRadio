@@ -1,0 +1,5 @@
+"Who is the current X" questions now fetch the office article itself (e.g. Chief Minister of Tamil Nadu) plus more evidence, and the AI was taught that "served from 2021 to 2026" means former, not current.
+System apps such as Settings and System UI are never flagged for overlay, usage access or installing apps — they need those by design. Only apps you installed count.
+Security cards now list every app name with a "Show all" expander instead of hiding names behind a count.
+Device-admin cards show app names instead of package names; the root-app check no longer flags "Rootless" apps; the findings count skips the info card.
+The malware result now says whether system apps were included, with a hint to turn the toggle on and re-run for full coverage.

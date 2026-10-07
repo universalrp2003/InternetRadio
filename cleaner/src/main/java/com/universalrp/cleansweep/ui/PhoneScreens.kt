@@ -499,8 +499,14 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                             }
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                "${loaded.findings.size} findings over ${loaded.appsChecked} apps • " +
-                                    "${loaded.highCount} high, ${loaded.mediumCount} medium",
+                                // v2.9: the always-there INFO card is not something "to check",
+                                // so it stays out of the count.
+                                run {
+                                    val n = loaded.findings.count { it.severity != Severity.INFO }
+                                    (if (n == 1) "1 finding" else "$n findings") +
+                                        " over ${loaded.appsChecked} apps • " +
+                                        "${loaded.highCount} high, ${loaded.mediumCount} medium"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
                             )
@@ -560,6 +566,9 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
 
 @Composable
 private fun FindingCard(finding: Finding) {
+    // v2.9: the scanner hands over every name; the card shows the first few and
+    // expands to the full list on tap — no more "6 of 11" guessing.
+    var expanded by remember { mutableStateOf(false) }
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -596,8 +605,22 @@ private fun FindingCard(finding: Finding) {
             )
             if (finding.samples.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
-                finding.samples.take(8).forEach { sample ->
+                val shown = if (expanded) finding.samples else finding.samples.take(6)
+                shown.forEach { sample ->
                     Text("• $sample", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                }
+                if (finding.samples.size > 6) {
+                    TextButton(
+                        onClick = { expanded = !expanded },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            if (expanded) tr("Show less")
+                            else tr("Show all %d", finding.samples.size),
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
             finding.fixHint?.let { hint ->
@@ -711,11 +734,23 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
                         Spacer(Modifier.width(8.dp))
                         Text(
                             "${report.checked} apps checked — no known malware" +
+                                (if (report.includeSystem) " (system apps included)"
+                                else " (your apps only)") +
                                 (if (report.skipped > 0) " (${report.skipped} unreadable, skipped)" else "") +
                                 " • ${checkedAt(report.scannedAtMs)}",
                             style = MaterialTheme.typography.bodySmall,
                             color = GoodGreen,
                             fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    // v2.9: the toggle defaults off, so a first scan covers user apps
+                    // only — say so plainly instead of letting "58 of 329" confuse.
+                    if (!report.includeSystem) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Turn on the system-apps toggle above and check again for full coverage.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
                         )
                     }
                 } else {

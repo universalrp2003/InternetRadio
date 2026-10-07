@@ -787,7 +787,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         // v2.8: the user sees the same evidence the model saw, so a wrong
                         // answer can be checked instead of trusted.
                         liveSources = snippets.take(3).map { snippet ->
-                            "• (${snippet.source}) ${snippet.text.take(220)}" +
+                            "• (${snippet.source}) ${ellipsize(snippet.text, 220)}" +
                                 shortSourceUrl(snippet.url)
                         }
                     } else if (today.isNotBlank()) {
@@ -818,7 +818,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "sentence briefly and name its source; when they do not settle it, " +
                         "say \"the live lookup did not settle this\" in one short sentence " +
                         "and mark the rest as possibly out of date. \"Current\" and " +
-                        "\"incumbent\" always mean as of today's date above. Never present " +
+                        "\"incumbent\" always mean as of today's date above. If the " +
+                        "evidence says someone \"served\" from one year to another year " +
+                        "that has already passed, that person is FORMER, not current — " +
+                        "never call them the current holder. Never present " +
                         "an answer from memory as if it came from the live results. " +
                         answerLanguageRule() +
                         " Keep it under 250 words, plain language, no markdown headings.",
@@ -946,6 +949,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val short = url.removePrefix("https://").removePrefix("http://")
             .substringBefore("#").trim().take(90)
         return if (short.isBlank()) "" else " ($short)"
+    }
+
+    /** Cuts text at a word boundary instead of mid-word ("...aft (en.wiki...)"). */
+    private fun ellipsize(text: String, max: Int): String {
+        if (text.length <= max) return text
+        val cut = text.take(max).substringBeforeLast(' ')
+        val kept = if (cut.length < max - 40) text.take(max) else cut
+        return kept.trimEnd(',', ';', ':', ' ') + "…"
     }
 
     fun setAnswerLanguage(value: String) {
@@ -1413,6 +1424,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     skipped = skipped,
                     vtLookups = vtLookups,
                     scannedAtMs = System.currentTimeMillis(),
+                    // v2.9: the result line states its own scope, so a scan run
+                    // before the system-apps toggle was switched on cannot confuse.
+                    includeSystem = includeSystem,
                 )
                 mutate {
                     it.copy(

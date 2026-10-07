@@ -69,6 +69,10 @@ object SecurityScanner {
         "getapps", "huawei", "amazon", "aptoide", "samsung", "miui", "coloros", "vivo",
     )
 
+    /** App names that mean a root tool — word-boundary, so "Rootless" never matches. */
+    private val ROOT_TOOL_NAME =
+        Regex("(?i)\\broot\\b|rooted|magisk|supersu|kingroot|apatch|kernelsu")
+
     suspend fun scan(
         context: Context,
         apps: List<AppRow>,
@@ -126,32 +130,37 @@ object SecurityScanner {
                         "uninstalling themselves.",
                     severity = Severity.MEDIUM,
                     count = admins.size,
-                    samples = admins,
+                    samples = admins.map { labelFor(context, it) ?: it },
                     fixHint = "Settings → Security → Device admin apps.",
                 )
             )
         }
 
         // v2.8: grantedPermissions is the live AppOps state — a revoked installer vanishes.
-        val installers = apps.filter { "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions }
-            .filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
+        // v2.9: the OS and its stores install apps by design; only user apps count here.
+        val installers = apps.filter {
+            !it.isSystem && "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions
+        }.filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
         if (installers.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "install_other_apps",
                     title = "Apps allowed to install other apps",
                     detail = "With \"install unknown apps\" allowed, an app can silently drop new " +
-                        "APKs on your phone.",
+                        "APKs on your phone. Your app stores are never listed here.",
                     severity = Severity.HIGH,
                     count = installers.size,
-                    samples = installers.take(6).map { it.label },
+                    samples = installers.map { it.label },
                     fixHint = "Settings → Apps → Special access → Install unknown apps.",
                 )
             )
         }
 
+        // v2.9: system apps (Settings, System UI) hold usage access by design and are
+        // never listed — only apps the user installed count here.
         val usageApps = apps.filter {
-            "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
+            !it.isSystem &&
+                "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
                 AppInventoryLoader.hasUsageAccess(context, it.pkg)
         }
         if (usageApps.size > 3) {
@@ -160,29 +169,38 @@ object SecurityScanner {
                     id = "usage_access",
                     title = "${usageApps.size} apps have usage access",
                     detail = "Usage access reveals which apps you open and when. A couple are normal " +
-                        "(launchers, digital wellbeing); a crowd is worth reviewing.",
+                        "(launchers, digital wellbeing); a crowd is worth reviewing. System " +
+                        "apps are never listed here.",
                     severity = Severity.LOW,
                     count = usageApps.size,
-                    samples = usageApps.take(6).map { it.label },
+                    samples = usageApps.map { it.label },
                     fixHint = "Settings → Apps → Special access → Usage access.",
                 )
             )
         }
 
-        // v2.8: grantedPermissions is the live AppOps state — anything switched off in
-        // Settings ("Display over other apps") already shows as revoked and is excluded here.
-        val overlay = apps.filter { "android.permission.SYSTEM_ALERT_WINDOW" in it.grantedPermissions }
-        if (overlay.size > 6) {
+        // v2.9: the OS itself needs overlay (system dialogs, volume panel, permission
+        // prompts) — flagging Settings and System UI as MEDIUM risk is noise the user
+        // cannot act on, and revoking those can break the phone. Only user apps count;
+        // one or two chosen apps are LOW, a crowd is MEDIUM.
+        val overlay = apps.filter {
+            !it.isSystem && "android.permission.SYSTEM_ALERT_WINDOW" in it.grantedPermissions
+        }
+        if (overlay.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "overlay",
-                    title = "${overlay.size} apps can draw over other apps",
-                    detail = "The overlay permission is what fake login screens use. Only a few apps " +
-                        "genuinely need it (screen recorders, floating timers). Anything you switched " +
-                        "off in Settings is already excluded from this count.",
-                    severity = Severity.MEDIUM,
+                    title = if (overlay.size == 1) "1 app can draw over other apps"
+                    else "${overlay.size} apps can draw over other apps",
+                    detail = "The overlay permission is what fake login screens use. One or two " +
+                        "apps you chose yourself (chat heads, screen recorders, floating " +
+                        "timers) are usually fine; a crowd is worth reviewing. System apps " +
+                        "such as Settings and System UI need this to show dialogs and " +
+                        "alerts, so they are never listed here — and anything you switched " +
+                        "off in Settings is excluded too.",
+                    severity = if (overlay.size > 6) Severity.MEDIUM else Severity.LOW,
                     count = overlay.size,
-                    samples = overlay.take(6).map { it.label },
+                    samples = overlay.map { it.label },
                     fixHint = "Settings → Apps → Special access → Display over other apps.",
                 )
             )
@@ -200,7 +218,7 @@ object SecurityScanner {
                         "normal for betas and mods — just make sure you know where each one came from.",
                     severity = Severity.MEDIUM,
                     count = sideloaded.size,
-                    samples = sideloaded.take(8).map { it.label },
+                    samples = sideloaded.map { it.label },
                     fixHint = "Open each one below and uninstall anything you do not recognise.",
                 )
             )
@@ -228,7 +246,7 @@ object SecurityScanner {
                     detail = "SMS is where OTPs arrive. Only your messaging app should need this.$defaultNote",
                     severity = Severity.HIGH,
                     count = smsApps.size,
-                    samples = smsApps.take(6).map { it.label },
+                    samples = smsApps.map { it.label },
                     fixHint = "Revoke SMS permission for anything that is not your SMS app.",
                 )
             )
@@ -265,7 +283,7 @@ object SecurityScanner {
                         "Browser or file-manager installs show up here.",
                     severity = Severity.LOW,
                     count = suspiciousInstallers.size,
-                    samples = suspiciousInstallers.take(6).map { "${it.label} ← ${it.installer}" },
+                    samples = suspiciousInstallers.map { "${it.label} ← ${it.installer}" },
                 )
             )
         }
@@ -311,16 +329,20 @@ object SecurityScanner {
             )
         }
 
-        val debugInstalled = apps.count { app -> app.label.lowercase().contains("root") && !app.isSystem }
-        if (debugInstalled > 0) {
+        // v2.9: word-boundary match — "Rootless Launcher" famously needs no root,
+        // and the old substring check flagged it. The card now names the apps too.
+        val rootTools = apps.filter { app -> !app.isSystem && ROOT_TOOL_NAME.containsMatchIn(app.label) }
+        if (rootTools.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "root_tools",
-                    title = "$debugInstalled root-related app(s) installed",
+                    title = if (rootTools.size == 1) "1 root-related app installed"
+                    else "${rootTools.size} root-related apps installed",
                     detail = "Root tools and \"game hackers\" ask for deep access. They only work on " +
                         "rooted phones — and they can read everything on one.",
                     severity = Severity.LOW,
-                    count = debugInstalled,
+                    count = rootTools.size,
+                    samples = rootTools.map { it.label },
                 )
             )
         }

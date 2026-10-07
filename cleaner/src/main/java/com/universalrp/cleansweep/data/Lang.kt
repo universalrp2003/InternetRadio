@@ -97,7 +97,7 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.8" to "சுத்தம் செய்பவர் v2.8",
+        "CleanSweep v2.9" to "சுத்தம் செய்பவர் v2.9",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)
@@ -141,6 +141,10 @@ object Lang {
             "சத்தமாகப் படி",
         "What the AI read just now:" to
             "AI இப்போது படித்தது:",
+        "Show all %d" to
+            "அனைத்தையும் காட்டு (%d)",
+        "Show less" to
+            "குறைத்துக் காட்டு",
         "EN" to
             "EN",
         "த" to
