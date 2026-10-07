@@ -42,15 +42,24 @@ The phone screenshots are the only piece that still has to come from a real phon
 are placed by `tools/make_screenshots.py`:
 
 ```bash
-python3 tools/make_screenshots.py cleaner home.png scan.png results.png
-python3 tools/make_screenshots.py radio --locale all home.png stations.png equalizer.png
-python3 tools/make_screenshots.py app --count 4 1.png 2.png 3.png 4.png
+# a whole set, in the order the store should show them
+python3 tools/make_screenshots.py cleaner shot1.png shot2.png shot3.png shot4.png
+
+# hide a private number on the third screenshot only (x,y,w,h - or percentages)
+python3 tools/make_screenshots.py cleaner shot1.png shot2.png shot3.png shot4.png \
+        --redact 3:40,1120,1000,70
+
+# both locales at once, and a Google Play shape (Play rejects anything above 2:1)
+python3 tools/make_screenshots.py radio --locale all radio1.png radio2.png radio3.png
+python3 tools/make_screenshots.py radio --canvas 1080x2160 radio1.png radio2.png radio3.png
 ```
 
 It numbers them in the order you pass them and writes `1.png`, `2.png`, ... into
-`<module>/fastlane/metadata/android/<locale>/images/phoneScreenshots/`. Each one is scaled to
-the 1080x1920 canvas, keeps **no invented device frame**, and fills the edges with a blurred
-copy of the same screenshot so nothing is cut off. Before writing anything it refuses files that
-are not readable portrait phone screenshots (minimum width 720, height/width 1.6-2.4) - that
-check is the one that catches a hand-crop, which is what a redaction becomes if it is done by
-scalpel rather than by cropping bar-free.
+`<module>/fastlane/metadata/android/<locale>/images/phoneScreenshots/`. By default each file
+keeps the phone's own size, so nothing is invented and nothing is cut - no device frame, no
+filler. A redaction box paints over the region with the apps' card colour *before* the file is
+written, so hiding the public IP, the gateway or an app list never changes the image shape, and
+the command that produced the file records exactly what was hidden. Before writing anything it
+refuses files that are not readable portrait phone screenshots (minimum width 720,
+height/width 1.6-2.4) - that check is the one that catches a hand-crop, which is what a
+redaction becomes if it is done by scalpel rather than by a bar.
