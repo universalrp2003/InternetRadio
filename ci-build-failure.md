@@ -2,11 +2,8 @@
 
 ## Kotlin / resource errors
 ```
-e: radio/src/main/java/com/universalrp/tamilnadufm/data/StationRepository.kt:178:29 Returns are prohibited in functions with expression body. Use block body '{...}'.
-e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1352:40 Unresolved reference 'ensureActive'.
-e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1379:36 Unresolved reference 'ensureActive'.
-e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1352:40 Unresolved reference 'ensureActive'.
-e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1379:36 Unresolved reference 'ensureActive'.
+e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1380:36 Unresolved reference 'ensureActive'.
+e: cleaner/src/main/java/com/universalrp/cleansweep/MainViewModel.kt:1380:36 Unresolved reference 'ensureActive'.
 ```
 
 ## Gradle summary
