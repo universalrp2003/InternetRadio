@@ -1,0 +1,70 @@
+# Refreshes the station seed list that ships inside the Ramesh Radio APK.
+#
+# The directory (radio-browser.info) is community maintained, so stream URLs come
+# and go. This workflow re-reads it and commits the result — monthly, or whenever
+# you press "Run workflow". It does not overwrite the app's own code.
+name: Refresh station list
+
+on:
+  workflow_dispatch:
+  # Also regenerate whenever the fetcher itself changes.
+  push:
+    paths:
+      - "tools/fetch_stations.py"
+      - "tools/curated_stations.json"
+  schedule:
+    - cron: "17 3 1 * *" # 03:17 on the 1st of every month
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download project code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch the station directory
+        run: python3 tools/fetch_stations.py radio/src/main/assets/stations_seed.json
+
+      - name: Show what we got
+        run: |
+          python3 - <<'PY'
+          import json
+          data = json.load(open("radio/src/main/assets/stations_seed.json"))
+          print("generated at:", data["generatedAt"])
+          print("total stations:", len(data["stations"]))
+          for cat, count in sorted(data["counts"].items()):
+              print(f"  {cat}: {count}")
+          print("\nsample:")
+          for s in data["stations"][:12]:
+              print(f"  [{s['category']}] {s['name']} ({s['codec']} {s['bitrate']}k, {s['country']})")
+          PY
+
+      - name: Commit if anything changed
+        run: |
+          git config user.name "station-bot"
+          git config user.email "station-bot@users.noreply.github.com"
+          git add radio/src/main/assets/stations_seed.json
+          if git diff --cached --quiet; then
+            echo "Station list is already up to date."
+          else
+            git commit -m "Refresh station list from the directory"
+            # A build run may be pushing a failure report to the same branch at the
+            # same time, so rebase onto whatever is there and retry the push.
+            for attempt in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                echo "Station list pushed."
+                break
+              fi
+              echo "Push attempt $attempt failed; retrying…"
+              sleep 6
+            done
+          fi

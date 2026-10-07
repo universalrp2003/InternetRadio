@@ -55,6 +55,7 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.CategoryResult
 import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.data.shortPath
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.Bg
@@ -63,6 +64,7 @@ import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.SurfaceC
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 
 @Composable
 fun ResultsScreen(state: UiState, vm: MainViewModel) {
@@ -86,8 +88,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             IconButton(onClick = { vm.navigate(com.universalrp.cleansweep.Screen.HOME) }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "Scan results",
+            Text(tr("Scan results"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -110,8 +111,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     style = MaterialTheme.typography.displayLarge,
                 )
                 Spacer(Modifier.height(12.dp))
-                Text(
-                    "Nothing to clean!",
+                Text(tr("Nothing to clean!"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
                 )
@@ -143,12 +143,42 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                         Text(
-                            "${report.totalCount} items in ${report.categories.size} categories • " +
+                            (state.scanScope?.let { "$it only • " } ?: "") +
+                                "${report.totalCount} items in ${report.categories.size} categories • " +
                                 "${report.filesScanned} files scanned",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
                     }
+                }
+                Spacer(Modifier.height(8.dp))
+                // Nothing is ticked automatically any more: you pick, then Clean.
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    val everythingTicked = report.categories.isNotEmpty() &&
+                        report.categories.all { it.allSelected }
+                    TextButton(
+                        onClick = { vm.toggleAll(!everythingTicked) },
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(
+                            if (everythingTicked) "Clear selection" else "Select all",
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    Text(
+                        if (selectedCount == 0) {
+                            "Tick what you want removed — CleanSweep deletes nothing on its own."
+                        } else {
+                            "$selectedCount of ${report.totalCount} ticked"
+                        },
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (selectedCount == 0) WarnAmber else TextSecondary,
+                    )
                 }
             }
 
@@ -175,12 +205,16 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             ) {
                 Column(Modifier.weight(1f)) {
                     Text(
-                        "${selectedCount} items selected",
+                        if (selectedCount == 0) "Nothing selected yet" else "$selectedCount items selected",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        selectedBytes.formatBytes() + " can be freed",
+                        if (selectedCount == 0) {
+                            "Tick items above, then tap Clean"
+                        } else {
+                            selectedBytes.formatBytes() + " can be freed"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
@@ -195,7 +229,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                 ) {
                     Icon(Icons.Outlined.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text("Clean", fontWeight = FontWeight.Bold)
+                    Text(tr("Clean"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -204,7 +238,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
     if (showConfirm) {
         AlertDialog(
             onDismissRequest = { showConfirm = false },
-            title = { Text("Delete permanently?") },
+            title = { Text(tr("Delete permanently?")) },
             text = {
                 Text(
                     "CleanSweep will permanently delete $selectedCount selected items and free " +
@@ -217,12 +251,12 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     showConfirm = false
                     vm.cleanSelected()
                 }) {
-                    Text("Delete", color = DangerRed, fontWeight = FontWeight.Bold)
+                    Text(tr("Delete"), color = DangerRed, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showConfirm = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text(tr("Cancel"), color = TextSecondary)
                 }
             },
         )
@@ -232,10 +266,48 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
         CleaningOverlay(done = state.cleanDone, total = state.cleanTotal)
     }
 
+    if (state.deleteFailureCount > 0) {
+        // The old build showed "0 MB cleaned" here and sounded like a success. It was not:
+        // on Android 8/9/10 the delete was refused for want of the storage permission.
+        AlertDialog(
+            onDismissRequest = { vm.dismissDeleteFailure() },
+            title = { Text(tr("Nothing was deleted")) },
+            text = {
+                Text(
+                    "${state.deleteFailureCount} file(s) could not be removed. The system said: " +
+                        "${state.deleteFailureReason ?: "permission denied"}.\n\n" +
+                        "On Android 9 and older this almost always means the storage permission is " +
+                        "missing, so Android refuses every delete even though the scan could see the " +
+                        "files. Grant it, then run the scan again.",
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        vm.dismissDeleteFailure()
+                        vm.requestStoragePermission()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = WarnAmber,
+                        contentColor = Color(0xFF2B1D02),
+                    ),
+                ) {
+                    Text(tr("Open permission settings"), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { vm.dismissDeleteFailure() }) {
+                    Text(tr("Close"), color = TextSecondary)
+                }
+            },
+        )
+    }
+
     state.freedDialogBytes?.let { freed ->
         AlertDialog(
             onDismissRequest = { vm.dismissFreedDialog() },
-            title = { Text("Cleaning complete ✨") },
+            title = { Text(tr("Cleaning complete ✨")) },
             text = {
                 Text(
                     "Freed ${freed.formatBytes()} by removing ${state.freedDialogItems} items. " +
@@ -251,7 +323,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                         contentColor = Color(0xFF052E22),
                     ),
                 ) {
-                    Text("Great!", fontWeight = FontWeight.Bold)
+                    Text(tr("Great!"), fontWeight = FontWeight.Bold)
                 }
             },
         )
@@ -400,8 +472,7 @@ private fun CleaningOverlay(done: Int, total: Int) {
                 .padding(28.dp)
                 .width(280.dp),
         ) {
-            Text(
-                "Cleaning…",
+            Text(tr("Cleaning…"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
             )

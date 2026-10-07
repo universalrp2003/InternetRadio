@@ -1,0 +1,3 @@
+v1.2 - the language menu now reads தமிழ் and it is the first and default selection, so the app
+opens on Tamil FM instead of "All channels". Everything else is exactly as before: Tamil FM
+and news, the local player, the towns chip, the widget and the 10-band equalizer.

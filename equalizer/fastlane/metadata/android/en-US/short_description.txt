@@ -1,0 +1,1 @@
+20-band equalizer with its own DSP, presets and a spectrum bar

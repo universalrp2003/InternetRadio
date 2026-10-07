@@ -30,11 +30,18 @@ class ScanEngine(private val context: Context) {
         private const val HASH_CHUNK = 65536L
     }
 
+    /**
+     * @param kinds when not null, only these categories are collected — that is what the
+     *   "Quick cleaning actions" tiles use, so tapping "Duplicates" scans for duplicates
+     *   instead of running a full sweep and showing everything.
+     */
     suspend fun scan(
         root: File,
         cfg: ScanSettings,
+        kinds: Set<JunkKind>? = null,
         onProgress: (ScanProgress) -> Unit,
     ): ScanReport = withContext(Dispatchers.IO) {
+        val want: Set<JunkKind> = kinds ?: JunkKind.entries.toSet()
         val categories = mapOf(
             JunkKind.RESIDUAL to CategoryResult(JunkKind.RESIDUAL),
             JunkKind.THUMBNAILS to CategoryResult(JunkKind.THUMBNAILS),
@@ -53,8 +60,17 @@ class ScanEngine(private val context: Context) {
         val large = categories.getValue(JunkKind.LARGE_FILES)
 
         val junkPaths = HashSet<String>()
-        val childrenByDir = HashMap<String, MutableList<String>>()
+        // How many children each directory has, and how many of them are junk. Keeping two
+        // ints per directory instead of the name of every file on the phone is what keeps
+        // this scan inside a phone's memory limit on a full 100 GB volume — the lists this
+        // replaced were the difference between a finished scan and an out-of-memory crash.
+        val dirChildCount = HashMap<String, Int>()
+        val dirJunkCount = HashMap<String, Int>()
         val bySize = HashMap<Long, MutableList<String>>()
+
+        fun countJunkChild(parentPath: String) {
+            dirJunkCount[parentPath] = (dirJunkCount[parentPath] ?: 0) + 1
+        }
 
         var filesScanned = 0L
         var dirsScanned = 0L
@@ -90,20 +106,23 @@ class ScanEngine(private val context: Context) {
 
             if (entries.isEmpty() && dir.absolutePath != rootPath) {
                 junkPaths.add(dir.absolutePath)
-                childrenByDir[dir.absolutePath] = mutableListOf()
-                addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
+                dirChildCount[dir.absolutePath] = 0
+                // File.parent is the parent *path* (a String); parentFile is a File.
+                dir.parent?.let { countJunkChild(it) }
+                if (JunkKind.EMPTY_FOLDERS in want) {
+                    addJunk(emptyDirs, JunkFile(dir.absolutePath, 0L, dir.lastModified()))
+                }
                 continue
             }
 
-            val childNames = ArrayList<String>(entries.size)
-            childrenByDir[dir.absolutePath] = childNames
-            val isRoot = dir.absolutePath == rootPath
+            val dirPath = dir.absolutePath
+            dirChildCount[dirPath] = entries.size
+            val isRoot = dirPath == rootPath
 
             for (f in entries) {
                 val abs = f.absolutePath
                 val name = f.name
                 val lower = name.lowercase()
-                childNames.add(name)
 
                 if (f.isDirectory) {
                     if (isRoot && name.equals("Android", ignoreCase = true)) continue
@@ -133,39 +152,51 @@ class ScanEngine(private val context: Context) {
                     JUNK_FILENAMES.contains(lower) || JUNK_EXTENSIONS.contains(ext) ||
                         lower.startsWith("~$") -> {
                         junkPaths.add(abs)
-                        addJunk(residual, JunkFile(abs, size, mod))
+                        countJunkChild(dirPath)
+                        if (JunkKind.RESIDUAL in want) {
+                            addJunk(residual, JunkFile(abs, size, mod))
+                        }
                         consumed = true
                     }
                     lower.endsWith(".apk") || lower.endsWith(".apks") || lower.endsWith(".xapk") -> {
-                        val installed = isInstalledApk(abs)
-                        if (!cfg.apkOnlyInstalled || installed) {
-                            junkPaths.add(abs)
-                            addJunk(
-                                apks,
-                                JunkFile(
-                                    abs, size, mod,
-                                    note = if (installed) "App already installed" else "App not installed"
+                        if (JunkKind.APK_FILES in want) {
+                            val installed = isInstalledApk(abs)
+                            if (!cfg.apkOnlyInstalled || installed) {
+                                junkPaths.add(abs)
+                                countJunkChild(dirPath)
+                                addJunk(
+                                    apks,
+                                    JunkFile(
+                                        abs, size, mod,
+                                        note = if (installed) "App already installed"
+                                        else "App not installed"
+                                    )
                                 )
-                            )
+                            }
                         }
                         consumed = true
                     }
                     abs.contains("/.thumbnails/") -> {
                         junkPaths.add(abs)
-                        addJunk(thumbs, JunkFile(abs, size, mod))
+                        countJunkChild(dirPath)
+                        if (JunkKind.THUMBNAILS in want) {
+                            addJunk(thumbs, JunkFile(abs, size, mod))
+                        }
                         consumed = true
                     }
                 }
 
                 if (!consumed) {
-                    if (size >= cfg.dupMinBytes) {
+                    if (JunkKind.DUPLICATES in want && size >= cfg.dupMinBytes) {
                         bySize.getOrPut(size) { mutableListOf() }.add(abs)
                     }
-                    if (size >= cfg.largeThresholdBytes) {
-                        addJunk(large, JunkFile(abs, size, mod, selected = false))
+                    if (JunkKind.LARGE_FILES in want && size >= cfg.largeThresholdBytes) {
+                        addJunk(large, JunkFile(abs, size, mod))
                     }
-                    if (abs.startsWith(downloadPrefix) && mod in 1 until oldCutoff) {
-                        addJunk(oldDownloads, JunkFile(abs, size, mod, selected = false))
+                    if (JunkKind.OLD_DOWNLOADS in want && abs.startsWith(downloadPrefix) &&
+                        mod in 1 until oldCutoff
+                    ) {
+                        addJunk(oldDownloads, JunkFile(abs, size, mod))
                     }
                 }
             }
@@ -186,28 +217,30 @@ class ScanEngine(private val context: Context) {
         }
 
         // Promote folders that will become empty once their junk children are deleted.
-        val snapshot = junkPaths.toList()
+        val snapshot = if (JunkKind.EMPTY_FOLDERS in want) junkPaths.toList() else emptyList()
         for (p in snapshot) {
-            var parent = File(p).parent ?: continue
-            while (parent != rootPath && parent.length > rootPath.length) {
-                val children = childrenByDir[parent] ?: break
-                if (children.isEmpty()) break
-                val allJunk = children.all { name ->
-                    (parent + File.separator + name) in junkPaths
+            // parentFile, not parent: Java's File.getParent() hands back a String path.
+            var parent = File(p).parentFile ?: continue
+            while (parent.absolutePath != rootPath && parent.absolutePath.length > rootPath.length) {
+                val total = dirChildCount[parent.absolutePath] ?: break
+                val junkKids = dirJunkCount[parent.absolutePath] ?: 0
+                if (total == 0 || junkKids < total) break
+                if (junkPaths.add(parent.absolutePath)) {
+                    addJunk(emptyDirs, JunkFile(parent.absolutePath, 0L, parent.lastModified()))
+                    parent.parentFile?.let { countJunkChild(it.absolutePath) }
                 }
-                if (!allJunk) break
-                if (junkPaths.add(parent)) {
-                    val df = File(parent)
-                    addJunk(emptyDirs, JunkFile(parent, 0L, df.lastModified()))
-                }
-                parent = File(parent).parent ?: break
+                parent = parent.parentFile ?: break
             }
         }
 
         // Duplicate detection: group by exact size, then hash head+tail of the file.
         val digest = MessageDigest.getInstance("MD5")
         var hashed = 0
-        val sizeGroups = bySize.entries.filter { it.value.size > 1 }.sortedByDescending { it.key }
+        val sizeGroups = if (JunkKind.DUPLICATES in want) {
+            bySize.entries.filter { it.value.size > 1 }.sortedByDescending { it.key }
+        } else {
+            emptyList()
+        }
         for ((size, paths) in sizeGroups) {
             if (hashed >= MAX_HASHED_FILES) break
             val byHash = HashMap<String, MutableList<String>>()
@@ -245,13 +278,20 @@ class ScanEngine(private val context: Context) {
             )
         )
 
-        ScanReport(
+        val report = ScanReport(
             categories = listOf(residual, thumbs, duplicates, apks, emptyDirs, oldDownloads, large)
                 .filter { it.files.isNotEmpty() },
             filesScanned = filesScanned,
             dirsScanned = dirsScanned,
             completedAt = System.currentTimeMillis(),
         )
+        // CleanSweep ticks nothing on its own: a fresh scan is a list for you to choose from.
+        // Settings → "Preselect after a scan" is the opt-in shortcut, per category.
+        report.categories.forEach { category ->
+            val preset = category.kind in cfg.defaultSelected
+            category.files.forEach { file -> file.selected = preset }
+        }
+        report
     }
 
     private fun isExcluded(path: String, prefixes: Set<String>): Boolean =

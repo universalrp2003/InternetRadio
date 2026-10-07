@@ -29,7 +29,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -41,15 +45,32 @@ import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.data.shortPath
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.SurfaceHigh
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
+import kotlinx.coroutines.delay
 
 @Composable
 fun ScanScreen(state: UiState, vm: MainViewModel) {
     val progress = state.progress
+
+    // Safety net (v2.6): the scanner screen can be opened by the home-screen widget, and the
+    // widget tap cannot start the work itself. If no progress has arrived after a few
+    // seconds, this offers the button instead of leaving "Starting…" on the screen
+    // forever — which is what the phone showed with nothing actually scanning.
+    var stalled by remember { mutableStateOf(false) }
+    val latestProgress by rememberUpdatedState(progress)
+    LaunchedEffect(Unit) {
+        delay(6_000)
+        if (latestProgress == null) stalled = true
+    }
+    LaunchedEffect(progress) {
+        if (progress != null) stalled = false
+    }
 
     val transition = rememberInfiniteTransition(label = "scan")
     val ringScale by transition.animateFloat(
@@ -128,14 +149,15 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 40.dp))
         Spacer(Modifier.height(32.dp))
         Text(
-            "Scanning your storage…",
+            state.scanScope?.let { "$it scan — only that kind of junk" }
+                ?: tr("Scanning your storage…"),
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center,
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            progress?.currentPath?.shortPath() ?: "Starting…",
+            progress?.currentPath?.shortPath() ?: tr("Starting…"),
             style = MaterialTheme.typography.bodySmall,
             color = TextSecondary,
             maxLines = 1,
@@ -154,7 +176,7 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
         ) {
             ScanStat(
                 value = (progress?.filesScanned ?: 0L).toString(),
-                label = "files scanned",
+                label = tr("files scanned"),
                 modifier = Modifier.weight(1f),
             )
             Box(
@@ -165,7 +187,7 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
             )
             ScanStat(
                 value = (progress?.junkBytes ?: 0L).formatBytes(),
-                label = "junk found",
+                label = tr("junk found"),
                 modifier = Modifier.weight(1f),
             )
         }
@@ -175,7 +197,24 @@ fun ScanScreen(state: UiState, vm: MainViewModel) {
             onClick = { vm.cancelScan() },
             colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
         ) {
-            Text("Cancel scan")
+            Text(tr("Cancel scan"))
+        }
+
+        if (stalled && progress == null) {
+            Spacer(Modifier.height(14.dp))
+            Text(
+                tr("Nothing is scanning right now."),
+                style = MaterialTheme.typography.bodySmall,
+                color = WarnAmber,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(8.dp))
+            GradientButton(
+                text = tr("Start the scan"),
+                icon = Icons.Outlined.Search,
+                onClick = { vm.startScan() },
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }

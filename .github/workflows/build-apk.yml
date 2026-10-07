@@ -1,11 +1,19 @@
-# GitHub Actions workflow: builds both Android APKs in the cloud, for free.
+# GitHub Actions workflow: builds the Android APKs in the cloud, for free.
 # - Internet Radio  (:app)
-# - CleanSweep junk cleaner (:cleaner)
+# - CleanSweep junk cleaner + on-device assistant (:cleaner)
+# - AppForge offline app builder (:builder)
+# - PulseEQ 20-band equalizer (:equalizer)
+# - Ramesh Radio (Tamilnadu FM Radio) — Tamil FM + world news + local audio + 10-band EQ (:radio)
 name: Build APK
 
 on:
   push:
     branches: [ main, "arena/**" ]
+    # A version tag publishes a permanent GitHub Release with the version-named APKs
+    # attached (see the "Publish a GitHub Release" step). One tag covers the whole
+    # workspace, so a datestamp is used instead of one app's version number: the file
+    # names still carry each app's own version.
+    tags: [ "v*" ]
   workflow_dispatch:   # lets you start a build manually from the Actions tab
 
 permissions:
@@ -32,6 +40,89 @@ jobs:
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
 
+      # F-Droid's build server (and anyone building locally) prefers a committed wrapper:
+      # it is what pins the Gradle version. CI generates it anyway, so it commits it once.
+      - name: Commit the Gradle wrapper (once)
+        run: |
+          # -f gradlew is always true here: the step above just generated it. What matters
+          # is whether git already tracks it.
+          if git ls-files --error-unmatch gradlew >/dev/null 2>&1; then
+            echo "the wrapper is already committed."
+            exit 0
+          fi
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add gradlew gradlew.bat gradle/wrapper
+          git commit -q -m "CI: commit the Gradle wrapper (pins Gradle 8.14.3 for F-Droid and local builds)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "wrapper committed and pushed."
+              exit 0
+            fi
+            echo "push attempt $attempt failed; retrying..."
+            sleep 6
+          done
+          echo "could not push the wrapper; the build continues without it."
+
+      # The project is GPL-3.0 (the author's choice). F-Droid and IzzyOnDroid both require the
+      # licence text in the repository, so this commits the verbatim SPDX copy once. The text
+      # is fetched rather than pasted, so it cannot be mistyped.
+      - name: Add the licence file (once)
+        run: |
+          # Nothing to do when LICENSE is already there in the right shape: the licence text
+          # has to come first, or GitHub and the stores do not recognise the file as GPL-3.0.
+          if git ls-files --error-unmatch LICENSE >/dev/null 2>&1 && \
+             head -c 60 LICENSE | grep -q "GNU GENERAL PUBLIC LICENSE"; then
+            echo "LICENSE is already committed and starts with the licence text."
+            exit 0
+          fi
+          TMP=$(mktemp)
+          curl -fsSL https://raw.githubusercontent.com/spdx/license-list-data/main/text/GPL-3.0-only.txt -o "$TMP" \
+            || curl -fsSL https://www.gnu.org/licenses/gpl-3.0.txt -o "$TMP" || true
+          SIZE=$(wc -c < "$TMP" | tr -d ' ')
+          echo "fetched $SIZE bytes of licence text"
+          if [ "$SIZE" -lt 20000 ]; then
+            echo "FAIL: the licence text did not download completely - refusing to commit a partial licence"
+            exit 1
+          fi
+          {
+            cat "$TMP"
+            echo ""
+            echo "========================================================================"
+            echo ""
+            echo "How to apply this licence to these apps"
+            echo ""
+            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ"
+            echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
+            echo ""
+            echo "This program is free software: you can redistribute it and/or modify it under"
+            echo "the terms of the GNU General Public License as published by the Free Software"
+            echo "Foundation, either version 3 of the License, or (at your option) any later"
+            echo "version."
+            echo ""
+            echo "This program is distributed in the hope that it will be useful, but WITHOUT ANY"
+            echo "WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A"
+            echo "PARTICULAR PURPOSE. See the GNU General Public License for more details."
+            echo ""
+            echo "You should have received a copy of the GNU General Public License along with"
+            echo "this program. If not, see <https://www.gnu.org/licenses/>."
+          } > LICENSE
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git add LICENSE
+          git commit -q -m "Add the licence: GNU GPL v3 (Copyright (C) 2026 Ramesh prathap .R)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "licence committed and pushed."
+              exit 0
+            fi
+            echo "push attempt $attempt failed; retrying..."
+            sleep 6
+          done
+          echo "could not push the licence; the build continues without it."
+
       - name: Ensure stable signing keystore
         run: |
           if [ ! -f ci-keystore/release.p12 ]; then
@@ -47,15 +138,539 @@ jobs:
             git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
 
-      - name: Build debug APKs
+      - name: Make the store icons
+        run: |
+          set -e
+          # The apps draw their launcher marks as vectors, and stores want PNGs (F-Droid:
+          # 512x512 icon plus a 1024x500 feature graphic). The icons are rasterised by pure
+          # Python, so they work anywhere; the graphics need ImageMagick, which is installed
+          # here if the runner does not already have it.
+          set -x
+          python3 --version
+          command -v convert identify || true
+          convert -version 2>/dev/null | head -2 || true
+          if ! command -v convert >/dev/null || ! command -v identify >/dev/null; then
+            echo "Installing ImageMagick and a font for the feature graphics..."
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq imagemagick fonts-dejavu-core
+          fi
+          set +x
+          # tee, so the output lands in store-art.log and the failure report can quote it:
+          # the Actions log endpoint is not always readable from outside.
+          {
+            python3 tools/make_store_assets.py icons
+            bash tools/make_feature_graphics.sh
+          } 2>&1 | tee store-art.log
+
+      - name: Build the APKs
         run: |
           set -o pipefail
-          gradle assembleDebug --no-daemon 2>&1 | tee build.log
+          # Debug APKs stay the quick family channel. The release pair is what a store will
+          # take: app stores reject an APK with android:debuggable, and F-Droid builds the
+          # release variant as well. Both are signed with the same ci-keystore, so a phone
+          # that already has the debug build updates to the release one normally.
+          # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
+          # apps since 2021); the APKs are what everyone else takes.
+          gradle assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+
+      - name: Verify built APKs
+        run: |
+          set -e
+          exec > >(tee verify.log) 2>&1
+          WORK=$(mktemp -d)
+
+          echo "=== APK files ==="
+          for m in app cleaner builder equalizer radio; do
+            ls -la "$m/build/outputs/apk/debug/" || true
+          done
+
+          CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
+          BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
+          EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
+          RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
+
+          # --- v2.6: the release APKs. These are the store-facing pair.
+          APP_REL=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          EQ_REL=$(ls equalizer/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          RADIO_REL=$(ls radio/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          echo "=== Google Play bundles (.aab) ==="
+          for b in "app|Internet-Radio" "cleaner|CleanSweep" "builder|AppForge" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
+            mod="${b%%|*}"; pretty="${b##*|}"
+            aab=$(ls "$mod"/build/outputs/bundle/release/*.aab 2>/dev/null | head -1 || true)
+            if [ -z "$aab" ]; then
+              echo "FAIL: no .aab bundle for $mod - Google Play cannot take an APK"
+              exit 1
+            fi
+            ver=$(grep -m1 'versionName' "$mod/build.gradle.kts" | sed -E 's/.*"([^"]+)".*/\1/')
+            mv "$aab" "$(dirname "$aab")/${pretty}-v${ver}.aab"
+            echo "OK: ${pretty}-v${ver}.aab inside the build"
+          done
+
+          echo "=== release APKs (what the stores take) ==="
+          for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+            if [ -z "$rel" ]; then
+              echo "FAIL: a release APK was not produced - stores cannot use the debug build"
+              exit 1
+            fi
+            echo "OK: $rel"
+          done
+
+          echo "=== App icons inside the built APKs ==="
+          # The Internet Radio module used to borrow Android's stock play icon; a store listing
+          # cannot ship that, so every APK must now carry its own icon resource.
+          #
+          # This is checked through aapt2 badging and not by looking for a file name: release
+          # builds run Android's resource optimisations, which rename resource paths inside the
+          # APK, so `res/.../ic_launcher` legitimately disappears from the zip listing.
+          AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
+          if [ -z "$AAPT" ]; then
+            echo "FAIL: aapt2 not found, cannot verify the app icons"
+            exit 1
+          fi
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$APP_REL" "$BUILDER_REL" "$EQ_REL"; do
+            bad=$("$AAPT" dump badging "$rel" || true)
+            icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)
+            dens=$(printf '%s\n' "$bad" | grep -c "^application-icon-" || true)
+            case "$icon" in
+              "") echo "FAIL: $rel declares no application icon"; exit 1 ;;
+              *android:*) echo "FAIL: $rel still borrows a platform icon ($icon)"; exit 1 ;;
+            esac
+            if [ "$dens" -eq 0 ]; then
+              echo "FAIL: $rel has no density-specific icon entries"
+              exit 1
+            fi
+            echo "OK: $rel icon=$icon ($dens density entries)"
+          done
+          # And the stock icon must be gone from the source, which is where it used to live.
+          if grep -q "android:drawable/ic_media_play" app/src/main/AndroidManifest.xml; then
+            echo "FAIL: the app module still points at Android's stock play icon"
+            exit 1
+          fi
+          echo "OK: no module borrows a platform icon any more"
+
+          echo "=== Package info ==="
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump badging "$CLEANER" | head -1 || true
+            "$AAPT" dump badging "$BUILDER" | head -1 || true
+            "$AAPT" dump badging "$EQ" | head -1 || true
+            "$AAPT" dump badging "$RADIO" | head -1 || true
+            # The installed name must be the one the user asked for.
+            CLEANER_LABEL=$("$AAPT" dump badging "$CLEANER" | grep -m1 "application-label:" || true)
+            echo "cleaner label: $CLEANER_LABEL"
+            LABEL=$("$AAPT" dump badging "$RADIO" | grep -m1 "application-label:" || true)
+            echo "radio label: $LABEL"
+            case "$LABEL" in
+              *"Ramesh Radio"*)
+                echo "OK: the built APK is labelled Ramesh Radio"
+                ;;
+              *)
+                echo "FAIL: the radio APK is not labelled Ramesh Radio ($LABEL)"
+                exit 1
+                ;;
+            esac
+            # A store will not accept a debuggable APK (IzzyOnDroid says so explicitly).
+            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+              if "$AAPT" dump badging "$rel" | grep -q "application-debuggable"; then
+                echo "FAIL: $rel carries the debuggable flag - app stores reject that"
+                exit 1
+              fi
+            done
+            echo "OK: no release APK carries the debuggable flag"
+            APKSIGNER=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1 || true)
+            if [ -n "$APKSIGNER" ]; then
+              echo "--- signing certificate of the release APK (F-Droid AllowedAPKSigningKeys) ---"
+              "$APKSIGNER" verify --print-certs "$CLEANER_REL" | head -6 || true
+            fi
+          else
+            echo "(aapt2 not found; using the Gradle intermediates instead)"
+          fi
+
+          # The manifests are read from Gradle's plain-text merged manifests —
+          # parsing the binary manifest out of the APK with `strings` is not
+          # reliable. aapt2 output is used as a cross-check when available.
+          MERGED_CLEANER=$(find cleaner/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          MERGED_EQ=$(find equalizer/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          MERGED_RADIO=$(find radio/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          echo "CleanSweep merged manifest: ${MERGED_CLEANER:-not found}"
+          echo "PulseEQ merged manifest: ${MERGED_EQ:-not found}"
+          echo "Ramesh Radio merged manifest: ${MERGED_RADIO:-not found}"
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump permissions "$EQ" > "$WORK/eq-perms-aapt.txt" 2>/dev/null || true
+            echo "--- aapt2 permissions for PulseEQ ---"
+            cat "$WORK/eq-perms-aapt.txt" || true
+          fi
+
+          # Dex checks: extract once, then grep the files (no huge pipes, so no
+          # spurious SIGPIPE failures).
+          unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
+          unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
+          unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
+          unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
+          unzip -l "$RADIO" > "$WORK/radio-entries.txt"
+
+          echo "=== CleanSweep v1.3 checks ==="
+          if [ -n "$MERGED_CLEANER" ] && grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE" "$MERGED_CLEANER"; then
+            echo "FAIL: CleanSweep still declares an Accessibility service"
+            exit 1
+          fi
+          echo "OK: no Accessibility service in CleanSweep's manifest"
+
+          if grep -aq "CacheCleanerService" "$WORK/cleaner.dex"; then
+            echo "FAIL: CacheCleanerService is still compiled into the APK"
+            exit 1
+          fi
+          echo "OK: CacheCleanerService is gone"
+
+          if grep -aq "CleanSweep Assistant" "$WORK/cleaner.dex"; then
+            echo "OK: the on-device assistant is in the APK"
+          else
+            echo "FAIL: the on-device assistant is missing from the APK"
+            exit 1
+          fi
+
+          if [ -n "$MERGED_CLEANER" ]; then
+            if grep -q "WRITE_EXTERNAL_STORAGE" "$MERGED_CLEANER"; then
+              echo "OK: legacy write permission declared (the Android 8/9/10 delete fix)"
+            else
+              echo "FAIL: WRITE_EXTERNAL_STORAGE is missing - cleaning would still report 0 MB on API 26-29"
+              exit 1
+            fi
+            if grep -q "NEARBY_WIFI_DEVICES" "$MERGED_CLEANER" && \
+               grep -q "ACCESS_FINE_LOCATION" "$MERGED_CLEANER"; then
+              echo "OK: Wi-Fi device-scan permissions declared"
+            else
+              echo "FAIL: Wi-Fi scan permissions are missing"
+              exit 1
+            fi
+            if grep -q "android.permission.INTERNET" "$MERGED_CLEANER"; then
+              echo "OK: INTERNET declared (used only for the optional AI analysis)"
+            else
+              echo "FAIL: INTERNET is missing - AI analysis could never work"
+              exit 1
+            fi
+          else
+            echo "FAIL: could not find the merged manifest for :cleaner"
+            exit 1
+          fi
+
+          if grep -q "FOREGROUND_SERVICE_SPECIAL_USE" "$MERGED_CLEANER" && \
+             grep -q "ChargeMonitorService" "$MERGED_CLEANER"; then
+            echo "OK: the charging-status service is declared"
+          else
+            echo "FAIL: the charging-status foreground service is missing"
+            exit 1
+          fi
+
+          if grep -q "SYSTEM_ALERT_WINDOW" "$MERGED_CLEANER"; then
+            echo "OK: overlay permission present for the status-bar watt reading"
+          else
+            echo "FAIL: SYSTEM_ALERT_WINDOW is missing (the watt reading needs it)"
+            exit 1
+          fi
+
+          if grep -q "READ_PHONE_STATE" "$MERGED_CLEANER"; then
+            echo "OK: phone-state permission present for the Mobile & data screen"
+          else
+            echo "FAIL: READ_PHONE_STATE is missing (signal / SIM / network type need it)"
+            exit 1
+          fi
+
+          if grep -q "locales_config" "$MERGED_CLEANER"; then
+            echo "OK: locale config present (English + Tamil)"
+          else
+            echo "FAIL: android:localeConfig is missing"
+            exit 1
+          fi
+
+          # A compiled APK has no "values-ta" folder — resources live compiled inside
+          # resources.arsc and the strings in the dex. Search both for the actual Tamil app
+          # name, which is the thing the user cares about.
+          if unzip -p "$CLEANER" resources.arsc | grep -qa "சுத்தம் செய்பவர்"; then
+            echo "OK: the Tamil launcher label is inside the APK resources"
+          else
+            echo "WARN: the Tamil launcher label was not found in resources.arsc"
+          fi
+          if grep -aq "சுத்தம் செய்பவர்" "$WORK/cleaner.dex"; then
+            echo "OK: the Tamil name is in the CleanSweep dex (menu + About)"
+          else
+            echo "WARN: the Tamil name was not found in the CleanSweep dex"
+          fi
+          if grep -aq "தினசரி அறிக்கை" "$WORK/cleaner.dex"; then
+            echo "OK: the Tamil menu (daily brief) is inside the CleanSweep dex"
+          else
+            echo "WARN: the Tamil menu strings were not found in the CleanSweep dex"
+          fi
+
+          if unzip -l "$CLEANER" | grep -q "res/layout/widget_cleansweep"; then
+            echo "OK: the home-screen widget layout is inside the APK"
+          else
+            echo "WARN: the widget layout is missing from the APK"
+          fi
+
+          for symbol in DeviceHealthReader BatteryReader CpuReader AppInventoryLoader \
+                        SecurityScanner NetworkScanner AiClient AiReport identifyDevice \
+                        ChargeMonitorService batteryTimeLabel StatusPill goBack \
+                        defaultSelected useAnotherFreeAi ping AiText MobileNet SpeedMeter \
+                        UsageStats MobileScreen ReadingMovePad moveBy applySaved savedFor \
+                        setDraggable togglePillDrag setSpeedSizeMb speedSizeMb \
+                        Announcer HealthWatchWorker VoiceScreen speakAnswer runDailyBriefNow \
+                        setVoiceEvent setQuietHours speakNow offlineFallback \
+                        SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
+                        setUnplugStartHour ChargerWatchWorker ChargeNotifier canSearchWeb \
+                        setOnlineVoice openScanner CrashLog; do
+            if grep -aq "$symbol" "$WORK/cleaner.dex"; then
+              echo "OK: $symbol is in the CleanSweep APK"
+            else
+              echo "FAIL: $symbol is missing from the CleanSweep APK"
+              exit 1
+            fi
+          done
+
+          echo "=== AppForge checks ==="
+          if grep -aq "AppForge" "$WORK/builder.dex"; then
+            echo "OK: AppForge APK contains its code"
+          else
+            echo "FAIL: AppForge APK looks empty"
+            exit 1
+          fi
+          if grep -aq "AndroidCodeGen" "$WORK/builder.dex"; then
+            echo "OK: the Android project generator is present"
+          else
+            echo "FAIL: the code generator is missing"
+            exit 1
+          fi
+
+          echo "=== PulseEQ checks ==="
+          if [ -n "$MERGED_EQ" ]; then
+            if grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
+              echo "FAIL: PulseEQ must not request INTERNET"
+              grep -n "uses-permission" "$MERGED_EQ" || true
+              exit 1
+            fi
+            echo "OK: PulseEQ requests no INTERNET permission (fully offline)"
+            echo "Permissions in the merged manifest:"
+            grep -o "android.permission.[A-Z_]*" "$MERGED_EQ" | sort -u || true
+          else
+            echo "WARN: merged manifest not found; falling back to aapt2 output"
+            if grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
+              echo "FAIL: PulseEQ must not request INTERNET"
+              exit 1
+            fi
+            echo "OK: no INTERNET permission in the aapt2 permission dump"
+          fi
+
+          if [ -n "$MERGED_EQ" ] && grep -q "EqService" "$MERGED_EQ"; then
+            echo "OK: the background equalizer service is declared"
+            grep -o 'android:name="[^"]*EqService"' "$MERGED_EQ" | head -2 || true
+          elif [ -n "$AAPT" ] && "$AAPT" dump xmltree --file AndroidManifest.xml "$EQ" 2>/dev/null | grep -q "EqService"; then
+            echo "OK: the background equalizer service is declared (aapt2)"
+          else
+            echo "FAIL: EqService could not be found in the equalizer manifest"
+            exit 1
+          fi
+
+          for symbol in PeakingBiquad EqEngine SessionEffectReceiver Bands; do
+            if grep -aq "$symbol" "$WORK/eq.dex"; then
+              echo "OK: $symbol is in the equalizer APK"
+            else
+              echo "FAIL: $symbol is missing from the equalizer APK"
+              exit 1
+            fi
+          done
+
+          echo "=== Ramesh Radio checks ==="
+          if [ -n "$MERGED_RADIO" ]; then
+            if grep -q "android.permission.INTERNET" "$MERGED_RADIO"; then
+              echo "OK: INTERNET permission present (streaming)"
+            else
+              echo "FAIL: Ramesh Radio cannot stream without INTERNET"
+              exit 1
+            fi
+            if grep -q "FOREGROUND_SERVICE_MEDIA_PLAYBACK" "$MERGED_RADIO"; then
+              echo "OK: foreground media playback permission declared"
+            else
+              echo "FAIL: background playback permission missing"
+              exit 1
+            fi
+            if grep -q "READ_MEDIA_AUDIO" "$MERGED_RADIO"; then
+              echo "OK: local audio permission declared"
+            else
+              echo "FAIL: local audio permission missing"
+              exit 1
+            fi
+            if grep -q "androidx.media3.session.MediaSessionService" "$MERGED_RADIO"; then
+              echo "OK: the Media3 playback service is declared"
+            else
+              echo "FAIL: no MediaSessionService intent filter in the manifest"
+              exit 1
+            fi
+            if grep -qi "accessibilityservice" "$MERGED_RADIO"; then
+              echo "FAIL: Ramesh Radio must not declare an Accessibility service"
+              exit 1
+            fi
+            echo "OK: no Accessibility service"
+            echo "Permissions in the merged manifest:"
+            grep -o "android.permission.[A-Z_]*" "$MERGED_RADIO" | sort -u || true
+          else
+            echo "FAIL: could not find the merged manifest for :radio"
+            exit 1
+          fi
+
+          if grep -q "com.universalrp.tamilnadufm.widget.RadioWidgetProvider" "$MERGED_RADIO"; then
+            echo "OK: the home-screen widget receiver is declared in the manifest"
+          else
+            echo "FAIL: the widget receiver is missing from the merged manifest"
+            exit 1
+          fi
+          # v1.2 rule: the language menu reads தமிழ் and it is the first selection.
+          if grep -aq "தமிழ்" "$WORK/radio.dex"; then
+            echo "OK: the தமிழ் menu label is inside the radio APK"
+          else
+            echo "FAIL: the தமிழ் menu label is missing from the radio APK"
+            exit 1
+          fi
+
+          if unzip -l "$RADIO" | grep -q "res/xml/radio_widget_info.xml" || \
+             unzip -l "$RADIO" | grep -q "res/.*/radio_widget_info.xml"; then
+            echo "OK: the widget info is packaged in the APK"
+          else
+            echo "FAIL: res/xml/radio_widget_info.xml is not packaged in the APK"
+            exit 1
+          fi
+
+          for symbol in PlaybackService AudioFx EqPresets StationRepository MainViewModel DirectoryClient RadioWidgetProvider; do
+            if grep -aq "$symbol" "$WORK/radio.dex"; then
+              echo "OK: $symbol is in the Ramesh Radio APK"
+            else
+              echo "FAIL: $symbol is missing from the radio APK"
+              exit 1
+            fi
+          done
+
+          if unzip -p "$RADIO" "assets/stations_seed.json" > "$WORK/seed.json" 2>/dev/null && [ -s "$WORK/seed.json" ]; then
+            echo "OK: the station seed list is packaged ($(wc -c < "$WORK/seed.json") bytes)"
+          else
+            echo "FAIL: assets/stations_seed.json is not packaged in the APK"
+            exit 1
+          fi
+          if python3 tools/check_seed.py "$WORK/seed.json"; then
+            echo "OK: seed list parsed and contains Tamil + news stations"
+          else
+            echo "FAIL: the seed list could not be parsed"
+            exit 1
+          fi
+
+          # Store listing inventory. Warnings only: F-Droid shows a listing without
+          # screenshots, it simply looks bare, and a missing icon is a polish problem, not a
+          # broken build. Printed every run so the gap is always visible.
+          echo "=== Store listing inventory (warnings) ==="
+          for m in app cleaner builder equalizer radio; do
+            d="$m/fastlane/metadata/android"
+            if [ ! -d "$d" ]; then
+              echo "WARN: $m has no fastlane listing at all"
+              continue
+            fi
+            shots=$(ls "$d"/*/images/phoneScreenshots/*.png "$d"/*/images/phoneScreenshots/*.jpg 2>/dev/null | wc -l | tr -d ' ')
+            icon=$(ls "$d"/*/images/icon.png 2>/dev/null | wc -l | tr -d ' ')
+            graphic=$(ls "$d"/*/images/featureGraphic.png 2>/dev/null | wc -l | tr -d ' ')
+            locales=$(ls "$d" | tr '\n' ' ')
+            echo "$m: locales=[$locales] screenshots=$shots icon=$icon featureGraphic=$graphic"
+            if [ "$shots" -lt 2 ]; then
+              echo "WARN: $m has fewer than 2 phone screenshots - the store page will show no gallery"
+            fi
+            if [ "$icon" -eq 0 ]; then
+              echo "WARN: $m has no 512x512 icon.png in its listing - 'Make the store icons' should have written it"
+            fi
+          done
+
+          echo "ALL CHECKS PASSED"
+
+      # v2.6: the user asked for the downloaded file to carry the version instead of
+      # "cleaner-debug.apk". The name is read from each module's own versionName, so it can
+      # never drift away from the app version, and the old generic name is gone afterwards.
+      - name: Give the APKs versioned file names
+        run: |
+          set -e
+          version_of() {
+            grep -m1 'versionName' "$1" | sed -E 's/.*"([^"]+)".*/\1/'
+          }
+          rename_apk() {
+            module="$1"; pretty="$2"; variant="$3"; suffix="$4"
+            src=$(ls "$module"/build/outputs/apk/"$variant"/*.apk 2>/dev/null | head -1 || true)
+            if [ -z "$src" ]; then
+              echo "No APK produced for $module — nothing to rename."
+              return 0
+            fi
+            ver=$(version_of "$module/build.gradle.kts")
+            if [ -z "$ver" ]; then ver="debug"; fi
+            dst="$(dirname "$src")/${pretty}-v${ver}${suffix}.apk"
+            mv "$src" "$dst"
+            echo "renamed: $dst"
+          }
+          rename_apk cleaner   CleanSweep      release ""
+          rename_apk radio     Ramesh-Radio    release ""
+          rename_apk app       Internet-Radio  release ""
+          rename_apk builder   AppForge        release ""
+          rename_apk equalizer PulseEQ         release ""
+          rename_apk cleaner   CleanSweep      debug   "-debug"
+          rename_apk radio     Ramesh-Radio    debug   "-debug"
+          rename_apk app       Internet-Radio  debug   "-debug"
+          rename_apk builder   AppForge        debug   "-debug"
+          rename_apk equalizer PulseEQ         debug   "-debug"
+          echo "=== APK file names ==="
+          ls -la */build/outputs/apk/*/*.apk
+
+      # Publishing: when a version tag is pushed, the very APKs verified above are attached
+      # to a GitHub Release. That is what makes an install link that does not expire (Actions
+      # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
+      # and it is the download an alternative store such as IzzyOnDroid needs.
+      - name: Publish a GitHub Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          TAG="${GITHUB_REF_NAME}"
+          FILES="$(ls */build/outputs/apk/release/*.apk) $(ls */build/outputs/bundle/release/*.aab)"
+          echo "release assets:"
+          echo "$FILES"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES --title "$TAG" --generate-notes
+          fi
 
       - name: Surface build errors
         if: failure()
         run: |
           echo "::error::Build failed - details committed to ci-build-failure.md on this branch"
+
+      # Commits whatever failed into ci-build-failure.md, so the reason is
+      # readable straight from the repository (and from a phone).
+      # A green build should not leave yesterday's failure report lying around.
+      - name: Clear the stale failure report
+        if: success()
+        run: |
+          if [ ! -f ci-build-failure.md ]; then
+            echo "No stale report."
+            exit 0
+          fi
+          git config user.name "ci-bot"
+          git config user.email "ci-bot@users.noreply.github.com"
+          git rm -q -f ci-build-failure.md
+          git commit -q -m "CI: clear the build failure report (build is green again)"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+            if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+              echo "Stale report removed."
+              exit 0
+            fi
+            echo "Push attempt $attempt failed; retrying…"
+            sleep 6
+          done
+          echo "Could not push the cleanup commit; the report will be removed by the next run."
 
       - name: Publish build failure excerpt
         if: failure()
@@ -63,37 +678,99 @@ jobs:
           {
             echo "# CI build failure excerpt"
             echo ""
-            echo "## Kotlin / resource errors"
-            echo '```'
-            grep -E "^e: " build.log | sed 's|file:///home/runner/work/InternetRadio/InternetRadio/||' | head -60
-            echo '```'
-            echo ""
-            echo "## Gradle summary"
-            echo '```'
-            grep -B2 -A30 -m1 "FAILURE: Build failed" build.log
-            echo '```'
+            if [ -f build.log ]; then
+              echo "## Kotlin / resource errors"
+              echo '```'
+              grep -E "^e: " build.log | sed 's|file:///home/runner/work/InternetRadio/InternetRadio/||' | head -60 || true
+              echo '```'
+              echo ""
+              echo "## Gradle summary"
+              echo '```'
+              grep -B2 -A30 -m1 "FAILURE: Build failed" build.log || true
+              echo '```'
+            else
+              echo "_No Gradle build log: the failure happened before or after the build._"
+            fi
+            if [ -f verify.log ]; then
+              echo ""
+              echo "## APK verification output"
+              echo '```'
+              tail -80 verify.log || true
+              echo '```'
+            fi
+            if [ -f store-art.log ]; then
+              echo ""
+              echo "## Store artwork step"
+              echo '```'
+              tail -60 store-art.log || true
+              echo '```'
+            fi
           } > ci-build-failure.md
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
-          git add ci-build-failure.md
-          git commit -m "CI: publish build failure excerpt"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git add -f ci-build-failure.md
+          if git diff --cached --quiet; then
+            echo "Nothing new to publish."
+          else
+            git commit -m "CI: publish build failure excerpt"
+            # Another workflow (the station refresh) may have pushed to this
+            # branch while the build was running, so rebase before pushing.
+            for attempt in 1 2 3 4 5; do
+              git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+              if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                echo "Report pushed."
+                break
+              fi
+              echo "Push attempt $attempt failed; retrying…"
+              sleep 6
+            done
+          fi
 
       - name: Upload build log on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
-          path: build.log
+          # store-art.log matters when the failure is the artwork step, which runs before
+          # Gradle and therefore leaves no build.log behind.
+          path: |
+            build.log
+            verify.log
+            store-art.log
+          if-no-files-found: warn
+
+      - name: Upload Google Play bundles (.aab)
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-bundles
+          path: "*/build/outputs/bundle/release/*.aab"
 
       - name: Upload Internet Radio APK
         uses: actions/upload-artifact@v4
         with:
           name: internet-radio-apk
-          path: app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/*/*.apk
 
       - name: Upload CleanSweep APK
         uses: actions/upload-artifact@v4
         with:
           name: cleansweep-apk
-          path: cleaner/build/outputs/apk/debug/*.apk
+          path: cleaner/build/outputs/apk/*/*.apk
+
+      - name: Upload AppForge APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: appforge-apk
+          path: builder/build/outputs/apk/*/*.apk
+
+      - name: Upload PulseEQ APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: pulseeq-apk
+          path: equalizer/build/outputs/apk/*/*.apk
+
+      - name: Upload Ramesh Radio APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ramesh-radio-apk
+          path: radio/build/outputs/apk/*/*.apk

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">PulseEQ</string>
+    <string name="notification_channel_name">Equalizer status</string>
+    <string name="notification_channel_description">Shows which preset is active while PulseEQ runs in the background</string>
+</resources>

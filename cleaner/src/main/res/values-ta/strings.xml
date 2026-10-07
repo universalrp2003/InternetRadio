@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      The launcher label in Tamil. Android asks for this file when the phone's language is
+      Tamil (or when the user picks Tamil in Settings → Apps → CleanSweep → Language, which
+      locales_config.xml enables on Android 13+).
+    -->
+    <string name="app_name">சுத்தம் செய்பவர்</string>
+    <string name="widget_description">பேட்டரி, சேமிப்பு மற்றும் தினசரி அறிக்கை — ஒரே தட்டலில்</string>
+    <string name="widget_clean">சுத்தம்</string>
+    <string name="widget_speak">அறிக்கையைப் படி</string>
+</resources>

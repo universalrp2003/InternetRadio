@@ -53,6 +53,7 @@ import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppCacheInfo
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
 import com.universalrp.cleansweep.ui.theme.Bg
 import com.universalrp.cleansweep.ui.theme.DangerRed
@@ -77,11 +78,10 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 8.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { vm.navigate(Screen.HOME) }) {
+            IconButton(onClick = { vm.goBack() }) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
             }
-            Text(
-                "App cache cleaner",
+            Text(tr("App cache cleaner"),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
@@ -120,8 +120,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    "System apps",
+                                Text(tr("System apps"),
                                     style = MaterialTheme.typography.labelMedium,
                                     color = TextSecondary,
                                 )
@@ -139,7 +138,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                     }
                 }
 
-                item { AutoCleanCard(state, vm) }
+                item { GuidedCleanCard(state) }
 
                 if (state.appsLoading) {
                     item {
@@ -171,17 +170,16 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                         Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            "Select apps",
+                        Text(tr("Select apps"),
                             style = MaterialTheme.typography.labelLarge,
                             color = TextSecondary,
                             modifier = Modifier.weight(1f),
                         )
                         TextButton(onClick = { vm.toggleAllApps(true) }) {
-                            Text("All", color = AccentCyan)
+                            Text(tr("All"), color = AccentCyan)
                         }
                         TextButton(onClick = { vm.toggleAllApps(false) }) {
-                            Text("None", color = TextSecondary)
+                            Text(tr("None"), color = TextSecondary)
                         }
                     }
                 }
@@ -215,10 +213,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                         }
                     }
                     Button(
-                        onClick = {
-                            if (!state.autoCleanAvailable) showHowItWorks = true
-                            else vm.cleanSelectedApps()
-                        },
+                        onClick = { vm.cleanSelectedApps() },
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = DangerRed,
@@ -227,43 +222,14 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                     ) {
                         Icon(Icons.Outlined.AutoFixHigh, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(6.dp))
-                        Text("Clean cache", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (state.pendingManualApps > 0) "Clean next apps" else "Clean cache",
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
             }
         }
-    }
-
-    if (showHowItWorks) {
-        androidx.compose.material3.AlertDialog(
-            onDismissRequest = { showHowItWorks = false },
-            title = { Text("Auto clean needs Accessibility") },
-            text = {
-                Text(
-                    "Android does not let one app clear another app's cache (that would need root). " +
-                        "CleanSweep can do it for you instead: with Accessibility turned on, it opens each " +
-                        "selected app's page and taps Storage → Clear cache automatically.\n\n" +
-                        "You can also continue in manual mode: CleanSweep opens each app page and you tap Clear cache yourself.",
-                    color = TextSecondary,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showHowItWorks = false
-                    vm.openAccessibilitySettings()
-                }) {
-                    Text("Enable auto clean", color = AccentCyan, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showHowItWorks = false
-                    vm.cleanSelectedApps()
-                }) {
-                    Text("Manual mode", color = TextSecondary)
-                }
-            },
-        )
     }
 }
 
@@ -274,8 +240,7 @@ private fun UsageAccessCard(vm: MainViewModel) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Android, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
-                Text(
-                    "Usage access needed",
+                Text(tr("Usage access needed"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
@@ -289,54 +254,65 @@ private fun UsageAccessCard(vm: MainViewModel) {
             )
             Spacer(Modifier.height(12.dp))
             Button(onClick = { vm.requestUsageAccess() }) {
-                Text("Grant usage access", fontWeight = FontWeight.Bold)
+                Text(tr("Grant usage access"), fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
+/**
+ * Explains the v1.3 guided flow honestly: Android does not allow one app to wipe
+ * another app's cache, and CleanSweep no longer asks for Accessibility to fake it.
+ * Instead it walks you through the official buttons, two taps per app.
+ */
 @Composable
-private fun AutoCleanCard(state: UiState, vm: MainViewModel) {
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .clickable { vm.openAccessibilitySettings() }
-    ) {
-        Row(
-            Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(40.dp)
-                    .background(SurfaceHigh, shape = MaterialTheme.shapes.small),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.AutoFixHigh,
-                    contentDescription = null,
-                    tint = if (state.autoCleanAvailable) AccentCyan else TextSecondary,
-                    modifier = Modifier.size(22.dp),
-                )
+private fun GuidedCleanCard(state: UiState) {
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .background(SurfaceHigh, shape = MaterialTheme.shapes.small),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.AutoFixHigh,
+                        contentDescription = null,
+                        tint = if (state.pendingManualApps > 0) WarnAmber else AccentCyan,
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(tr("Guided two-tap clean"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(tr("No Accessibility permission needed — v1.3 dropped it"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AccentCyan,
+                    )
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    "Auto clean (Accessibility)",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    if (state.autoCleanAvailable)
-                        "Enabled — caches will be cleared fully automatically"
-                    else
-                        "Off — tap to enable hands-free cache cleaning",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (state.autoCleanAvailable) AccentCyan else TextSecondary,
-                )
-            }
-            StatusDot(state.autoCleanAvailable, if (state.autoCleanAvailable) "ON" else "OFF")
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
+            Spacer(Modifier.height(10.dp))
+            Text(
+                if (state.pendingManualApps > 0)
+                    "Cleaning in progress: ${state.pendingManualApps} app${if (state.pendingManualApps == 1) "" else "s"} left. " +
+                        "CleanSweep opened the app's storage page — tap “Clear cache” there, come back, then tap “Next app”."
+                else
+                    "Android does not let any cleaner wipe another app's cache silently (that needs root). " +
+                        "So CleanSweep opens each selected app's storage page and you tap “Clear cache” — two taps per app, " +
+                        "and you can see exactly what is happening.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(10.dp))
+            Text(tr("1. Tick apps  →  2. Clean cache  →  3. Tap “Clear cache” in Settings  →  4. Back → Next app"),
+                style = MaterialTheme.typography.labelMedium,
+                color = TextPrimary,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

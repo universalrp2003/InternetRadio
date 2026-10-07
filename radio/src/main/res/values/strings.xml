@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Ramesh Radio</string>
+    <string name="notification_channel_name">Now playing</string>
+    <string name="notification_channel_description">Shows the station playing in the background</string>
+    <string name="widget_description">Ramesh Radio: see what is playing and control it from your home screen</string>
+    <string name="widget_play_pause">Play or pause</string>
+    <string name="widget_next">Next station</string>
+    <string name="widget_previous">Previous station</string>
+    <string name="widget_tap_to_play">Tap play to listen</string>
+    <string name="widget_status_playing">Playing \u2022 tap for the app</string>
+    <string name="widget_status_paused">Paused \u2022 tap play to resume</string>
+    <string name="widget_status_idle">Pick a station in the app</string>
+</resources>

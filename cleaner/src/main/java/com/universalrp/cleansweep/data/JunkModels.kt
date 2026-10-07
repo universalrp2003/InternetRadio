@@ -1,7 +1,14 @@
 package com.universalrp.cleansweep.data
 
 /** Categories of junk that the scanner can detect. */
-enum class JunkKind(val label: String, val description: String, val defaultSelected: Boolean) {
+enum class JunkKind(
+    val label: String,
+    val description: String,
+    /** The categories CleanSweep suggests as safe to preselect (see the settings switch). */
+    val defaultSelected: Boolean,
+    /** Review lists: these may contain personal files, so they are never auto-ticked. */
+    val reviewOnly: Boolean = false,
+) {
     RESIDUAL(
         "Residual & temp files",
         "Leftover .tmp, .log, .bak, partial downloads and other garbage files",
@@ -30,12 +37,14 @@ enum class JunkKind(val label: String, val description: String, val defaultSelec
     OLD_DOWNLOADS(
         "Old downloads",
         "Files in your Download folder older than the limit you set (off by default)",
-        false
+        false,
+        true,
     ),
     LARGE_FILES(
         "Large files",
         "Very large files you may want to review (never deleted without your OK)",
-        false
+        false,
+        true,
     ),
 }
 
@@ -95,4 +104,10 @@ data class ScanSettings(
     val oldDownloadDays: Int = 30,
     val apkOnlyInstalled: Boolean = false,
     val excludedPrefixes: Set<String> = emptySet(),
+    /**
+     * Categories the user wants ticked the moment a scan finishes. Empty by default:
+     * CleanSweep selects nothing for you, you tick what goes — the switches in
+     * Settings → "Preselect after a scan" are how you opt into a shortcut.
+     */
+    val defaultSelected: Set<JunkKind> = emptySet(),
 )

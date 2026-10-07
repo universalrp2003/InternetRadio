@@ -1,0 +1,36 @@
+Categories:
+  - System
+  - Security
+License: GPL-3.0-or-later
+AuthorName: Ramesh prathap .R
+AuthorEmail: universalrp2003@gmail.com
+WebSite: https://github.com/universalrp2003/InternetRadio
+SourceCode: https://github.com/universalrp2003/InternetRadio
+IssueTracker: https://github.com/universalrp2003/InternetRadio/issues
+
+AutoName: CleanSweep
+
+RepoType: git
+Repo: https://github.com/universalrp2003/InternetRadio.git
+
+Builds:
+  - versionName: '2.6'
+    versionCode: 11
+    commit: v2026.10.06
+    subdir: cleaner
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless
+      - update-java-alternatives -a
+    gradle:
+      - yes
+
+MaintainerNotes: >
+  CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ all live in one
+  Gradle project; the subdir field picks this app's module. The listing text and
+  the Tamil translation are in cleaner/fastlane/metadata/android/.
+
+AutoUpdateMode: Version
+UpdateCheckMode: RepoManifest
+CurrentVersion: '2.6'
+CurrentVersionCode: 11

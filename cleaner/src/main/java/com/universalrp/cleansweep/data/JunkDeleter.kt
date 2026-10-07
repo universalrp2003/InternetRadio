@@ -15,6 +15,8 @@ class JunkDeleter(private val context: Context) {
         val freedBytes: Long,
         val deleted: Int,
         val failed: List<String>,
+        /** Why the first delete failed — usually a missing storage permission. */
+        val firstFailure: String? = null,
     )
 
     suspend fun delete(
@@ -25,6 +27,7 @@ class JunkDeleter(private val context: Context) {
         var freed = 0L
         var deleted = 0
         val failed = mutableListOf<String>()
+        var firstFailure: String? = null
         var done = 0
         val total = paths.size
 
@@ -43,9 +46,13 @@ class JunkDeleter(private val context: Context) {
             } catch (e: Exception) {
                 0L
             }
+            var failureReason: String? = null
             val ok = try {
                 f.delete()
             } catch (e: Exception) {
+                // RecoverableSecurityException / EACCES land here on Android 8-9 when the
+                // app has read but not write access to shared storage.
+                failureReason = "${e.javaClass.simpleName}: ${e.message ?: "delete refused"}"
                 false
             }
             if (ok) {
@@ -54,6 +61,9 @@ class JunkDeleter(private val context: Context) {
                 removeFromMediaStore(f.absolutePath)
             } else if (f.exists()) {
                 failed.add(f.absolutePath)
+                if (firstFailure == null) {
+                    firstFailure = failureReason ?: "the system refused to delete this file"
+                }
             } else {
                 deleted++
             }
@@ -90,7 +100,7 @@ class JunkDeleter(private val context: Context) {
             onProgress(done, total, d.absolutePath)
         }
 
-        Result(freed, deleted, failed)
+        Result(freed, deleted, failed, firstFailure)
     }
 
     /** Best-effort cleanup so gallery/file managers stop showing deleted media. */

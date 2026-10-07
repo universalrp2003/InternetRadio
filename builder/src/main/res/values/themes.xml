@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="appforge_bg">#0B0F1E</color>
+
+    <style name="Theme.AppForge" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/appforge_bg</item>
+    </style>
+</resources>

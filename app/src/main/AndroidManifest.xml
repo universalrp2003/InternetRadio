@@ -8,7 +8,7 @@
 
     <application
         android:label="Internet Radio"
-        android:icon="@android:drawable/ic_media_play"
+        android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 
         <activity

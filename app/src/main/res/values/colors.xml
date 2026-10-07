@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Internet Radio's own background, matching the other apps in this project. -->
+    <color name="internetradio_bg">#08111F</color>
+</resources>

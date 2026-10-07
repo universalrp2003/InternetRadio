@@ -1,0 +1,11 @@
+Internet Radio streams radio stations over the internet with Media3/ExoPlayer: tap a station
+and it plays, keep browsing the list while it plays, and control it from the notification or
+the lock screen after you leave the app.
+
+* Background playback with a media notification (play/pause, next/previous).
+* A station list you can search, with favourites so the ones you like are one tap away.
+* Handles the usual stream formats (MP3, AAC, HLS) and reports a clear message when a station
+  is offline instead of pretending to play.
+
+No accounts, no ads, no analytics. The app uses the internet only to play the station you
+chose; nothing about you is collected or sent anywhere.

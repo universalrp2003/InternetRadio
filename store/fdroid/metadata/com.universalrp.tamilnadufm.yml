@@ -1,0 +1,36 @@
+Categories:
+  - Multimedia
+  - Internet
+License: GPL-3.0-or-later
+AuthorName: Ramesh prathap .R
+AuthorEmail: universalrp2003@gmail.com
+WebSite: https://github.com/universalrp2003/InternetRadio
+SourceCode: https://github.com/universalrp2003/InternetRadio
+IssueTracker: https://github.com/universalrp2003/InternetRadio/issues
+
+AutoName: Ramesh Radio
+
+RepoType: git
+Repo: https://github.com/universalrp2003/InternetRadio.git
+
+Builds:
+  - versionName: '1.2'
+    versionCode: 2
+    commit: v2026.10.06
+    subdir: radio
+    sudo:
+      - apt-get update
+      - apt-get install -y openjdk-17-jdk-headless
+      - update-java-alternatives -a
+    gradle:
+      - yes
+
+MaintainerNotes: >
+  One of five apps in this Gradle project (see :cleaner's maintainer notes).
+  Station list is shipped in the APK; the online radio-browser directory is only
+  searched when the user taps search.
+
+AutoUpdateMode: Version
+UpdateCheckMode: RepoManifest
+CurrentVersion: '1.2'
+CurrentVersionCode: 2

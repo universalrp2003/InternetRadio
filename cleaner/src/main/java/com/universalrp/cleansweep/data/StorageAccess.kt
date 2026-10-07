@@ -50,14 +50,27 @@ object StorageAccess {
         }
     }
 
-    fun openAccessibilitySettings(context: Context) {
+    /**
+     * Opens the Storage page of another app straight away.
+     * From there the user taps "Clear cache" — this is the two-tap guided flow
+     * that replaces the old Accessibility automation in v1.3.
+     */
+    fun openAppStorage(context: Context, pkg: String) {
+        // Most ROMs (including MIUI/HyperOS) accept this undocumented-but-stable action.
         try {
             context.startActivity(
-                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                Intent("android.intent.action.APPLICATION_DETAILS_STORAGE_SETTINGS")
+                    .setPackage("com.android.settings")
+                    .putExtra("package", pkg)
+                    .putExtra(":settings:show_fragment_args", android.os.Bundle().apply {
+                        putString("package", pkg)
+                    })
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
+            return
         } catch (e: Exception) {
-            // Ignored.
+            // Fall through to the app-info page.
         }
+        openAppInfo(context, pkg)
     }
 }

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- LED equalizer bars -->
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M26,62 L31,62 L31,80 L26,80 Z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M35,50 L40,50 L40,80 L35,80 Z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M44,38 L49,38 L49,80 L44,80 Z" />
+    <path
+        android:fillColor="#FBBF24"
+        android:pathData="M53,28 L58,28 L58,80 L53,80 Z" />
+    <path
+        android:fillColor="#34D399"
+        android:pathData="M62,42 L67,42 L67,80 L62,80 Z" />
+    <path
+        android:fillColor="#22D3EE"
+        android:pathData="M71,54 L76,54 L76,80 L71,80 Z" />
+    <!-- spark -->
+    <path
+        android:fillColor="#A78BFA"
+        android:pathData="M80,24 L82.5,31 L89.5,33.5 L82.5,36 L80,43 L77.5,36 L70.5,33.5 L77.5,31 Z" />
+</vector>

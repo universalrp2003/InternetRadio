@@ -13,6 +13,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -24,6 +26,13 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,15 +53,23 @@ import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.SdStorage
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.material.icons.outlined.ArrowDownward
+import androidx.compose.material.icons.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.ArrowUpward
+import androidx.compose.material.icons.outlined.RestartAlt
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.data.JunkKind
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.GoodGreen
 import com.universalrp.cleansweep.ui.theme.AccentViolet
 import com.universalrp.cleansweep.ui.theme.OutlineC
 import com.universalrp.cleansweep.ui.theme.SurfaceC
+import com.universalrp.cleansweep.ui.theme.TextPrimary
 import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 fun JunkKind.icon(): ImageVector = when (this) {
@@ -225,5 +242,130 @@ fun StatusDot(active: Boolean, label: String) {
         )
         Box(Modifier.size(8.dp))
         Text(label, style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+    }
+}
+
+/**
+ * AI answers come back dressed in markdown (**bold**, "- " bullets, "##" headings).
+ * This renders them as tidy text with real bold runs and clean bullets, so the screen
+ * never shows a wall of asterisks like the old build did.
+ */
+@Composable
+fun AiText(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = TextPrimary,
+    style: TextStyle = MaterialTheme.typography.bodyMedium,
+) {
+    val lines = remember(text) { aiLines(text) }
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        lines.forEach { line ->
+            Row(verticalAlignment = Alignment.Top) {
+                if (line.kind == 1) {
+                    Text(
+                        "•",
+                        style = style,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(end = 6.dp),
+                    )
+                }
+                Text(
+                    text = aiInline(line.text),
+                    style = style,
+                    color = if (line.kind == 2) AccentCyan else color,
+                    fontWeight = if (line.kind == 2) FontWeight.Bold else null,
+                )
+            }
+        }
+    }
+}
+
+private data class AiLine(val kind: Int, val text: String)
+
+/** kind: 0 = normal, 1 = bullet, 2 = heading. */
+private fun aiLines(raw: String): List<AiLine> = raw
+    .replace("\r", "")
+    .lines()
+    .mapNotNull { original ->
+        val trimmed = original.trim()
+        if (trimmed.isEmpty()) return@mapNotNull null
+        if (trimmed.all { it == '-' || it == '_' || it == '*' }) return@mapNotNull null
+        val heading = trimmed.startsWith("#")
+        var body = trimmed.trimStart('#').trim()
+        val bullet = body.startsWith("- ") || body.startsWith("* ") || body.startsWith("• ")
+        if (bullet) body = body.substring(2).trim()
+        when {
+            heading -> AiLine(2, body)
+            bullet -> AiLine(1, body)
+            else -> AiLine(0, body)
+        }
+    }
+
+/** Turns **bold** runs into real bold text and drops stray back-ticks. */
+private fun aiInline(text: String): AnnotatedString = buildAnnotatedString {
+    var bold = false
+    text.replace("`", "").replace("__", "**").split("**").forEach { chunk ->
+        if (chunk.isNotEmpty()) {
+            withStyle(SpanStyle(fontWeight = if (bold) FontWeight.Bold else null)) {
+                append(chunk)
+            }
+        }
+        bold = !bold
+    }
+}
+
+/**
+ * The arrow pad that moves the status-bar watt reading. Every phone blocks that strip with
+ * something different — VoLTE, VPN, the carrier name, the battery percentage — so the user
+ * decides where the reading sits, and the position is remembered.
+ */
+@Composable
+fun ReadingMovePad(
+    onMove: (dx: Int, dy: Int) -> Unit,
+    onReset: () -> Unit,
+    note: String,
+    dragging: Boolean = false,
+    onToggleDrag: (() -> Unit)? = null,
+) {
+    Column {
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TextButton(onClick = { onMove(-24, 0) }) {
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Move left"), tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(24, 0) }) {
+                Icon(Icons.Outlined.ArrowForward, contentDescription = tr("Move right"), tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(0, -12) }) {
+                Icon(Icons.Outlined.ArrowUpward, contentDescription = tr("Move up"), tint = AccentCyan)
+            }
+            TextButton(onClick = { onMove(0, 12) }) {
+                Icon(Icons.Outlined.ArrowDownward, contentDescription = tr("Move down"), tint = AccentCyan)
+            }
+            Spacer(Modifier.size(6.dp))
+            TextButton(onClick = onReset) {
+                Icon(Icons.Outlined.RestartAlt, contentDescription = null, tint = GoodGreen)
+                Spacer(Modifier.size(6.dp))
+                Text(tr("Auto"), color = GoodGreen, fontWeight = FontWeight.Bold)
+            }
+            if (onToggleDrag != null) {
+                TextButton(onClick = onToggleDrag) {
+                    Text(
+                        if (dragging) tr("Done") else tr("Drag"),
+                        color = if (dragging) AccentViolet else AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+        Text(
+            note,
+            style = MaterialTheme.typography.labelSmall,
+            color = TextSecondary,
+        )
     }
 }

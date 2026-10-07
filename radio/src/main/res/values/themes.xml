@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="tamilfm_bg">#0B0713</color>
+
+    <style name="Theme.TamilnaduFm" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/tamilfm_bg</item>
+        <item name="android:statusBarColor">@color/tamilfm_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:navigationBarColor">@color/tamilfm_bg</item>
+    </style>
+</resources>
