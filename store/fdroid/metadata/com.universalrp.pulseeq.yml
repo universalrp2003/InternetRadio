@@ -26,7 +26,7 @@ Builds:
 
 MaintainerNotes: >
   One of five apps in this Gradle project. PulseEQ uses INTERNET only for optional GitHub release checks. Audio is processed locally.
-  permission at all: it is an audio tool, not a music downloader.
+  It is an audio tool, not a music downloader.
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
