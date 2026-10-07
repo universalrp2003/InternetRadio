@@ -62,6 +62,7 @@ import android.provider.Settings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -1349,7 +1350,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 var skipped = 0
                 var vtLookups = 0
                 for ((index, app) in targets.withIndex()) {
-                    kotlinx.coroutines.ensureActive()
+                    coroutineContext.ensureActive()
                     mutate { it.copy(malwareProgress = index to targets.size) }
                     val hash = app.apkPath?.let { MalwareCheck.sha256OfFile(it) }
                     if (hash == null) {

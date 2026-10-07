@@ -167,19 +167,21 @@ class StationRepository(context: Context) {
     }
 
     /** The last saved queue: urls, names, and the index that was playing. Null when none. */
-    fun loadQueue(): Triple<List<String>, List<String>, Int>? = try {
-        val raw = prefs.getString(KEY_QUEUE, null) ?: return null
-        val json = JSONObject(raw)
-        val urlArray = json.optJSONArray("urls") ?: return null
-        val nameArray = json.optJSONArray("names")
-        val urls = (0 until urlArray.length()).mapNotNull {
-            urlArray.optString(it).takeIf { s -> s.isNotBlank() }
+    fun loadQueue(): Triple<List<String>, List<String>, Int>? {
+        return try {
+            val raw = prefs.getString(KEY_QUEUE, null) ?: return null
+            val json = JSONObject(raw)
+            val urlArray = json.optJSONArray("urls") ?: return null
+            val nameArray = json.optJSONArray("names")
+            val urls = (0 until urlArray.length()).mapNotNull {
+                urlArray.optString(it).takeIf { s -> s.isNotBlank() }
+            }
+            if (urls.isEmpty()) return null
+            val names = (0 until urls.size).map { i -> nameArray?.optString(i).orEmpty() }
+            Triple(urls, names, json.optInt("index", 0).coerceIn(0, urls.size - 1))
+        } catch (t: Throwable) {
+            null
         }
-        if (urls.isEmpty()) return null
-        val names = (0 until urls.size).map { i -> nameArray?.optString(i).orEmpty() }
-        Triple(urls, names, json.optInt("index", 0).coerceIn(0, urls.size - 1))
-    } catch (t: Throwable) {
-        null
     }
 
     private companion object {
