@@ -35,10 +35,25 @@ data class AppRow(
     val lastUsedMs: Long?,
     val hasLauncher: Boolean,
     val installer: String?,
+    /** Every permission the app declares in its manifest (asked for, whether granted or not). */
     val permissions: List<String>,
+    /**
+     * The declared permissions Android has actually granted right now. This is what the
+     * UI means by \"this app can…\" — reading only [permissions] is what kept showing a
+     * permission as held after the user revoked it (v2.7 bug: the manifest never changes,
+     * only the grant does).
+     */
+    val grantedPermissions: List<String>,
+    /** Declared permissions the user (or Android) has taken away since install. */
+    val revokedPermissions: List<String>,
+    /** Plain-language labels for the granted permissions that deserve a second look. */
     val riskyPermissions: List<String>,
+    /** Plain-language labels for the risky permissions that were taken away. */
+    val revokedRiskyPermissions: List<String>,
     val tags: List<String>,
     val canUninstall: Boolean,
+    /** Path of the installed APK, so the malware hash check can read it. Null when unknown. */
+    val apkPath: String?,
 ) {
     val totalBytes: Long get() = if (dataBytes > 0L) dataBytes + cacheBytes else apkBytes + cacheBytes
     val isUnused: Boolean get() = lastUsedMs == null || lastUsedMs < System.currentTimeMillis() - 30L * 24 * 3600 * 1000
@@ -147,7 +162,19 @@ object AppInventoryLoader {
             val updatedSystem = (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
             if (isSystem && !includeSystem) continue
 
-            val permissions = info.requestedPermissions?.toList().orEmpty()
+            val declared = info.requestedPermissions?.toList().orEmpty()
+            val flags = info.requestedPermissionsFlags
+            // granted[i] lines up with declared[i]; when Android gives no flags (old packages,
+            // some system apps) every declared permission is treated as granted, as before.
+            val granted = if (flags != null && flags.size == declared.size) {
+                declared.filterIndexed { i, _ ->
+                    (flags[i] and PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
+                }
+            } else {
+                declared
+            }
+            val grantedSet = granted.toHashSet()
+            val revoked = declared.filter { it !in grantedSet }
 
             var dataBytes = 0L
             var cacheBytes = 0L
@@ -178,7 +205,8 @@ object AppInventoryLoader {
 
             val installer = installerOf(pm, ai.packageName)
             val lastUsed = stats[ai.packageName]
-            val risky = BloatRules.riskyLabels(permissions)
+            val risky = BloatRules.riskyLabels(granted)
+            val revokedRisky = BloatRules.riskyLabels(revoked)
             val launcher = hasLauncherActivity(pm, ai.packageName)
 
             val tags = mutableListOf<String>()
@@ -191,6 +219,7 @@ object AppInventoryLoader {
             if (!isSystem && !BloatRules.isTrustedInstaller(installer)) tags.add("Sideloaded")
             if (!launcher && !isSystem) tags.add("No launcher icon")
             if (risky.isNotEmpty()) tags.add("Sensitive permissions")
+            if (revokedRisky.isNotEmpty()) tags.add("Permissions removed")
 
             rows.add(
                 AppRow(
@@ -206,10 +235,14 @@ object AppInventoryLoader {
                     lastUsedMs = lastUsed,
                     hasLauncher = launcher,
                     installer = installer,
-                    permissions = permissions,
+                    permissions = declared,
+                    grantedPermissions = granted,
+                    revokedPermissions = revoked,
                     riskyPermissions = risky,
+                    revokedRiskyPermissions = revokedRisky,
                     tags = tags,
                     canUninstall = !isSystem,
+                    apkPath = ai.sourceDir,
                 )
             )
         }

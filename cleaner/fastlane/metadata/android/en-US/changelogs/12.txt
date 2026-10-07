@@ -1,0 +1,6 @@
+Permissions now show what each app really holds: revoked ones are listed as removed, and the list refreshes when you come back from Settings.
+Home keeps your scroll position when you return from a scan.
+New speaker button in the chat mutes AI voice replies (per-answer Read aloud still works).
+The typing bubble names the AI that is actually answering.
+New: live web lookup gives the AI fresh facts with today's date.
+New: malware hash check compares installed apps against MalwareBazaar, plus VirusTotal with your free key.

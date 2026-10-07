@@ -6,6 +6,7 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
@@ -72,6 +73,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var controller: MediaController? = null
     private var sleepJob: Job? = null
 
+    /**
+     * v1.3: the station lists' scroll positions live here. The Radio screen leaves the
+     * composition on every tab switch, which used to drop the list back to the first
+     * station ("playing the 100th channel, opened the equalizer, came back to the top").
+     * The ViewModel outlives the tab switch (and a rotation), so the position survives.
+     */
+    val radioListState = LazyListState()
+    val newsListState = LazyListState()
+
     private val playerListener = object : Player.Listener {
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             syncNowPlaying(mediaItem)
@@ -136,7 +146,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private fun syncNowPlaying(mediaItem: MediaItem?) {
         val id = mediaItem?.mediaId
         val local = mediaItem?.mediaMetadata?.extras?.getString(EXTRA_LOCAL_TITLE)
+        // v1.3: directory hits are not in the shipped list, so a plain lookup used to clear
+        // the transport bar a moment after playback started. Fall back to the last-played
+        // record (markPlayed saved it) and then to the stream's own metadata title.
         val station = _state.value.stations.firstOrNull { it.url == id || it.id == id }
+            ?: lastPlayed()?.takeIf { it.url == id }
+            ?: if (id != null && (id.startsWith("http://") || id.startsWith("https://"))) {
+                RadioStation(
+                    id = id,
+                    name = mediaItem?.mediaMetadata?.title?.toString()
+                        ?.takeIf { title -> title.isNotBlank() } ?: "Live stream",
+                    url = id,
+                )
+            } else {
+                null
+            }
         mutate {
             it.copy(
                 nowPlaying = station,
@@ -301,42 +325,63 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- playback
 
-    fun play(station: RadioStation) {
+    /**
+     * Plays a station — and queues the whole visible list behind it, so Next/Previous work
+     * identically in the app, the widget, the notification, the lock screen and a headset.
+     * v1.3: the old build loaded a single item, which left the widget's next/previous (and
+     * the notification's) with nowhere to go. The queue is also saved for the service, so
+     * next/previous keep working with the app closed.
+     *
+     * @param queueOverride the list to queue instead of the visible one (the directory
+     *   results when playing from the directory sheet).
+     */
+    fun play(station: RadioStation, queueOverride: List<RadioStation>? = null) {
         PlayerBus.ensureService(ctx)
         val c = controller ?: run {
             mutate { it.copy(message = "Player is still starting — tap again in a second.") }
             return
         }
-        val item = toMediaItem(station)
         if (c.currentMediaItem?.mediaId == station.url) {
             if (c.isPlaying) c.pause() else c.play()
         } else {
             PlayerBus.clearError()
-            c.setMediaItem(item)
+            val source = queueOverride ?: _state.value.visible
+            val queue = if (source.any { it.url == station.url }) source else listOf(station)
+            val index = queue.indexOfFirst { it.url == station.url }.coerceAtLeast(0)
+            c.setMediaItems(queue.map { toMediaItem(it) }, index, 0L)
             c.prepare()
             c.play()
+            repo.saveQueue(queue.map { it.url }, queue.map { it.name }, index)
             repo.markPlayed(station)
         }
         mutate { it.copy(nowPlaying = station, busy = true) }
     }
 
+    /** Plays a directory hit with the directory results as its next/previous queue. */
+    fun playDirectory(station: RadioStation) {
+        val results = _state.value.directoryResults
+        play(station, queueOverride = results.takeIf { it.isNotEmpty() })
+        closeDirectory()
+    }
+
     fun playLocal(track: LocalTrack) {
         PlayerBus.ensureService(ctx)
         val c = controller ?: return
-        val item = MediaItem.Builder()
-            .setUri(track.uri)
-            .setMediaId(track.uri.toString())
-            .setMediaMetadata(
-                MediaMetadata.Builder()
-                    .setTitle(track.title)
-                    .setArtist(track.artist)
-                    .setExtras(android.os.Bundle().apply {
-                        putString(EXTRA_LOCAL_TITLE, track.title)
-                    })
-                    .build()
+        // The phone's own tracks queue up the same way stations do: next/previous walk the
+        // local list from here, in the widget and the notification too.
+        val tracks = _state.value.localTracks
+        val index = tracks.indexOfFirst { it.uri == track.uri }
+        if (index >= 0) {
+            c.setMediaItems(tracks.map { toLocalItem(it) }, index, 0L)
+            repo.saveQueue(
+                tracks.map { it.uri.toString() },
+                tracks.map { it.title },
+                index,
             )
-            .build()
-        c.setMediaItem(item)
+        } else {
+            c.setMediaItem(toLocalItem(track))
+            repo.saveQueue(listOf(track.uri.toString()), listOf(track.title), 0)
+        }
         c.prepare()
         c.play()
         mutate { it.copy(playingLocalTitle = track.title, nowPlaying = null, busy = true) }
@@ -389,6 +434,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                             .firstOrNull { it.isNotBlank() }
                     )
                     .setArtworkUri(station.favicon.takeIf { it.startsWith("http") }?.let { Uri.parse(it) })
+                    .build()
+            )
+            .build()
+
+    private fun toLocalItem(track: LocalTrack): MediaItem =
+        MediaItem.Builder()
+            .setUri(track.uri)
+            .setMediaId(track.uri.toString())
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.title)
+                    .setArtist(track.artist)
+                    .setExtras(android.os.Bundle().apply {
+                        putString(EXTRA_LOCAL_TITLE, track.title)
+                    })
                     .build()
             )
             .build()

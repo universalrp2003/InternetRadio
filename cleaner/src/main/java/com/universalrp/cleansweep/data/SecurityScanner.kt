@@ -42,12 +42,12 @@ data class SecurityReport(
 /**
  * On-phone security review.
  *
- * These are checks of Android's own settings and of the permissions apps ask for.
+ * These are checks of Android's own settings and of the permissions apps currently
+ * hold (granted, not merely declared — a revoked permission must not show up here).
  * That catches the things that actually cause trouble on a phone (apps that can
  * read your SMS, apps that can install other apps, rogue accessibility services,
- * notification readers). It is **not** a virus scanner: file hashes are not looked
- * up anywhere, because CleanSweep does not upload anything. The UI says this in
- * plain words as well, because claiming otherwise would be dishonest.
+ * notification readers). File-hash malware lookups live in [MalwareCheck] instead:
+ * hashes only, never the files themselves.
  */
 object SecurityScanner {
 
@@ -199,8 +199,10 @@ object SecurityScanner {
             )
         }
 
+        // Granted permissions, not declared ones: an app the user already cut off from SMS
+        // must disappear from this finding (v2.7 — \"revoked but still showing\").
         val smsApps = apps.filter {
-            it.permissions.any { p ->
+            it.grantedPermissions.any { p ->
                 p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
             } && !it.isSystem
         }
@@ -311,10 +313,10 @@ object SecurityScanner {
         findings.add(
             Finding(
                 id = "no_hash_lookup",
-                title = "No file-hash virus check",
-                detail = "CleanSweep deliberately has no internet permission, so it cannot compare " +
-                    "your files against online virus databases. Everything above is checked on the " +
-                    "phone itself. For a file-hash scan, use Play Protect or an online scanner.",
+                title = "Malware hash check is on this screen",
+                detail = "The “Malware hash check” card above compares each installed app's file " +
+                    "hash against MalwareBazaar automatically — hashes only, your files are never " +
+                    "uploaded — and against VirusTotal when you add a free key there.",
                 severity = Severity.INFO,
             )
         )

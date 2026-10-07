@@ -97,7 +97,7 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.6" to "சுத்தம் செய்பவர் v2.6",
+        "CleanSweep v2.7" to "சுத்தம் செய்பவர் v2.7",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)
@@ -528,6 +528,20 @@ object Lang {
             "உங்கள் போன் அங்கே VoLTE, VPN, ஆபரேட்டர் பெயர், பேட்டரி % எழுதும் — " +
             "காலியாக இருக்கும் இடத்திற்கு நகர்த்துங்கள்.",
         "Mobile data is ON." to "மொபைல் டேட்டா ஆன்.",
+        // ---------------------------------------------------------------- v2.7 additions
+        "Mute voice replies" to "குரல் பதில்களை நிறுத்து",
+        "Voice replies on" to "குரல் பதில் இயக்கத்தில்",
+        "Live web lookup" to "நேரடி இணைய தேடல்",
+        "Malware hash check" to "தீம்பொருள் சோதனை",
+        "Check installed apps" to "நிறுவிய ஆப்களை சோதி",
+        "Check this app for malware" to "இந்த ஆப்பில் தீம்பொருள் உள்ளதா என சோதி",
+        "Permissions this app has right now" to "இந்த ஆப் இப்போது வைத்திருக்கும் அனுமதிகள்",
+        "Removed — Android no longer grants these" to "நீக்கப்பட்டது — இவை இனி ஆப்க்கு இல்லை",
+        "Last checked %s" to "கடைசியாக சோதித்தது %s",
+        "Include preinstalled system apps" to "முன்பே நிறுவிய சிஸ்டம் ஆப்களையும் சேர்",
+        "Open app settings" to "ஆப் அமைப்புகளைத் திற",
+        "Remove" to "நீக்கு",
+        "VirusTotal API key (optional)" to "VirusTotal API கீ (விருப்பம்)",
     )
 }
 

@@ -232,6 +232,42 @@ object AiSettings {
 
     private const val PREFS = "cleansweep_ai"
 
+    /**
+     * v2.7: the assistant fetches live web snippets (DuckDuckGo + Wikipedia, no key) and
+     * hands them to the model with today's date, so time-sensitive questions stop being
+     * answered from stale training memory. On by default; the AI settings screen can turn
+     * it off.
+     */
+    const val KEY_WEB_LOOKUP = "web_lookup"
+
+    fun webLookup(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getBoolean(KEY_WEB_LOOKUP, true)
+
+    fun setWebLookup(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_WEB_LOOKUP, on)
+            .apply()
+    }
+
+    /**
+     * v2.7: the user's own free VirusTotal API key, stored exactly like the AI keys —
+     * private to this app, sent only to virustotal.com, and only for hashes the user
+     * asked about (flagged apps, or one app checked by hand). Blank when not set, in
+     * which case the malware check uses MalwareBazaar alone.
+     */
+    const val KEY_VIRUSTOTAL = "virustotal_key"
+
+    fun vtKey(context: Context): String =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getString(KEY_VIRUSTOTAL, "").orEmpty()
+
+    fun setVtKey(context: Context, key: String) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putString(KEY_VIRUSTOTAL, key.trim())
+            .apply()
+    }
+
     /** Separate from the menu language: the user may read the menu in English and want Tamil
      *  answers, or the other way round. */
     const val KEY_ANSWER_LANGUAGE = "answer_language"

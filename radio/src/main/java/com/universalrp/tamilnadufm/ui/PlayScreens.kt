@@ -45,6 +45,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Stop
@@ -923,6 +925,18 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // v1.3: previous/next here too — same queue the widget and notification use.
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(SurfaceHigh)
+                        .clickable { vm.previous() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = TextSecondary)
+                }
+                Spacer(Modifier.width(16.dp))
                 Box(
                     Modifier
                         .size(58.dp)
@@ -937,6 +951,17 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                         tint = Color(0xFF2A1200),
                         modifier = Modifier.size(30.dp),
                     )
+                }
+                Spacer(Modifier.width(16.dp))
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(SurfaceHigh)
+                        .clickable { vm.next() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = TextSecondary)
                 }
                 Spacer(Modifier.width(16.dp))
                 Box(

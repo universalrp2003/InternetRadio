@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Android
@@ -82,7 +83,7 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun HomeScreen(state: UiState, vm: MainViewModel) {
+fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
     Column(
         Modifier
             .fillMaxSize()
@@ -150,18 +151,22 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
 
         LazyColumn(
+            state = listState,
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            // Every section is keyed, so the restored scroll position still points at the
+            // same card when a conditional card (setup prompt, health, last clean) appears
+            // or disappears between visits.
             if (!state.hasAllFilesAccess) {
-                item { SetupCard(vm) }
+                item(key = "setup") { SetupCard(vm) }
             }
 
-            item { StorageCard(state) }
+            item(key = "storage") { StorageCard(state) }
 
             // The daily brief card: what CleanSweep found for you today, and the switch that
             // turns the whole daily watch on or off without digging into Settings.
-            item {
+            item(key = "brief") {
                 PanelCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp)) {
                         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -223,11 +228,11 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             if (!state.legacyStorageOk) {
-                item { LegacyStorageCard(vm) }
+                item(key = "legacy") { LegacyStorageCard(vm) }
             }
 
             state.health?.let { health ->
-                item {
+                item(key = "health") {
                     PanelCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -267,9 +272,9 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
-            item { AiStatusCard(state, vm) }
+            item(key = "aistatus") { AiStatusCard(state, vm) }
 
-            item {
+            item(key = "scanbutton") {
                 GradientButton(
                     text = if (state.report != null) "Scan again" else "Scan & clean junk",
                     icon = Icons.Outlined.AutoFixHigh,
@@ -279,9 +284,9 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 )
             }
 
-            item { AssistantCard(state, vm) }
+            item(key = "assistant") { AssistantCard(state, vm) }
 
-            item {
+            item(key = "quick") {
                 SectionTitle(tr("Phone health, security & network"))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -342,7 +347,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
-            item {
+            item(key = "tiles") {
                 SectionTitle(tr("Quick cleaning actions"))
                 Text(tr("Each tile scans for its own kind of junk only — then you tick what to clean."),
                     style = MaterialTheme.typography.labelSmall,
@@ -418,7 +423,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
             }
 
             state.lastClean?.let { stats ->
-                item {
+                item(key = "lastclean") {
                     PanelCard(Modifier.fillMaxWidth()) {
                         Row(
                             Modifier.padding(16.dp),
@@ -450,7 +455,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
-            item { PhoneTipCard() }
+            item(key = "tip") { PhoneTipCard() }
         }
     }
 }

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Send
+import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.outlined.Wifi
@@ -78,11 +79,11 @@ import com.universalrp.cleansweep.ui.theme.TextSecondary
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
- * The on-device assistant chat.
+ * The assistant chat.
  *
- * Everything here is local: questions are answered by the rule engine in
- * [com.universalrp.cleansweep.ai.Assistant] using the numbers already on screen.
- * CleanSweep has no INTERNET permission, so there is nothing to send anywhere.
+ * The on-device rule engine in [com.universalrp.cleansweep.ai.Assistant] answers from the
+ * numbers already on screen (no internet needed); with Online AI on, the user's own
+ * provider answers instead, optionally with live web snippets (see WebLookup).
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -215,6 +216,17 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                     color = AccentCyan,
                 )
             }
+            // v2.7: the mute for voice replies, right in the chat — the setting also exists
+            // under Voice & daily watch, but nobody should have to dig for it. Switching it
+            // off stops whatever is being read out at once (see setVoiceEvent).
+            val voiceReplies = state.voiceOn && state.voiceAnswers
+            IconButton(onClick = { vm.setVoiceEvent(Announcer.Event.ANSWER, !state.voiceAnswers) }) {
+                Icon(
+                    if (voiceReplies) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
+                    contentDescription = if (voiceReplies) tr("Mute voice replies") else tr("Voice replies on"),
+                    tint = if (voiceReplies) AccentCyan else TextSecondary,
+                )
+            }
             IconButton(onClick = { vm.openAiSettings() }) {
                 Icon(Icons.Outlined.Settings, contentDescription = "Which AI answers", tint = TextSecondary)
             }
@@ -300,7 +312,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             }
 
             if (state.assistantTyping) {
-                item { TypingBubble() }
+                item { TypingBubble(state) }
             }
 
             if (showChips) {
@@ -431,9 +443,10 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                 }
                 if (!msg.fromUser && msg.text.isNotBlank()) {
                     // Ask for this particular answer to be read out — allowed at any hour,
-                    // because the user asked for it just now.
+                    // because the user asked for it just now, and even when automatic voice
+                    // replies are muted.
                     TextButton(
-                        onClick = { vm.speakAnswer(msg.text) },
+                        onClick = { vm.speakAnswer(msg.text, forced = true) },
                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                     ) {
                         Icon(
@@ -456,7 +469,15 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
 }
 
 @Composable
-private fun TypingBubble() {
+private fun TypingBubble(state: UiState) {
+    // v2.7: the old bubble always said "Thinking on this device…" — even while an online
+    // provider was answering. Now it names who is actually working.
+    val online = state.assistantOnline && state.aiConfig.ready
+    val label = if (online) {
+        "Asking ${state.aiEngineLabel.ifBlank { "the online AI" }}…"
+    } else {
+        tr("Thinking on this device…")
+    }
     Row(
         Modifier
             .fillMaxWidth()
@@ -470,7 +491,7 @@ private fun TypingBubble() {
             strokeWidth = 2.dp,
         )
         Spacer(Modifier.width(12.dp))
-        Text(tr("Thinking on this device…"),
+        Text(label,
             style = MaterialTheme.typography.bodySmall,
             color = TextSecondary,
         )

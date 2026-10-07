@@ -105,16 +105,56 @@ class PlaybackService : MediaSessionService() {
                     else -> exo.play()
                 }
             }
-            RadioWidgetProvider.ACTION_NEXT -> player?.seekToNextMediaItem()
-            RadioWidgetProvider.ACTION_PREVIOUS -> player?.seekToPreviousMediaItem()
+            RadioWidgetProvider.ACTION_NEXT -> stepQueue(+1)
+            RadioWidgetProvider.ACTION_PREVIOUS -> stepQueue(-1)
         }
         return super.onStartCommand(intent, flags, startId)
+    }
+
+    /**
+     * v1.3: next/previous for the widget (the notification, lock screen and headset follow
+     * the player queue on their own). While the app is alive the player holds the whole
+     * visible list, so this is a plain seek; with a single item left — or nothing, after
+     * the service restarted — the last queue the app saved is rebuilt around the new
+     * position instead. Before this, a single-item player made both buttons dead.
+     */
+    private fun stepQueue(direction: Int) {
+        val exo = player ?: return
+        if (exo.currentTimeline.windowCount > 1) {
+            if (direction > 0) exo.seekToNextMediaItem() else exo.seekToPreviousMediaItem()
+            return
+        }
+        val (urls, names) = com.universalrp.tamilnadufm.data.StationRepository(this)
+            .loadQueue()?.let { it.first to it.second } ?: (emptyList<String>() to emptyList())
+        if (urls.isEmpty()) {
+            if (exo.mediaItemCount == 0) resumeLastStation(exo)
+            return
+        }
+        val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
+        val currentId = exo.currentMediaItem?.mediaId ?: prefs.getString("last_url", null)
+        val at = urls.indexOfFirst { it == currentId }
+        val nextIndex = if (at < 0) {
+            if (direction > 0) 0 else urls.size - 1
+        } else {
+            (at + direction).mod(urls.size)
+        }
+        playQueueAt(exo, urls, names, nextIndex)
     }
 
     /** Used by the widget when nothing is loaded yet: bring back the last station. */
     private fun resumeLastStation(player: ExoPlayer) {
         val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
-        val url = prefs.getString("last_url", null) ?: return
+        val url = prefs.getString("last_url", null)
+        // Resume inside the saved queue when the last station is part of it, so the very
+        // next widget tap on next/previous already works.
+        val queue = com.universalrp.tamilnadufm.data.StationRepository(this).loadQueue()
+        val urls = queue?.first.orEmpty()
+        val at = urls.indexOfFirst { it == url }
+        if (queue != null && url != null && at >= 0) {
+            playQueueAt(player, urls, queue.second, at)
+            return
+        }
+        if (url == null) return
         val name = prefs.getString("last_name", null) ?: "Ramesh Radio"
         val favicon = prefs.getString("last_favicon", null)
         player.setMediaItem(
@@ -134,6 +174,47 @@ class PlaybackService : MediaSessionService() {
         )
         player.prepare()
         player.play()
+    }
+
+    private fun playQueueAt(
+        player: ExoPlayer,
+        urls: List<String>,
+        names: List<String>,
+        index: Int,
+    ) {
+        if (urls.isEmpty()) return
+        val safe = index.coerceIn(0, urls.size - 1)
+        player.setMediaItems(
+            urls.mapIndexed { i, url -> queueItem(url, names.getOrElse(i) { "" }) },
+            safe,
+            0L,
+        )
+        player.prepare()
+        player.play()
+    }
+
+    /**
+     * One queue entry rebuilt from prefs. Entries that are not http(s) are local files,
+     * so they carry the local-title extra the UI reads back (see MainViewModel).
+     */
+    private fun queueItem(url: String, name: String): MediaItem {
+        val local = !(url.startsWith("http://") || url.startsWith("https://"))
+        val metadata = MediaMetadata.Builder()
+            .setTitle(name.ifBlank { "Ramesh Radio" })
+            .setArtist(if (local) "From your phone" else "Ramesh Radio")
+        if (local) {
+            metadata.setExtras(android.os.Bundle().apply {
+                putString(
+                    com.universalrp.tamilnadufm.MainViewModel.EXTRA_LOCAL_TITLE,
+                    name.ifBlank { "Audio file" },
+                )
+            })
+        }
+        return MediaItem.Builder()
+            .setUri(url)
+            .setMediaId(url)
+            .setMediaMetadata(metadata.build())
+            .build()
     }
 
     private fun publishWidgetState() {

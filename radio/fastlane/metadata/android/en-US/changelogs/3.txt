@@ -1,0 +1,3 @@
+Station lists keep your place when you switch tabs.
+Next/Previous now work everywhere through a real play queue: widget, notification, lock screen and headset.
+The Now Playing screen has Previous/Next buttons, and directory stations keep their name while playing.
