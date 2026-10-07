@@ -444,21 +444,21 @@ jobs:
 
           echo "=== PulseEQ checks ==="
           if [ -n "$MERGED_EQ" ]; then
-            if grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
-              echo "FAIL: PulseEQ must not request INTERNET"
+            if ! grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
+              echo "FAIL: PulseEQ update checker requires INTERNET"
               grep -n "uses-permission" "$MERGED_EQ" || true
               exit 1
             fi
-            echo "OK: PulseEQ requests no INTERNET permission (fully offline)"
+            echo "OK: PulseEQ has INTERNET for optional release checks; audio remains local"
             echo "Permissions in the merged manifest:"
             grep -o "android.permission.[A-Z_]*" "$MERGED_EQ" | sort -u || true
           else
             echo "WARN: merged manifest not found; falling back to aapt2 output"
-            if grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
-              echo "FAIL: PulseEQ must not request INTERNET"
+            if ! grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
+              echo "FAIL: PulseEQ update checker requires INTERNET"
               exit 1
             fi
-            echo "OK: no INTERNET permission in the aapt2 permission dump"
+            echo "OK: update-check INTERNET permission in aapt2 dump"
           fi
 
           if [ -n "$MERGED_EQ" ] && grep -q "EqService" "$MERGED_EQ"; then
