@@ -1,7 +1,8 @@
 package com.universalrp.cleansweep.ai
 
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -14,8 +15,9 @@ import java.net.URLEncoder
  *
  * Providers other than Google cannot browse by themselves, so a question like \"today's
  * news\" or \"current petrol price\" used to be answered from training memory — confidently
- * wrong. This fetches a few fresh, dated snippets first (DuckDuckGo instant answers and
- * Wikipedia search) and the assistant hands them to the model together with today's date,
+ * wrong. This fetches a few fresh, dated snippets first (DuckDuckGo instant answers,
+ * Wikipedia search hits, and the lead paragraph of the top Wikipedia articles) and the
+ * assistant hands them to the model together with today's date,
  * so the model quotes the live text instead of guessing. Both sources need no key and no
  * signup; when both come back empty the model is told today's date and asked to say when
  * an answer may be out of date, instead of inventing one.
@@ -54,16 +56,29 @@ object WebLookup {
         return FRESH_WORDS.any { lower.contains(it) }
     }
 
-    /** Runs both sources and keeps up to four usable snippets. Never throws. */
-    suspend fun lookup(query: String): Lookup = withContext(Dispatchers.IO) {
+    /**
+     * Runs every source and keeps up to six usable snippets. Never throws.
+     *
+     * The two sources run at the same time; then the lead paragraph of each of the top
+     * Wikipedia hits is fetched, also at the same time — about two round-trips in
+     * total. The article lead is the most current one-paragraph statement on a topic
+     * (for \"who is the current X\" it names the incumbent outright), while search
+     * snippets are fragments built around the query words and too often mangle the
+     * answer — one such fragment is how \"Tamil Nadu's CM\" once came back wrong.
+     */
+    suspend fun lookup(query: String): Lookup = coroutineScope {
         val q = query.trim().take(300)
-        if (q.isEmpty()) return@withContext Lookup(emptyList())
-        val out = ArrayList<Snippet>(4)
-        runCatching { duckDuckGo(q) }.getOrNull()?.let { out.addAll(it) }
-        if (out.size < 4) {
-            runCatching { wikipedia(q) }.getOrNull()?.let { out.addAll(it) }
-        }
-        Lookup(out.take(4))
+        if (q.isEmpty()) return@coroutineScope Lookup(emptyList())
+        val ddg = async(Dispatchers.IO) { runCatching { duckDuckGo(q) }.getOrNull().orEmpty() }
+        val wiki = async(Dispatchers.IO) { runCatching { wikipedia(q) }.getOrNull() }
+        val ddgSnippets = ddg.await()
+        val (wikiSnippets, wikiTitles) =
+            wiki.await() ?: (emptyList<Snippet>() to emptyList<String>())
+        val summaries = wikiTitles.take(2).map { title ->
+            async(Dispatchers.IO) { runCatching { wikiSummary(title) }.getOrNull() }
+        }.mapNotNull { it.await() }
+        // Summaries first: the model reads top-down, and the lead is the best evidence.
+        Lookup((summaries + ddgSnippets + wikiSnippets).take(6))
     }
 
     /** DuckDuckGo's keyless instant-answer API: an abstract plus related topics. */
@@ -108,21 +123,27 @@ object WebLookup {
         }
     }
 
-    /** Wikipedia's keyless search API: titles plus short text extracts. */
-    private fun wikipedia(query: String): List<Snippet> {
+    /**
+     * Wikipedia's keyless search API: titles plus short text extracts. Returns the
+     * snippets together with the hit titles, so their article leads can be fetched next.
+     */
+    private fun wikipedia(query: String): Pair<List<Snippet>, List<String>> {
         val url = "https://en.wikipedia.org/w/api.php?action=query&list=search" +
             "&srsearch=" + URLEncoder.encode(query, "UTF-8") +
             "&srlimit=3&format=json&utf8=1"
-        val body = get(url).ifBlank { return emptyList() }
+        val none = emptyList<Snippet>() to emptyList<String>()
+        val body = get(url).ifBlank { return none }
         return try {
             val results = JSONObject(body).optJSONObject("query")?.optJSONArray("search")
-                ?: return emptyList()
+                ?: return none
             val out = ArrayList<Snippet>(3)
+            val titles = ArrayList<String>(3)
             for (i in 0 until results.length()) {
                 val item = results.optJSONObject(i) ?: continue
                 val title = item.optString("title").trim()
                 val snippet = stripTags(item.optString("snippet")).trim().take(400)
                 if (title.isNotBlank() && snippet.length > 40) {
+                    if (title !in titles) titles.add(title)
                     out.add(
                         Snippet(
                             source = "Wikipedia",
@@ -133,9 +154,31 @@ object WebLookup {
                     )
                 }
             }
-            out
+            out to titles
         } catch (e: Exception) {
-            emptyList()
+            none
+        }
+    }
+
+    /**
+     * The lead section of one Wikipedia article, via the keyless REST summary endpoint.
+     * Skips disambiguation pages. Null when the article has no usable lead.
+     */
+    private fun wikiSummary(title: String): Snippet? {
+        val slug = URLEncoder.encode(title.replace(' ', '_'), "UTF-8")
+        val body = get("https://en.wikipedia.org/api/rest_v1/page/summary/$slug")
+        if (body.isBlank()) return null
+        return try {
+            val json = JSONObject(body)
+            if (json.optString("type") == "disambiguation") return null
+            val extract = json.optString("extract").trim()
+            if (extract.length < 60) return null
+            val pageUrl = json.optJSONObject("content_urls")
+                ?.optJSONObject("desktop")?.optString("page")
+                .orEmpty().ifBlank { "https://en.wikipedia.org/wiki/$slug" }
+            Snippet(source = "Wikipedia: $title", text = extract.take(700), url = pageUrl)
+        } catch (e: Exception) {
+            null
         }
     }
 
@@ -150,7 +193,7 @@ object WebLookup {
                 connectTimeout = TIMEOUT_MS
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.7 (Android)")
+                setRequestProperty("User-Agent", "CleanSweep/2.8 (Android)")
             }
             if (connection.responseCode !in 200..299) return ""
             connection.inputStream?.let { readAll(it) }.orEmpty()

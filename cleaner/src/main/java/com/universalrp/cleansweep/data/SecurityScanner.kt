@@ -114,7 +114,9 @@ object SecurityScanner {
             )
         }
 
-        val admins = activeAdmins(context)
+        // com.google.android.gms is Find My Device — a device admin on every GMS phone by
+        // design, not something the user did wrong. Only anything *else* is worth flagging.
+        val admins = activeAdmins(context).filter { it != "com.google.android.gms" }
         if (admins.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -130,7 +132,8 @@ object SecurityScanner {
             )
         }
 
-        val installers = apps.filter { "android.permission.REQUEST_INSTALL_PACKAGES" in it.permissions }
+        // v2.8: grantedPermissions is the live AppOps state — a revoked installer vanishes.
+        val installers = apps.filter { "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions }
             .filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
         if (installers.isNotEmpty()) {
             findings.add(
@@ -148,7 +151,7 @@ object SecurityScanner {
         }
 
         val usageApps = apps.filter {
-            "android.permission.PACKAGE_USAGE_STATS" in it.permissions &&
+            "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
                 AppInventoryLoader.hasUsageAccess(context, it.pkg)
         }
         if (usageApps.size > 3) {
@@ -166,14 +169,17 @@ object SecurityScanner {
             )
         }
 
-        val overlay = apps.filter { "android.permission.SYSTEM_ALERT_WINDOW" in it.permissions }
+        // v2.8: grantedPermissions is the live AppOps state — anything switched off in
+        // Settings ("Display over other apps") already shows as revoked and is excluded here.
+        val overlay = apps.filter { "android.permission.SYSTEM_ALERT_WINDOW" in it.grantedPermissions }
         if (overlay.size > 6) {
             findings.add(
                 Finding(
                     id = "overlay",
-                    title = "${overlay.size} apps ask to draw over other apps",
+                    title = "${overlay.size} apps can draw over other apps",
                     detail = "The overlay permission is what fake login screens use. Only a few apps " +
-                        "genuinely need it (screen recorders, floating timers).",
+                        "genuinely need it (screen recorders, floating timers). Anything you switched " +
+                        "off in Settings is already excluded from this count.",
                     severity = Severity.MEDIUM,
                     count = overlay.size,
                     samples = overlay.take(6).map { it.label },
@@ -188,7 +194,8 @@ object SecurityScanner {
             findings.add(
                 Finding(
                     id = "sideloaded",
-                    title = "${sideloaded.size} apps were not installed from an app store",
+                    title = if (sideloaded.size == 1) "1 app was not installed from an app store"
+                    else "${sideloaded.size} apps were not installed from an app store",
                     detail = "An app installed from a file has not been reviewed by any store. That is " +
                         "normal for betas and mods — just make sure you know where each one came from.",
                     severity = Severity.MEDIUM,
@@ -201,17 +208,24 @@ object SecurityScanner {
 
         // Granted permissions, not declared ones: an app the user already cut off from SMS
         // must disappear from this finding (v2.7 — \"revoked but still showing\").
+        // v2.8: the default SMS app is supposed to read SMS — flagging it HIGH is a false
+        // alarm, so it is excluded and named in the detail line instead.
+        val defaultSmsPkg = defaultSmsPackage(context)
         val smsApps = apps.filter {
-            it.grantedPermissions.any { p ->
-                p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
-            } && !it.isSystem
+            it.pkg != defaultSmsPkg &&
+                it.grantedPermissions.any { p ->
+                    p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
+                } && !it.isSystem
         }
         if (smsApps.isNotEmpty()) {
+            val defaultSmsName = defaultSmsPkg?.let { labelFor(context, it) }
+            val defaultNote = if (defaultSmsName != null) " Your default SMS app ($defaultSmsName) is not listed." else ""
             findings.add(
                 Finding(
                     id = "sms_readers",
-                    title = "${smsApps.size} installed apps can read your SMS",
-                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.",
+                    title = if (smsApps.size == 1) "1 installed app can read your SMS"
+                    else "${smsApps.size} installed apps can read your SMS",
+                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.$defaultNote",
                     severity = Severity.HIGH,
                     count = smsApps.size,
                     samples = smsApps.take(6).map { it.label },
@@ -245,7 +259,8 @@ object SecurityScanner {
             findings.add(
                 Finding(
                     id = "odd_installer",
-                    title = "${suspiciousInstallers.size} apps came from an unusual installer",
+                    title = if (suspiciousInstallers.size == 1) "1 app came from an unusual installer"
+                    else "${suspiciousInstallers.size} apps came from an unusual installer",
                     detail = "The installer package is the app that put this one on your phone. " +
                         "Browser or file-manager installs show up here.",
                     severity = Severity.LOW,
@@ -357,6 +372,21 @@ object SecurityScanner {
         dpm?.activeAdmins?.map { (it as ComponentName).packageName }?.distinct().orEmpty()
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /** The package the user chose as their messaging app (Settings → Apps → Default apps). */
+    private fun defaultSmsPackage(context: Context): String? = try {
+        android.provider.Telephony.Sms.getDefaultSmsPackage(context)
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Display label for a package, or null when it cannot be resolved. */
+    private fun labelFor(context: Context, pkg: String): String? = try {
+        val pm = context.packageManager
+        pm.getApplicationInfo(pkg, 0).loadLabel(pm)?.toString()
+    } catch (e: Exception) {
+        null
     }
 
     private fun isScreenLocked(context: Context): Boolean = try {

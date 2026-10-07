@@ -417,6 +417,26 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                     Spacer(Modifier.height(4.dp))
                 }
                 AiText(msg.text)
+                // v2.8: the same live evidence the model saw, so the answer can be
+                // checked instead of trusted.
+                msg.sources.takeIf { it.isNotEmpty() }?.let { sources ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        tr("What the AI read just now:"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    sources.take(3).forEach { line ->
+                        Text(
+                            line,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                        Spacer(Modifier.height(2.dp))
+                    }
+                }
                 msg.meta?.let { meta ->
                     Spacer(Modifier.height(6.dp))
                     Text(

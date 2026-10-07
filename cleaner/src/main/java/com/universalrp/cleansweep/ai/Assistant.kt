@@ -18,6 +18,12 @@ data class AssistantMessage(
      * always knows who is talking.
      */
     val meta: String? = null,
+    /**
+     * The live web evidence behind an online answer — display-ready lines like
+     * \"• Wikipedia: <quote>… (en.wikipedia.org/…)\". Empty for on-device answers.
+     * Shown under the bubble so a wrong answer can be checked instead of trusted.
+     */
+    val sources: List<String> = emptyList(),
 )
 
 /**

@@ -770,6 +770,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     ""
                 }
                 var liveMeta = ""
+                var liveSources = emptyList<String>()
                 var liveBlock = if (today.isNotBlank()) "Today's date is $today." else ""
                 if (state.aiWebLookup) {
                     val snippets = runCatching { WebLookup.lookup(q) }.getOrNull()
@@ -783,6 +784,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                                 (if (snippet.url.isNotBlank()) " [${snippet.url}]" else "")
                         }
                         liveMeta = " · live web (${snippets.size})"
+                        // v2.8: the user sees the same evidence the model saw, so a wrong
+                        // answer can be checked instead of trusted.
+                        liveSources = snippets.take(3).map { snippet ->
+                            "• (${snippet.source}) ${snippet.text.take(220)}" +
+                                shortSourceUrl(snippet.url)
+                        }
                     } else if (today.isNotBlank()) {
                         liveBlock = "Today's date is $today. No live web results were found " +
                             "for this question, so say in one short sentence when an answer " +
@@ -804,7 +811,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "the information came from. If you have no way to look something up, " +
                         "say that in one short sentence and then give the best answer you have " +
                         "from what you know; never refuse the question and never say you are " +
-                        "not allowed to discuss a topic. " + answerLanguageRule() +
+                        "not allowed to discuss a topic. " +
+                        "Live web results may be attached to the question. They are fresher " +
+                        "than your own memory, so for anything time-sensitive treat them as " +
+                        "the authority: when they settle the question, quote the decisive " +
+                        "sentence briefly and name its source; when they do not settle it, " +
+                        "say \"the live lookup did not settle this\" in one short sentence " +
+                        "and mark the rest as possibly out of date. \"Current\" and " +
+                        "\"incumbent\" always mean as of today's date above. Never present " +
+                        "an answer from memory as if it came from the live results. " +
+                        answerLanguageRule() +
                         " Keep it under 250 words, plain language, no markdown headings.",
                     userPrompt = "$facts\n$liveBlock\nQuestion from the user: $q",
                     allowSearch = true,
@@ -824,6 +840,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     } else {
                         "On-device engine · ${state.aiConfig.engineLabel} did not answer"
                     },
+                    // The evidence travels with the answer; a failed call shows the
+                    // on-device fallback instead, which had no live evidence.
+                    sources = if (result.ok) liveSources else emptyList(),
                 )
                 mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
                 if (result.ok) speakAnswer(result.text)
@@ -917,6 +936,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         "ta" -> "Always reply in Tamil, whatever language the question is written in."
         "en" -> "Always reply in English, whatever language the question is written in."
         else -> "Reply in the language the user wrote in."
+    }
+
+    /**
+     * A source URL shortened for the bubble (\" (en.wikipedia.org/wiki/…)\"),
+     * or an empty string when there is nothing worth showing.
+     */
+    private fun shortSourceUrl(url: String): String {
+        val short = url.removePrefix("https://").removePrefix("http://")
+            .substringBefore("#").trim().take(90)
+        return if (short.isBlank()) "" else " ($short)"
     }
 
     fun setAnswerLanguage(value: String) {
