@@ -16,7 +16,10 @@ object NewsLookup {
         !Regex("(?i)\\b(what is|meaning|define|history)\\b").containsMatchIn(q)
 
     suspend fun fetch(q: String): List<WebLookup.Snippet> = withContext(Dispatchers.IO) {
-        val url = "https://news.google.com/rss/search?q=" + URLEncoder.encode("$q when:1d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
+        val topic = q.replace(Regex("(?i)\\b(tell|me|please|show|give|what|are|the|today|today's|latest|current|headlines?|news)\\b"), " ")
+            .replace(Regex("\\s+"), " ").trim(' ', '?', '.', '!')
+        val url = if (topic.isBlank()) "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en"
+            else "https://news.google.com/rss/search?q=" + URLEncoder.encode("$topic when:1d", "UTF-8") + "&hl=en-IN&gl=IN&ceid=IN:en"
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.connectTimeout = 12000
