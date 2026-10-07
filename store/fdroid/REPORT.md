@@ -114,6 +114,30 @@ Both of these are free and need no new account:
    piece of work (index signing key to keep, a Pages branch to publish), it is not
    discoverability, and it is entirely your call. Say the word and I will build it.
 
+## F-Droid's bot replied, and it found the real blocker (7 Oct)
+
+F-Droid Bot commented on #4512: **"Fastlane was not found in your repo!"**. Read the small print
+in that comment: `SDKs/Languages @ f6c906f`. That is the tip of **`main`**, this repository's
+default branch — and `main` is **93 commits behind** the work. It has no fastlane folders, no
+`LICENSE`, no store metadata, nothing from the last two days, because all of it lives on the
+development branch. F-Droid's tooling, like every reviewer, reads the **default branch**, so
+right now it is looking at a repository that has none of the work in it.
+
+### The fix is one merge, and only you can tap it
+
+`main` can fast-forward to the development branch cleanly — verified: no conflicts, `main` is a
+direct ancestor. This repository already works that way (PR #2 was merged into `main` the same
+way). So:
+
+1. Open <https://github.com/universalrp2003/InternetRadio/compare/main...arena/01a10b15-internetradio>
+2. Tap **Create pull request**, then **Merge pull request** → **Confirm merge**.
+
+After that, `main` contains the five apps, the licence, the fastlane listings, the icons, the
+feature graphics and the ready F-Droid recipes. Then:
+
+3. Paste the reply in `ISSUE_COMMENT_fastlane.md` into issue #4512 so the maintainers re-scan.
+   Until the merge happens, do not argue with the bot — it reported exactly what it saw.
+
 ## Where the artwork stands (done, 6 Oct)
 
 Every store wants the same three things, and two of them no longer need anything from you:
