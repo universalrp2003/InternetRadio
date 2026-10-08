@@ -52,6 +52,8 @@ data class UiState(
     // local files
     val localTracks: List<LocalTrack> = emptyList(),
     val localPermission: Boolean = false,
+    val localFolder: String = "",
+    val localLoading: Boolean = false,
     // equalizer
     val eq: AudioFx.Settings = AudioFx.Settings(),
     val eqEngine: String = "",
@@ -72,6 +74,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var controller: MediaController? = null
     private var sleepJob: Job? = null
+    private var folderJob: Job? = null
 
     /**
      * v1.3: the station lists' scroll positions live here. The Radio screen leaves the
@@ -112,6 +115,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         AudioFx.load(ctx)
         mutate { it.copy(eq = AudioFx.settings, eqEngine = AudioFx.engineName) }
         loadStations()
+        ctx.getSharedPreferences("music_folder", Context.MODE_PRIVATE).getString("uri", null)?.let { loadMusicFolder(Uri.parse(it), false) }
         viewModelScope.launch {
             // Keep the EQ screen honest about the engine and the sleep timer ticking.
             while (true) {
@@ -342,7 +346,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         if (c.currentMediaItem?.mediaId == station.url) {
-            if (c.isPlaying) c.pause() else c.play()
+            if (c.isPlaying) c.pause() else resumePlayer(c)
         } else {
             PlayerBus.clearError()
             val source = queueOverride ?: _state.value.visible
@@ -354,7 +358,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             repo.saveQueue(queue.map { it.url }, queue.map { it.name }, index)
             repo.markPlayed(station)
         }
-        mutate { it.copy(nowPlaying = station, busy = true) }
+        mutate { it.copy(nowPlaying = station, busy = c.playbackState == Player.STATE_BUFFERING) }
     }
 
     /** Plays a directory hit with the directory results as its next/previous queue. */
@@ -387,16 +391,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(playingLocalTitle = track.title, nowPlaying = null, busy = true) }
     }
 
+    private fun resumePlayer(c: MediaController) {
+        if (c.mediaItemCount == 0) { resumeLast(); return }
+        val uri = c.currentMediaItem?.localConfiguration?.uri ?: c.currentMediaItem?.mediaId?.let { Uri.parse(it) }
+        if (uri?.scheme in listOf("http", "https")) {
+            // A radio stream must reconnect to NOW, not an hours-old buffered connection.
+            c.stop()
+            c.seekToDefaultPosition()
+            c.prepare()
+        } else if (c.playbackState == Player.STATE_IDLE || c.playbackState == Player.STATE_ENDED || c.playerError != null) {
+            if (c.playbackState == Player.STATE_ENDED) c.seekToDefaultPosition()
+            c.prepare()
+        }
+        PlayerBus.clearError()
+        c.play()
+    }
+
     fun togglePlayPause() {
-        val c = controller ?: return
-        if (c.isPlaying) c.pause() else c.play()
+        val c = controller ?: run { mutate { it.copy(message = "Player is connecting. Please try again shortly.") }; return }
+        if (c.isPlaying) c.pause() else resumePlayer(c)
     }
 
     fun stop() {
         val c = controller ?: return
+        c.pause()
         c.stop()
-        c.clearMediaItems()
-        mutate { it.copy(nowPlaying = null, playingLocalTitle = null) }
+        // Keep the active local/radio queue so Play can prepare it again.
+        mutate { it.copy(busy = false) }
     }
 
     fun resumeLast() {
@@ -406,20 +427,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun lastPlayed(): RadioStation? = repo.lastPlayed()
 
-    fun next() {
-        val s = _state.value
-        if (s.visible.isEmpty()) return
-        val index = s.visible.indexOfFirst { it.url == s.nowPlaying?.url }
-        val next = s.visible[(index + 1).coerceAtLeast(0) % s.visible.size]
-        play(next)
-    }
+    fun next() = stepQueue(1)
 
-    fun previous() {
-        val s = _state.value
-        if (s.visible.isEmpty()) return
-        val index = s.visible.indexOfFirst { it.url == s.nowPlaying?.url }
-        val prev = if (index <= 0) s.visible.last() else s.visible[index - 1]
-        play(prev)
+    fun previous() = stepQueue(-1)
+
+    private fun stepQueue(direction: Int) {
+        val c = controller ?: return
+        if (c.mediaItemCount == 0) { resumeLast(); return }
+        val index = (c.currentMediaItemIndex + direction).mod(c.mediaItemCount)
+        c.seekTo(index, 0L)
+        if (c.playbackState == Player.STATE_IDLE || c.playerError != null) c.prepare()
+        c.play()
     }
 
     private fun toMediaItem(station: RadioStation): MediaItem =
@@ -456,6 +474,28 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun openNowPlaying(open: Boolean) = mutate { it.copy(showNowPlaying = open) }
 
     // ------------------------------------------------------------ local files
+
+    fun loadMusicFolder(uri: Uri, persist: Boolean = true) {
+        folderJob?.cancel()
+        folderJob = viewModelScope.launch {
+            mutate { it.copy(localLoading = true) }
+            try {
+                if (persist) ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val tracks = withContext(Dispatchers.IO) { com.universalrp.tamilnadufm.data.MusicFolder.read(ctx, uri) }
+                ctx.getSharedPreferences("music_folder", Context.MODE_PRIVATE).edit().putString("uri", uri.toString()).apply()
+                mutate { it.copy(localTracks = tracks, localFolder = uri.toString(), localLoading = false,
+                    message = if (tracks.isEmpty()) "No audio files in this folder. Choose the folder containing your songs." else "${tracks.size} songs loaded from your folder") }
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) {
+                mutate { it.copy(localLoading = false, message = "Cannot read music folder. Select it again to grant access.") }
+            }
+        }
+    }
+
+    fun refreshMusicFolder() {
+        val uri = _state.value.localFolder
+        if (uri.isNotBlank()) loadMusicFolder(Uri.parse(uri), false)
+    }
 
     fun loadLocalTracks() {
         viewModelScope.launch {
@@ -507,10 +547,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Plays a file the user picked through the system file picker. */
     fun playPickedFile(uri: Uri) {
+        runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
         playLocal(LocalTrack(uri = uri, title = uri.lastPathSegment ?: "Audio file", artist = "", durationMs = 0))
     }
 
     // -------------------------------------------------------------- equalizer
+
+    fun setBalance(value: Float) {
+        AudioFx.setBalance(value)
+        mutate { it.copy(eq = AudioFx.settings) }
+    }
 
     fun setEqEnabled(on: Boolean) {
         AudioFx.setEnabled(on)

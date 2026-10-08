@@ -1,5 +1,7 @@
 package com.universalrp.tamilnadufm.ui
 
+import androidx.compose.material3.TextButton
+import com.universalrp.tamilnadufm.audio.AudioFx
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -88,21 +90,14 @@ import com.universalrp.tamilnadufm.player.PlayerBus
 
 @Composable
 fun LocalScreen(vm: MainViewModel, state: UiState) {
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) vm.loadLocalTracks()
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.loadMusicFolder(uri)
     }
+    val localPlayback by PlayerBus.state.collectAsState()
     val fileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) vm.playPickedFile(uri)
-    }
-
-    val permission = if (Build.VERSION.SDK_INT >= 33) {
-        Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
     LazyColumn(
@@ -131,22 +126,25 @@ fun LocalScreen(vm: MainViewModel, state: UiState) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconChip(Icons.Filled.Refresh, "Scan device") {
-                            permissionLauncher.launch(permission)
-                            vm.loadLocalTracks()
-                        }
+                        IconChip(Icons.Filled.Folder, "Choose folder") { folderLauncher.launch(null) }
                         Spacer(Modifier.width(8.dp))
                         IconChip(Icons.Filled.Folder, "Open a file") {
                             fileLauncher.launch(arrayOf("audio/*"))
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (state.localLoading) "Reading your music folder…" else "Only audio in your chosen folder and subfolders is listed.", color = TextSecondary)
+                    Row {
+                        IconButton(onClick = { vm.previous() }) { Icon(Icons.Filled.SkipPrevious, "Previous song", tint = Saffron) }
+                        IconButton(onClick = { vm.togglePlayPause() }) { Icon(if (localPlayback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play or pause", tint = Saffron) }
+                        IconButton(onClick = { vm.next() }) { Icon(Icons.Filled.SkipNext, "Next song", tint = Saffron) }
+                        IconButton(onClick = { vm.refreshMusicFolder() }) { Icon(Icons.Filled.Refresh, "Refresh folder", tint = Saffron) }
+                    }
                     if (state.localTracks.isEmpty()) {
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "No songs listed yet. Tap \u201CScan device\u201D and allow access to your " +
-                                "audio files, or pick a single file with \u201COpen a file\u201D. " +
-                                "If a file is stored somewhere unusual, the picker still works — " +
-                                "the equalizer applies either way.",
+                            "Choose the folder containing your songs, not your ringtones folder. " +
+                                "Or open a single audio file. Folder access is remembered; no whole-device scan is needed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
@@ -283,6 +281,16 @@ fun EqualizerScreen(vm: MainViewModel, state: UiState) {
                 )
             }
         }
+
+        PanelCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Text("Left / right balance", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("Left ← Centre → Right. Reduces the louder side without boosting or clipping. Applies to stereo audio played here, not other apps.", color = TextSecondary)
+                Slider(value = eq.balance, onValueChange = { vm.setBalance(it) }, valueRange = -1f..1f)
+                TextButton(onClick = { vm.setBalance(0f) }) { Text("Centre / reset") }
+            }
+        }
+        com.universalrp.tamilnadufm.ui.ExternalEqPanel()
 
         // Quick curves
         SectionTitle("Quick sound")

@@ -61,7 +61,7 @@ class MainActivity : ComponentActivity() {
             controllerFuture = future
             future.addListener(
                 {
-                    controller.value = runCatching { future.get() }.getOrNull()
+                    if (controllerFuture === future) controller.value = runCatching { future.get() }.getOrNull()
                 },
                 MoreExecutors.directExecutor(),
             )

@@ -171,7 +171,7 @@ jobs:
           # that already has the debug build updates to the release one normally.
           # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
           # apps since 2021); the APKs are what everyone else takes.
-          gradle :cleaner:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          gradle :cleaner:testDebugUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify built APKs
         run: |

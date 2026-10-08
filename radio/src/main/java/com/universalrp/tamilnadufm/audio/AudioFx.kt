@@ -43,6 +43,7 @@ object AudioFx {
         val rumbleCut: Boolean = true,
         val hissCut: Boolean = false,
         val boostDb: Float = 0f,
+        val balance: Float = 0f,
     )
 
     @Volatile
@@ -94,6 +95,7 @@ object AudioFx {
             rumbleCut = prefs.getBoolean("rumble_cut", true),
             hissCut = prefs.getBoolean("hiss_cut", false),
             boostDb = prefs.getFloat("boost", 0f),
+            balance = prefs.getFloat("balance", 0f).coerceIn(-1f, 1f),
         )
     }
 
@@ -296,6 +298,7 @@ object AudioFx {
             .putBoolean("rumble_cut", settings.rumbleCut)
             .putBoolean("hiss_cut", settings.hissCut)
             .putFloat("boost", settings.boostDb)
+            .putFloat("balance", settings.balance)
             .apply()
     }
 
@@ -304,6 +307,8 @@ object AudioFx {
         persist()
         applyToEffects()
     }
+
+    fun setBalance(value: Float) = update { it.copy(balance = value.coerceIn(-1f, 1f)) }
 
     fun setEnabled(on: Boolean) = update { it.copy(enabled = on) }
 

@@ -1,0 +1,1 @@
+Choose a persistent music folder with a local-song queue and playback controls. Added stereo left/right balance and reset. Added embedded EQ for compatible other-app sessions, with an optional device-dependent global mix attempt. Improved stopped-stream reconnection, timeouts and controller lifecycle handling. AI vocal separation is still under investigation and is not included.

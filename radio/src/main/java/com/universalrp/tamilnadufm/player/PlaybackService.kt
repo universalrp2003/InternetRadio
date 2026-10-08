@@ -25,8 +25,31 @@ class PlaybackService : MediaSessionService() {
 
     private var mediaSession: MediaSession? = null
     private var player: ExoPlayer? = null
+    private var pausedAt = 0L
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val stalled = Runnable {
+        player?.let { p ->
+            if (p.playWhenReady && p.playbackState == Player.STATE_BUFFERING) {
+                p.stop()
+                PlayerBus.reportError("The stream did not start within 30 seconds. Check the connection and tap Play to retry, or choose another station.")
+            }
+        }
+    }
 
     private val listener = object : Player.Listener {
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            val p = player ?: return
+            if (!playWhenReady) { pausedAt = android.os.SystemClock.elapsedRealtime(); return }
+            val reconnect = pausedAt > 0 && android.os.SystemClock.elapsedRealtime() - pausedAt > 60000 &&
+                p.currentMediaItem?.mediaId?.startsWith("http") == true
+            pausedAt = 0
+            if (reconnect) { p.stop(); p.seekToDefaultPosition() }
+            if (p.mediaItemCount > 0 && (reconnect || p.playbackState == Player.STATE_IDLE || p.playerError != null)) {
+                PlayerBus.clearError()
+                p.prepare()
+            }
+        }
+
         override fun onAudioSessionIdChanged(audioSessionId: Int) {
             AudioFx.load(this@PlaybackService)
             AudioFx.attach(audioSessionId)
@@ -50,6 +73,8 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             PlayerBus.reportState(playbackState)
+            handler.removeCallbacks(stalled)
+            if (playbackState == Player.STATE_BUFFERING) handler.postDelayed(stalled, 30000)
         }
     }
 
@@ -62,7 +87,19 @@ class PlaybackService : MediaSessionService() {
             .setBufferDurationsMs(20_000, 45_000, 1_500, 3_000)
             .build()
 
-        val exo = ExoPlayer.Builder(this)
+        val renderers = object : androidx.media3.exoplayer.DefaultRenderersFactory(this) {
+            override fun buildAudioSink(context: android.content.Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink =
+                androidx.media3.exoplayer.audio.DefaultAudioSink.Builder(context)
+                    .setEnableFloatOutput(false)
+                    .setAudioProcessors(arrayOf(com.universalrp.tamilnadufm.audio.BalanceProcessor()))
+                    .build()
+        }
+        val http = androidx.media3.datasource.DefaultHttpDataSource.Factory()
+            .setConnectTimeoutMs(12000).setReadTimeoutMs(12000).setAllowCrossProtocolRedirects(true)
+        val sources = androidx.media3.exoplayer.source.DefaultMediaSourceFactory(
+            androidx.media3.datasource.DefaultDataSource.Factory(this, http))
+        val exo = ExoPlayer.Builder(this, renderers)
+            .setMediaSourceFactory(sources)
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -102,7 +139,12 @@ class PlaybackService : MediaSessionService() {
                     exo == null -> Unit
                     exo.mediaItemCount == 0 -> resumeLastStation(exo)
                     exo.isPlaying -> exo.pause()
-                    else -> exo.play()
+                    else -> {
+                        if (exo.currentMediaItem?.mediaId?.startsWith("http") == true) {
+                            exo.stop(); exo.seekToDefaultPosition(); exo.prepare()
+                        } else if (exo.playbackState == Player.STATE_IDLE || exo.playerError != null) exo.prepare()
+                        exo.play()
+                    }
                 }
             }
             RadioWidgetProvider.ACTION_NEXT -> stepQueue(+1)
@@ -235,6 +277,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        handler.removeCallbacksAndMessages(null)
         AudioFx.release()
         PlayerBus.detach()
         player?.removeListener(listener)
