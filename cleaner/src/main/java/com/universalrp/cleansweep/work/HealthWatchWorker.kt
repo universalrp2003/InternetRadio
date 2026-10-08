@@ -86,7 +86,7 @@ class HealthWatchWorker(
 
     // ------------------------------------------------------------------ warnings
 
-    private fun warnings(ctx: Context) {
+    private suspend fun warnings(ctx: Context) {
         // Wi-Fi ⇄ mobile data changed — first, so a bad battery read cannot skip it.
         networkTransportChanged(ctx)
         val battery = try {
@@ -107,10 +107,9 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_LOW, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_LOW, now).apply()
-                Announcer.speak(
+                Announcer.speakTamil(
                     ctx,
-                    "Battery low. ${battery.percent} percent left. Plug in the charger soon.",
-                    "பேட்டரி குறைவு. ${battery.percent} சதவீதம் மட்டுமே உள்ளது. விரைவில் சார்ஜரை இணைக்கவும்.",
+                    "பேட்டரி குறைவு: ${battery.percent} சதவீதம். சார்ஜ் செய்யவும்.",
                     Announcer.Event.BATTERY_LOW,
                 )
             }
@@ -121,10 +120,9 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_FULL, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_FULL, now).apply()
-                Announcer.speak(
+                Announcer.speakTamil(
                     ctx,
-                    "Battery full. You can unplug the charger.",
-                    "பேட்டரி முழுவதும் சார்ஜ் ஆகிவிட்டது. சார்ஜரை கழற்றலாம்.",
+                    "பேட்டரி முழுமை அடைந்தது. சார்ஜரை அகற்றவும்.",
                     Announcer.Event.BATTERY_FULL,
                 )
             }
@@ -182,16 +180,37 @@ class HealthWatchWorker(
                 prefs.edit().putLong(Announcer.KEY_LAST_HOT, now).apply()
                 val batteryText = battery.temperatureC?.let { "%.0f".format(it) } ?: "?"
                 val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
-                val which = if (batteryHot && cpuHot) "battery and processor" else if (batteryHot) "battery" else "processor"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
-                Announcer.speak(
+                val plugWarning = if (battery.charging) " வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும்." else ""
+                Announcer.speakTamil(
                     ctx,
-                    "Your phone is running hot — the $which is at ${if (batteryHot) batteryText else cpuText} degrees. " +
-                        "Close heavy apps and take it off the charger.",
-                    "உங்கள் போன் சூடாகிறது — $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரியில் உள்ளது. " +
-                        "கனமான ஆப்களை மூடி, சார்ஜரை கழற்றவும்.",
+                    "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.$plugWarning",
                     Announcer.Event.OVERHEAT,
                 )
+            }
+        }
+
+        // Weekly high security risks check (remind once a week)
+        val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
+        if (now - lastSecReminder > 7 * 24 * 60 * 60 * 1000L) {
+            val highRisks = try {
+                val apps = AppInventoryLoader.load(ctx, includeSystem = false).rows
+                val report = SecurityScanner.scan(ctx, apps)
+                report.findings.filter { it.severity == Severity.HIGH }
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (highRisks.isNotEmpty()) {
+                prefs.edit().putLong("last_sec_reminder_ms", now).apply()
+                val riskCount = highRisks.size
+                prefs.edit().putString("widget_security_alert", "$riskCount critical security alert${if (riskCount > 1) "s" else ""}").apply()
+                Announcer.speakTamil(
+                    ctx,
+                    "பாதுகாப்பு நினைவூட்டல்: $riskCount முக்கிய பாதுகாப்பு அமைப்புகளை சரிபார்க்கவும்.",
+                    Announcer.Event.TEST,
+                )
+            } else {
+                prefs.edit().remove("widget_security_alert").apply()
             }
         }
     }
@@ -320,7 +339,6 @@ class HealthWatchWorker(
         // ---- the full text (notification body + the app's "last brief" card)
         val full = buildString {
             appendLine(if (tamil) "தினசரி அறிக்கை" else "Daily brief")
-            appendLine()
             appendLine((if (tamil) "பேட்டரி" else "Battery") + ": ${battery?.percent ?: "?"}% — " +
                 (battery?.statusLabel ?: "?") + ", $batteryTemp°C" +
                 (timeToFull?.let { " ($it)" } ?: ""))
@@ -340,8 +358,8 @@ class HealthWatchWorker(
             )
         }.trim()
 
-        // ---- ask the AI for a friendlier short version, and keep the honest text if it fails
-        var spokenFinal = if (tamil) spoken.second else spoken.first
+        // Spoken daily brief is always in Tamil as requested
+        var spokenFinal = spoken.second
         val config = try {
             AiSettings.autoComplete(AiSettings.load(ctx))
         } catch (e: Exception) {

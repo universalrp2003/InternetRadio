@@ -632,7 +632,7 @@ jobs:
       # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
       # and it is the download an alternative store such as IzzyOnDroid needs.
       - name: Publish a GitHub Release (verified maintained apps)
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/c4eae96a-internetradio' && contains(github.event.head_commit.message, '[publish]'))
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.release_tag }}

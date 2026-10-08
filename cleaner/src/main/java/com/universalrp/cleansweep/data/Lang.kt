@@ -97,7 +97,11 @@ object Lang {
         // ------------------------------------------------------------- app chrome
         "CleanSweep" to "சுத்தம் செய்பவர்",
         "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
-        "CleanSweep v2.12" to "சுத்தம் செய்பவர் v2.12",
+        "CleanSweep v2.16" to "சுத்தம் செய்பவர் v2.16",
+        "CleanSweep v2.15" to "சுத்தம் செய்பவர் v2.15",
+        "CleanSweep v2.14" to "சுத்தம் செய்பவர் v2.14",
+        "Background battery & health monitor" to "பின்னணி பேட்டரி & ஆரோக்கிய கண்காணிப்பு",
+        "Louder voice alerts" to "அதிக ஒலி வாய்ஸ் எச்சரிக்கைகள்",
         // ------------------------------------------------------ status-bar reading position
 
         // ------------------------------------------- longer explanations (v2.3 screens)

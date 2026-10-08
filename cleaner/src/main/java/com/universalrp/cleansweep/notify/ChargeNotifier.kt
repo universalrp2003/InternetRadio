@@ -13,6 +13,7 @@ import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
 import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
@@ -113,6 +114,16 @@ object ChargeNotifier {
             else -> "Open CleanSweep for CPU temperature, battery health and security."
         }
 
+        val stopIntent = Intent(context, ChargeMonitorService::class.java).apply {
+            action = ChargeMonitorService.ACTION_STOP_SERVICE
+        }
+        val stopPending = PendingIntent.getService(
+            context,
+            4202,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_battery)
             .setContentTitle(title)
@@ -122,6 +133,7 @@ object ChargeNotifier {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(openApp)
+            .addAction(0, "Stop", stopPending)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -203,14 +215,14 @@ object ChargeNotifier {
      * The dedupe marker lives in prefs because the service and the fallback job can both ask
      * for the line, and the user must not hear it twice.
      */
-    fun announcePluggedIn(context: Context, delayMs: Long = 7_000) {
+    fun announcePluggedIn(context: Context, delayMs: Long = 1_500) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        if (System.currentTimeMillis() - last < 90_000L) return
+        if (System.currentTimeMillis() - last < 45_000L) return
         prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
 
-        // The caller is a worker or a service scope, never the main thread, but guard anyway.
+        // Give a short pause for the hardware connection to establish
         try {
             if (delayMs > 0) Thread.sleep(delayMs)
         } catch (e: InterruptedException) {
@@ -220,22 +232,42 @@ object ChargeNotifier {
         val battery = read(app) ?: return
         if (!battery.charging) return
 
+        // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
+        val tempC = battery.temperatureC
+        if (tempC != null && tempC >= 42.0f) {
+            val tempRound = tempC.toInt()
+            val warnTamil = "எச்சரிக்கை! போன் மிக அதிக வெப்பமாக உள்ளது ($tempRound டிகிரி). வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும் அல்லது சார்ஜரை அகற்றவும்."
+            Announcer.speakTamil(app, warnTamil, Announcer.Event.OVERHEAT)
+            return
+        }
+
         val percent = battery.percent.coerceAtLeast(0)
         val watts = battery.powerW
-        val timeLine = try {
-            batteryTimeLabel(battery)
+        // Remaining time estimate: only announce when charging is stable and verified
+        val currentA = battery.currentA
+        val timeEstimate = try {
+            val mins = batteryTimeMinutes(battery)
+            // Only speak time estimate when current is steady (> 0.25A) and percent is between 5% and 94%
+            if (mins != null && mins in 2..480 && currentA != null && currentA > 0.25f && percent in 5..94) {
+                val h = mins / 60
+                val m = mins % 60
+                if (h > 0) "$h மணி $m நிமிடம்" else "$m நிமிடம்"
+            } else null
         } catch (e: Exception) {
             null
         }
-        val english = buildString {
-            append("Charging started at $percent percent.")
-            if (watts != null) append(" " + "%.1f".format(watts) + " watts now.")
-            if (timeLine != null) append(" $timeLine.")
-        }
+
+        // Spoken immediately in Tamil on plug-in:
         val tamil = buildString {
-            append("சார்ஜ் தொடங்கியது — $percent சதவீதம்.")
-            if (watts != null) append(" இப்போது " + "%.1f".format(watts) + " வாட்ஸ்.")
+            if (watts != null && watts < 4.0f && percent < 90) {
+                append("மெதுவான சார்ஜிங்: $percent சதவீதம்.")
+            } else {
+                append("சார்ஜர் இணைக்கப்பட்டது: $percent சதவீதம்.")
+            }
+            if (timeEstimate != null) {
+                append(" நிறைவடைய $timeEstimate.")
+            }
         }
-        Announcer.speak(app, english, tamil, Announcer.Event.CHARGING)
+        Announcer.speakTamil(app, tamil, Announcer.Event.CHARGING)
     }
 }

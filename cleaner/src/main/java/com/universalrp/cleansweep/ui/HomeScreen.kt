@@ -20,6 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -46,6 +52,8 @@ import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +67,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.Screen
@@ -89,17 +98,17 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        // Top bar
+        // Top bar - neat and compact header, prevents wrapping on small screens
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
                 contentAlignment = Alignment.Center,
             ) {
@@ -107,48 +116,82 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     Icons.Outlined.CleaningServices,
                     contentDescription = null,
                     tint = TextPrimary,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(19.dp),
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     tr(Lang.appName()),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    Lang.tagline(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
             // One tap between தமிழ் and English, right where the eye already is. The full
             // choice (and the note about the launcher name) stays in Settings → Language.
-            TextButton(onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) }) {
+            TextButton(
+                onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            ) {
                 Text(
-                    if (state.lang == AppLang.TA) tr("EN") else tr("த"),
+                    if (state.lang == AppLang.TA) "EN" else "த",
                     color = AccentCyan,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.VOICE) }) {
+            IconButton(
+                onClick = { vm.navigate(Screen.VOICE) },
+                modifier = Modifier.size(38.dp),
+            ) {
                 Icon(
                     if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
                     contentDescription = "Voice",
                     tint = if (state.voiceOn) AccentCyan else TextSecondary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.SETTINGS) }) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.SETTINGS) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
-            IconButton(onClick = { vm.navigate(Screen.ABOUT) }) {
-                Icon(Icons.Outlined.Info, contentDescription = "About", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.ABOUT) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = "About",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
 
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+
+        if (state.tamilInfoVisible && state.tamilInfoItems.isNotEmpty()) {
+            TamilInfoStrip(
+                items = state.tamilInfoItems,
+                isPaused = state.tamilInfoPaused,
+                onTogglePause = { vm.toggleTamilInfoPause() },
+                onHide = { vm.toggleTamilInfoVisibility() },
+                onRefresh = { vm.loadTamilInfoStrip(force = true) },
+                onSpeak = { text -> vm.speakTamilText(text) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
 
         LazyColumn(
             state = listState,
@@ -163,6 +206,16 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             }
 
             item(key = "storage") { StorageCard(state) }
+
+            item(key = "scanbutton") {
+                GradientButton(
+                    text = if (state.report != null) "Scan again" else "Scan & clean junk",
+                    icon = Icons.Outlined.AutoFixHigh,
+                    onClick = { vm.startScan() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = state.hasAllFilesAccess && state.legacyStorageOk,
+                )
+            }
 
             // The daily brief card: what CleanSweep found for you today, and the switch that
             // turns the whole daily watch on or off without digging into Settings.
@@ -273,16 +326,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             }
 
             item(key = "aistatus") { AiStatusCard(state, vm) }
-
-            item(key = "scanbutton") {
-                GradientButton(
-                    text = if (state.report != null) "Scan again" else "Scan & clean junk",
-                    icon = Icons.Outlined.AutoFixHigh,
-                    onClick = { vm.startScan() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.hasAllFilesAccess && state.legacyStorageOk,
-                )
-            }
 
             item(key = "assistant") { AssistantCard(state, vm) }
 
@@ -442,10 +485,10 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    "${stats.items} items • ${
-                                        SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
-                                            .format(Date(stats.atMs))
-                                    }",
+                                "${stats.items} items • ${
+                                    SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
+                                        .format(Date(stats.atMs))
+                                }",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary,
                                 )
@@ -454,8 +497,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     }
                 }
             }
-
-            item(key = "tip") { PhoneTipCard() }
         }
     }
 }
@@ -548,61 +589,49 @@ private fun AiStatusCard(state: UiState, vm: MainViewModel) {
     PanelCard(
         Modifier
             .fillMaxWidth()
-            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
+            .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                    contentDescription = null,
-                    tint = accent,
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
+                contentDescription = null,
+                tint = accent,
+                modifier = Modifier.size(20.dp),
+            )
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    when {
+                        state.aiStatusChecking -> "Checking AI…"
+                        ok -> "AI ready • ${state.aiEngineLabel}"
+                        configured -> "AI offline (${state.aiEngineLabel})"
+                        else -> "AI not configured"
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
                 )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when {
-                            state.aiStatusChecking -> "Checking your AI…"
-                            ok -> "AI ready"
-                            configured -> "AI is not answering"
-                            else -> "AI is not set up"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        when {
-                            state.aiStatusChecking -> "Asking ${state.aiEngineLabel} for a quick hello."
-                            ok -> state.aiEngineLabel + " answered. Every answer will show its model."
-                            configured -> state.aiStatusText
-                                ?: "The provider did not answer. You can try a free AI instead."
-                            else -> state.aiStatusText
-                                ?: "Add a free Gemini key, or use the free no-key option."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                    )
-                }
+                Text(
+                    when {
+                        ok -> state.aiConfig.resolvedModel.substringAfterLast('/')
+                        configured -> state.aiStatusText ?: "Provider not responding"
+                        else -> "Tap to configure Gemini or free AI"
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
             }
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            TextButton(
+                onClick = { vm.openAiSettings() },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                TextButton(onClick = { vm.openAiSettings() }) {
-                    Text(tr("AI settings"), color = AccentCyan, fontWeight = FontWeight.Bold)
-                }
-                if (configured) {
-                    TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
-                        Text(tr("Check again"), color = AccentCyan, fontWeight = FontWeight.Bold)
-                    }
-                }
-                if (!ok) {
-                    TextButton(onClick = { vm.useAnotherFreeAi() }) {
-                        Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
-                    }
-                }
+                Text(tr("AI settings"), color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -645,6 +674,7 @@ private fun SetupCard(vm: MainViewModel) {
 @Composable
 private fun StorageCard(state: UiState) {
     val storage = state.storage
+    val freeRam = state.health?.device?.availableRamBytes
     PanelCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -666,10 +696,19 @@ private fun StorageCard(state: UiState) {
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        "free",
-                        style = MaterialTheme.typography.labelMedium,
+                        "free storage",
+                        style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                    if (freeRam != null && freeRam > 0L) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "${freeRam.formatBytes()} RAM",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = GoodGreen,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(20.dp))
@@ -686,6 +725,15 @@ private fun StorageCard(state: UiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = if (pct > 90) WarnAmber else TextSecondary,
                     fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                val isTa = state.lang == AppLang.TA
+                val phoneAge = remember { com.universalrp.cleansweep.data.PhoneAgeEstimator.estimateAge() }
+                Text(
+                    (if (isTa) "போன் வயது: " else "Est. phone age: ") + phoneAge.displayString(isTa),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -743,24 +791,56 @@ private fun SurfaceHighCard(modifier: Modifier = Modifier, content: @Composable 
 }
 
 @Composable
-private fun PhoneTipCard() {
-    PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(tr("Works on every Android phone"),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentViolet,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
-                    "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
-                    "CleanSweep never touches your personal files unless you select them, and the only " +
-                    "thing that ever uses the internet is the AI analysis you start yourself. " +
-                    "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
+fun TamilInfoStrip(
+    items: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item>,
+    isPaused: Boolean,
+    onTogglePause: () -> Unit,
+    onHide: () -> Unit,
+    onRefresh: () -> Unit,
+    onSpeak: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (items.isEmpty()) return
+    var currentIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
+
+    androidx.compose.runtime.LaunchedEffect(isPaused, items) {
+        while (!isPaused) {
+            kotlinx.coroutines.delay(6_000)
+            currentIndex = (currentIndex + 1) % items.size
+        }
+    }
+
+    val item = items[currentIndex.coerceIn(0, items.size - 1)]
+
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .clickable { onSpeak(item.title) }
+            .semantics { contentDescription = "Updates: ${item.title}" },
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceHigh,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineC),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = TextPrimary,
+                )
+                Text(
+                    "${item.source} • ${item.date} • tap to listen",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

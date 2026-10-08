@@ -44,10 +44,9 @@ class SystemEventWatcher : BroadcastReceiver() {
             return
         }
         if (battery.percent >= Announcer.UNPLUG_BEFORE_PERCENT || battery.percent <= 0) return
-        Announcer.speak(
+        Announcer.speakTamil(
             context,
-            "Charger removed at ${battery.percent} percent. If you can, keep it plugged in a little longer.",
-            "சார்ஜர் ${battery.percent} சதவீதத்திலேயே கழற்றப்பட்டது. முடிந்தால் இன்னும் சிறிது நேரம் இணைத்து வைக்கவும்.",
+            "சார்ஜர் அகற்றப்பட்டது: ${battery.percent} சதவீதம்.",
             Announcer.Event.UNPLUGGED_EARLY,
         )
     }
@@ -60,6 +59,24 @@ class SystemEventWatcher : BroadcastReceiver() {
      * the two receivers cannot double up.
      */
     private fun pluggedIn(context: Context) {
+        // Instantly trigger voice announcement directly
+        if (Announcer.allows(context, Announcer.Event.CHARGING)) {
+            val pending = goAsync()
+            Thread {
+                try {
+                    ChargeNotifier.announcePluggedIn(context, delayMs = 1_000)
+                } catch (e: Exception) {
+                    // Ignore
+                } finally {
+                    try {
+                        pending.finish()
+                    } catch (e: Exception) {
+                        // Finished
+                    }
+                }
+            }.start()
+        }
+
         if (ChargeMonitorService.cardEnabled(context) ||
             Announcer.allows(context, Announcer.Event.CHARGING)
         ) {
@@ -86,10 +103,9 @@ class SystemEventWatcher : BroadcastReceiver() {
                 }
                 val noCurrent = battery?.currentA?.let { it > -0.05f && it < 0.05f } ?: false
                 if (battery != null && battery.charging && noCurrent && battery.percent < 100) {
-                    Announcer.speak(
+                    Announcer.speakTamil(
                         context,
-                        "The charger is connected but the battery is not charging. Check the cable or the plug.",
-                        "சார்ஜர் இணைக்கப்பட்டுள்ளது, ஆனால் பேட்டரி சார்ஜ் ஆகவில்லை. கேபிள் அல்லது பிளக்கைச் சரிபார்க்கவும்.",
+                        "சார்ஜர் இணைக்கப்பட்டுள்ளது, ஆனால் சார்ஜ் ஆகவில்லை. கேபிளை சரிபார்க்கவும்.",
                         Announcer.Event.CHARGER_IDLE,
                     )
                 }

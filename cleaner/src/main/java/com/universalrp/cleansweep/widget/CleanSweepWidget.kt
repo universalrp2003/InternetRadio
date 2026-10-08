@@ -71,7 +71,13 @@ class CleanSweepWidget : AppWidgetProvider() {
             }
 
             val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
-            val watts = battery?.powerW?.let { " • " + "%.1f".format(it) + " W" }.orEmpty()
+            val watts = if (battery?.charging == true && battery.powerW != null) {
+                " • %.1f W".format(battery.powerW)
+            } else if (battery?.charging == false) {
+                " • Discharging"
+            } else {
+                ""
+            }
             views.setTextViewText(R.id.widget_battery, percent + watts)
 
             val free = health?.storage?.free?.formatBytes() ?: "—"
@@ -82,15 +88,25 @@ class CleanSweepWidget : AppWidgetProvider() {
                 brief.isBlank() -> "No brief yet — tap to open CleanSweep"
                 else -> brief.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
             }
-            views.setTextViewText(R.id.widget_brief, line)
+
+            // Check if there are critical security warnings to highlight on the widget
+            val prefs = context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+            val secWarning = prefs.getString("widget_security_alert", null)
+            val displayLine = if (!secWarning.isNullOrBlank()) {
+                "⚠️ $secWarning"
+            } else {
+                line
+            }
+            views.setTextViewText(R.id.widget_brief, displayLine)
 
             val stamp = battery?.statusLabel.orEmpty()
+            val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
             views.setTextViewText(
                 R.id.widget_state,
                 if (stamp.isNotBlank()) {
-                    stamp + " • " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    "$stamp • updated $timeFmt"
                 } else {
-                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    "updated $timeFmt"
                 },
             )
 

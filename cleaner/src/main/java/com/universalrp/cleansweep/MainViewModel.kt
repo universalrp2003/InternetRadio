@@ -182,6 +182,7 @@ data class UiState(
     // 0 = the user has not picked a size yet; the screen asks instead of guessing
     val speedSizeMb: Int = 0,
     val speedIncludeUpload: Boolean = false,
+    val persistentMonitor: Boolean = false,
     val speedError: String? = null,
     val usage: DataUsageReport? = null,
     val usageBusy: Boolean = false,
@@ -202,6 +203,7 @@ data class UiState(
     // ---------------------------------------------------------------- voice & daily watch
     /** The master voice switch (Settings → Voice). */
     val voiceOn: Boolean = true,
+    val voiceLouder: Boolean = false,
     /** v2.6: use the phone's natural cloud voice instead of the robotic offline one. */
     val onlineVoice: Boolean = true,
     val voiceQuietStart: Int = Announcer.DEFAULT_QUIET_START,
@@ -240,6 +242,9 @@ data class UiState(
     val malwareReport: MalwareReport? = null,
     val malwareIncludeSystem: Boolean = false,
     val vtKeySaved: Boolean = false,
+    val tamilInfoItems: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item> = emptyList(),
+    val tamilInfoVisible: Boolean = true,
+    val tamilInfoPaused: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -301,6 +306,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ChargeMonitorService.sync(ctx, on)
             }
         }
+        viewModelScope.launch {
+            settingsRepo.persistentMonitor.collect { on ->
+                mutate { it.copy(persistentMonitor = on) }
+                prefs.edit().putBoolean(ChargeMonitorService.PERSISTENT_KEY, on).apply()
+                ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+            }
+        }
         val lastMs = prefs.getLong("last_clean_ms", 0L)
         if (lastMs > 0L) {
             val stats = CleanStats(
@@ -358,6 +370,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshAiStatus()
         // Mobile readings are cheap: read them once at start so the card is never empty.
         loadMobile()
+        loadTamilInfoStrip()
     }
 
     private var widgetTick = 0
@@ -774,7 +787,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 var officeText = ""
                 var fetchedSnippets = emptyList<WebLookup.Snippet>()
                 var liveBlock = if (today.isNotBlank()) "Today's date is $today." else ""
-                if (state.aiWebLookup) {
+                val isGreeting = WebLookup.isGreetingOrSmallTalk(q)
+                if (state.aiWebLookup && !isGreeting) {
                     val lookup = runCatching { WebLookup.lookup(q) }.getOrNull()
                     val snippets = lookup?.snippets.orEmpty()
                     fetchedSnippets = snippets
@@ -996,6 +1010,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(onlineVoice = on) }
     }
 
+    fun setLouderVoice(on: Boolean) {
+        Announcer.setLouderVoice(ctx, on)
+        mutate { it.copy(voiceLouder = on) }
+    }
+
     fun setVoiceOn(on: Boolean) {
         Announcer.setEnabled(ctx, on)
         if (on) HealthWatchWorker.schedule(ctx) else HealthWatchWorker.cancel(ctx)
@@ -1080,6 +1099,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate {
             it.copy(
                 voiceOn = Announcer.enabled(ctx),
+                voiceLouder = Announcer.louderVoice(ctx),
                 onlineVoice = Announcer.onlineVoice(ctx),
                 voiceQuietStart = Announcer.quietStart(ctx),
                 voiceQuietEnd = Announcer.quietEnd(ctx),
@@ -1209,6 +1229,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Mirrored so ChargingWatcher knows whether to start the monitor on its own.
         prefs.edit().putBoolean(ChargeMonitorService.CARD_KEY, enabled).apply()
         ChargeMonitorService.sync(ctx, enabled)
+    }
+
+    fun setPersistentMonitor(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setPersistentMonitor(enabled) }
+        prefs.edit().putBoolean(ChargeMonitorService.PERSISTENT_KEY, enabled).apply()
+        ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+        if (enabled) {
+            mutate { it.copy(message = "Persistent battery monitor on. Use notification 'Stop' to end.") }
+        } else {
+            mutate { it.copy(message = "Persistent battery monitor off.") }
+        }
     }
 
     /**
@@ -2197,4 +2228,27 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeExclusion(path: String) =
         viewModelScope.launch { settingsRepo.removeExclusion(path) }
+
+    // -------------------------------------------------------- Tamil info strip
+
+    fun loadTamilInfoStrip(force: Boolean = false) {
+        viewModelScope.launch {
+            val items = com.universalrp.cleansweep.data.TamilInfoStripRepo.getItems(ctx, force)
+            mutate { it.copy(tamilInfoItems = items) }
+        }
+    }
+
+    fun toggleTamilInfoPause() {
+        mutate { it.copy(tamilInfoPaused = !it.tamilInfoPaused) }
+    }
+
+    fun toggleTamilInfoVisibility() {
+        mutate { it.copy(tamilInfoVisible = !it.tamilInfoVisible) }
+    }
+
+    fun speakTamilText(text: String) {
+        if (text.isNotBlank()) {
+            Announcer.speakTamil(ctx, text, Announcer.Event.TEST)
+        }
+    }
 }

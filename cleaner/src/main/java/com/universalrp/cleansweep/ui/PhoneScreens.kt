@@ -827,9 +827,9 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
     }
 }
 
-/** "14:32" — shown next to results so a fresh re-check is visible at a glance. */
+/** "2:32 PM" — shown next to results so a fresh re-check is visible at a glance. */
 private fun checkedAt(ms: Long): String = try {
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(ms))
 } catch (e: Exception) {
     ""
 }
