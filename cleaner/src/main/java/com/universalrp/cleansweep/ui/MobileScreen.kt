@@ -747,12 +747,41 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.height(8.dp))
             Text(
                 tr(
-                    "Inspects on-device socket connections and attributes them to apps without " +
-                        "needing an external VPN. Identifies trackers, analytics endpoints, and server companies."
+                    "Inspects on-device socket connections and attributes them to apps. " +
+                        "Choose between standard passive inspection or local on-device VPN loopback for deep packet inspection."
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
             )
+            Spacer(Modifier.height(10.dp))
+
+            // Dual Mode Switches: Passive vs Local VPN
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(SurfaceHigh, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Local On-Device VPN Mode"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (state.appTrackerVpnActive) tr("VPN Active (zero external data)")
+                        else tr("Intercepts live outbound sockets & DNS queries"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (state.appTrackerVpnActive) GoodGreen else TextSecondary,
+                    )
+                }
+                Switch(
+                    checked = state.appTrackerVpnMode,
+                    onCheckedChange = { vm.setTrackerVpnMode(it) },
+                )
+            }
+
             Spacer(Modifier.height(10.dp))
             GradientButton(
                 text = if (state.appTrackerBusy) tr("Inspecting connections…") else tr("Inspect App Trackers"),
@@ -764,21 +793,32 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
 
             if (report != null) {
                 Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        "${report.connections.size} active connection(s)",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = AccentCyan,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    if (report.trackerCount > 0) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
-                            "• ${report.trackerCount} tracker(s) detected",
+                            "${report.connections.size} connection(s)",
                             style = MaterialTheme.typography.labelMedium,
-                            color = DangerRed,
-                            fontWeight = FontWeight.Bold,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.SemiBold,
                         )
+                        if (report.trackerCount > 0) {
+                            Text(
+                                "• ${report.trackerCount} tracker(s)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = DangerRed,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
                     }
+                    Text(
+                        report.mode,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 if (report.connections.isEmpty()) {
@@ -789,7 +829,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                     )
                 } else {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        report.connections.take(12).forEach { conn ->
+                        report.connections.take(16).forEach { conn ->
                             TrackerItemCard(conn)
                         }
                     }

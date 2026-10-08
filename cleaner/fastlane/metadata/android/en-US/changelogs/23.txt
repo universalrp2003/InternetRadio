@@ -1,0 +1,6 @@
+CleanSweep v2.18:
+- Dual-Mode Network Tracker: Added switchable Local On-Device VPN mode and passive NetworkStats inspection to intercept live app socket connections, destination hosts, and tracker domains without root.
+- Background 15-Minute Wi-Fi Intruder Scanner: Periodically scans local Wi-Fi in the background and issues immediate Tamil voice & notification alerts when an unrecognized device connects.
+- Known Device Custom Naming: Assign friendly custom names (e.g., Living Room TV, Dad's Phone) to Wi-Fi devices alongside the verified green checkmark.
+- Home Screen Polish: Removed "Daily brief" card and "Last clean freed MB" card for a cleaner, streamlined layout.
+- High/Medium Security Voice Announcements: Daily brief voice announcements now speak strictly when high or medium security risks are detected.

@@ -163,5 +163,15 @@
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
         </receiver>
+
+        <!-- Optional on-device VpnService for intercepting live app socket destinations & tracker domains -->
+        <service
+            android:name=".vpn.CleanSweepVpnService"
+            android:permission="android.permission.BIND_VPN_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.net.VpnService" />
+            </intent-filter>
+        </service>
     </application>
 </manifest>

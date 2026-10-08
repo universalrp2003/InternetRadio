@@ -217,69 +217,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 )
             }
 
-            // The daily brief card: what CleanSweep found for you today, and the switch that
-            // turns the whole daily watch on or off without digging into Settings.
-            item(key = "brief") {
-                PanelCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Outlined.RecordVoiceOver,
-                                contentDescription = null,
-                                tint = AccentCyan,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                tr("Daily brief"),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (state.voiceOn) {
-                                Icon(
-                                    Icons.Outlined.VolumeUp,
-                                    contentDescription = null,
-                                    tint = AccentCyan,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (state.lastBrief.isNotBlank()) state.lastBrief
-                            else tr(
-                                "Once a day CleanSweep checks the battery, temperature, storage, " +
-                                    "junk and security, says a short summary out loud and keeps " +
-                                    "the full report here."
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        ) {
-                            TextButton(onClick = { vm.runDailyBriefNow() }) {
-                                Text(
-                                    tr("Run the daily check now"),
-                                    color = AccentCyan,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            TextButton(onClick = { vm.navigate(Screen.VOICE) }) {
-                                Text(
-                                    if (state.dailyScanOn) tr("Daily brief: on") else tr("Daily brief: off"),
-                                    color = if (state.dailyScanOn) GoodGreen else TextSecondary,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             if (!state.legacyStorageOk) {
                 item(key = "legacy") { LegacyStorageCard(vm) }
             }
@@ -461,39 +398,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                             onClick = { vm.navigate(Screen.APP_CACHE) },
                             modifier = Modifier.weight(1f),
                         )
-                    }
-                }
-            }
-
-            state.lastClean?.let { stats ->
-                item(key = "lastclean") {
-                    PanelCard(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Outlined.CleaningServices,
-                                contentDescription = null,
-                                tint = GoodGreen,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "Last clean: ${stats.freedBytes.formatBytes()} freed",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                "${stats.items} items • ${
-                                    SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
-                                        .format(Date(stats.atMs))
-                                }",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                )
-                            }
-                        }
                     }
                 }
             }

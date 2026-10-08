@@ -56,6 +56,7 @@ data class LanDevice(
     val isGateway: Boolean,
     val openPorts: List<Int>,
     val isVerifiedKnown: Boolean = false,
+    val customName: String? = null,
 ) {
     /**
      * Device type guessed from three real signals, in order of strength:

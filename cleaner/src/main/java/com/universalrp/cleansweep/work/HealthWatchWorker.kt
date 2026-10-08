@@ -310,30 +310,24 @@ class HealthWatchWorker(
         }
 
         val high = security?.findings?.count { it.severity == Severity.HIGH } ?: 0
+        val medium = security?.findings?.count { it.severity == Severity.MEDIUM } ?: 0
         val batteryTemp = battery?.temperatureC?.let { "%.0f".format(it) } ?: "?"
         val cpuTemp = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
         val freeGb = storage?.free?.let { "%.1f".format(it / 1024.0 / 1024.0 / 1024.0) } ?: "?"
         val freeRam = health?.device?.availableRamBytes?.let { (it / 1024.0 / 1024.0).toInt().toString() } ?: "?"
         val timeToFull = battery?.let { batteryTimeLabelOrNull(it) }
 
-        // ---- the one line that is spoken
-        val spoken: Pair<String, String> = when {
-            high > 0 -> ("Important: $high security setting${if (high == 1) "" else "s"} need attention. " +
+        // ---- the one line that is spoken (Strictly High/Medium security risk warnings)
+        val spoken: Pair<String, String>? = when {
+            high > 0 -> ("Important: $high high-risk security issue${if (high == 1) "" else "s"} need attention. " +
                 "Open CleanSweep to see them.") to
-                ("முக்கியம்: $high பாதுகாப்பு அமைப்புகளில் கவனம் தேவை. " +
+                ("முக்கிய எச்சரிக்கை: $high அதிக ஆபத்துள்ள பாதுகாப்பு அமைப்புகளில் கவனம் தேவை. " +
                     "விவரங்களுக்கு CleanSweep-ஐத் திறக்கவும்.")
-            (battery?.percent ?: 100) < Announcer.LOW_PERCENT && battery?.charging != true ->
-                ("Daily brief. Battery is low at ${battery?.percent ?: 0} percent, and " +
-                    "${junk?.totalBytes?.formatBytes() ?: "0 B"} of junk is waiting.") to
-                    ("தினசரி சுருக்கம். பேட்டரி ${battery?.percent ?: 0} சதவீதம் மட்டுமே உள்ளது; " +
-                        "${junk?.totalBytes?.formatBytes() ?: "0 B"} குப்பை காத்திருக்கிறது.")
-            (junk?.totalBytes ?: 0L) > 1024L * 1024L * 1024L ->
-                ("Daily brief. Your phone is fine, but ${junk?.totalBytes?.formatBytes()} of junk is ready to clean.") to
-                    ("தினசரி சுருக்கம். போன் நன்றாக உள்ளது; ஆனால் ${junk?.totalBytes?.formatBytes()} குப்பை சுத்தம் செய்யத் தயார்.")
-            else -> ("Daily brief. Battery ${battery?.percent ?: 0} percent, storage ${freeGb} gigabytes free, " +
-                "nothing urgent.") to
-                ("தினசரி சுருக்கம். பேட்டரி ${battery?.percent ?: 0} சதவீதம், சேமிப்பு ${freeGb} ஜிகாபைட் காலி, " +
-                    "அவசரம் எதுவும் இல்லை.")
+            medium > 0 -> ("Attention: $medium moderate security warning${if (medium == 1) "" else "s"} detected. " +
+                "Open CleanSweep to review.") to
+                ("கவனம்: $medium மிதமான பாதுகாப்பு எச்சரிக்கைகள் உள்ளன. " +
+                    "விவரங்களுக்கு CleanSweep-ஐத் திறக்கவும்.")
+            else -> null // Safe / clean — remain silent as configured
         }
 
         // ---- the full text (notification body + the app's "last brief" card)
@@ -358,30 +352,28 @@ class HealthWatchWorker(
             )
         }.trim()
 
-        // Spoken daily brief is always in Tamil as requested
-        var spokenFinal = spoken.second
+        // Spoken daily brief is always in Tamil as requested (Strictly for high & medium security warnings)
+        var spokenFinal: String? = spoken?.second
         val config = try {
             AiSettings.autoComplete(AiSettings.load(ctx))
         } catch (e: Exception) {
             null
         }
-        if (config != null && config.ready) {
+        if (spokenFinal != null && config != null && config.ready) {
             val prompt = buildString {
-                appendLine("Facts about this Android phone right now:")
+                appendLine("Security warning for this Android phone right now:")
                 appendLine(full)
                 appendLine()
                 appendLine(
-                    "Write the daily brief in 2 short sentences, under 40 words, plain " +
-                        "language, no bullet points, no markdown. Say the single most useful " +
-                        "thing first. " +
-                        if (tamil) "Write it in Tamil." else "Write it in English."
+                    "Write a concise Tamil security voice warning in 1-2 short sentences, under 35 words. " +
+                        "Warn about the high/medium security issues directly."
                 )
             }
             val result = try {
                 AiClient.ask(
                     config,
                     "You are CleanSweep, a phone-health assistant. Be brief, concrete and calm. " +
-                        "Never invent a number that is not in the facts.",
+                        "Focus strictly on high and medium security warnings.",
                     prompt,
                 )
             } catch (e: Exception) {
@@ -394,13 +386,16 @@ class HealthWatchWorker(
 
         // A hand-run brief keeps the day free, so the evening brief still arrives.
         Announcer.saveBrief(ctx, today, full, markDay = !forced)
-        notify(ctx, full, spokenFinal)
-        Announcer.speak(
-            ctx,
-            spokenFinal,
-            spokenFinal,
-            Announcer.Event.DAILY,
-        )
+        val notifSummary = spokenFinal ?: if (tamil) "பாதுகாப்பு நிலை சீராக உள்ளது" else "All security checks passed"
+        notify(ctx, full, notifSummary)
+        if (spokenFinal != null) {
+            Announcer.speak(
+                ctx,
+                spokenFinal,
+                spokenFinal,
+                Announcer.Event.DAILY,
+            )
+        }
     }
 
     /**

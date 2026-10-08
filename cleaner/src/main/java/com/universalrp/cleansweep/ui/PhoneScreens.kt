@@ -985,6 +985,30 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                     ),
                                 )
                             }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        tr("Background 15-min intruder scan"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                    Text(
+                                        tr("Alerts if unknown device connects in background"),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = TextSecondary,
+                                    )
+                                }
+                                Switch(
+                                    checked = state.bgWifiScanEnabled,
+                                    onCheckedChange = { vm.setBgWifiScanEnabled(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color(0xFF03202B),
+                                        checkedTrackColor = AccentCyan,
+                                    ),
+                                )
+                            }
                             state.networkProgress?.let { (done, total) ->
                                 Spacer(Modifier.height(8.dp))
                                 Text(
@@ -1046,6 +1070,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                         DeviceCard(
                             device = device,
                             onToggleVerified = { device.mac?.let { mac -> vm.toggleDeviceVerified(mac) } },
+                            onRename = { newName -> device.mac?.let { mac -> vm.setCustomDeviceName(mac, newName) } },
                         )
                     }
                 }
@@ -1112,7 +1137,50 @@ private fun NetworkPermissionCard(
 private fun DeviceCard(
     device: LanDevice,
     onToggleVerified: () -> Unit = {},
+    onRename: (String) -> Unit = {},
 ) {
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameInput by remember(device.customName) { mutableStateOf(device.customName.orEmpty()) }
+
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(tr("Device Name")) },
+            text = {
+                Column {
+                    Text(
+                        "${device.ip}${device.mac?.let { " • $it" } ?: ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = renameInput,
+                        onValueChange = { renameInput = it },
+                        placeholder = { Text("e.g. Living Room TV, Dad's Phone") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRename(renameInput)
+                        showRenameDialog = false
+                    }
+                ) {
+                    Text(tr("Save"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text(tr("Cancel"), color = TextSecondary)
+                }
+            }
+        )
+    }
+
     PanelCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -1134,8 +1202,9 @@ private fun DeviceCard(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val displayName = device.customName ?: (device.ip + (device.hostname?.let { " • $it" } ?: ""))
                     Text(
-                        device.ip + (device.hostname?.let { " • $it" } ?: ""),
+                        displayName,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
@@ -1151,6 +1220,13 @@ private fun DeviceCard(
                             fontWeight = FontWeight.Bold,
                         )
                     }
+                }
+                if (device.customName != null) {
+                    Text(
+                        device.ip + (device.hostname?.let { " • $it" } ?: ""),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentCyan,
+                    )
                 }
                 Text(
                     buildString {
@@ -1180,7 +1256,15 @@ private fun DeviceCard(
                 )
             }
             if (!device.isSelf && !device.isGateway && device.mac != null) {
-                Spacer(Modifier.width(8.dp))
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = { showRenameDialog = true }) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = "Name device",
+                        tint = if (device.customName != null) AccentCyan else TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
                 IconButton(onClick = onToggleVerified) {
                     Icon(
                         Icons.Outlined.CheckCircle,

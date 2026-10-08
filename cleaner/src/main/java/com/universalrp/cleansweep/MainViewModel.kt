@@ -246,9 +246,13 @@ data class UiState(
     val tamilInfoVisible: Boolean = true,
     val tamilInfoPaused: Boolean = false,
     val autoWifiScanOnOpen: Boolean = true,
+    val bgWifiScanEnabled: Boolean = true,
     val verifiedWifiMacs: Set<String> = emptySet(),
+    val customDeviceNames: Map<String, String> = emptyMap(),
     val appTrackerReport: com.universalrp.cleansweep.data.AppNetworkTracker.TrackerReport? = null,
     val appTrackerBusy: Boolean = false,
+    val appTrackerVpnActive: Boolean = false,
+    val appTrackerVpnMode: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -370,10 +374,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (Announcer.enabled(ctx) || Announcer.dailyScanOn(ctx)) HealthWatchWorker.schedule(ctx)
         val savedVerified = prefs.getStringSet("verified_wifi_macs", emptySet()) ?: emptySet()
         val autoWifiScan = prefs.getBoolean("auto_wifi_scan_open", true)
+        val bgWifiScan = prefs.getBoolean(com.universalrp.cleansweep.work.WifiScanWorker.KEY_BG_WIFI_SCAN, true)
+        val savedNamesRaw = prefs.getString("custom_device_names_json", "{}") ?: "{}"
+        val namesMap = try {
+            val json = org.json.JSONObject(savedNamesRaw)
+            val map = mutableMapOf<String, String>()
+            json.keys().forEach { k -> map[k] = json.getString(k) }
+            map
+        } catch (e: Exception) {
+            emptyMap()
+        }
+        val vpnPref = prefs.getBoolean("tracker_vpn_mode_pref", false)
+
+        if (bgWifiScan) {
+            com.universalrp.cleansweep.work.WifiScanWorker.schedule(ctx)
+        }
+
         mutate {
             it.copy(
                 verifiedWifiMacs = savedVerified,
+                customDeviceNames = namesMap,
                 autoWifiScanOnOpen = autoWifiScan,
+                bgWifiScanEnabled = bgWifiScan,
+                appTrackerVpnMode = vpnPref,
+                appTrackerVpnActive = com.universalrp.cleansweep.vpn.CleanSweepVpnService.isVpnRunning,
             )
         }
         refresh()
@@ -1604,9 +1628,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }.getOrNull()
 
             val verified = _state.value.verifiedWifiMacs
+            val customNames = _state.value.customDeviceNames
             val updatedReport = report?.let { r ->
                 r.copy(devices = r.devices.map { d ->
-                    if (d.mac != null && d.mac in verified) d.copy(isVerifiedKnown = true) else d
+                    val isV = d.mac != null && d.mac in verified
+                    val cName = d.mac?.let { customNames[it] }
+                    d.copy(isVerifiedKnown = isV, customName = cName)
                 })
             }
 
@@ -2286,17 +2313,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setCustomDeviceName(mac: String, name: String) {
+        val trimmed = name.trim()
+        val current = _state.value.customDeviceNames.toMutableMap()
+        if (trimmed.isBlank()) {
+            current.remove(mac)
+        } else {
+            current[mac] = trimmed
+        }
+        val json = org.json.JSONObject()
+        current.forEach { (k, v) -> json.put(k, v) }
+        prefs.edit().putString("custom_device_names_json", json.toString()).apply()
+
+        mutate { state ->
+            val updatedReport = state.networkReport?.let { r ->
+                r.copy(devices = r.devices.map { d ->
+                    if (d.mac == mac) d.copy(customName = trimmed.ifBlank { null }) else d
+                })
+            }
+            state.copy(customDeviceNames = current, networkReport = updatedReport)
+        }
+    }
+
     fun setAutoWifiScanOnOpen(enabled: Boolean) {
         prefs.edit().putBoolean("auto_wifi_scan_open", enabled).apply()
         mutate { it.copy(autoWifiScanOnOpen = enabled) }
     }
 
+    fun setBgWifiScanEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(com.universalrp.cleansweep.work.WifiScanWorker.KEY_BG_WIFI_SCAN, enabled).apply()
+        if (enabled) {
+            com.universalrp.cleansweep.work.WifiScanWorker.schedule(ctx)
+        } else {
+            com.universalrp.cleansweep.work.WifiScanWorker.cancel(ctx)
+        }
+        mutate { it.copy(bgWifiScanEnabled = enabled) }
+    }
+
+    fun setTrackerVpnMode(preferVpn: Boolean) {
+        prefs.edit().putBoolean("tracker_vpn_mode_pref", preferVpn).apply()
+        mutate { it.copy(appTrackerVpnMode = preferVpn) }
+        if (preferVpn) {
+            startTrackerVpn()
+        } else {
+            stopTrackerVpn()
+        }
+    }
+
+    fun startTrackerVpn() {
+        val intent = android.content.Intent(ctx, com.universalrp.cleansweep.vpn.CleanSweepVpnService::class.java)
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            ctx.startForegroundService(intent)
+        } else {
+            ctx.startService(intent)
+        }
+        mutate { it.copy(appTrackerVpnActive = true) }
+    }
+
+    fun stopTrackerVpn() {
+        com.universalrp.cleansweep.vpn.CleanSweepVpnService.stop(ctx)
+        mutate { it.copy(appTrackerVpnActive = false) }
+    }
+
     fun scanAppTrackers() {
         if (_state.value.appTrackerBusy) return
-        mutate { it.copy(appTrackerBusy = true) }
+        mutate {
+            it.copy(
+                appTrackerBusy = true,
+                appTrackerVpnActive = com.universalrp.cleansweep.vpn.CleanSweepVpnService.isVpnRunning,
+            )
+        }
         viewModelScope.launch {
             val report = runCatching {
-                com.universalrp.cleansweep.data.AppNetworkTracker.inspectConnections(ctx)
+                com.universalrp.cleansweep.data.AppNetworkTracker.inspectConnections(ctx, _state.value.appTrackerVpnMode)
             }.getOrNull()
             mutate { it.copy(appTrackerBusy = false, appTrackerReport = report) }
         }
