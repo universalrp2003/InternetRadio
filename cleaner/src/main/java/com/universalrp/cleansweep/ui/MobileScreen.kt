@@ -723,6 +723,17 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
 @Composable
 private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
     val report = state.appTrackerReport
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val vpnLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            vm.startTrackerVpn()
+        } else {
+            vm.setTrackerVpnMode(false)
+        }
+    }
+
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -778,7 +789,18 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                 }
                 Switch(
                     checked = state.appTrackerVpnMode,
-                    onCheckedChange = { vm.setTrackerVpnMode(it) },
+                    onCheckedChange = { enable ->
+                        if (enable) {
+                            val vpnIntent = android.net.VpnService.prepare(context)
+                            if (vpnIntent != null) {
+                                vpnLauncher.launch(vpnIntent)
+                            } else {
+                                vm.setTrackerVpnMode(true)
+                            }
+                        } else {
+                            vm.setTrackerVpnMode(false)
+                        }
+                    },
                 )
             }
 

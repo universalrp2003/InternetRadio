@@ -131,20 +131,10 @@ class CleanSweepWidget : AppWidgetProvider() {
             )
             views.setOnClickPendingIntent(R.id.widget_clean, clean)
 
-            // The speaker reads the last brief out loud, from the widget itself.
-            val speak = PendingIntent.getBroadcast(
-                context,
-                93,
-                Intent(context, CleanSweepWidget::class.java).setAction(ACTION_SPEAK),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-            )
-            views.setOnClickPendingIntent(R.id.widget_speak, speak)
-
             return views
         }
 
         const val ACTION_CLEAN = "com.universalrp.cleansweep.WIDGET_CLEAN"
-        const val ACTION_SPEAK = "com.universalrp.cleansweep.WIDGET_SPEAK"
         const val ACTION_REFRESH_WIDGET = "com.universalrp.cleansweep.WIDGET_REFRESH"
     }
 

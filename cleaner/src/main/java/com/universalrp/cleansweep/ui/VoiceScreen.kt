@@ -292,9 +292,9 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.CHARGING, it) },
                 )
                 VoiceSwitch(
-                    title = tr("Daily brief"),
-                    subtitle = tr("One short spoken summary a day, with the details in a notification."),
-                    icon = Icons.Outlined.RecordVoiceOver,
+                    title = tr("Daily security warnings"),
+                    subtitle = tr("Spoken Tamil warning only when High or Medium security risk settings/apps are detected."),
+                    icon = Icons.Outlined.Security,
                     tint = AccentCyan,
                     checked = state.voiceDaily,
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.DAILY, it) },
@@ -363,11 +363,10 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
               Column(Modifier.fillMaxWidth()) {
                 VoiceSwitch(
-                    title = tr("Daily full check"),
+                    title = tr("Daily security risk watch"),
                     subtitle = tr(
-                        "Once a day CleanSweep reads the battery, temperature, storage, junk and " +
-                            "security, asks the AI for a two-sentence summary when a key is saved, " +
-                            "speaks it and posts the full report."
+                        "Once a day CleanSweep checks security settings, permissions, battery and system health. " +
+                            "Speaks out loud strictly when High or Medium risk items are found."
                     ),
                     checked = state.dailyScanOn,
                     onCheckedChange = { vm.setDailyScanOn(it) },

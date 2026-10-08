@@ -14,68 +14,71 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /**
- * Dated, attributed Tamil headlines and cybersecurity / digital safety alerts.
- * Covers international news, India news, Tamil Nadu local news, and cybersecurity alerts.
- * Caches items locally, tracks shown items so news doesn't repeat, and allows manual refresh.
+ * Dated, attributed Tamil headlines, Indian & International news, and on-device cybersecurity / digital safety alerts.
+ * Covers international news, India news, Tamil Nadu local news, and app risk warnings.
+ * Maintains a large cache (up to 100 items), rotates cyclic headlines, and supports manual refresh.
  */
 object TamilInfoStripRepo {
 
     data class Item(
-        val category: String, // e.g. "செய்திகள்", "தமிழ்நாடு", "இந்தியா", "பாதுகாப்பு"
+        val category: String, // e.g. "பாதுகாப்பு எச்சரிக்கை", "தமிழ்நாடு", "இந்தியா", "சர்வதேசம்"
         val title: String,
         val source: String,
         val date: String,
         val link: String,
+        val isSecurityAlert: Boolean = false,
     )
 
     private const val PREFS = "cleansweep_info_strip"
     private const val KEY_LAST_FETCH = "last_fetch_ms"
     private const val KEY_ITEMS_JSON = "cached_items"
     private const val KEY_SHOWN_HASHES = "shown_title_hashes"
-    private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L // 30 minutes periodic refresh
+    private const val CACHE_VALIDITY_MS = 20 * 60 * 1000L // 20 minutes periodic refresh
 
     // Curated Tamil Nadu, India, International and Cyber Safety fallback updates
     private val DEFAULT_ITEMS = listOf(
         Item(
-            category = "பாதுகாப்பு",
+            category = "பாதுகாப்பு எச்சரிக்கை",
             title = "தெரியாத எண்களில் இருந்து வரும் APK கோப்புகளை அல்லது செயலிகளை ஒருபோதும் நிறுவ வேண்டாம் — சைபர் பாதுகாப்பு எச்சரிக்கை.",
             source = "சைபர் கிரைம் பிரிவு",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://www.cert-in.org.in",
+            isSecurityAlert = true,
         ),
         Item(
-            category = "பாதுகாப்பு",
+            category = "பாதுகாப்பு எச்சரிக்கை",
             title = "வங்கி கணக்கு விவரங்கள், கிரெடிட் கார்டு CVV அல்லது OTP-ஐ யாரிடமும் தொலைபேசியில் பகிராதீர்கள்.",
             source = "இந்திய சைபர் பாதுகாப்பு",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://cybercrime.gov.in",
+            isSecurityAlert = true,
         ),
         Item(
             category = "தமிழ்நாடு",
             title = "தமிழ்நாடு அரசு மின்சார வாகன பயன்பாட்டை ஊக்குவிக்க புதிய சார்ஜிங் நிலையங்களை விரிவாக்கம் செய்கிறது.",
             source = "தினத்தந்தி தமிழ்நாடு",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://www.dailythanthi.com",
         ),
         Item(
             category = "இந்தியா",
             title = "இந்திய ரயில்வே புதிய அதிவிரைவு வந்தே பாரத் ரயில் வழித்தடங்களை அறிமுகப்படுத்தியுள்ளது.",
             source = "தினமணி இந்தியா",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://www.dinamani.com",
         ),
         Item(
             category = "சர்வதேசம்",
             title = "சர்வதேச அளவில் விண்வெளி ஆராய்ச்சி மற்றும் பசுமை ஆற்றல் திட்டங்களில் புதிய முன்னேற்றங்கள் அறிவிப்பு.",
             source = "BBC Tamil",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://feeds.bbci.co.uk/tamil/rss.xml",
         ),
         Item(
             category = "தமிழ்நாடு",
             title = "சென்னை மற்றும் முக்கிய மாவட்டங்களில் உள்கட்டமைப்பு மற்றும் குடிநீர் பாதுகாப்பு திட்டங்கள் துரிதம்.",
             source = "News18 Tamil",
-            date = "அக்டோபர் 2026",
+            date = "இன்று",
             link = "https://tamil.news18.com",
         ),
     )
@@ -84,16 +87,18 @@ object TamilInfoStripRepo {
     private val RSS_FEEDS = listOf(
         // Tamil Nadu News
         Triple("தமிழ்நாடு", "தினத்தந்தி தமிழ்நாடு", "https://www.dailythanthi.com/rss/tamilnadu"),
+        Triple("தமிழ்நாடு", "தினமணி தமிழ்நாடு", "https://www.dinamani.com/%E0%AE%A4%E0%AE%AE%E0%AE%BF%E0%AE%B4%E0%AF%8D%E0%AE%A8%E0%AE%BE%E0%AE%9F%E0%AF%81/rssxml"),
+        Triple("தமிழ்நாடு", "News18 தமிழ்நாடு", "https://tamil.news18.com/commonfeeds/v1/tam/rss/tamil-nadu.xml"),
         // National / India News
-        Triple("இந்தியா", "News18 Tamil", "https://tamil.news18.com/commonfeeds/v1/tam/rss/national.xml"),
+        Triple("இந்தியா", "News18 இந்தியா", "https://tamil.news18.com/commonfeeds/v1/tam/rss/national.xml"),
+        Triple("இந்தியா", "தினமணி இந்தியா", "https://www.dinamani.com/%E0%AE%87%E0%AE%A8%E0%AF%8D%E0%AE%A4%E0%AE%BF%E0%AE%AF%E0%AE%BE/rssxml"),
+        Triple("இந்தியா", "புதிய தலைமுறை", "https://www.puthiyathalaimurai.com/rss.xml"),
         // International News
         Triple("சர்வதேசம்", "BBC Tamil", "https://feeds.bbci.co.uk/tamil/rss.xml"),
-        // Top Multi-Category Tamil News
+        Triple("சர்வதேசம்", "Oneindia சர்வதேசம்", "https://tamil.oneindia.com/rss/feeds/tamil-international-fb.xml"),
+        // General & Trending
         Triple("செய்திகள்", "Oneindia Tamil", "https://tamil.oneindia.com/rss/feeds/tamil-news-fb.xml"),
-        Triple("செய்திகள்", "Top News", "https://news.google.com/rss?hl=ta&gl=IN&ceid=IN:ta"),
-        // Additional reliable sources
-        Triple("தமிழ்நாடு", "தினமணி", "https://www.dinamani.com/rss.xml"),
-        Triple("இந்தியா", "புதிய தலைமுறை", "https://www.puthiyathalaimurai.com/rss.xml"),
+        Triple("செய்திகள்", "Google News Tamil", "https://news.google.com/rss?hl=ta&gl=IN&ceid=IN:ta"),
     )
 
     suspend fun getItems(context: Context, forceRefresh: Boolean = false): List<Item> = withContext(Dispatchers.IO) {
@@ -101,21 +106,79 @@ object TamilInfoStripRepo {
         val lastFetch = prefs.getLong(KEY_LAST_FETCH, 0L)
         val now = System.currentTimeMillis()
 
+        // Also inject on-device app security risk alerts into the feed!
+        val appSecurityAlerts = checkAppSecurityAlerts(context)
+
         if (!forceRefresh && (now - lastFetch) < CACHE_VALIDITY_MS) {
             val cached = loadCached(prefs)
-            if (cached.isNotEmpty()) return@withContext rotateAndPrioritize(prefs, cached)
+            if (cached.isNotEmpty()) return@withContext rotateAndPrioritize(prefs, appSecurityAlerts + cached)
         }
 
         // Fetch fresh items from multiple providers if network allows
         val fresh = fetchFromFeeds(context)
         if (fresh.isNotEmpty()) {
             saveCache(prefs, fresh, now)
-            return@withContext rotateAndPrioritize(prefs, fresh)
+            return@withContext rotateAndPrioritize(prefs, appSecurityAlerts + fresh)
         }
 
         val cached = loadCached(prefs)
         val itemsToUse = if (cached.isNotEmpty()) cached else DEFAULT_ITEMS
-        rotateAndPrioritize(prefs, itemsToUse)
+        rotateAndPrioritize(prefs, appSecurityAlerts + itemsToUse)
+    }
+
+    /**
+     * Checks installed apps on device for High / Medium security risk permissions
+     * and turns them into high-priority security alert items in the news feed!
+     */
+    private fun checkAppSecurityAlerts(context: Context): List<Item> {
+        val list = mutableListOf<Item>()
+        try {
+            val pm = context.packageManager
+            val installed = pm.getInstalledApplications(0)
+            for (app in installed) {
+                // Ignore system apps
+                if (SecurityScanner.isSystemPackage(app.packageName)) continue
+                val label = try { pm.getApplicationLabel(app).toString() } catch (e: Exception) { app.packageName }
+                
+                // Check SMS permission (High risk for non-banking apps)
+                val hasSms = pm.checkPermission(android.Manifest.permission.READ_SMS, app.packageName) == PackageManager.PERMISSION_GRANTED
+                if (hasSms && !SecurityScanner.isBankingOrPaymentApp(app.packageName, label)) {
+                    list.add(
+                        Item(
+                            category = "பாதுகாப்பு எச்சரிக்கை (High Risk)",
+                            title = "எச்சரிக்கை: '$label' செயலி உங்கள் தனிப்பட்ட SMS செய்திகளைப் படிக்கும் அனுமதி பெற்றுள்ளது. தேவை இல்லையெனில் அனுமதியை நீக்கவும்.",
+                            source = "CleanSweep பாதுகாப்பு ஆய்வு",
+                            date = "உடனடி நடவடிக்கை",
+                            link = "",
+                            isSecurityAlert = true,
+                        )
+                    )
+                }
+
+                // Check overlay permission (draw over other apps)
+                val hasOverlay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
+                    appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, app.uid, app.packageName) == android.app.AppOpsManager.MODE_ALLOWED
+                } else false
+
+                if (hasOverlay && !app.packageName.contains("launcher") && !app.packageName.contains("cleaner") && !app.packageName.contains("radio")) {
+                    list.add(
+                        Item(
+                            category = "பாதுகாப்பு எச்சரிக்கை (Medium Risk)",
+                            title = "கவனம்: '$label' செயலி மற்ற திரைகளின் மேல் தோன்றும் அனுமதி (Overlay) பெற்றுள்ளது. இது திரையைப் பதிவு செய்ய வாய்ப்புள்ளது.",
+                            source = "CleanSweep பாதுகாப்பு ஆய்வு",
+                            date = "சரிபார்க்கவும்",
+                            link = "",
+                            isSecurityAlert = true,
+                        )
+                    )
+                }
+                if (list.size >= 8) break
+            }
+        } catch (e: Exception) {
+            // Ignore
+        }
+        return list
     }
 
     /**
@@ -126,22 +189,29 @@ object TamilInfoStripRepo {
         items: List<Item>,
     ): List<Item> {
         val shownSet = prefs.getStringSet(KEY_SHOWN_HASHES, emptySet())?.toMutableSet() ?: mutableSetOf()
-        // If almost all items have been shown, reset history so news continues cycling
         if (shownSet.size >= items.size && items.isNotEmpty()) {
             shownSet.clear()
         }
 
-        val unseen = items.filter { it.title.hashCode().toString() !in shownSet }
-        val seen = items.filter { it.title.hashCode().toString() in shownSet }
+        // Security alerts are always prioritized
+        val securityAlerts = items.filter { it.isSecurityAlert }
+        val normalNews = items.filter { !it.isSecurityAlert }
 
-        // Mark up to 3 of current unseen items as shown
-        unseen.take(3).forEach {
+        val unseen = normalNews.filter { it.title.hashCode().toString() !in shownSet }
+        val seen = normalNews.filter { it.title.hashCode().toString() in shownSet }
+
+        unseen.take(5).forEach {
             shownSet.add(it.title.hashCode().toString())
         }
         prefs.edit().putStringSet(KEY_SHOWN_HASHES, shownSet).apply()
 
-        // Balance providers: alternate sources (News18, தினத்தந்தி, தினமணி, BBC, Oneindia, CERT-In)
-        return (unseen + seen).distinctBy { it.title }
+        // Combine: Interleave Security alerts at the top and throughout the stream
+        val combined = mutableListOf<Item>()
+        combined.addAll(securityAlerts)
+        combined.addAll(unseen)
+        combined.addAll(seen)
+
+        return combined.distinctBy { it.title }
     }
 
     private fun fetchFromFeeds(context: Context): List<Item> {
@@ -154,15 +224,15 @@ object TamilInfoStripRepo {
 
         val results = mutableListOf<Item>()
 
-        // Fetch up to 4 items from each category to provide a rich variety
+        // Fetch up to 12 items from each provider to build an extensive pool of 50-100 items
         for ((cat, srcLabel, feedUrl) in RSS_FEEDS) {
-            if (results.size >= 25) break
+            if (results.size >= 100) break
             var conn: HttpURLConnection? = null
             try {
                 conn = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 6_000
-                    readTimeout = 6_000
-                    setRequestProperty("User-Agent", "CleanSweep Android NewsReader")
+                    connectTimeout = 7_000
+                    readTimeout = 7_000
+                    setRequestProperty("User-Agent", "CleanSweep Android NewsReader/2.18")
                 }
                 if (conn.responseCode != 200) continue
                 conn.inputStream.use { stream ->
@@ -171,7 +241,7 @@ object TamilInfoStripRepo {
                     var inItem = false
                     var title = ""; var link = ""; var pubDate = ""
                     var itemsFromThisFeed = 0
-                    while (parser.eventType != XmlPullParser.END_DOCUMENT && itemsFromThisFeed < 4) {
+                    while (parser.eventType != XmlPullParser.END_DOCUMENT && itemsFromThisFeed < 12) {
                         when (parser.eventType) {
                             XmlPullParser.START_TAG -> {
                                 when (parser.name) {
@@ -212,7 +282,7 @@ object TamilInfoStripRepo {
         }
 
         // Add curated security / cyber warnings to the stream
-        results.addAll(DEFAULT_ITEMS.filter { it.category == "பாதுகாப்பு" })
+        results.addAll(DEFAULT_ITEMS.filter { it.category.startsWith("பாதுகாப்பு") })
 
         return results.distinctBy { it.title }
     }
@@ -239,9 +309,9 @@ object TamilInfoStripRepo {
         s.any { it.code in 0x0B80..0x0BFF }
 
     private fun loadCached(prefs: android.content.SharedPreferences): List<Item> {
-        val raw = prefs.getString(KEY_ITEMS_JSON, null) ?: return emptyList()
+        val json = prefs.getString(KEY_ITEMS_JSON, null) ?: return emptyList()
         return try {
-            val arr = org.json.JSONArray(raw)
+            val arr = org.json.JSONArray(json)
             val list = mutableListOf<Item>()
             for (i in 0 until arr.length()) {
                 val o = arr.getJSONObject(i)
@@ -252,6 +322,7 @@ object TamilInfoStripRepo {
                         source = o.getString("src"),
                         date = o.getString("date"),
                         link = o.getString("link"),
+                        isSecurityAlert = o.optBoolean("is_sec", false),
                     )
                 )
             }
@@ -271,6 +342,7 @@ object TamilInfoStripRepo {
                 o.put("src", item.source)
                 o.put("date", item.date)
                 o.put("link", item.link)
+                o.put("is_sec", item.isSecurityAlert)
                 arr.put(o)
             }
             prefs.edit()

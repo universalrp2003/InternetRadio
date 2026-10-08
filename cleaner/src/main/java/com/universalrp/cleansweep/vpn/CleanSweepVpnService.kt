@@ -19,7 +19,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.nio.ByteBuffer
 
 /**
@@ -41,20 +40,30 @@ class CleanSweepVpnService : VpnService() {
             return START_NOT_STICKY
         }
 
-        startForeground(NOTIFICATION_ID, createNotification())
+        try {
+            startForeground(NOTIFICATION_ID, createNotification())
+        } catch (e: Exception) {
+            // Android 14+ FGS restrictions or notification error
+        }
+
+        val success = startPacketInspection()
+        if (!success) {
+            stopVpn()
+            return START_NOT_STICKY
+        }
+
         isVpnRunning = true
-        startPacketInspection()
         return START_STICKY
     }
 
-    private fun startPacketInspection() {
-        try {
+    private fun startPacketInspection(): Boolean {
+        return try {
             val builder = Builder()
                 .setSession("CleanSweep Local Tracker Monitor")
                 .addAddress("10.120.0.1", 32)
                 .addRoute("0.0.0.0", 0)
                 .setMtu(1500)
-                .setBlocking(true)
+                .setBlocking(false)
 
             // Exclude CleanSweep itself to avoid any loop
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -66,7 +75,7 @@ class CleanSweepVpnService : VpnService() {
             }
 
             vpnInterface = builder.establish()
-            val tunFd = vpnInterface?.fileDescriptor ?: return
+            val tunFd = vpnInterface?.fileDescriptor ?: return false
 
             val inputStream = FileInputStream(tunFd)
 
@@ -80,7 +89,10 @@ class CleanSweepVpnService : VpnService() {
                     } catch (e: Exception) {
                         break
                     }
-                    if (length <= 0) continue
+                    if (length <= 0) {
+                        kotlinx.coroutines.delay(10)
+                        continue
+                    }
 
                     // Parse IP packet header
                     val version = (buffer[0].toInt() shr 4) and 0x0F
@@ -115,8 +127,9 @@ class CleanSweepVpnService : VpnService() {
                     packet.clear()
                 }
             }
+            true
         } catch (e: Exception) {
-            stopVpn()
+            false
         }
     }
 
@@ -151,7 +164,11 @@ class CleanSweepVpnService : VpnService() {
             // Ignored
         }
         vpnInterface = null
-        stopForeground(true)
+        try {
+            stopForeground(true)
+        } catch (e: Exception) {
+            // Ignored
+        }
         stopSelf()
     }
 
@@ -214,7 +231,11 @@ class CleanSweepVpnService : VpnService() {
             val intent = Intent(context, CleanSweepVpnService::class.java).apply {
                 action = ACTION_STOP
             }
-            context.startService(intent)
+            try {
+                context.startService(intent)
+            } catch (e: Exception) {
+                // Ignored
+            }
         }
     }
 }

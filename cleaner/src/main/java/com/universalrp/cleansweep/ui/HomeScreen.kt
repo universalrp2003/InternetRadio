@@ -262,8 +262,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 }
             }
 
-            item(key = "aistatus") { AiStatusCard(state, vm) }
-
             item(key = "assistant") { AssistantCard(state, vm) }
 
             item(key = "quick") {
@@ -405,137 +403,104 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
     }
 }
 
-/** Entry point for the on-device assistant (v1.3). */
+/** Entry point for the on-device assistant (v1.3) with quick question input directly on Home. */
 @Composable
 private fun AssistantCard(state: UiState, vm: MainViewModel) {
     val totalCache = state.appCaches.sumOf { if (it.cacheBytes > 0L) it.cacheBytes else 0L }
-    // Which engine is answering *now*. The old build hard-coded "ON-DEVICE" even after
-    // the user switched to Online AI, which is exactly what the screenshot complained about.
     val online = state.assistantOnline && state.aiConfig.ready
     val badge = if (online) "ONLINE AI" else "ON-DEVICE"
     val badgeColor = if (online) GoodGreen else AccentCyan
-    val subtitle = when {
-        online -> "Answered by ${state.aiEngineLabel} — tap to ask or change"
-        state.report != null -> "Ask me what the scan found — I work offline"
-        totalCache > 0L -> "${totalCache.formatBytes()} of app cache found — ask me what to do"
-        else -> "Free space, safe deletes, cache help — answers stay on this phone"
-    }
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .clickable { vm.openAssistant() }
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
+    var quickQuestion by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
+
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(
                 Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .clickable { vm.openAssistant() },
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(
-                    Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(tr("Ask the assistant"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF04202A),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(badgeColor)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.SmartToy,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp),
                     )
                 }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            tr("Ask the assistant"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF04202A),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(badgeColor)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
+                    Text(
+                        if (online) state.aiEngineLabel else tr("Free space, cache help — answers on this phone"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1,
+                    )
+                }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
             }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
-        }
-    }
-}
 
-/**
- * "Is my AI actually able to answer?" — checked on every app start. Green when the chosen
- * provider answered a moment ago, red with the real reason when it did not, and always
- * with a one-tap way out: fix the settings, check again, or switch to a free AI.
- */
-@Composable
-private fun AiStatusCard(state: UiState, vm: MainViewModel) {
-    val configured = state.aiConfig.ready
-    val ok = configured && state.aiStatusOk
-    val accent = when {
-        !configured -> WarnAmber
-        ok -> GoodGreen
-        else -> DangerRed
-    }
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .border(1.dp, accent.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                contentDescription = null,
-                tint = accent,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Text(
-                    when {
-                        state.aiStatusChecking -> "Checking AI…"
-                        ok -> "AI ready • ${state.aiEngineLabel}"
-                        configured -> "AI offline (${state.aiEngineLabel})"
-                        else -> "AI not configured"
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                Text(
-                    when {
-                        ok -> state.aiConfig.resolvedModel.substringAfterLast('/')
-                        configured -> state.aiStatusText ?: "Provider not responding"
-                        else -> "Tap to configure Gemini or free AI"
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                )
-            }
-            TextButton(
-                onClick = { vm.openAiSettings() },
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+            Spacer(Modifier.height(10.dp))
+
+            // Direct question bar on Home screen
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(tr("AI settings"), color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                androidx.compose.material3.OutlinedTextField(
+                    value = quickQuestion,
+                    onValueChange = { quickQuestion = it },
+                    placeholder = { Text(tr("Ask any question…"), style = MaterialTheme.typography.bodySmall) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = {
+                        val q = quickQuestion.trim()
+                        if (q.isNotBlank()) {
+                            vm.askAssistant(q)
+                        } else {
+                            vm.openAssistant()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AccentCyan),
+                ) {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = "Ask",
+                        tint = Color(0xFF04202A),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }
@@ -715,14 +680,18 @@ fun TamilInfoStrip(
     }
 
     val item = items[currentIndex.coerceIn(0, items.size - 1)]
+    val isAlert = item.isSecurityAlert
 
     androidx.compose.material3.Surface(
         modifier = modifier
             .clickable { onSpeak(item.title) }
             .semantics { contentDescription = "Updates: ${item.title}" },
         shape = RoundedCornerShape(10.dp),
-        color = SurfaceHigh,
-        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineC),
+        color = if (isAlert) DangerRed.copy(alpha = 0.12f) else SurfaceHigh,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isAlert) DangerRed.copy(alpha = 0.6f) else OutlineC
+        ),
     ) {
         Row(
             Modifier
@@ -730,18 +699,28 @@ fun TamilInfoStrip(
                 .padding(horizontal = 10.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            if (isAlert) {
+                Icon(
+                    Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = DangerRed,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Column(Modifier.weight(1f)) {
                 Text(
                     item.title,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 3,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    color = TextPrimary,
+                    color = if (isAlert) DangerRed else TextPrimary,
+                    fontWeight = if (isAlert) FontWeight.SemiBold else FontWeight.Normal,
                 )
                 Text(
-                    "${item.source} • ${item.date} • tap to listen",
+                    "${item.source} • ${item.date} • ${item.category} • tap to listen",
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary,
+                    color = if (isAlert) DangerRed.copy(alpha = 0.8f) else TextSecondary,
                     maxLines = 1,
                 )
             }

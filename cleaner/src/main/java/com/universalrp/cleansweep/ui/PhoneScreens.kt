@@ -527,38 +527,6 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                 items(loaded.findings, key = { it.id }) { finding ->
                     FindingCard(finding)
                 }
-
-                item {
-                    PanelCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentViolet)
-                                Spacer(Modifier.width(10.dp))
-                                Text(tr("Want a second opinion?"),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "The AI analysis reads these findings and explains which one matters " +
-                                    "most on your phone.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary,
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            GradientButton(
-                                text = if (state.aiConfig.ready) "Analyse with AI" else "Set up AI analysis",
-                                icon = Icons.Outlined.SmartToy,
-                                onClick = {
-                                    if (state.aiConfig.ready) vm.runAiAnalysis()
-                                    else vm.navigate(Screen.AI_SETTINGS)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
-                }
             }
         }
     }
@@ -1018,44 +986,6 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Spacer(Modifier.height(8.dp))
-                            if (loaded.devices.size > 1) {
-                                GradientButton(
-                                    text = when {
-                                        state.aiDeviceBusy -> "Identifying…"
-                                        state.aiConfig.ready -> "Identify with AI"
-                                        else -> "Set up AI to identify"
-                                    },
-                                    icon = Icons.Outlined.SmartToy,
-                                    onClick = {
-                                        // With no provider this explains itself instead of
-                                        // being a button that does nothing.
-                                        if (state.aiConfig.ready) {
-                                            vm.identifyDevicesWithAi()
-                                        } else {
-                                            vm.openAiSettings()
-                                        }
-                                    },
-                                    enabled = !state.aiDeviceBusy,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    if (state.aiConfig.ready) {
-                                        "The AI sees the same table (ports, names, MAC vendors) and " +
-                                            "says what each device probably is, with its confidence."
-                                    } else {
-                                        "CleanSweep's own guess is on each card below. Add a free AI " +
-                                            "key to get a second opinion with reasons."
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary,
-                                )
-                                state.aiDeviceResult?.let { result ->
-                                    Spacer(Modifier.height(8.dp))
-                                    AiText(result, style = MaterialTheme.typography.bodySmall)
-                                }
-                                Spacer(Modifier.height(8.dp))
-                            }
                             Text(
                                 loaded.note,
                                 style = MaterialTheme.typography.labelSmall,
