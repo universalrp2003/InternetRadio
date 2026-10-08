@@ -1,36 +1,52 @@
-# InternetRadio workspace
+# CleanSweep · Ramesh Radio · PulseEQ
 
-Five Android applications in one Gradle project:
+Three actively maintained, GPL-3.0 Android apps by **Ramesh prathap .R**.
+Designed for **Android 8.0 (API 26) and newer across manufacturers**, not just
+one phone model. Some audio effects and background behaviour depend on Android
+and the device; not every model has been tested.
 
-| Module | App | Description |
+| App | Module | Purpose |
 |---|---|---|
-| `:app` | **Internet Radio** | Streams internet radio stations with Media3/ExoPlayer, background playback and a media notification. |
-| `:cleaner` | **CleanSweep v2.3** | Junk & cache cleaner for **every Android 8+ phone** (Redmi/HyperOS, Samsung, Oppo, Vivo, Realme, OnePlus, Pixel…). Scans junk, thumbnails, duplicates, leftover APKs and empty folders and clears app caches with a **guided two-tap flow** — **no Accessibility service at all**. v2.0 adds a **battery & hardware monitor** (charge, temperature, voltage, current, **watts**, CPU temp/load, RAM), an **installed-app list** that flags bloatware, unused and sideloaded apps, a **security review** of permissions and settings, a **Wi-Fi scanner** that shows how many devices are on your network, and optional **AI analysis** (Gemini / NVIDIA / OpenRouter / Groq / OpenAI / any custom endpoint / free keyless option) with your own key. v2.1 adds a **charging card in the status bar** (watts, current, temperature, time to full), **"Load models"** so the AI settings list the models your key can really use, a **green/amber/red vitals board** beside the AI analysis, and **device identification** (phone / laptop / camera / printer / TV / NAS) on the Wi-Fi screen. v2.2 adds the **watt reading in the empty part of the status bar** (drawn beside the front-camera cutout), a back button that **walks back through the screens** instead of closing the app, **quick tiles that scan only their own category**, **nothing ticked until you tick it** (with per-category preselect switches in Settings), and an **AI availability check on every launch** that names the live model and switches to a free AI when your provider does not answer. v2.3 adds a **Tamil menu** (the app becomes **சுத்தம் செய்பவர்** (“the cleaner”) when Tamil is chosen, with a Tamil launcher label and Android 13+ per-app language support), the author credit (**ரமேஷ் பிரதாப்** / Ramesh prathap .R / universalrp2003@gmail.com), a **movable** status-bar watt reading (arrow pad, position remembered), per-provider **saved AI keys and models** so switching provider never asks again, automatic **retries with plain-language 502/503/504 and timeout messages**, and a new **Mobile & data** screen (operator and SIM, 5G/4G, real dBm signal, cell towers, public IP/ISP, ping **and jitter**, a **speed test with 1–100 MB sizes** and a data warning, plus today\u2019s **mobile/Wi-Fi data usage** and top data-hungry apps). Fixes the Android 9 "0 MB cleaned" storage-permission bug. See [cleaner/README.md](cleaner/README.md). |
-| `:builder` | **AppForge v1.0** | Build an app on your phone: design screens from blocks, preview the real thing as a working offline mini-app, then export a single HTML app or a complete Android Studio project (with its own GitHub Actions workflow) that builds into an APK. See [builder/README.md](builder/README.md). |
-| `:radio` | **Ramesh Radio v1.1** | Tamil FM from Tamil Nadu, Sri Lanka, Malaysia, Singapore and the Tamil diaspora, plus Tamil and English **news** radio, a **local audio file player**, favourites/recently-played, a **"TN towns" chip** for city-level FM (Madurai, Puducherry, Kodaikanal, Coimbatore, Tirunelveli …), a sleep timer, a **home-screen widget** (play/pause, next/previous) and a **10-band equalizer (31 Hz – 16 kHz)** with Clear sound (multiband levelling + limiter), rumble cut and hiss cut. Station lists come from the shipped seed plus live search of the open Radio-Browser directory. See [radio/README.md](radio/README.md). |
-| `:equalizer` | **PulseEQ v1.0** | 20-band sound equalizer with its own DSP (peaking biquads + preamp + soft limiter), presets for music/movies/speech/podcast/gaming and more, LED light-bar spectrum driven by real audio energy, a built-in 20-band player, cooperating-player session support, and a foreground service that keeps it running in the background. No INTERNET permission. See [equalizer/README.md](equalizer/README.md). |
+| **CleanSweep** | `cleaner` | Phone cleaning, health/security review and optional AI assistance. |
+| **Ramesh Radio** | `radio` | Tamil/world radio, folder-based local music, stereo balance and EQ. |
+| **PulseEQ** | `equalizer` | Local audio DSP and device-dependent external-session equalization. |
 
-## Download (no build needed)
+AppForge (`builder`) and the original Internet Radio (`app`) are preserved as
+legacy projects, but are not part of this release or the current development focus.
 
-Every release is a GitHub Release with a permanent link — nothing expires, and the file names
-carry the version:
+## Download — release APKs
 
-| App | Version | Download |
+| App | Version | Installable APK |
 |---|---|---|
-| **CleanSweep** | 2.6 | [CleanSweep-v2.6.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/CleanSweep-v2.6.apk) |
-| **Ramesh Radio** | 1.2 | [Ramesh-Radio-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/Ramesh-Radio-v1.2.apk) |
-| **Internet Radio** | 1.0 | [Internet-Radio-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/Internet-Radio-v1.0.apk) |
-| **AppForge** | 1.0 | [AppForge-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/AppForge-v1.0.apk) |
-| **PulseEQ** | 1.0 | [PulseEQ-v1.0.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.06/PulseEQ-v1.0.apk) |
+| CleanSweep | 2.13 | [CleanSweep-v2.13.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/CleanSweep-v2.13.apk) |
+| Ramesh Radio | 1.7 | [Ramesh-Radio-v1.7.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/Ramesh-Radio-v1.7.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/PulseEQ-v1.2.apk) |
 
-All releases: <https://github.com/universalrp2003/InternetRadio/releases> · These are the
-**release** builds (signed with the project keystore, not debuggable), which is what an app
-store will take. The "debug" builds CI also produces are for quick testing only.
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.08)
+· [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
-Each build also produces the **Google Play bundles** (`*.aab`) as the `store-bundles` CI
-artifact — Play does not accept APKs for new apps. Which apps Play allows, and the whole
-submission pack, is in [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md); the privacy
-policy is [PRIVACY.md](PRIVACY.md).
+Install **one release APK per app**. Debug APKs are development builds; you do not
+need both. AABs are for store submissions and cannot be installed directly.
+GitHub publication does not mean the apps have been published to Google Play or F-Droid.
+CI artifacts are temporary build downloads, not the public release channel.
+
+## What's new
+
+- **CleanSweep 2.13:** evidence-based officeholder replies, dated news RSS, raw-JSON
+  suppression, keyboard fixes and clearer phone-analysis guidance.
+- **Ramesh Radio 1.7:** single-file picker reconnection fix, persistent folder queues,
+  local transport controls, stereo balance, embedded external-session EQ and stream recovery.
+- **PulseEQ 1.2:** version-aware About and GitHub update checks with release notes.
+- All three offer manual update checks and optional daily-on-launch checks for
+  **published stable GitHub releases**. Nothing installs automatically.
+
+**Not included:** AI vocal separation/karaoke. System-wide EQ is not guaranteed on
+all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
+not independently verified reporting.
+
+See [full release notes](releases/v2026.10.08.md), [privacy](PRIVACY.md),
+[Radio device test plan](docs/radio-1.6-device-test-plan.md), and
+[publishing guidance](PUBLISHING.md).
 
 ## Licence
 
@@ -60,7 +76,7 @@ Radio-Browser directory by `.github/workflows/refresh-stations.yml`:
 - the result is committed to `radio/src/main/assets/stations_seed.json` and packaged into the
   next APK, so a build never ships a station link that was already dead at build time.
 
-## What's new
+## Earlier history
 
 - **CleanSweep v2.6** — the "repair everything" round, from the phone's own bug report:
   the **scan no longer crashes or hangs** (the widget refresh is out of the scan loop, the

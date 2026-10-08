@@ -73,6 +73,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     val state: StateFlow<UiState> = _state
 
     private var controller: MediaController? = null
+    private var pendingLocalTrack: LocalTrack? = null
     private var sleepJob: Job? = null
     private var folderJob: Job? = null
 
@@ -141,11 +142,15 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         controller.addListener(playerListener)
         syncNowPlaying(controller.currentMediaItem)
         mutate { it.copy(busy = controller.playbackState == Player.STATE_BUFFERING) }
+        pendingLocalTrack?.let { track ->
+            pendingLocalTrack = null
+            playLocal(track)
+        }
     }
 
     fun detachController(controller: MediaController) {
         controller.removeListener(playerListener)
-        this.controller = null
+        if (this.controller === controller) this.controller = null
     }
 
     private fun syncNowPlaying(mediaItem: MediaItem?) {
@@ -372,7 +377,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun playLocal(track: LocalTrack) {
         PlayerBus.clearError()
         PlayerBus.ensureService(ctx)
-        val c = controller ?: return
+        val c = controller ?: run {
+            pendingLocalTrack = track
+            mutate { it.copy(message = "Connecting the player to open ${track.title}…") }
+            return
+        }
+        pendingLocalTrack = null
         // The phone's own tracks queue up the same way stations do: next/previous walk the
         // local list from here, in the widget and the notification too.
         val tracks = _state.value.localTracks
@@ -557,8 +567,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Plays a file the user picked through the system file picker. */
     fun playPickedFile(uri: Uri) {
+        // The system picker stops our Activity; its controller can still be reconnecting
+        // when the result arrives. playLocal queues the request until attachController.
         runCatching { ctx.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        playLocal(LocalTrack(uri = uri, title = uri.lastPathSegment ?: "Audio file", artist = "", durationMs = 0))
+        viewModelScope.launch {
+            try {
+                val title = withContext(Dispatchers.IO) {
+                    ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { } ?: error("File is not readable")
+                    ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+                        if (it.moveToFirst()) it.getString(0) else null
+                    } ?: "Audio file"
+                }
+                playLocal(LocalTrack(uri, title, "", 0))
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                mutate { it.copy(message = "Could not open that file. Download it to your phone if it is cloud-only, then select it again and allow access.", busy = false) }
+            }
+        }
     }
 
     // -------------------------------------------------------------- equalizer
