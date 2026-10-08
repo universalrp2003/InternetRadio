@@ -135,6 +135,7 @@ class CleanSweepWidget : AppWidgetProvider() {
         }
 
         const val ACTION_CLEAN = "com.universalrp.cleansweep.WIDGET_CLEAN"
+        const val ACTION_SPEAK = "com.universalrp.cleansweep.WIDGET_SPEAK"
         const val ACTION_REFRESH_WIDGET = "com.universalrp.cleansweep.WIDGET_REFRESH"
     }
 

@@ -1,6 +1,7 @@
 package com.universalrp.cleansweep.data
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.util.Xml
