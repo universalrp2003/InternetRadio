@@ -13,6 +13,7 @@ import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
 import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
