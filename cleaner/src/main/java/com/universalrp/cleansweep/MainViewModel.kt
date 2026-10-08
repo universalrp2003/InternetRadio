@@ -245,6 +245,10 @@ data class UiState(
     val tamilInfoItems: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item> = emptyList(),
     val tamilInfoVisible: Boolean = true,
     val tamilInfoPaused: Boolean = false,
+    val autoWifiScanOnOpen: Boolean = true,
+    val verifiedWifiMacs: Set<String> = emptySet(),
+    val appTrackerReport: com.universalrp.cleansweep.data.AppNetworkTracker.TrackerReport? = null,
+    val appTrackerBusy: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -364,6 +368,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // whenever the user wants warnings or the daily brief.
         loadVoiceSettings()
         if (Announcer.enabled(ctx) || Announcer.dailyScanOn(ctx)) HealthWatchWorker.schedule(ctx)
+        val savedVerified = prefs.getStringSet("verified_wifi_macs", emptySet()) ?: emptySet()
+        val autoWifiScan = prefs.getBoolean("auto_wifi_scan_open", true)
+        mutate {
+            it.copy(
+                verifiedWifiMacs = savedVerified,
+                autoWifiScanOnOpen = autoWifiScan,
+            )
+        }
         refresh()
         refreshHealth()
         // "Every time you open the app, check that the AI can actually answer."
@@ -371,6 +383,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Mobile readings are cheap: read them once at start so the card is never empty.
         loadMobile()
         loadTamilInfoStrip()
+        if (autoWifiScan && NetworkScanner.wifiPermissionGranted(ctx)) {
+            scanNetwork()
+        }
     }
 
     private var widgetTick = 0
@@ -1587,11 +1602,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     mutate { it.copy(networkProgress = done to total) }
                 }
             }.getOrNull()
+
+            val verified = _state.value.verifiedWifiMacs
+            val updatedReport = report?.let { r ->
+                r.copy(devices = r.devices.map { d ->
+                    if (d.mac != null && d.mac in verified) d.copy(isVerifiedKnown = true) else d
+                })
+            }
+
             mutate {
                 it.copy(
                     networkBusy = false,
                     networkProgress = null,
-                    networkReport = report ?: it.networkReport,
+                    networkReport = updatedReport ?: it.networkReport,
                     message = when {
                         report == null -> "The network scan stopped unexpectedly."
                         report.devices.isEmpty() -> "No devices answered. Some routers block " +
@@ -1601,22 +1624,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 )
             }
             // New device on the network: the scan just listed them, so anything that was not
-            // in the previous scan is genuinely new. Only spoken when the switch allows it.
+            // in the previous scan or verified list is genuinely new. Only spoken when the switch allows it.
             if (report != null && report.devices.isNotEmpty()) {
-                val known = _state.value.knownNetworkMacs
-                val fresh = report.devices.filter { it.mac != null && it.mac !in known }
+                val known = _state.value.knownNetworkMacs + _state.value.verifiedWifiMacs
+                val fresh = report.devices.filter { it.mac != null && it.mac !in known && !it.isSelf && !it.isGateway }
                 if (known.isNotEmpty() && fresh.isNotEmpty()) {
-                    Announcer.speak(
+                    Announcer.speakTamil(
                         ctx,
                         if (fresh.size == 1) {
-                            "A new device joined your Wi-Fi network."
+                            "எச்சரிக்கை! உங்கள் வைஃபை நெட்வொர்க்கில் ஒரு புதிய சாதனம் இணைந்துள்ளது."
                         } else {
-                            "${fresh.size} new devices joined your Wi-Fi network."
-                        },
-                        if (fresh.size == 1) {
-                            "உங்கள் Wi-Fi நெட்வொர்க்கில் ஒரு புதிய சாதனம் இணைந்துள்ளது."
-                        } else {
-                            "உங்கள் Wi-Fi நெட்வொர்க்கில் ${fresh.size} புதிய சாதனங்கள் இணைந்துள்ளன."
+                            "எச்சரிக்கை! உங்கள் வைஃபை நெட்வொர்க்கில் ${fresh.size} புதிய சாதனங்கள் இணைந்துள்ளன."
                         },
                         Announcer.Event.NEW_DEVICE,
                     )
@@ -2249,6 +2267,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun speakTamilText(text: String) {
         if (text.isNotBlank()) {
             Announcer.speakTamil(ctx, text, Announcer.Event.TEST)
+        }
+    }
+
+    // ---------------------------------------------------- Wi-Fi Verified Devices & Auto-Scan
+
+    fun toggleDeviceVerified(mac: String) {
+        val current = _state.value.verifiedWifiMacs.toMutableSet()
+        if (mac in current) current.remove(mac) else current.add(mac)
+        prefs.edit().putStringSet("verified_wifi_macs", current).apply()
+        mutate { state ->
+            val updatedReport = state.networkReport?.let { r ->
+                r.copy(devices = r.devices.map { d ->
+                    if (d.mac == mac) d.copy(isVerifiedKnown = mac in current) else d
+                })
+            }
+            state.copy(verifiedWifiMacs = current, networkReport = updatedReport)
+        }
+    }
+
+    fun setAutoWifiScanOnOpen(enabled: Boolean) {
+        prefs.edit().putBoolean("auto_wifi_scan_open", enabled).apply()
+        mutate { it.copy(autoWifiScanOnOpen = enabled) }
+    }
+
+    fun scanAppTrackers() {
+        if (_state.value.appTrackerBusy) return
+        mutate { it.copy(appTrackerBusy = true) }
+        viewModelScope.launch {
+            val report = runCatching {
+                com.universalrp.cleansweep.data.AppNetworkTracker.inspectConnections(ctx)
+            }.getOrNull()
+            mutate { it.copy(appTrackerBusy = false, appTrackerReport = report) }
         }
     }
 }

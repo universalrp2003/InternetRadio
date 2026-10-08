@@ -305,10 +305,13 @@ object Announcer {
 
     /** Points the engine at the right locale (and voice) before speaking. */
     private fun prepareVoice(context: Context, lang: AppLang) {
-        val engine = tts ?: return
+        val engine = ensureEngine(context) ?: return
         try {
             val locale = if (lang == AppLang.TA) TAMIL else Locale.US
-            engine.setLanguage(locale)
+            val res = engine.setLanguage(locale)
+            if (lang == AppLang.TA && (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED)) {
+                engine.setLanguage(Locale("ta"))
+            }
             if (onlineVoice(context)) pickNaturalVoice(engine, locale)
         } catch (e: Exception) {
             // Keep whatever voice is loaded.
@@ -410,11 +413,24 @@ object Announcer {
 
     private fun applyLanguage(engine: TextToSpeech, context: Context) {
         try {
-            val wanted = if (Lang.languageIn(context) == AppLang.TA) TAMIL else Locale.US
-            val result = engine.setLanguage(wanted)
-            tamilVoice = wanted == TAMIL && result != TextToSpeech.LANG_MISSING_DATA &&
-                result != TextToSpeech.LANG_NOT_SUPPORTED
-            if (wanted == TAMIL && !tamilVoice) engine.setLanguage(Locale.US)
+            val resTa = engine.setLanguage(TAMIL)
+            tamilVoice = resTa != TextToSpeech.LANG_MISSING_DATA && resTa != TextToSpeech.LANG_NOT_SUPPORTED
+            if (!tamilVoice) {
+                // If specific ta-IN locale failed, attempt bare Locale("ta")
+                val resBareTa = engine.setLanguage(Locale("ta"))
+                tamilVoice = resBareTa != TextToSpeech.LANG_MISSING_DATA && resBareTa != TextToSpeech.LANG_NOT_SUPPORTED
+            }
+
+            val appLang = Lang.languageIn(context)
+            if (appLang == AppLang.TA && !tamilVoice) {
+                engine.setLanguage(Locale.US)
+            } else if (appLang == AppLang.EN && !tamilVoice) {
+                engine.setLanguage(Locale.US)
+            } else if (tamilVoice) {
+                // Keep Tamil active
+                engine.setLanguage(TAMIL)
+            }
+
             usingNetworkVoice = false
             if (onlineVoice(context)) {
                 pickNaturalVoice(engine, if (tamilVoice) TAMIL else Locale.US)

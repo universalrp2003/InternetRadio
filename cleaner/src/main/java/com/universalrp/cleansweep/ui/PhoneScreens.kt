@@ -966,6 +966,25 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 enabled = !state.networkBusy,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+                            Spacer(Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    tr("Auto-scan when app opens"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Switch(
+                                    checked = state.autoWifiScanOnOpen,
+                                    onCheckedChange = { vm.setAutoWifiScanOnOpen(it) },
+                                    colors = SwitchDefaults.colors(
+                                        checkedThumbColor = Color(0xFF03202B),
+                                        checkedTrackColor = AccentCyan,
+                                    ),
+                                )
+                            }
                             state.networkProgress?.let { (done, total) ->
                                 Spacer(Modifier.height(8.dp))
                                 Text(
@@ -1023,7 +1042,12 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                 }
 
                 if (loaded.devices.isNotEmpty()) {
-                    items(loaded.devices, key = { it.ip }) { device -> DeviceCard(device) }
+                    items(loaded.devices, key = { it.ip }) { device ->
+                        DeviceCard(
+                            device = device,
+                            onToggleVerified = { device.mac?.let { mac -> vm.toggleDeviceVerified(mac) } },
+                        )
+                    }
                 }
             }
 
@@ -1085,7 +1109,10 @@ private fun NetworkPermissionCard(
 }
 
 @Composable
-private fun DeviceCard(device: LanDevice) {
+private fun DeviceCard(
+    device: LanDevice,
+    onToggleVerified: () -> Unit = {},
+) {
     PanelCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -1106,13 +1133,25 @@ private fun DeviceCard(device: LanDevice) {
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    device.ip + (device.hostname?.let { " • $it" } ?: ""),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.ip + (device.hostname?.let { " • $it" } ?: ""),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (device.isVerifiedKnown) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "✓ Verified",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoodGreen,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
                 Text(
                     buildString {
                         append(device.identity.type)
@@ -1139,6 +1178,17 @@ private fun DeviceCard(device: LanDevice) {
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentViolet,
                 )
+            }
+            if (!device.isSelf && !device.isGateway && device.mac != null) {
+                Spacer(Modifier.width(8.dp))
+                IconButton(onClick = onToggleVerified) {
+                    Icon(
+                        if (device.isVerifiedKnown) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        contentDescription = "Known device",
+                        tint = if (device.isVerifiedKnown) GoodGreen else TextSecondary,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
             }
         }
     }

@@ -64,7 +64,7 @@ class SystemEventWatcher : BroadcastReceiver() {
             val pending = goAsync()
             Thread {
                 try {
-                    ChargeNotifier.announcePluggedIn(context, delayMs = 1_000)
+                    ChargeNotifier.announcePluggedIn(context, delayMs = 600)
                 } catch (e: Exception) {
                     // Ignore
                 } finally {

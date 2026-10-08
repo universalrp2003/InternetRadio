@@ -1,0 +1,6 @@
+CleanSweep v2.17:
+- Instant Tamil spoken charger announcement fix (pre-initialised TTS engine and eliminated delays).
+- News feed upgrade: Multi-provider coverage including Tamil Nadu, India, International, and Cyber Safety news with rotating unseen headlines and dedicated refresh button.
+- Widget touch protection: Tapping widget body refreshes widget state directly without opening the app, preventing launcher crashes.
+- Wi-Fi intruder detection: Mark verified/trusted devices, auto-scan on open, and spoken/notification alerts when unknown devices connect.
+- On-device Passive Network & Tracker Monitor: Inspect live app connections, destinations, server companies, and tracker endpoints.

@@ -215,11 +215,12 @@ object ChargeNotifier {
      * The dedupe marker lives in prefs because the service and the fallback job can both ask
      * for the line, and the user must not hear it twice.
      */
-    fun announcePluggedIn(context: Context, delayMs: Long = 1_500) {
+    fun announcePluggedIn(context: Context, delayMs: Long = 800) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        if (System.currentTimeMillis() - last < 45_000L) return
+        // Deduplicate plug-ins within 15 seconds (reduced from 45s)
+        if (System.currentTimeMillis() - last < 15_000L) return
         prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
 
         // Give a short pause for the hardware connection to establish
@@ -230,7 +231,6 @@ object ChargeNotifier {
             return
         }
         val battery = read(app) ?: return
-        if (!battery.charging) return
 
         // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
         val tempC = battery.temperatureC

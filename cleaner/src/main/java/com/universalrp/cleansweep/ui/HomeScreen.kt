@@ -841,6 +841,18 @@ fun TamilInfoStrip(
                     maxLines = 1,
                 )
             }
+            Spacer(Modifier.width(6.dp))
+            IconButton(
+                onClick = onRefresh,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Sync,
+                    contentDescription = "New News",
+                    tint = AccentCyan,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }

@@ -163,6 +163,9 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
         // -------------------------------------------------------------- speed test
         item { SpeedTestCard(state, vm) }
 
+        // -------------------------------------------------------------- app network tracker (v2.17)
+        item { AppTrackerCard(state, vm) }
+
         // -------------------------------------------------------------- data usage
         item { DataUsageCard(state, vm) }
 
@@ -711,6 +714,117 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
             state.speedError?.takeIf { state.speedResult == null }?.let { error ->
                 Spacer(Modifier.height(6.dp))
                 Text(error, style = MaterialTheme.typography.labelSmall, color = DangerRed)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
+    val report = state.appTrackerReport
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.Security, contentDescription = null, tint = AccentCyan)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Live App Connections & Trackers"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr("Inspect active destinations & track telemetry"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                IconButton(onClick = { vm.scanAppTrackers() }) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "Inspect", tint = TextSecondary)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tr(
+                    "Inspects on-device socket connections and attributes them to apps without " +
+                        "needing an external VPN. Identifies trackers, analytics endpoints, and server companies."
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(10.dp))
+            GradientButton(
+                text = if (state.appTrackerBusy) tr("Inspecting connections…") else tr("Inspect App Trackers"),
+                icon = Icons.Outlined.TravelExplore,
+                onClick = { vm.scanAppTrackers() },
+                enabled = !state.appTrackerBusy,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (report != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "${report.connections.size} active connection(s)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    if (report.trackerCount > 0) {
+                        Text(
+                            "• ${report.trackerCount} tracker(s) detected",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = DangerRed,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (report.connections.isEmpty()) {
+                    Text(
+                        tr("No active outward connections at this exact moment."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                } else {
+                    report.connections.take(12).forEach { conn ->
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            color = SurfaceHigh,
+                        ) {
+                            Column(Modifier.padding(10.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        conn.appName,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.weight(1f),
+                                    )
+                                    Text(
+                                        conn.category,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (conn.isTracker) DangerRed else AccentCyan,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    "Company / Network: ${conn.orgOrCompany}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+                    }
+                }
             }
         }
     }

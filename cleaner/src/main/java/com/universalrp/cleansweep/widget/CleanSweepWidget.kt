@@ -110,14 +110,15 @@ class CleanSweepWidget : AppWidgetProvider() {
                 },
             )
 
-            // Open the app (normal tap).
-            val open = PendingIntent.getActivity(
+            // Tapping widget body refreshes the widget details rather than opening the app,
+            // preventing accidental launcher freezes/crashes. The app is only opened when tapping "Clean".
+            val refreshIntent = PendingIntent.getBroadcast(
                 context,
                 91,
-                Intent(context, MainActivity::class.java),
+                Intent(context, CleanSweepWidget::class.java).setAction(ACTION_REFRESH_WIDGET),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
             )
-            views.setOnClickPendingIntent(R.id.widget_root, open)
+            views.setOnClickPendingIntent(R.id.widget_root, refreshIntent)
 
             // "Clean": open the app on the scanning screen so the user only confirms.
             val clean = PendingIntent.getActivity(
@@ -144,20 +145,26 @@ class CleanSweepWidget : AppWidgetProvider() {
 
         const val ACTION_CLEAN = "com.universalrp.cleansweep.WIDGET_CLEAN"
         const val ACTION_SPEAK = "com.universalrp.cleansweep.WIDGET_SPEAK"
+        const val ACTION_REFRESH_WIDGET = "com.universalrp.cleansweep.WIDGET_REFRESH"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_SPEAK) {
-            val app = context.applicationContext
-            val brief = Announcer.lastBrief(app)
-            if (brief.isNotBlank()) {
-                // The user tapped the speaker: allowed at any hour, still behind the master switch.
-                Announcer.speakNow(app, Announcer.shorten(brief, 400), null)
-            } else {
-                Announcer.speakNow(app, "No daily brief yet. Open CleanSweep first.", null)
+        val app = context.applicationContext
+        when (intent.action) {
+            ACTION_SPEAK -> {
+                val brief = Announcer.lastBrief(app)
+                if (brief.isNotBlank()) {
+                    // The user tapped the speaker: allowed at any hour, still behind the master switch.
+                    Announcer.speakNow(app, Announcer.shorten(brief, 400), null)
+                } else {
+                    Announcer.speakNow(app, "No daily brief yet. Open CleanSweep first.", null)
+                }
+                refresh(app)
             }
-            refresh(app)
+            ACTION_REFRESH_WIDGET -> {
+                refresh(app)
+            }
         }
     }
 
