@@ -77,6 +77,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onPlaybackStateChanged(playbackState: Int) {
             PlayerBus.reportState(playbackState)
+            if (playbackState == Player.STATE_READY) PlayerBus.clearError()
             handler.removeCallbacks(stalled)
             if (playbackState == Player.STATE_BUFFERING) handler.postDelayed(stalled, 30000)
         }

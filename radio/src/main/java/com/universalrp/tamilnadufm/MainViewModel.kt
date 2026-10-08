@@ -97,8 +97,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
             mutate {
                 it.copy(
-                    message = "That station did not respond. It may be offline right now — try another, " +
-                        "or search the directory for a working stream.",
+                    message = if (controller?.currentMediaItem?.mediaId?.startsWith("content:") == true)
+                        "Cannot play this audio file. It may have moved, access may have expired, or its format is unsupported. Choose the folder/file again."
+                    else "That station did not respond. It may be offline right now — try another, or check your connection.",
                     busy = false,
                 )
             }
@@ -369,6 +370,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun playLocal(track: LocalTrack) {
+        PlayerBus.clearError()
         PlayerBus.ensureService(ctx)
         val c = controller ?: return
         // The phone's own tracks queue up the same way stations do: next/previous walk the
