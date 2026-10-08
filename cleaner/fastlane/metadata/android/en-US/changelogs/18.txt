@@ -1,0 +1,2 @@
+Check for updates in About/More, with published release notes and optional daily checks on launch. Downloads require your approval.
+Fix officeholder parsing with party affiliations, retrieve dated RSS headlines, suppress raw provider tool responses, dismiss the keyboard on send and improve phone-analysis guidance.

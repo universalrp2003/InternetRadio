@@ -2,6 +2,7 @@ package com.universalrp.cleansweep
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.universalrp.cleansweep.ai.AiClient
@@ -13,12 +14,17 @@ import com.universalrp.cleansweep.ai.Assistant
 import com.universalrp.cleansweep.ai.AssistantAction
 import com.universalrp.cleansweep.ai.AssistantContext
 import com.universalrp.cleansweep.ai.AssistantMessage
+import com.universalrp.cleansweep.ai.WebLookup
 import com.universalrp.cleansweep.data.AppCacheInfo
 import com.universalrp.cleansweep.data.AppCacheRepo
 import com.universalrp.cleansweep.data.AppInventoryLoader
 import com.universalrp.cleansweep.data.AppInventoryReport
 import com.universalrp.cleansweep.data.AppRow
+import com.universalrp.cleansweep.data.BazaarVerdict
 import com.universalrp.cleansweep.data.DeviceHealthReader
+import com.universalrp.cleansweep.data.MalwareCheck
+import com.universalrp.cleansweep.data.MalwareHit
+import com.universalrp.cleansweep.data.MalwareReport
 import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.DataUsageReport
 import com.universalrp.cleansweep.data.HealthSnapshot
@@ -56,6 +62,7 @@ import android.provider.Settings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -225,6 +232,14 @@ data class UiState(
     val lastCrash: String = "",
     /** The last thing the offline engine could not answer, kept for "Ask the AI". */
     val assistantPendingQuestion: String = "",
+    /** v2.7: the assistant fetches live web snippets before asking the model. */
+    val aiWebLookup: Boolean = true,
+    // v2.7: file-hash malware check (MalwareBazaar always, VirusTotal with a free key)
+    val malwareBusy: Boolean = false,
+    val malwareProgress: Pair<Int, Int>? = null,
+    val malwareReport: MalwareReport? = null,
+    val malwareIncludeSystem: Boolean = false,
+    val vtKeySaved: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -239,9 +254,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private var scanJob: Job? = null
     private var speedJob: Job? = null
+    private var malwareJob: Job? = null
     private var currentSettings = ScanSettings()
     /** Screens the user actually visited, so the back button can walk them again. */
     private val navStack = ArrayDeque<Screen>()
+    /**
+     * v2.7: the Home list's scroll position lives here, not in the composable — the Home
+     * screen leaves the composition while a scan runs, which used to drop the user back
+     * at the top on return (\"back from Temp & junk goes to the top menu\"). The ViewModel
+     * outlives the screen switch (and a rotation), so the position survives both.
+     */
+    val homeListState = LazyListState()
     private var lastAiCheckMs = 0L
     private val manualQueue = ArrayDeque<String>()
 
@@ -317,7 +340,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val loaded = AiSettings.load(ctx)
         val completed = AiSettings.autoComplete(loaded)
         if (completed != loaded) AiSettings.save(ctx, completed)
-        mutate { it.copy(aiConfig = completed, aiEngineLabel = completed.engineLabel) }
+        mutate {
+            it.copy(
+                aiConfig = completed,
+                aiEngineLabel = completed.engineLabel,
+                aiWebLookup = AiSettings.webLookup(ctx),
+                vtKeySaved = AiSettings.vtKey(ctx).isNotBlank(),
+            )
+        }
         // Voice + daily watch: read the switches, and make sure the hourly worker is alive
         // whenever the user wants warnings or the daily brief.
         loadVoiceSettings()
@@ -373,6 +403,16 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (System.currentTimeMillis() - lastAiCheckMs > 15 * 60_000L) refreshAiStatus()
         if (_state.value.screen == Screen.APP_CACHE && _state.value.usageAccess) {
             loadAppCaches()
+        }
+        // v2.7: coming back from Android's app-info page (where permissions are revoked)
+        // must re-read the app list and the security findings — the old build kept showing
+        // the revoked permission as held until the screen was opened again by hand.
+        // refresh() runs on every ON_RESUME, and both loaders no-op while already busy.
+        if (_state.value.screen == Screen.APPS) {
+            loadAppInventory()
+        }
+        if (_state.value.screen == Screen.SECURITY) {
+            loadSecurity()
         }
     }
 
@@ -718,6 +758,49 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         )
                     }
                 }
+                // v2.7: live web grounding. Providers other than Google cannot browse by
+                // themselves, so without this a question about today is answered from stale
+                // training memory. The lookup below fetches fresh keyless snippets first and
+                // they travel with the question; the model is told to quote them (with the
+                // source) for anything time-sensitive instead of guessing.
+                val today = try {
+                    java.text.SimpleDateFormat("d MMMM yyyy", java.util.Locale.ENGLISH)
+                        .format(java.util.Date())
+                } catch (e: Exception) {
+                    ""
+                }
+                var liveMeta = ""
+                var liveSources = emptyList<String>()
+                var officeText = ""
+                var fetchedSnippets = emptyList<WebLookup.Snippet>()
+                var liveBlock = if (today.isNotBlank()) "Today's date is $today." else ""
+                if (state.aiWebLookup) {
+                    val lookup = runCatching { WebLookup.lookup(q) }.getOrNull()
+                    val snippets = lookup?.snippets.orEmpty()
+                    fetchedSnippets = snippets
+                    // v2.11: the office lead doubles as the verification source.
+                    officeText = lookup?.office?.text.orEmpty()
+                    if (snippets.isNotEmpty()) {
+                        liveBlock = "Live web results, fetched just now" +
+                            (if (today.isNotBlank()) " ($today)" else "") +
+                            " — for anything time-sensitive, base the answer on these and " +
+                            "name the source:\n" + snippets.joinToString("\n") { snippet ->
+                            "- (${snippet.source}) ${snippet.text}" +
+                                (if (snippet.url.isNotBlank()) " [${snippet.url}]" else "")
+                        }
+                        liveMeta = " · live web (${snippets.size})"
+                        // v2.8: the user sees the same evidence the model saw, so a wrong
+                        // answer can be checked instead of trusted.
+                        liveSources = snippets.take(3).map { snippet ->
+                            "• (${snippet.source}) ${ellipsize(snippet.text, 220)}" +
+                                shortSourceUrl(snippet.url)
+                        }
+                    } else if (today.isNotBlank()) {
+                        liveBlock = "Today's date is $today. No live web results were found " +
+                            "for this question, so say in one short sentence when an answer " +
+                            "may be out of date instead of stating it as current fact."
+                    }
+                }
                 val (result, fallbackNote, elapsedMs) = askWithFallback(
                     // v2.4: the assistant answers *any* question — general knowledge, how-to,
                     // maths, whatever the user types. The phone facts below are context it may
@@ -733,29 +816,45 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                         "the information came from. If you have no way to look something up, " +
                         "say that in one short sentence and then give the best answer you have " +
                         "from what you know; never refuse the question and never say you are " +
-                        "not allowed to discuss a topic. " + answerLanguageRule() +
+                        "not allowed to discuss a topic. " +
+                        "Live web results may be attached to the question. They are fresher " +
+                        "than your own memory, so for anything time-sensitive treat them as " +
+                        "the authority: when they settle the question, quote the decisive " +
+                        "sentence briefly and name its source; when they do not settle it, " +
+                        "say \"the live lookup did not settle this\" in one short sentence " +
+                        "and mark the rest as possibly out of date. \"Current\" and " +
+                        "\"incumbent\" always mean as of today's date above. If the " +
+                        "evidence says someone \"served\" from one year to another year " +
+                        "that has already passed, that person is FORMER, not current — " +
+                        "never call them the current holder. Never present " +
+                        "an answer from memory as if it came from the live results. " +
+                        answerLanguageRule() +
                         " Keep it under 250 words, plain language, no markdown headings.",
-                    userPrompt = "$facts\nQuestion from the user: $q",
+                    userPrompt = "$facts\n$liveBlock\nQuestion from the user: $q",
                     allowSearch = true,
                 )
+                // Apply the same evidence gate to provider responses and offline fallbacks.
+                val rawAnswer = if (result.ok) result.text else
+                    "I could not reach the AI provider (${result.error ?: "unknown error"}).\n\n" +
+                        Assistant.answer(q, context, state.assistantVerbose).text
+                val answerText = if (com.universalrp.cleansweep.ai.NewsLookup.applies(q))
+                    com.universalrp.cleansweep.ai.NewsLookup.answer(fetchedSnippets)
+                else com.universalrp.cleansweep.ai.OfficeEvidence.answer(q, rawAnswer, officeText)
                 val reply = AssistantMessage(
                     fromUser = false,
-                    text = if (result.ok) {
-                        result.text
-                    } else {
-                        "I could not reach the AI provider (${result.error ?: "unknown error"}).\n\n" +
-                            "Here is the on-device answer instead:\n\n" +
-                            Assistant.answer(q, context, state.assistantVerbose).text
-                    },
+                    text = answerText,
                     // The bubble says who answered and which model — no mystery AI.
                     meta = if (result.ok) {
-                        answerMeta(result, elapsedMs, fallbackNote)
+                        answerMeta(result, elapsedMs, fallbackNote) + liveMeta
                     } else {
                         "On-device engine · ${state.aiConfig.engineLabel} did not answer"
                     },
+                    // Evidence is retained even when the provider failed: the office
+                    // gate can still answer from a successfully fetched article.
+                    sources = liveSources,
                 )
                 mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
-                if (result.ok) speakAnswer(result.text)
+                if (result.ok) speakAnswer(answerText)
                 return@launch
             }
             // The offline engine first. When it cannot answer *and* the user has an AI
@@ -811,10 +910,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /**
      * Speaks an assistant answer when the user asked for spoken replies. Long answers are cut
      * to the useful part — nobody wants two minutes of bullet points read to them.
+     *
+     * @param forced the per-answer "Read aloud" tap: an explicit request, honoured even when
+     *   automatic voice replies are muted (only the master voice switch still gates it).
      */
-    fun speakAnswer(text: String) {
+    fun speakAnswer(text: String, forced: Boolean = false) {
         val s = _state.value
-        if (!s.voiceOn || !s.voiceAnswers) return
+        if (!s.voiceOn) return
+        if (!forced && !s.voiceAnswers) return
         val short = Announcer.shorten(text, 420)
         if (short.isBlank()) return
         // Read it in the language it is actually written in, not the menu language: an
@@ -842,6 +945,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         "ta" -> "Always reply in Tamil, whatever language the question is written in."
         "en" -> "Always reply in English, whatever language the question is written in."
         else -> "Reply in the language the user wrote in."
+    }
+
+    /**
+     * A source URL shortened for the bubble (\" (en.wikipedia.org/wiki/…)\"),
+     * or an empty string when there is nothing worth showing.
+     */
+    private fun shortSourceUrl(url: String): String {
+        val short = url.removePrefix("https://").removePrefix("http://")
+            .substringBefore("#").trim().take(90)
+        return if (short.isBlank()) "" else " ($short)"
+    }
+
+    /** Cuts text at a word boundary instead of mid-word ("...aft (en.wiki...)"). */
+    private fun ellipsize(text: String, max: Int): String {
+        if (text.length <= max) return text
+        val cut = text.take(max).substringBeforeLast(' ')
+        val kept = if (cut.length < max - 40) text.take(max) else cut
+        return kept.trimEnd(',', ';', ':', ' ') + "…"
     }
 
     fun setAnswerLanguage(value: String) {
@@ -883,6 +1004,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setVoiceEvent(event: Announcer.Event, on: Boolean) {
         Announcer.setAllows(ctx, event, on)
+        // v2.7: muting the answers is also the Stop button — anything being read out halts
+        // at once instead of finishing the sentence.
+        if (event == Announcer.Event.ANSWER && !on) Announcer.stop()
         // Turning any voice event on means the hourly watch must be alive; the charging
         // announcement additionally needs the charging monitor, which reads the same switches.
         if (on) HealthWatchWorker.schedule(ctx)
@@ -1213,9 +1337,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (_state.value.securityBusy) return
         mutate { it.copy(securityBusy = true, screen = Screen.SECURITY) }
         viewModelScope.launch {
-            val apps = _state.value.appInventory?.rows
-                ?: runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }
-                    .getOrNull()?.rows.orEmpty()
+            // v2.7: always re-read the installed apps first. The old build reused the cached
+            // inventory when it had one, so a permission revoked in Settings kept showing as
+            // held until the app was restarted. The fresh inventory is shared with the apps
+            // screen, so both always agree.
+            val inventory = runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }.getOrNull()
+            if (inventory != null) mutate { it.copy(appInventory = inventory) }
+            val apps = inventory?.rows ?: _state.value.appInventory?.rows.orEmpty()
             val report = runCatching { SecurityScanner.scan(ctx, apps) }.getOrNull()
             mutate {
                 it.copy(
@@ -1223,6 +1351,169 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     securityReport = report ?: it.securityReport,
                     message = if (report == null) "Security check could not run." else null,
                 )
+            }
+        }
+    }
+
+    // ------------------------------------------------- malware hash check (v2.7)
+
+    /**
+     * Hashes each installed APK (SHA-256, on the phone) and looks the hash up in
+     * MalwareBazaar — free, no key, and that database holds only confirmed malware, so a
+     * hit is a real red flag. A saved VirusTotal key buys a second opinion, but only for
+     * apps MalwareBazaar already flagged: the free VirusTotal quota (4/minute, 500/day)
+     * would never survive a blind sweep of the whole list.
+     *
+     * By default only user-installed apps are checked — preinstalled system apps live on
+     * the read-only partition and cannot be removed anyway — with a switch for the full
+     * sweep. Cancellable; progress is shown per app.
+     */
+    fun runMalwareScan() {
+        if (_state.value.malwareBusy) return
+        mutate { it.copy(malwareBusy = true, malwareProgress = 0 to 0, malwareReport = null) }
+        malwareJob = viewModelScope.launch {
+            try {
+                val inventory = _state.value.appInventory
+                    ?: runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }.getOrNull()
+                if (inventory != null && _state.value.appInventory == null) {
+                    mutate { it.copy(appInventory = inventory) }
+                }
+                val includeSystem = _state.value.malwareIncludeSystem
+                val targets = inventory?.rows.orEmpty().filter { includeSystem || !it.isSystem }
+                if (targets.isEmpty()) {
+                    mutate {
+                        it.copy(
+                            malwareBusy = false,
+                            malwareProgress = null,
+                            message = "No apps to check — open Installed apps first.",
+                        )
+                    }
+                    return@launch
+                }
+                val vtKey = AiSettings.vtKey(ctx).trim()
+                val hits = mutableListOf<MalwareHit>()
+                var checked = 0
+                var skipped = 0
+                var vtLookups = 0
+                for ((index, app) in targets.withIndex()) {
+                    coroutineContext.ensureActive()
+                    mutate { it.copy(malwareProgress = index to targets.size) }
+                    val hash = app.apkPath?.let { MalwareCheck.sha256OfFile(it) }
+                    if (hash == null) {
+                        skipped++
+                        continue
+                    }
+                    when (val verdict = MalwareCheck.queryBazaar(hash)) {
+                        is BazaarVerdict.Hit -> {
+                            var source = "MalwareBazaar"
+                            var detail = verdict.signature +
+                                (if (verdict.tags.isNotBlank()) " (${verdict.tags})" else "")
+                            // Second opinion, spent only where it matters (see the KDoc above).
+                            if (vtKey.isNotBlank()) {
+                                val vt = MalwareCheck.queryVirusTotal(vtKey, hash)
+                                if (vt != null) {
+                                    vtLookups++
+                                    source = "MalwareBazaar + VirusTotal"
+                                    detail += " · VirusTotal: ${vt.malicious}/${vt.total} engines flagged it"
+                                }
+                            }
+                            hits.add(MalwareHit(app.pkg, app.label, source, detail, hash))
+                        }
+                        else -> Unit
+                    }
+                    checked++
+                }
+                coroutineContext.ensureActive()
+                val done = MalwareReport(
+                    checked = checked,
+                    hits = hits.toList(),
+                    skipped = skipped,
+                    vtLookups = vtLookups,
+                    scannedAtMs = System.currentTimeMillis(),
+                    // v2.9: the result line states its own scope, so a scan run
+                    // before the system-apps toggle was switched on cannot confuse.
+                    includeSystem = includeSystem,
+                )
+                mutate {
+                    it.copy(
+                        malwareBusy = false,
+                        malwareProgress = null,
+                        malwareReport = done,
+                        message = if (hits.isEmpty()) {
+                            "No known malware: ${done.checked} apps checked against MalwareBazaar."
+                        } else {
+                            "${hits.size} app(s) flagged — details are listed in the card above."
+                        },
+                    )
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                mutate { it.copy(malwareBusy = false, malwareProgress = null) }
+            }
+        }
+    }
+
+    fun cancelMalwareScan() {
+        malwareJob?.cancel()
+        malwareJob = null
+        mutate { it.copy(malwareBusy = false, malwareProgress = null) }
+    }
+
+    fun setMalwareIncludeSystem(on: Boolean) = mutate { it.copy(malwareIncludeSystem = on) }
+
+    /** Saves the user's own free VirusTotal key (blank clears it). Stored like the AI keys. */
+    fun saveVtKey(key: String) {
+        AiSettings.setVtKey(ctx, key.trim())
+        mutate {
+            it.copy(
+                vtKeySaved = key.trim().isNotBlank(),
+                message = if (key.trim().isNotBlank()) {
+                    "VirusTotal key saved — flagged apps now get a second opinion."
+                } else {
+                    "VirusTotal key removed — MalwareBazaar only."
+                },
+            )
+        }
+    }
+
+    /**
+     * \"Check this app for malware\" from the app details: MalwareBazaar first, VirusTotal
+     * second when a key is saved. The answer comes back as a message, whatever it is.
+     */
+    fun checkOneApp(pkg: String) {
+        viewModelScope.launch {
+            val inventory = _state.value.appInventory
+                ?: runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }.getOrNull()
+            if (inventory != null && _state.value.appInventory == null) {
+                mutate { it.copy(appInventory = inventory) }
+            }
+            val app = inventory?.rows?.firstOrNull { it.pkg == pkg }
+            if (app == null) {
+                mutate { it.copy(message = "That app is no longer installed.") }
+                return@launch
+            }
+            mutate { it.copy(message = "Checking ${app.label}…") }
+            val hash = app.apkPath?.let { MalwareCheck.sha256OfFile(it) }
+            if (hash == null) {
+                mutate { it.copy(message = "Could not read ${app.label}'s file to hash it.") }
+                return@launch
+            }
+            when (val verdict = MalwareCheck.queryBazaar(hash)) {
+                is BazaarVerdict.Hit -> {
+                    var detail = "MalwareBazaar flags ${app.label}: ${verdict.signature}"
+                    val vtKey = AiSettings.vtKey(ctx).trim()
+                    if (vtKey.isNotBlank()) {
+                        MalwareCheck.queryVirusTotal(vtKey, hash)?.let { vt ->
+                            detail += " (VirusTotal: ${vt.malicious}/${vt.total} engines)"
+                        }
+                    }
+                    mutate { it.copy(message = "$detail — consider uninstalling it.") }
+                }
+                is BazaarVerdict.Clean -> {
+                    mutate { it.copy(message = "${app.label}: no match in MalwareBazaar — not known malware.") }
+                }
+                is BazaarVerdict.Unknown -> {
+                    mutate { it.copy(message = "Could not check ${app.label} (${verdict.reason}).") }
+                }
             }
         }
     }
@@ -1345,6 +1636,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val updated = _state.value.aiConfig.copy(includeNetwork = value)
         AiSettings.save(ctx, updated)
         mutate { it.copy(aiConfig = updated) }
+    }
+
+    /** v2.7: live web snippets before the model answers (DuckDuckGo + Wikipedia, no key). */
+    fun setAiWebLookup(on: Boolean) {
+        AiSettings.setWebLookup(ctx, on)
+        mutate { it.copy(aiWebLookup = on) }
     }
 
     fun saveAiConfig(apiKey: String, model: String, baseUrl: String) {

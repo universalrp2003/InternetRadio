@@ -26,7 +26,17 @@ object AiReport {
         Rules you must follow:
         1. Never invent numbers that are not in the report.
         2. If a value is missing, say "not reported by this phone" instead of guessing.
-        3. Separate what is clearly bloatware or risky from what is normal and should be left alone.
+        3. Permissions, unfamiliar names and missing usage history do NOT establish bloatware,
+           malware or high risk. Only describe scanner findings as findings. System components
+           are not third-party apps. Do not recommend removing system, biometric, banking,
+           keyboard or home-control apps merely because they seem unused.
+        7. Uninstall only user-selected third-party apps the user confirms they no longer need.
+           No usage record means unknown, not proof of 30 days of inactivity.
+        8. Raw thermal zones are uncalibrated and sensor-specific. Never declare a hotspot safe,
+           overheating or under light load from its value alone. Use Android thermal status
+           and battery readings, and state uncertainty. Uptime is not the phone's age.
+        9. Security patch is the INSTALLED patch, not the latest available update. You cannot
+           know whether an OTA exists. Suggest checking Settings, not installing that same date.
         4. Say clearly when something needs root or a manufacturer tool and therefore cannot be
            fixed by a normal app.
         5. Mention when a "problem" is actually normal for a phone of this age.
@@ -178,6 +188,7 @@ object AiReport {
                 append(" | ").append(row.pkg)
                 append(" | ").append(gb(row.totalBytes))
                 append(" | ").append(lastUsedLabel(row.lastUsedMs))
+                append(if (row.isPreinstalled) " | SYSTEM/PREINSTALLED: do not recommend removal" else " | USER-INSTALLED: removal only if user confirms not needed")
                 if (row.tags.isNotEmpty()) append(" | ").append(row.tags.joinToString(", "))
                 if (row.riskyPermissions.isNotEmpty()) {
                     append(" | ").append(row.riskyPermissions.take(4).joinToString("; "))
@@ -193,7 +204,7 @@ object AiReport {
     }
 
     private fun lastUsedLabel(ms: Long?): String {
-        if (ms == null) return "never used (30 days)"
+        if (ms == null || ms <= 0) return "no usage record available (not proof of inactivity)"
         val days = ((System.currentTimeMillis() - ms) / (24L * 3600 * 1000)).coerceAtLeast(0)
         return when {
             days <= 0 -> "used today"

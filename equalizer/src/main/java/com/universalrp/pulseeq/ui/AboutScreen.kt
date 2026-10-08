@@ -27,6 +27,10 @@ import com.universalrp.pulseeq.EqViewModel
 
 @Composable
 fun AboutScreen(vm: EqViewModel) {
+    val sourceContext = androidx.compose.ui.platform.LocalContext.current
+    val installedVersion = androidx.compose.runtime.remember {
+        runCatching { sourceContext.packageManager.getPackageInfo(sourceContext.packageName, 0).versionName }.getOrNull() ?: "unknown"
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -47,7 +51,7 @@ fun AboutScreen(vm: EqViewModel) {
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
-                    "PulseEQ 1.0 • 20-band equalizer",
+                    "PulseEQ $installedVersion • 20-band equalizer",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary,
                 )
@@ -61,6 +65,12 @@ fun AboutScreen(vm: EqViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            androidx.compose.material3.TextButton(onClick = {
+                runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
+            }) { Text("Source code · GNU GPL v3") }
+            Text("Audio processing stays on your phone. Optional daily update checks contact GitHub and can be turned off below.", color = TextSecondary)
+            com.universalrp.updates.AppUpdates.Control("PulseEQ")
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -123,7 +133,7 @@ fun AboutScreen(vm: EqViewModel) {
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(
-                        "• No INTERNET permission — PulseEQ cannot send anything anywhere, even by accident.\n" +
+                        "• Internet permission is used only for GitHub release checks; no audio is uploaded.\n" +
                             "• No microphone permission: the LED spectrum reads the audio you are already " +
                             "playing, not the room.\n" +
                             "• No accounts, no ads, no analytics.\n" +

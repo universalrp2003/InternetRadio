@@ -9,7 +9,10 @@
     <application
         android:label="Internet Radio"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@android:style/Theme.Material.Light.NoActionBar"
+        android:usesCleartextTraffic="true">
+        <!-- Cleartext is required: many stations are still plain http streams,
+             which Android 9+ blocks without this flag. -->
 
         <activity
             android:name=".MainActivity"

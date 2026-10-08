@@ -2,7 +2,7 @@
 
 A real equalizer with its own DSP: **20 bands**, presets for **music, movies, speech** and more,
 **LED light-bar spectrum** that follows the actual audio, and a **foreground service** so it keeps
-working after you leave the app. Fully offline — **no INTERNET permission at all**.
+working after you leave the app. Audio processing is offline. Internet permission is used only for optional GitHub update checks.
 
 **v1.0 highlights:** 20 peaking filters per channel + preamp + soft limiter • 17 presets •
 live LED spectrum • background service with notification • system-wide effect attempt with honest
@@ -93,6 +93,6 @@ gradle wrapper
   non-root apps; PulseEQ says so in the app instead of showing a fake "ACTIVE" badge.
 - The device effect engine usually has fewer bands than 20 (often 5). PulseEQ interpolates your
   20-band curve onto whatever the phone offers, and shows the real band layout in Settings.
-- The built-in player handles **local files only** (no streaming — no INTERNET permission).
+- The built-in player handles **local files only** (no streaming; Internet is used only for update checks).
 - Volume/limiter changes are applied in software: if your phone's own "Dolby"/"Dirac" effect is also
   active, the two can fight; turning the built-in one off gives the cleanest result.

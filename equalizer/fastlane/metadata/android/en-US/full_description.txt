@@ -9,5 +9,5 @@ not clip.
 * Works with cooperating music players that expose their audio session, and keeps running in
   the background with a foreground service and a small notification showing the active preset.
 
-PulseEQ asks for no INTERNET permission at all: it never goes online, has no ads and collects
+PulseEQ uses Internet only for optional GitHub release checks. It has no ads and collects
 nothing. It is an equalizer, an audio tool — it does not download music.

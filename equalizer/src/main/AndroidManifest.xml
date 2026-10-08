@@ -2,7 +2,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-        PulseEQ is fully offline: no INTERNET permission at all.
+        Audio processing remains offline. INTERNET is used only for GitHub update checks.
         MODIFY_AUDIO_SETTINGS is what lets us attach an equalizer effect to audio
         sessions (our own player, and — where the ROM allows it — other apps).
     -->
@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <uses-permission android:name="android.permission.INTERNET" />
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

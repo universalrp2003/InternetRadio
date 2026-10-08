@@ -352,7 +352,7 @@ object AiClient {
                 doOutput = true
                 setRequestProperty("Content-Type", "application/json; charset=utf-8")
                 setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.6 (Android)")
+                setRequestProperty("User-Agent", "CleanSweep/2.12 (Android)")
                 if (!bearer.isNullOrBlank()) {
                     setRequestProperty("Authorization", "Bearer ${bearer.trim()}")
                 }
@@ -400,14 +400,14 @@ object AiClient {
                 }
                 sources = readSources(candidate)
             }
-            val answer = builder.toString().trim().ifBlank { body.take(4000) }
+            val answer = builder.toString().trim().ifBlank { "The provider returned no final answer." }
             if (sources.isEmpty()) {
                 answer
             } else {
                 answer + "\n\n" + "Sources:" + "\n" + sources.joinToString("\n") { "- $it" }
             }
         } catch (e: Exception) {
-            body.take(4000)
+            "The provider returned an unreadable response."
         }
     }
 
@@ -528,7 +528,8 @@ object AiClient {
                 val explained = explain(status, text)
                 return false to if (attempts > 1) "$explained (try $attempt of $attempts)" else explained
             }
-            return true to extractText(text)
+            val answer = extractText(text)
+            return if (answer.isBlank()) false to "The provider returned no final answer (possibly an unsupported tool call). Please try another provider." else true to answer
         } catch (e: UnknownHostException) {
             return false to "No internet connection (could not reach the AI service)."
         } catch (e: SocketTimeoutException) {
@@ -617,9 +618,10 @@ object AiClient {
                 }
             }
             if (json.has("response")) return json.optString("response")
+            return ""
         } catch (e: Exception) {
-            // Fall through: show the raw body so nothing is hidden from the user.
+            // Plain-text endpoints are allowed, but never expose malformed JSON/tool calls.
         }
-        return body.take(4000)
+        return if (body.trimStart().startsWith("{") || body.trimStart().startsWith("[")) "" else body.take(4000)
     }
 }

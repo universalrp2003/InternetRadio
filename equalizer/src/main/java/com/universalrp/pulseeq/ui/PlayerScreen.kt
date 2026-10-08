@@ -192,7 +192,7 @@ fun PlayerScreen(state: EqUiState, vm: EqViewModel) {
                     )
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "It plays local files — PulseEQ has no INTERNET permission, so it cannot stream " +
+                        "It plays local files — streaming is not supported. Internet access is only for update checks, not " +
                             "online music. For YouTube, Spotify and other apps, use the Background/Settings " +
                             "options: the system-wide effect or the cooperating-player sessions.",
                         style = MaterialTheme.typography.bodySmall,

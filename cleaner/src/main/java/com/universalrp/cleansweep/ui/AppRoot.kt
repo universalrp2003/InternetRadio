@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.SnackbarHost
@@ -39,6 +40,7 @@ fun AppRoot(vm: MainViewModel) {
         Modifier
             .fillMaxSize()
             .background(Bg)
+            .navigationBarsPadding()
     ) {
         // The system back button walks back through the screens that were opened instead
         // of closing the whole app — that was the v2.1 bug ("back closes the application").
@@ -46,7 +48,9 @@ fun AppRoot(vm: MainViewModel) {
         BackHandler(enabled = state.screen != Screen.HOME) { vm.goBack() }
 
         when (state.screen) {
-            Screen.HOME -> HomeScreen(state, vm)
+            // v2.7: the Home list state lives in the ViewModel, so coming back from a scan
+            // lands where the user was instead of jumping to the top.
+            Screen.HOME -> HomeScreen(state, vm, vm.homeListState)
             Screen.SCANNING -> ScanScreen(state, vm)
             Screen.RESULTS -> ResultsScreen(state, vm)
             Screen.APP_CACHE -> AppCacheScreen(state, vm)

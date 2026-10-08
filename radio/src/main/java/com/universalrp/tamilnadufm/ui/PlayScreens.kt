@@ -1,5 +1,8 @@
 package com.universalrp.tamilnadufm.ui
 
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.TextButton
+import com.universalrp.tamilnadufm.audio.AudioFx
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -45,6 +48,8 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.StarBorder
 import androidx.compose.material.icons.filled.Stop
@@ -86,21 +91,14 @@ import com.universalrp.tamilnadufm.player.PlayerBus
 
 @Composable
 fun LocalScreen(vm: MainViewModel, state: UiState) {
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) vm.loadLocalTracks()
+    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) vm.loadMusicFolder(uri)
     }
+    val localPlayback by PlayerBus.state.collectAsState()
     val fileLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri ->
         if (uri != null) vm.playPickedFile(uri)
-    }
-
-    val permission = if (Build.VERSION.SDK_INT >= 33) {
-        Manifest.permission.READ_MEDIA_AUDIO
-    } else {
-        Manifest.permission.READ_EXTERNAL_STORAGE
     }
 
     LazyColumn(
@@ -129,22 +127,25 @@ fun LocalScreen(vm: MainViewModel, state: UiState) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconChip(Icons.Filled.Refresh, "Scan device") {
-                            permissionLauncher.launch(permission)
-                            vm.loadLocalTracks()
-                        }
+                        IconChip(Icons.Filled.Folder, "Choose folder") { folderLauncher.launch(null) }
                         Spacer(Modifier.width(8.dp))
                         IconChip(Icons.Filled.Folder, "Open a file") {
                             fileLauncher.launch(arrayOf("audio/*"))
                         }
                     }
+                    Spacer(Modifier.height(8.dp))
+                    Text(if (state.localLoading) "Reading your music folder…" else "Only audio in your chosen folder and subfolders is listed.", color = TextSecondary)
+                    Row {
+                        IconButton(onClick = { vm.previous() }) { Icon(Icons.Filled.SkipPrevious, "Previous song", tint = Saffron) }
+                        IconButton(onClick = { vm.togglePlayPause() }) { Icon(if (localPlayback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play or pause", tint = Saffron) }
+                        IconButton(onClick = { vm.next() }) { Icon(Icons.Filled.SkipNext, "Next song", tint = Saffron) }
+                        IconButton(onClick = { vm.refreshMusicFolder() }) { Icon(Icons.Filled.Refresh, "Refresh folder", tint = Saffron) }
+                    }
                     if (state.localTracks.isEmpty()) {
                         Spacer(Modifier.height(10.dp))
                         Text(
-                            "No songs listed yet. Tap \u201CScan device\u201D and allow access to your " +
-                                "audio files, or pick a single file with \u201COpen a file\u201D. " +
-                                "If a file is stored somewhere unusual, the picker still works — " +
-                                "the equalizer applies either way.",
+                            "Choose the folder containing your songs, not your ringtones folder. " +
+                                "Or open a single audio file. Folder access is remembered; no whole-device scan is needed.",
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
@@ -281,6 +282,16 @@ fun EqualizerScreen(vm: MainViewModel, state: UiState) {
                 )
             }
         }
+
+        PanelCard(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Text("Left / right balance", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("Left ← Centre → Right. Reduces the louder side without boosting or clipping. Applies to stereo audio played here, not other apps.", color = TextSecondary)
+                Slider(value = eq.balance, onValueChange = { vm.setBalance(it) }, valueRange = -1f..1f)
+                TextButton(onClick = { vm.setBalance(0f) }) { Text("Centre / reset") }
+            }
+        }
+        com.universalrp.tamilnadufm.ui.ExternalEqPanel()
 
         // Quick curves
         SectionTitle("Quick sound")
@@ -621,6 +632,11 @@ private fun Fader(
 
 @Composable
 fun MoreScreen(vm: MainViewModel, state: UiState) {
+    val aboutContext = androidx.compose.ui.platform.LocalContext.current
+    val installedVersion = androidx.compose.runtime.remember {
+        runCatching { aboutContext.packageManager.getPackageInfo(aboutContext.packageName, 0).versionName }.getOrNull() ?: "unknown"
+    }
+
     var name by remember { mutableStateOf("") }
     var url by remember { mutableStateOf("") }
 
@@ -767,6 +783,7 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
             }
         }
 
+        item { com.universalrp.updates.AppUpdates.Control("Ramesh-Radio") }
         // About
         item {
             PanelCard(Modifier.fillMaxWidth()) {
@@ -778,13 +795,13 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        "Version 1.1 • Tamil FM, world news, home-screen widget and a 10-band equalizer",
+                        "Version $installedVersion • Tamil FM, world news, home-screen widget and a 10-band equalizer",
                         style = MaterialTheme.typography.labelMedium,
                         color = TextSecondary,
                     )
                     Spacer(Modifier.height(10.dp))
                     Text(
-                        "Built by Ramesh prathap .R",
+                        "Author: ரமேஷ் பிரதாப் • Ramesh prathap .R",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary,
                         fontWeight = FontWeight.SemiBold,
@@ -811,6 +828,14 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                    Spacer(Modifier.height(12.dp))
+                    Text("Free software under the GNU GPL v3\nApp: Ramesh Radio (Tamilnadu FM Radio)", color = TextSecondary)
+                    androidx.compose.material3.TextButton(onClick = {
+                        runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO,
+                            android.net.Uri.parse("mailto:universalrp2003@gmail.com"))) }
+                    }) { Text("universalrp2003@gmail.com", color = Teal) }
+                    Text("Privacy & permissions", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Internet access is needed for live streams and directory searches. Local audio is selected on your phone. Notifications and the foreground playback service keep audio controls available while listening. Favourites and settings stay on this device. Stream and directory servers receive your requests; offline station listings do not make streams playable offline.", color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
                     Row {
                         IconChip(Icons.Filled.Share, "Share app") { vm.shareApp() }
@@ -923,6 +948,18 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                 horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                // v1.3: previous/next here too — same queue the widget and notification use.
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(SurfaceHigh)
+                        .clickable { vm.previous() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = TextSecondary)
+                }
+                Spacer(Modifier.width(16.dp))
                 Box(
                     Modifier
                         .size(58.dp)
@@ -937,6 +974,17 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                         tint = Color(0xFF2A1200),
                         modifier = Modifier.size(30.dp),
                     )
+                }
+                Spacer(Modifier.width(16.dp))
+                Box(
+                    Modifier
+                        .size(48.dp)
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(SurfaceHigh)
+                        .clickable { vm.next() },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = TextSecondary)
                 }
                 Spacer(Modifier.width(16.dp))
                 Box(

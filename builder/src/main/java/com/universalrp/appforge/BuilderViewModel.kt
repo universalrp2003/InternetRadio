@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 enum class BScreen { HOME, EDITOR, PREVIEW, EXPORT, ABOUT }
 
 /** Shown on the home and about screens. */
-const val APP_VERSION = "1.0"
+const val APP_VERSION = "1.1"
 
 /** Files offered in the generated-code viewer. */
 val CODE_FILES = listOf(

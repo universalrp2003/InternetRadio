@@ -1,0 +1,1 @@
+Check for updates in About/More, with published release notes and optional daily checks on launch. Downloads require your approval.

@@ -1,0 +1,5 @@
+Your default SMS app is no longer flagged for reading SMS (it is supposed to), and the detail line names it.
+Overlay, installer, usage-access and all-files findings now follow the live Settings toggles: switch one off and it disappears from the report.
+The AI reads the lead paragraph of Wikipedia articles for fresher answers, and every online answer now shows the web evidence it was based on.
+Fixed "1 installed apps" and similar grammar in the security report.
+Find My Device is no longer listed as a suspicious device admin.

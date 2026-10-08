@@ -1,3 +1,19 @@
+## Maintained-app release checklist (2026-10-08)
+
+Actively publish CleanSweep, Ramesh Radio and PulseEQ only. Bump an app version/code
+when its APK changes, update its changelog, README download links and
+`releases/<tag>.md`, then set `releases/latest-tag.txt`. Do not advertise unfinished
+features. Verify Android 8+ compatibility and report limits of device testing.
+
+The Build APK workflow publishes only after unit tests, compilation and APK checks
+pass. A session-branch push whose final commit message contains `[publish]` explicitly
+requests publication; ordinary pushes remain test builds. Manual dispatch also accepts
+`release_tag` when the GitHub connection has Actions-write permission. Published
+assets are release APKs/AABs for the three maintained apps, never debug or legacy APKs.
+A new release is assembled as a draft, then published after uploading all assets.
+Existing releases are not overwritten. Merge the reviewed PR so the default-branch
+README matches the public release. GitHub publishing is not app-store approval.
+
 # Publishing these apps to a store — what is ready, what you must do
 
 **Route chosen (6 Oct 2026, revised):** **free open stores, no Google Play** — the $25 Play

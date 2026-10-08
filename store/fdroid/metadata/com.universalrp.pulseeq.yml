@@ -13,8 +13,8 @@ RepoType: git
 Repo: https://github.com/universalrp2003/InternetRadio.git
 
 Builds:
-  - versionName: '1.0'
-    versionCode: 1
+  - versionName: '1.2'
+    versionCode: 3
     commit: v2026.10.06
     subdir: equalizer
     sudo:
@@ -25,10 +25,10 @@ Builds:
       - yes
 
 MaintainerNotes: >
-  One of five apps in this Gradle project. PulseEQ declares no INTERNET
-  permission at all: it is an audio tool, not a music downloader.
+  One of five apps in this Gradle project. PulseEQ uses INTERNET only for optional GitHub release checks. Audio is processed locally.
+  It is an audio tool, not a music downloader.
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
-CurrentVersion: '1.0'
-CurrentVersionCode: 1
+CurrentVersion: '1.2'
+CurrentVersionCode: 3

@@ -1,0 +1,3 @@
+"Who is the current X" answers are now verified against the office article: if the AI names someone else, a live-check note corrects it with the incumbent's name and date.
+The lookup tolerates voice typos ("cm if tamilnadu"), ignores chit-chat words when searching, skips search hits that share nothing with the question, and puts the incumbent sentence first so no truncation can hide it.
+F-Droid, Aurora and Xiaomi's own store are now treated as known stores instead of unusual installers, and F-Droid installs are no longer tagged Sideloaded.

@@ -139,6 +139,51 @@ class StationRepository(context: Context) {
         get() = prefs.getString(KEY_LAST_ERROR, null)
         set(value) = prefs.edit().putString(KEY_LAST_ERROR, value).apply()
 
+    // ------------------------------------------------------------ play queue (v1.3)
+    //
+    // Next/Previous must work when the app is closed (widget, notification, headset), so
+    // the playback service cannot ask the ViewModel what "next" means. Instead every play()
+    // saves the list it is playing from here; the service rebuilds it when its own queue
+    // has a single item left (or nothing — after a reboot of the service).
+
+    /**
+     * Saves the queue as parallel url/name lists plus the position that is playing.
+     * Local files are stored as their URI strings next to stream urls — the service tells
+     * them apart by scheme (http = stream, anything else = a file on the phone).
+     */
+    fun saveQueue(urls: List<String>, names: List<String>, index: Int) {
+        try {
+            val capped = urls.take(MAX_QUEUE)
+            val named = names.take(MAX_QUEUE)
+            val json = JSONObject()
+                .put("urls", JSONArray(capped))
+                .put("names", JSONArray(named))
+                .put("index", index.coerceIn(0, (capped.size - 1).coerceAtLeast(0)))
+                .toString()
+            prefs.edit().putString(KEY_QUEUE, json).apply()
+        } catch (t: Throwable) {
+            // A queue that cannot be saved is simply forgotten; playback is unaffected.
+        }
+    }
+
+    /** The last saved queue: urls, names, and the index that was playing. Null when none. */
+    fun loadQueue(): Triple<List<String>, List<String>, Int>? {
+        return try {
+            val raw = prefs.getString(KEY_QUEUE, null) ?: return null
+            val json = JSONObject(raw)
+            val urlArray = json.optJSONArray("urls") ?: return null
+            val nameArray = json.optJSONArray("names")
+            val urls = (0 until urlArray.length()).mapNotNull {
+                urlArray.optString(it).takeIf { s -> s.isNotBlank() }
+            }
+            if (urls.isEmpty()) return null
+            val names = (0 until urls.size).map { i -> nameArray?.optString(i).orEmpty() }
+            Triple(urls, names, json.optInt("index", 0).coerceIn(0, urls.size - 1))
+        } catch (t: Throwable) {
+            null
+        }
+    }
+
     private companion object {
         const val KEY_CUSTOM = "custom_stations"
         const val KEY_FAVOURITES = "favourite_urls"
@@ -148,6 +193,8 @@ class StationRepository(context: Context) {
         const val KEY_LAST_FAVICON = "last_favicon"
         const val KEY_LAST_ID = "last_id"
         const val KEY_LAST_ERROR = "last_error"
+        const val KEY_QUEUE = "play_queue"
         const val MAX_RECENT = 25
+        const val MAX_QUEUE = 400
     }
 }

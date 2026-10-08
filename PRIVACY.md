@@ -26,7 +26,8 @@ An app uses the internet only for a feature you start yourself:
 | **CleanSweep — optional AI** | Only after you save your own API key and tap **Analyse**, **Ask** or **Run the daily check now** | The text you are asking about, plus the on-device summary shown in full by “See exactly what was sent” (storage figures, battery and temperature readings, security findings, and app names *only if you leave that switch on*). It goes straight to the provider whose key you pasted — Google Gemini, NVIDIA, OpenRouter, Groq, OpenAI, or a custom endpoint — never to the developer |
 | **CleanSweep — speed test** | Only when you tap the speed test | Nothing but the test traffic itself |
 | **CleanSweep — public IP / ping** | Only on the Mobile & data screen | A request to the check service (Cloudflare, ipinfo.io, ipapi.co or ipify); no data about you is included |
-| **AppForge, PulseEQ** | Never — **PulseEQ has no INTERNET permission at all**, and AppForge works entirely on the phone | — |
+| **PulseEQ** | Optional GitHub release checks; audio stays local | GitHub receives normal request metadata, not audio |
+| **AppForge** | No change to its existing local project workflow | — |
 
 Search words, station URLs and AI questions are handled by those third parties under their own
 privacy policies, because the request goes from your phone directly to them.
@@ -72,3 +73,8 @@ the date above updated.
 
 Ramesh prathap .R — universalrp2003@gmail.com
 Source code and issue tracker: <https://github.com/universalrp2003/InternetRadio>
+
+## Update checks (CleanSweep, Ramesh Radio, PulseEQ)
+These apps check GitHub published releases at most once a day on launch, with an off switch and manual check in About/More. GitHub receives normal connection metadata, including your IP address. No app inventory or audio is sent. Opening a release/download is user initiated. PulseEQ now has Internet permission for these checks; audio processing stays on-device.
+
+CleanSweep headline queries use Google News RSS when web lookup is enabled. Google receives the query and connection metadata; fetched headline links open their corresponding news pages.

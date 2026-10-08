@@ -82,8 +82,9 @@ fun AppRoot(vm: MainViewModel, controller: MediaController?) {
     ) {
         Box(Modifier.weight(1f)) {
             when (state.tab) {
-                Tab.RADIO -> RadioScreen(vm, state)
-                Tab.NEWS -> NewsScreen(vm, state)
+                // v1.3: list states live in the ViewModel, so a tab switch keeps your place.
+                Tab.RADIO -> RadioScreen(vm, state, vm.radioListState)
+                Tab.NEWS -> NewsScreen(vm, state, vm.newsListState)
                 Tab.LOCAL -> LocalScreen(vm, state)
                 Tab.EQUALIZER -> EqualizerScreen(vm, state)
                 Tab.MORE -> MoreScreen(vm, state)

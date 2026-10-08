@@ -52,6 +52,11 @@ fun CleanSweepTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = DarkScheme,
         shapes = AppShapes,
-        content = content,
+        content = {
+            androidx.compose.runtime.CompositionLocalProvider(
+                androidx.compose.material3.LocalContentColor provides TextPrimary,
+                content = content,
+            )
+        },
     )
 }

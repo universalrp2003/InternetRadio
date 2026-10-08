@@ -151,7 +151,13 @@ fun RadioScreen(controller: MediaController?, onStationClick: (Int) -> Unit) {
     val currentStation = defaultStations.firstOrNull { it.streamUrl == currentMediaId }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Internet Radio") }) },
+        topBar = { TopAppBar(title = { Text("Internet Radio") }, actions = {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            androidx.compose.material3.TextButton(onClick = {
+                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
+            }) { Text("Source code") }
+        }) },
         bottomBar = {
             NowPlayingBar(
                 station = currentStation,

@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             TamilFmTheme {
+                com.universalrp.updates.AppUpdates.Control("Ramesh-Radio", automatic = true)
                 val vm: MainViewModel = viewModel()
                 AppRoot(vm, controller.value)
             }
@@ -60,7 +61,7 @@ class MainActivity : ComponentActivity() {
             controllerFuture = future
             future.addListener(
                 {
-                    controller.value = runCatching { future.get() }.getOrNull()
+                    if (controllerFuture === future) controller.value = runCatching { future.get() }.getOrNull()
                 },
                 MoreExecutors.directExecutor(),
             )

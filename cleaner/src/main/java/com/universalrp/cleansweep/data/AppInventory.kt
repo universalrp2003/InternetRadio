@@ -35,10 +35,25 @@ data class AppRow(
     val lastUsedMs: Long?,
     val hasLauncher: Boolean,
     val installer: String?,
+    /** Every permission the app declares in its manifest (asked for, whether granted or not). */
     val permissions: List<String>,
+    /**
+     * The declared permissions Android has actually granted right now. This is what the
+     * UI means by \"this app can…\" — reading only [permissions] is what kept showing a
+     * permission as held after the user revoked it (v2.7 bug: the manifest never changes,
+     * only the grant does).
+     */
+    val grantedPermissions: List<String>,
+    /** Declared permissions the user (or Android) has taken away since install. */
+    val revokedPermissions: List<String>,
+    /** Plain-language labels for the granted permissions that deserve a second look. */
     val riskyPermissions: List<String>,
+    /** Plain-language labels for the risky permissions that were taken away. */
+    val revokedRiskyPermissions: List<String>,
     val tags: List<String>,
     val canUninstall: Boolean,
+    /** Path of the installed APK, so the malware hash check can read it. Null when unknown. */
+    val apkPath: String?,
 ) {
     val totalBytes: Long get() = if (dataBytes > 0L) dataBytes + cacheBytes else apkBytes + cacheBytes
     val isUnused: Boolean get() = lastUsedMs == null || lastUsedMs < System.currentTimeMillis() - 30L * 24 * 3600 * 1000
@@ -80,6 +95,10 @@ object BloatRules {
     private val TRUSTED_INSTALLER_HINTS = listOf(
         "vending", "packageinstaller", "galaxyapps", "appstore", "appstore",
         "market", "appgallery", "getapps", "microsoft", "android",
+        // v2.11: same stores the security scanner trusts — F-Droid installs are
+        // not "sideloaded", and Xiaomi's store reports as com.xiaomi.discover.
+        "fdroid", "xiaomi", "aurora", "amazon", "aptoide", "samsung",
+        "miui", "coloros", "vivo", "huawei",
     )
 
     /** Permissions that deserve a second look, with a plain-language label. */
@@ -147,7 +166,40 @@ object AppInventoryLoader {
             val updatedSystem = (ai.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
             if (isSystem && !includeSystem) continue
 
-            val permissions = info.requestedPermissions?.toList().orEmpty()
+            val declared = info.requestedPermissions?.toList().orEmpty()
+            val flags = info.requestedPermissionsFlags
+            // granted[i] lines up with declared[i]; when Android gives no flags (old packages,
+            // some system apps) every declared permission is treated as granted, as before.
+            val granted = if (flags != null && flags.size == declared.size) {
+                declared.filterIndexed { i, _ ->
+                    (flags[i] and PackageInfo.REQUESTED_PERMISSION_GRANTED) != 0
+                }
+            } else {
+                declared
+            }
+            val grantedSet = granted.toHashSet()
+            val revoked = declared.filter { it !in grantedSet }
+
+            // v2.8: four sensitive permissions are really enforced through AppOps, not the
+            // manifest flag — switching "Display over other apps" off in Settings leaves the
+            // manifest untouched, so the flag alone kept showing the app as holding the
+            // permission. Verify the live state and reclassify anything that is off now.
+            val liveDenied = granted.filter { perm ->
+                when (perm) {
+                    "android.permission.REQUEST_INSTALL_PACKAGES" ->
+                        !canInstallPackages(context, ai.packageName)
+                    "android.permission.PACKAGE_USAGE_STATS" ->
+                        !hasUsageAccess(context, ai.packageName)
+                    "android.permission.SYSTEM_ALERT_WINDOW" ->
+                        !canDrawOverlays(context, ai.packageName)
+                    "android.permission.MANAGE_EXTERNAL_STORAGE" ->
+                        !hasAllFilesAccessNow(context, ai.packageName)
+                    else -> false
+                }
+            }.toHashSet()
+            val liveGranted = granted.filter { it !in liveDenied }
+            // liveDenied came from granted, so none of it is in revoked yet — no dupes.
+            val liveRevoked = revoked + liveDenied
 
             var dataBytes = 0L
             var cacheBytes = 0L
@@ -178,7 +230,8 @@ object AppInventoryLoader {
 
             val installer = installerOf(pm, ai.packageName)
             val lastUsed = stats[ai.packageName]
-            val risky = BloatRules.riskyLabels(permissions)
+            val risky = BloatRules.riskyLabels(liveGranted)
+            val revokedRisky = BloatRules.riskyLabels(liveRevoked)
             val launcher = hasLauncherActivity(pm, ai.packageName)
 
             val tags = mutableListOf<String>()
@@ -191,6 +244,7 @@ object AppInventoryLoader {
             if (!isSystem && !BloatRules.isTrustedInstaller(installer)) tags.add("Sideloaded")
             if (!launcher && !isSystem) tags.add("No launcher icon")
             if (risky.isNotEmpty()) tags.add("Sensitive permissions")
+            if (revokedRisky.isNotEmpty()) tags.add("Permissions removed")
 
             rows.add(
                 AppRow(
@@ -206,10 +260,14 @@ object AppInventoryLoader {
                     lastUsedMs = lastUsed,
                     hasLauncher = launcher,
                     installer = installer,
-                    permissions = permissions,
+                    permissions = declared,
+                    grantedPermissions = liveGranted,
+                    revokedPermissions = liveRevoked,
                     riskyPermissions = risky,
+                    revokedRiskyPermissions = revokedRisky,
                     tags = tags,
                     canUninstall = !isSystem,
+                    apkPath = ai.sourceDir,
                 )
             )
         }
@@ -264,33 +322,38 @@ object AppInventoryLoader {
      */
     const val OP_REQUEST_INSTALL_PACKAGES = "android:request_install_packages"
 
+    /** Op name for "display over other apps". Hidden from the SDK like the one above. */
+    const val OP_SYSTEM_ALERT_WINDOW = "android:system_alert_window"
+
+    /** Op name for "all files access". Hidden from the SDK like the one above. */
+    const val OP_MANAGE_EXTERNAL_STORAGE = "android:manage_external_storage"
+
     /** Whether this app is allowed to install other apps right now (AppOps check). */
-    fun canInstallPackages(context: Context, pkg: String): Boolean {
-        val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
-        return try {
-            val uid = context.packageManager.getApplicationInfo(pkg, 0).uid
-            val mode = if (Build.VERSION.SDK_INT >= 29) {
-                appOps.unsafeCheckOpNoThrow(OP_REQUEST_INSTALL_PACKAGES, uid, pkg)
-            } else {
-                @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(OP_REQUEST_INSTALL_PACKAGES, uid, pkg)
-            }
-            mode == AppOpsManager.MODE_ALLOWED
-        } catch (e: Exception) {
-            false
-        }
-    }
+    fun canInstallPackages(context: Context, pkg: String): Boolean =
+        checkAppOp(context, pkg, OP_REQUEST_INSTALL_PACKAGES)
 
     /** Whether this app currently has "usage access" granted. */
-    fun hasUsageAccess(context: Context, pkg: String): Boolean {
+    fun hasUsageAccess(context: Context, pkg: String): Boolean =
+        checkAppOp(context, pkg, AppOpsManager.OPSTR_GET_USAGE_STATS)
+
+    /** Whether this app can draw over other apps right now (the Settings toggle). */
+    fun canDrawOverlays(context: Context, pkg: String): Boolean =
+        checkAppOp(context, pkg, OP_SYSTEM_ALERT_WINDOW)
+
+    /** Whether this app holds all-files access right now. */
+    fun hasAllFilesAccessNow(context: Context, pkg: String): Boolean =
+        checkAppOp(context, pkg, OP_MANAGE_EXTERNAL_STORAGE)
+
+    /** The live AppOps verdict for one package — the truth for special permissions. */
+    private fun checkAppOp(context: Context, pkg: String, op: String): Boolean {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? AppOpsManager ?: return false
         return try {
             val uid = context.packageManager.getApplicationInfo(pkg, 0).uid
             val mode = if (Build.VERSION.SDK_INT >= 29) {
-                appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, uid, pkg)
+                appOps.unsafeCheckOpNoThrow(op, uid, pkg)
             } else {
                 @Suppress("DEPRECATION")
-                appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, uid, pkg)
+                appOps.checkOpNoThrow(op, uid, pkg)
             }
             mode == AppOpsManager.MODE_ALLOWED
         } catch (e: Exception) {

@@ -46,8 +46,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -63,6 +66,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
@@ -182,6 +186,12 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                                     "30+ days • ${loaded.sideloadedCount} not from a store • " +
                                     "${loaded.riskyCount} with sensitive permissions",
                                 style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                tr("Last checked %s", checkedAt(loaded.scannedAtMs)),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )
                             if (!loaded.usageAccessGranted) {
@@ -322,13 +332,26 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
                 )
                 InfoRow("Installer", row.installer ?: "not from a store / unknown")
                 InfoRow("Type", if (row.isSystem) "System app (preinstalled)" else "Installed by you")
+                // v2.7: granted vs revoked. The old dialog listed everything the app ever asked
+                // for, so a revoked permission kept showing as held. Now \"has\" means Android
+                // grants it right now, and taken-away permissions are listed as removed.
                 if (row.riskyPermissions.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
-                    Text(tr("Permissions worth knowing about"),
+                    Text(tr("Permissions this app has right now"),
                         style = MaterialTheme.typography.labelLarge,
                         color = WarnAmber,
                     )
                     row.riskyPermissions.forEach { permission ->
+                        Text("• $permission", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+                }
+                if (row.revokedRiskyPermissions.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(tr("Removed — Android no longer grants these"),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = GoodGreen,
+                    )
+                    row.revokedRiskyPermissions.forEach { permission ->
                         Text("• $permission", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
                 }
@@ -341,7 +364,25 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
                         color = DangerRed,
                     )
                 }
-                Spacer(Modifier.height(10.dp))
+                Spacer(Modifier.height(4.dp))
+                TextButton(
+                    onClick = { vm.checkOneApp(row.pkg) },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                ) {
+                    Icon(
+                        Icons.Outlined.Security,
+                        contentDescription = null,
+                        tint = AccentCyan,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        tr("Check this app for malware"),
+                        color = AccentCyan,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.height(6.dp))
                 Text(
                     "CleanSweep never force-stops or uninstalls anything by itself — Android asks " +
                         "you to confirm on the next screen.",
@@ -458,13 +499,29 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                             }
                             Spacer(Modifier.height(10.dp))
                             Text(
-                                "${loaded.findings.size} findings over ${loaded.appsChecked} apps • " +
-                                    "${loaded.highCount} high, ${loaded.mediumCount} medium",
+                                // v2.9: the always-there INFO card is not something "to check",
+                                // so it stays out of the count.
+                                run {
+                                    val n = loaded.findings.count { it.severity != Severity.INFO }
+                                    (if (n == 1) "1 finding" else "$n findings") +
+                                        " over ${loaded.appsChecked} apps • " +
+                                        "${loaded.highCount} high, ${loaded.mediumCount} medium"
+                                },
                                 style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                tr("Last checked %s", checkedAt(loaded.scannedAtMs)),
+                                style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )
                         }
                     }
+                }
+
+                item(key = "malware") {
+                    MalwareCard(state, vm)
                 }
 
                 items(loaded.findings, key = { it.id }) { finding ->
@@ -509,6 +566,9 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
 
 @Composable
 private fun FindingCard(finding: Finding) {
+    // v2.9: the scanner hands over every name; the card shows the first few and
+    // expands to the full list on tap — no more "6 of 11" guessing.
+    var expanded by remember { mutableStateOf(false) }
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -545,8 +605,22 @@ private fun FindingCard(finding: Finding) {
             )
             if (finding.samples.isNotEmpty()) {
                 Spacer(Modifier.height(6.dp))
-                finding.samples.take(8).forEach { sample ->
+                val shown = if (expanded) finding.samples else finding.samples.take(6)
+                shown.forEach { sample ->
                     Text("• $sample", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                }
+                if (finding.samples.size > 6) {
+                    TextButton(
+                        onClick = { expanded = !expanded },
+                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                    ) {
+                        Text(
+                            if (expanded) tr("Show less")
+                            else tr("Show all %d", finding.samples.size),
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                 }
             }
             finding.fixHint?.let { hint ->
@@ -574,6 +648,190 @@ private fun scoreColor(score: Int): Color = when {
     score >= 75 -> AccentCyan
     score >= 55 -> WarnAmber
     else -> DangerRed
+}
+
+/* =========================================================== malware hashes (v2.7) */
+
+@Composable
+private fun MalwareCard(state: UiState, vm: MainViewModel) {
+    var vtDraft by remember { mutableStateOf("") }
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.BugReport, contentDescription = null, tint = AccentCyan)
+                Spacer(Modifier.width(10.dp))
+                Text(tr("Malware hash check"),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Each installed app's file is hashed on the phone and the hash is compared " +
+                    "with MalwareBazaar — automatic, no signup. Only hashes leave the phone, " +
+                    "never your files. A hit means a known-bad file; \"clean\" means not known " +
+                    "malware, which is not the same as proven safe.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tr("Include preinstalled system apps"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = state.malwareIncludeSystem,
+                    onCheckedChange = { vm.setMalwareIncludeSystem(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color(0xFF03202B),
+                        checkedTrackColor = AccentCyan,
+                    ),
+                )
+            }
+            if (state.malwareBusy) {
+                Spacer(Modifier.height(8.dp))
+                val (done, total) = state.malwareProgress ?: (0 to 0)
+                LinearProgressIndicator(
+                    progress = { if (total > 0) done.toFloat() / total else 0f },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = AccentCyan,
+                    trackColor = SurfaceHigh,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (total > 0) "Checked $done of $total…" else "Starting…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { vm.cancelMalwareScan() }) {
+                        Text(tr("Cancel"), color = WarnAmber, fontWeight = FontWeight.Bold)
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(8.dp))
+                GradientButton(
+                    text = tr("Check installed apps"),
+                    icon = Icons.Outlined.BugReport,
+                    onClick = { vm.runMalwareScan() },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            state.malwareReport?.let { report ->
+                Spacer(Modifier.height(10.dp))
+                if (report.hits.isEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = GoodGreen,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "${report.checked} apps checked — no known malware" +
+                                (if (report.includeSystem) " (system apps included)"
+                                else " (your apps only)") +
+                                (if (report.skipped > 0) " (${report.skipped} unreadable, skipped)" else "") +
+                                " • ${checkedAt(report.scannedAtMs)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GoodGreen,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    // v2.9: the toggle defaults off, so a first scan covers user apps
+                    // only — say so plainly instead of letting "58 of 329" confuse.
+                    if (!report.includeSystem) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Turn on the system-apps toggle above and check again for full coverage.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                        )
+                    }
+                } else {
+                    report.hits.forEach { hit ->
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "⚠ ${hit.label}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = DangerRed,
+                        )
+                        Text(
+                            "${hit.source}: ${hit.detail}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                        TextButton(
+                            onClick = { vm.openAppInfo(hit.pkg) },
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+                        ) {
+                            Text(tr("Open app settings"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "${report.checked} checked • ${checkedAt(report.scannedAtMs)} — uninstall " +
+                            "anything here you do not recognise.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+            }
+            Spacer(Modifier.height(10.dp))
+            if (state.vtKeySaved) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "VirusTotal key saved — flagged apps get a second opinion there.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { vm.saveVtKey("") }) {
+                        Text(tr("Remove"), color = TextSecondary)
+                    }
+                }
+            } else {
+                Text(
+                    "Optional: paste a free VirusTotal API key (virustotal.com → sign up → API key) " +
+                        "for a second opinion on flagged apps. The free quota is small, so it is " +
+                        "only spent there and on apps you check by hand.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedTextField(
+                        value = vtDraft,
+                        onValueChange = { vtDraft = it },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true,
+                        placeholder = { Text(tr("VirusTotal API key (optional)")) },
+                        visualTransformation = PasswordVisualTransformation(),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(
+                        onClick = { vm.saveVtKey(vtDraft); vtDraft = "" },
+                        enabled = vtDraft.isNotBlank(),
+                    ) {
+                        Text(tr("Save"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** "14:32" — shown next to results so a fresh re-check is visible at a glance. */
+private fun checkedAt(ms: Long): String = try {
+    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+} catch (e: Exception) {
+    ""
 }
 
 /* ====================================================================== network */

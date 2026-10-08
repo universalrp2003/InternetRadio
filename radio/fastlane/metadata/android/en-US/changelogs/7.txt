@@ -1,0 +1,1 @@
+Fix single-file opening when the audio controller reconnects after returning from the Android file picker. Preserve the selected track until the player is ready, display the file name and explain inaccessible-file errors. Includes folder queues, stereo balance and device-dependent other-app EQ from 1.6. AI karaoke is not included.

@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         // v2.6: remember a crash on the phone itself, so the next bug report can say what
         // actually happened instead of "MIUI said it stopped".
         CrashLog.install(this)
@@ -42,6 +44,7 @@ class MainActivity : ComponentActivity() {
         requestNotificationsIfNeeded()
         setContent {
             CleanSweepTheme {
+                com.universalrp.updates.AppUpdates.Control("CleanSweep", automatic = true)
                 val vm: MainViewModel = viewModel()
 
                 // The widget's "Clean" button opens the app on the scanner (Android does not

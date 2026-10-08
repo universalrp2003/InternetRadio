@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -54,11 +55,12 @@ import com.universalrp.tamilnadufm.data.RadioStation
 // --------------------------------------------------------------------- radio
 
 @Composable
-fun RadioScreen(vm: MainViewModel, state: UiState) {
+fun RadioScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
     LazyColumn(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
@@ -338,11 +340,12 @@ fun StationRow(
 // ---------------------------------------------------------------------- news
 
 @Composable
-fun NewsScreen(vm: MainViewModel, state: UiState) {
+fun NewsScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
     LazyColumn(
         Modifier
             .fillMaxSize()
             .padding(horizontal = 14.dp),
+        state = listState,
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
@@ -536,8 +539,7 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                                 )
                             }
                             IconChip(Icons.Filled.PlayArrow, "Play", tint = Saffron) {
-                                vm.play(station)
-                                vm.closeDirectory()
+                                vm.playDirectory(station)
                             }
                             Spacer(Modifier.width(6.dp))
                             Icon(

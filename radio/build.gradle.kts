@@ -9,6 +9,7 @@ plugins {
 val stableKeystore = rootProject.file("ci-keystore/release.p12")
 
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.universalrp.tamilnadufm"
     compileSdk = 36
 
@@ -16,8 +17,8 @@ android {
         applicationId = "com.universalrp.tamilnadufm"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.2"
+        versionCode = 7
+        versionName = "1.7"
     }
 
     signingConfigs {
@@ -59,6 +60,7 @@ android {
 }
 
 dependencies {
+    testImplementation("junit:junit:4.13.2")
     // Media3/ExoPlayer: streaming (MP3/AAC + HLS), background playback, notification,
     // lock-screen controls and audio focus.
     val media3Version = "1.11.0"

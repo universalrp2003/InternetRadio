@@ -426,6 +426,15 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                             checked = state.aiConfig.includeNetwork,
                             onChange = { vm.setAiIncludeNetwork(it) },
                         )
+                        SwitchRow(
+                            label = tr("Live web lookup"),
+                            detail = "Before answering, fetch fresh keyless web snippets " +
+                                "(DuckDuckGo + Wikipedia) with today's date, so news, prices " +
+                                "and versions stop coming from stale memory. Only used for " +
+                                "assistant questions.",
+                            checked = state.aiWebLookup,
+                            onChange = { vm.setAiWebLookup(it) },
+                        )
 
                         Spacer(Modifier.height(14.dp))
                         Button(

@@ -14,7 +14,12 @@ on:
     # workspace, so a datestamp is used instead of one app's version number: the file
     # names still carry each app's own version.
     tags: [ "v*" ]
-  workflow_dispatch:   # lets you start a build manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Publish the three maintained apps after verification (e.g. v2026.10.08); blank builds only'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -171,7 +176,7 @@ jobs:
           # that already has the debug build updates to the release one normally.
           # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
           # apps since 2021); the APKs are what everyone else takes.
-          gradle assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          gradle :cleaner:testDebugUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify built APKs
         run: |
@@ -444,21 +449,21 @@ jobs:
 
           echo "=== PulseEQ checks ==="
           if [ -n "$MERGED_EQ" ]; then
-            if grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
-              echo "FAIL: PulseEQ must not request INTERNET"
+            if ! grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
+              echo "FAIL: PulseEQ update checker requires INTERNET"
               grep -n "uses-permission" "$MERGED_EQ" || true
               exit 1
             fi
-            echo "OK: PulseEQ requests no INTERNET permission (fully offline)"
+            echo "OK: PulseEQ has INTERNET for optional release checks; audio remains local"
             echo "Permissions in the merged manifest:"
             grep -o "android.permission.[A-Z_]*" "$MERGED_EQ" | sort -u || true
           else
             echo "WARN: merged manifest not found; falling back to aapt2 output"
-            if grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
-              echo "FAIL: PulseEQ must not request INTERNET"
+            if ! grep -q "android.permission.INTERNET" "$WORK/eq-perms-aapt.txt"; then
+              echo "FAIL: PulseEQ update checker requires INTERNET"
               exit 1
             fi
-            echo "OK: no INTERNET permission in the aapt2 permission dump"
+            echo "OK: update-check INTERNET permission in aapt2 dump"
           fi
 
           if [ -n "$MERGED_EQ" ] && grep -q "EqService" "$MERGED_EQ"; then
@@ -626,21 +631,29 @@ jobs:
       # to a GitHub Release. That is what makes an install link that does not expire (Actions
       # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
       # and it is the download an alternative store such as IzzyOnDroid needs.
-      - name: Publish a GitHub Release (version tags only)
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish a GitHub Release (verified maintained apps)
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/c4eae96a-internetradio' && contains(github.event.head_commit.message, '[publish]'))
         env:
           GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
         run: |
-          set -e
-          TAG="${GITHUB_REF_NAME}"
-          FILES="$(ls */build/outputs/apk/release/*.apk) $(ls */build/outputs/bundle/release/*.aab)"
-          echo "release assets:"
-          echo "$FILES"
+          set -euo pipefail
+          if [[ -n "${REQUESTED_TAG:-}" ]]; then TAG="$REQUESTED_TAG"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then TAG="$GITHUB_REF_NAME"
+          else TAG="$(cat releases/latest-tag.txt)"; fi
+          [[ "$TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release tag"; exit 1; }
+          NOTES="releases/$TAG.md"
+          test -f "$NOTES"
+          FILES=(cleaner/build/outputs/apk/release/*.apk radio/build/outputs/apk/release/*.apk equalizer/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab radio/build/outputs/bundle/release/*.aab equalizer/build/outputs/bundle/release/*.aab)
+          for file in "${FILES[@]}"; do test -f "$file"; done
+          # Draft until every asset is uploaded. Never clobber an existing published release.
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" $FILES --clobber
-          else
-            gh release create "$TAG" $FILES --title "$TAG" --generate-notes
+            echo "Release already exists; use a new version/tag instead of overwriting it."
+            exit 1
           fi
+          gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Android app updates — $TAG" --notes-file "$NOTES"
+          gh release upload "$TAG" "${FILES[@]}"
+          gh release edit "$TAG" --draft=false --latest
 
       - name: Surface build errors
         if: failure()

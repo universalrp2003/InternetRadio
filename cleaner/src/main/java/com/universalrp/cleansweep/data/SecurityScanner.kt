@@ -42,12 +42,12 @@ data class SecurityReport(
 /**
  * On-phone security review.
  *
- * These are checks of Android's own settings and of the permissions apps ask for.
+ * These are checks of Android's own settings and of the permissions apps currently
+ * hold (granted, not merely declared — a revoked permission must not show up here).
  * That catches the things that actually cause trouble on a phone (apps that can
  * read your SMS, apps that can install other apps, rogue accessibility services,
- * notification readers). It is **not** a virus scanner: file hashes are not looked
- * up anywhere, because CleanSweep does not upload anything. The UI says this in
- * plain words as well, because claiming otherwise would be dishonest.
+ * notification readers). File-hash malware lookups live in [MalwareCheck] instead:
+ * hashes only, never the files themselves.
  */
 object SecurityScanner {
 
@@ -67,7 +67,15 @@ object SecurityScanner {
     private val KNOWN_STORES = listOf(
         "vending", "packageinstaller", "galaxyapps", "appstore", "market", "appgallery",
         "getapps", "huawei", "amazon", "aptoide", "samsung", "miui", "coloros", "vivo",
+        // v2.11: F-Droid and Aurora are legitimate stores, and Xiaomi's own store
+        // reports as com.xiaomi.discover — flagging them cried wolf on every phone
+        // that uses them.
+        "fdroid", "xiaomi", "aurora", "microsoft",
     )
+
+    /** App names that mean a root tool — word-boundary, so "Rootless" never matches. */
+    private val ROOT_TOOL_NAME =
+        Regex("(?i)\\broot\\b|rooted|magisk|supersu|kingroot|apatch|kernelsu")
 
     suspend fun scan(
         context: Context,
@@ -114,7 +122,9 @@ object SecurityScanner {
             )
         }
 
-        val admins = activeAdmins(context)
+        // com.google.android.gms is Find My Device — a device admin on every GMS phone by
+        // design, not something the user did wrong. Only anything *else* is worth flagging.
+        val admins = activeAdmins(context).filter { it != "com.google.android.gms" }
         if (admins.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -124,31 +134,37 @@ object SecurityScanner {
                         "uninstalling themselves.",
                     severity = Severity.MEDIUM,
                     count = admins.size,
-                    samples = admins,
+                    samples = admins.map { labelFor(context, it) ?: it },
                     fixHint = "Settings → Security → Device admin apps.",
                 )
             )
         }
 
-        val installers = apps.filter { "android.permission.REQUEST_INSTALL_PACKAGES" in it.permissions }
-            .filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
+        // v2.8: grantedPermissions is the live AppOps state — a revoked installer vanishes.
+        // v2.9: the OS and its stores install apps by design; only user apps count here.
+        val installers = apps.filter {
+            !it.isSystem && "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions
+        }.filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
         if (installers.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "install_other_apps",
                     title = "Apps allowed to install other apps",
                     detail = "With \"install unknown apps\" allowed, an app can silently drop new " +
-                        "APKs on your phone.",
+                        "APKs on your phone. Your app stores are never listed here.",
                     severity = Severity.HIGH,
                     count = installers.size,
-                    samples = installers.take(6).map { it.label },
+                    samples = installers.map { it.label },
                     fixHint = "Settings → Apps → Special access → Install unknown apps.",
                 )
             )
         }
 
+        // v2.9: system apps (Settings, System UI) hold usage access by design and are
+        // never listed — only apps the user installed count here.
         val usageApps = apps.filter {
-            "android.permission.PACKAGE_USAGE_STATS" in it.permissions &&
+            !it.isSystem &&
+                "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
                 AppInventoryLoader.hasUsageAccess(context, it.pkg)
         }
         if (usageApps.size > 3) {
@@ -157,26 +173,38 @@ object SecurityScanner {
                     id = "usage_access",
                     title = "${usageApps.size} apps have usage access",
                     detail = "Usage access reveals which apps you open and when. A couple are normal " +
-                        "(launchers, digital wellbeing); a crowd is worth reviewing.",
+                        "(launchers, digital wellbeing); a crowd is worth reviewing. System " +
+                        "apps are never listed here.",
                     severity = Severity.LOW,
                     count = usageApps.size,
-                    samples = usageApps.take(6).map { it.label },
+                    samples = usageApps.map { it.label },
                     fixHint = "Settings → Apps → Special access → Usage access.",
                 )
             )
         }
 
-        val overlay = apps.filter { "android.permission.SYSTEM_ALERT_WINDOW" in it.permissions }
-        if (overlay.size > 6) {
+        // v2.9: the OS itself needs overlay (system dialogs, volume panel, permission
+        // prompts) — flagging Settings and System UI as MEDIUM risk is noise the user
+        // cannot act on, and revoking those can break the phone. Only user apps count;
+        // one or two chosen apps are LOW, a crowd is MEDIUM.
+        val overlay = apps.filter {
+            !it.isSystem && "android.permission.SYSTEM_ALERT_WINDOW" in it.grantedPermissions
+        }
+        if (overlay.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "overlay",
-                    title = "${overlay.size} apps ask to draw over other apps",
-                    detail = "The overlay permission is what fake login screens use. Only a few apps " +
-                        "genuinely need it (screen recorders, floating timers).",
-                    severity = Severity.MEDIUM,
+                    title = if (overlay.size == 1) "1 app can draw over other apps"
+                    else "${overlay.size} apps can draw over other apps",
+                    detail = "The overlay permission is what fake login screens use. One or two " +
+                        "apps you chose yourself (chat heads, screen recorders, floating " +
+                        "timers) are usually fine; a crowd is worth reviewing. System apps " +
+                        "such as Settings and System UI need this to show dialogs and " +
+                        "alerts, so they are never listed here — and anything you switched " +
+                        "off in Settings is excluded too.",
+                    severity = if (overlay.size > 6) Severity.MEDIUM else Severity.LOW,
                     count = overlay.size,
-                    samples = overlay.take(6).map { it.label },
+                    samples = overlay.map { it.label },
                     fixHint = "Settings → Apps → Special access → Display over other apps.",
                 )
             )
@@ -188,31 +216,41 @@ object SecurityScanner {
             findings.add(
                 Finding(
                     id = "sideloaded",
-                    title = "${sideloaded.size} apps were not installed from an app store",
+                    title = if (sideloaded.size == 1) "1 app was not installed from an app store"
+                    else "${sideloaded.size} apps were not installed from an app store",
                     detail = "An app installed from a file has not been reviewed by any store. That is " +
                         "normal for betas and mods — just make sure you know where each one came from.",
                     severity = Severity.MEDIUM,
                     count = sideloaded.size,
-                    samples = sideloaded.take(8).map { it.label },
+                    samples = sideloaded.map { it.label },
                     fixHint = "Open each one below and uninstall anything you do not recognise.",
                 )
             )
         }
 
+        // Granted permissions, not declared ones: an app the user already cut off from SMS
+        // must disappear from this finding (v2.7 — \"revoked but still showing\").
+        // v2.8: the default SMS app is supposed to read SMS — flagging it HIGH is a false
+        // alarm, so it is excluded and named in the detail line instead.
+        val defaultSmsPkg = defaultSmsPackage(context)
         val smsApps = apps.filter {
-            it.permissions.any { p ->
-                p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
-            } && !it.isSystem
+            it.pkg != defaultSmsPkg &&
+                it.grantedPermissions.any { p ->
+                    p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
+                } && !it.isSystem
         }
         if (smsApps.isNotEmpty()) {
+            val defaultSmsName = defaultSmsPkg?.let { labelFor(context, it) }
+            val defaultNote = if (defaultSmsName != null) " Your default SMS app ($defaultSmsName) is not listed." else ""
             findings.add(
                 Finding(
                     id = "sms_readers",
-                    title = "${smsApps.size} installed apps can read your SMS",
-                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.",
+                    title = if (smsApps.size == 1) "1 installed app can read your SMS"
+                    else "${smsApps.size} installed apps can read your SMS",
+                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.$defaultNote",
                     severity = Severity.HIGH,
                     count = smsApps.size,
-                    samples = smsApps.take(6).map { it.label },
+                    samples = smsApps.map { it.label },
                     fixHint = "Revoke SMS permission for anything that is not your SMS app.",
                 )
             )
@@ -243,12 +281,14 @@ object SecurityScanner {
             findings.add(
                 Finding(
                     id = "odd_installer",
-                    title = "${suspiciousInstallers.size} apps came from an unusual installer",
+                    title = if (suspiciousInstallers.size == 1) "1 app came from an unusual installer"
+                    else "${suspiciousInstallers.size} apps came from an unusual installer",
                     detail = "The installer package is the app that put this one on your phone. " +
-                        "Browser or file-manager installs show up here.",
+                        "Browser or file-manager installs show up here. The Play Store, " +
+                        "F-Droid, Aurora and your phone maker's own store are never listed.",
                     severity = Severity.LOW,
                     count = suspiciousInstallers.size,
-                    samples = suspiciousInstallers.take(6).map { "${it.label} ← ${it.installer}" },
+                    samples = suspiciousInstallers.map { "${it.label} ← ${it.installer}" },
                 )
             )
         }
@@ -294,16 +334,20 @@ object SecurityScanner {
             )
         }
 
-        val debugInstalled = apps.count { app -> app.label.lowercase().contains("root") && !app.isSystem }
-        if (debugInstalled > 0) {
+        // v2.9: word-boundary match — "Rootless Launcher" famously needs no root,
+        // and the old substring check flagged it. The card now names the apps too.
+        val rootTools = apps.filter { app -> !app.isSystem && ROOT_TOOL_NAME.containsMatchIn(app.label) }
+        if (rootTools.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "root_tools",
-                    title = "$debugInstalled root-related app(s) installed",
+                    title = if (rootTools.size == 1) "1 root-related app installed"
+                    else "${rootTools.size} root-related apps installed",
                     detail = "Root tools and \"game hackers\" ask for deep access. They only work on " +
                         "rooted phones — and they can read everything on one.",
                     severity = Severity.LOW,
-                    count = debugInstalled,
+                    count = rootTools.size,
+                    samples = rootTools.map { it.label },
                 )
             )
         }
@@ -311,10 +355,10 @@ object SecurityScanner {
         findings.add(
             Finding(
                 id = "no_hash_lookup",
-                title = "No file-hash virus check",
-                detail = "CleanSweep deliberately has no internet permission, so it cannot compare " +
-                    "your files against online virus databases. Everything above is checked on the " +
-                    "phone itself. For a file-hash scan, use Play Protect or an online scanner.",
+                title = "Malware hash check is on this screen",
+                detail = "The “Malware hash check” card above compares each installed app's file " +
+                    "hash against MalwareBazaar automatically — hashes only, your files are never " +
+                    "uploaded — and against VirusTotal when you add a free key there.",
                 severity = Severity.INFO,
             )
         )
@@ -355,6 +399,21 @@ object SecurityScanner {
         dpm?.activeAdmins?.map { (it as ComponentName).packageName }?.distinct().orEmpty()
     } catch (e: Exception) {
         emptyList()
+    }
+
+    /** The package the user chose as their messaging app (Settings → Apps → Default apps). */
+    private fun defaultSmsPackage(context: Context): String? = try {
+        android.provider.Telephony.Sms.getDefaultSmsPackage(context)
+    } catch (e: Exception) {
+        null
+    }
+
+    /** Display label for a package, or null when it cannot be resolved. */
+    private fun labelFor(context: Context, pkg: String): String? = try {
+        val pm = context.packageManager
+        pm.getApplicationInfo(pkg, 0).loadLabel(pm)?.toString()
+    } catch (e: Exception) {
+        null
     }
 
     private fun isScreenLocked(context: Context): Boolean = try {
