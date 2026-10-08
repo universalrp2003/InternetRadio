@@ -847,7 +847,7 @@ fun TamilInfoStrip(
                 modifier = Modifier.size(32.dp),
             ) {
                 Icon(
-                    Icons.Outlined.Sync,
+                    Icons.Outlined.Refresh,
                     contentDescription = "New News",
                     tint = AccentCyan,
                     modifier = Modifier.size(18.dp),

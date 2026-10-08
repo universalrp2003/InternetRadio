@@ -31,6 +31,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -725,7 +726,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.Security, contentDescription = null, tint = AccentCyan)
+                Icon(Icons.Outlined.SignalCellularAlt, contentDescription = null, tint = AccentCyan)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
@@ -755,7 +756,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.height(10.dp))
             GradientButton(
                 text = if (state.appTrackerBusy) tr("Inspecting connections…") else tr("Inspect App Trackers"),
-                icon = Icons.Outlined.TravelExplore,
+                icon = Icons.Outlined.Refresh,
                 onClick = { vm.scanAppTrackers() },
                 enabled = !state.appTrackerBusy,
                 modifier = Modifier.fillMaxWidth(),
@@ -787,45 +788,50 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                         color = TextSecondary,
                     )
                 } else {
-                    report.connections.take(12).forEach { conn ->
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp),
-                            shape = RoundedCornerShape(10.dp),
-                            color = SurfaceHigh,
-                        ) {
-                            Column(Modifier.padding(10.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        conn.appName,
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        conn.category,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = if (conn.isTracker) DangerRed else AccentCyan,
-                                        fontWeight = FontWeight.SemiBold,
-                                    )
-                                }
-                                Spacer(Modifier.height(2.dp))
-                                Text(
-                                    "Company / Network: ${conn.orgOrCompany}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextPrimary,
-                                )
-                                Text(
-                                    "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary,
-                                )
-                            }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        report.connections.take(12).forEach { conn ->
+                            TrackerItemCard(conn)
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun TrackerItemCard(conn: com.universalrp.cleansweep.data.AppNetworkTracker.ActiveConnection) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceHigh,
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    conn.appName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    conn.category,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (conn.isTracker) DangerRed else AccentCyan,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Company / Network: ${conn.orgOrCompany}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextPrimary,
+            )
+            Text(
+                "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
         }
     }
 }

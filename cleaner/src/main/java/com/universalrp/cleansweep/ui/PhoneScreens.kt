@@ -1183,10 +1183,10 @@ private fun DeviceCard(
                 Spacer(Modifier.width(8.dp))
                 IconButton(onClick = onToggleVerified) {
                     Icon(
-                        if (device.isVerifiedKnown) Icons.Outlined.CheckCircle else Icons.Outlined.RadioButtonUnchecked,
+                        Icons.Outlined.CheckCircle,
                         contentDescription = "Known device",
-                        tint = if (device.isVerifiedKnown) GoodGreen else TextSecondary,
-                        modifier = Modifier.size(20.dp),
+                        tint = if (device.isVerifiedKnown) GoodGreen else TextSecondary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(22.dp),
                     )
                 }
             }
