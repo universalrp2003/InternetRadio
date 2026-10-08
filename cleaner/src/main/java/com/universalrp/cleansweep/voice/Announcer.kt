@@ -43,6 +43,7 @@ object Announcer {
      * one: the phone's own cloud voice, no key, no account, no audio stored anywhere.
      */
     const val KEY_ONLINE = "voice_online"
+    const val KEY_LOUDER = "voice_louder"
     const val KEY_QUIET_START = "voice_quiet_start"
     const val KEY_QUIET_END = "voice_quiet_end"
     const val KEY_LOW = "voice_battery_low"
@@ -162,6 +163,13 @@ object Announcer {
         }
     }
 
+    /** Louder voice alerts: boost alert speech volume (off by default). */
+    fun louderVoice(context: Context): Boolean = prefs(context).getBoolean(KEY_LOUDER, false)
+
+    fun setLouderVoice(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LOUDER, on).apply()
+    }
+
     fun setEnabled(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_ON, on).apply()
         if (!on) stop()
@@ -250,6 +258,20 @@ object Announcer {
     }
 
     /**
+     * Spoken alert in TAMIL (concise, direct). Charging and all other spoken alerts
+     * are strictly in Tamil when requested.
+     */
+    fun speakTamil(context: Context, tamilText: String, event: Event): Boolean {
+        val ctx = context.applicationContext
+        if (!enabled(ctx)) return false
+        if (!allows(ctx, event)) return false
+        if (event != Event.TEST && inQuietHours(ctx)) return false
+        if (tamilText.isBlank()) return false
+        prepareVoice(ctx, AppLang.TA)
+        return utter(ctx, tamilText, flush = true)
+    }
+
+    /**
      * Says something the user just asked for (an assistant answer, the test button). Quiet
      * hours do not apply — but the master switch still does.
      */
@@ -309,7 +331,12 @@ object Announcer {
     private fun say(engine: TextToSpeech, text: String, flush: Boolean): Boolean = try {
         lastSpoken = text
         val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-        engine.speak(text, mode, null, "cleansweep-" + System.currentTimeMillis())
+        val params = android.os.Bundle()
+        val louder = prefsContext?.let { louderVoice(it) } ?: false
+        if (louder) {
+            params.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, 1.0f)
+        }
+        engine.speak(text, mode, params, "cleansweep-" + System.currentTimeMillis())
         true
     } catch (e: Exception) {
         false

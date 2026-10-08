@@ -37,6 +37,7 @@ class SettingsRepo(context: Context) {
         val OLD_DAYS = intPreferencesKey("old_days")
         val APK_INSTALLED_ONLY = booleanPreferencesKey("apk_installed_only")
         val CHARGE_MONITOR = booleanPreferencesKey("charge_monitor")
+        val PERSISTENT_MONITOR = booleanPreferencesKey("persistent_monitor")
         val ASSISTANT_ONLINE = booleanPreferencesKey("assistant_online")
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
         val DEFAULT_SELECTED = stringSetPreferencesKey("default_selected_kinds")
@@ -64,6 +65,12 @@ class SettingsRepo(context: Context) {
 
     suspend fun setChargeMonitor(value: Boolean) =
         store.edit { it[Keys.CHARGE_MONITOR] = value }
+
+    /** Persistent background battery and health monitor (optional, off by default). */
+    val persistentMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.PERSISTENT_MONITOR] ?: false }
+
+    suspend fun setPersistentMonitor(value: Boolean) =
+        store.edit { it[Keys.PERSISTENT_MONITOR] = value }
 
     /** true = the assistant answers through your AI provider, false = on-device engine. */
     val assistantOnline: Flow<Boolean> = store.data.map { p -> p[Keys.ASSISTANT_ONLINE] ?: false }

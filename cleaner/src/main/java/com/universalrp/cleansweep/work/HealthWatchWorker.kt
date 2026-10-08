@@ -107,10 +107,9 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_LOW, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_LOW, now).apply()
-                Announcer.speak(
+                Announcer.speakTamil(
                     ctx,
-                    "Battery low. ${battery.percent} percent left. Plug in the charger soon.",
-                    "பேட்டரி குறைவு. ${battery.percent} சதவீதம் மட்டுமே உள்ளது. விரைவில் சார்ஜரை இணைக்கவும்.",
+                    "பேட்டரி குறைவு: ${battery.percent} சதவீதம். சார்ஜ் செய்யவும்.",
                     Announcer.Event.BATTERY_LOW,
                 )
             }
@@ -121,10 +120,9 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_FULL, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_FULL, now).apply()
-                Announcer.speak(
+                Announcer.speakTamil(
                     ctx,
-                    "Battery full. You can unplug the charger.",
-                    "பேட்டரி முழுவதும் சார்ஜ் ஆகிவிட்டது. சார்ஜரை கழற்றலாம்.",
+                    "பேட்டரி முழுமை அடைந்தது. சார்ஜரை அகற்றவும்.",
                     Announcer.Event.BATTERY_FULL,
                 )
             }
@@ -184,12 +182,9 @@ class HealthWatchWorker(
                 val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
                 val which = if (batteryHot && cpuHot) "battery and processor" else if (batteryHot) "battery" else "processor"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
-                Announcer.speak(
+                Announcer.speakTamil(
                     ctx,
-                    "Your phone is running hot — the $which is at ${if (batteryHot) batteryText else cpuText} degrees. " +
-                        "Close heavy apps and take it off the charger.",
-                    "உங்கள் போன் சூடாகிறது — $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரியில் உள்ளது. " +
-                        "கனமான ஆப்களை மூடி, சார்ஜரை கழற்றவும்.",
+                    "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.",
                     Announcer.Event.OVERHEAT,
                 )
             }

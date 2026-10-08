@@ -122,23 +122,28 @@ object BatteryReader {
         val chargeCounter = property(bm, BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             ?.let { it / 1000f } // µAh -> mAh
 
-        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+        val charging = (status == BatteryManager.BATTERY_STATUS_CHARGING ||
             status == BatteryManager.BATTERY_STATUS_FULL ||
-            plugged != 0
+            plugged != 0) && status != BatteryManager.BATTERY_STATUS_DISCHARGING
 
-        val powerW = if (voltageV != null && currentA != null) {
+        // Power is ONLY charging power when actively plugged into an external power source.
+        // During discharging, battery power drain is not charging power and must not be
+        // displayed as charging wattage.
+        // Furthermore, power measured here is battery-side electrical power (V_batt * I_batt),
+        // NOT charger adapter output wattage.
+        val powerW = if (charging && plugged != 0 && voltageV != null && currentA != null) {
             val watts = voltageV * abs(currentA)
-            // Filter obviously wrong kernel values (some ROMs report 0 or absurd numbers).
-            if (watts > 0f && watts < 200f) watts else null
+            // Filter obviously wrong kernel values (spikes or absurd sensor reports).
+            if (watts > 0.05f && watts < 150f) watts else null
         } else {
             null
         }
 
         val signNote = when {
             currentA == null -> "Current counter not reported on this phone"
-            currentA > 0.05f && charging -> "Positive = current flowing into the battery"
-            currentA < -0.05f -> "Negative = current drawn out of the battery"
+            charging && currentA > 0.05f -> "Positive = current flowing into the battery (battery-side)"
             charging -> "Trickle / full"
+            currentA < -0.05f -> "Negative = current drawn out of battery"
             else -> "Near zero right now"
         }
 
@@ -403,6 +408,17 @@ object DeviceHealthReader {
     } catch (e: Exception) {
         0L
     }
+}
+
+fun batteryTimeMinutes(battery: BatteryReading): Int? {
+    val current = battery.currentA ?: return null
+    if (battery.percent < 0 || battery.percent >= 100) return null
+    val capacity = battery.estimatedCapacityMah ?: return null
+    val remainingMah = capacity * (1f - battery.percent / 100f)
+    if (battery.charging && current > 0.05f) {
+        return (remainingMah / (current * 1000f) * 60f).toInt().coerceIn(1, 14 * 60)
+    }
+    return null
 }
 
 /**

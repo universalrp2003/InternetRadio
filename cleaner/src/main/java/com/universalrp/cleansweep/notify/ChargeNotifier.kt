@@ -113,6 +113,16 @@ object ChargeNotifier {
             else -> "Open CleanSweep for CPU temperature, battery health and security."
         }
 
+        val stopIntent = Intent(context, ChargeMonitorService::class.java).apply {
+            action = ChargeMonitorService.ACTION_STOP_SERVICE
+        }
+        val stopPending = PendingIntent.getService(
+            context,
+            4202,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_battery)
             .setContentTitle(title)
@@ -122,6 +132,7 @@ object ChargeNotifier {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(openApp)
+            .addAction(0, "Stop", stopPending)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -222,20 +233,33 @@ object ChargeNotifier {
 
         val percent = battery.percent.coerceAtLeast(0)
         val watts = battery.powerW
-        val timeLine = try {
-            batteryTimeLabel(battery)
+        val timeEstimate = try {
+            val mins = batteryTimeMinutes(battery)
+            if (mins != null && mins in 1..720) {
+                val h = mins / 60
+                val m = mins % 60
+                if (h > 0) "$h மணி $m நிமிடம்" else "$m நிமிடம்"
+            } else null
         } catch (e: Exception) {
             null
         }
+
+        // Brief, spoken in Tamil:
+        // "சார்ஜர் இணைக்கப்பட்டது — 85%. நிறைவடைய 25 நிமிடம்."
+        val tamil = buildString {
+            if (watts != null && watts < 4.0f && percent < 90) {
+                append("மெதுவான சார்ஜிங்: $percent சதவீதம்.")
+            } else {
+                append("சார்ஜர் இணைக்கப்பட்டது: $percent சதவீதம்.")
+            }
+            if (timeEstimate != null) {
+                append(" நிறைவடைய $timeEstimate.")
+            }
+        }
         val english = buildString {
             append("Charging started at $percent percent.")
-            if (watts != null) append(" " + "%.1f".format(watts) + " watts now.")
-            if (timeLine != null) append(" $timeLine.")
+            if (watts != null) append(" %.1f watts.".format(watts))
         }
-        val tamil = buildString {
-            append("சார்ஜ் தொடங்கியது — $percent சதவீதம்.")
-            if (watts != null) append(" இப்போது " + "%.1f".format(watts) + " வாட்ஸ்.")
-        }
-        Announcer.speak(app, english, tamil, Announcer.Event.CHARGING)
+        Announcer.speakTamil(app, tamil, Announcer.Event.CHARGING)
     }
 }

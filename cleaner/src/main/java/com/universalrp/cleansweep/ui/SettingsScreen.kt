@@ -260,12 +260,24 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             }
 
             PanelCard(Modifier.fillMaxWidth()) {
-                SettingSwitch(
-                    title = tr("Charging status in the status bar"),
-                    subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
-                    checked = state.chargeMonitor,
-                    onCheckedChange = { vm.setChargeMonitor(it) },
-                )
+                Column {
+                    SettingSwitch(
+                        title = tr("Charging status in the status bar"),
+                        subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
+                        checked = state.chargeMonitor,
+                        onCheckedChange = { vm.setChargeMonitor(it) },
+                    )
+                    SettingSwitch(
+                        title = tr("Background battery & health monitor"),
+                        subtitle = tr(
+                            "Keeps low-priority background monitoring active with a persistent notification " +
+                                "and an instant Stop button. Note: OEM power savers may restrict background execution, " +
+                                "and no app survives an Android force-stop."
+                        ),
+                        checked = state.persistentMonitor,
+                        onCheckedChange = { vm.setPersistentMonitor(it) },
+                    )
+                }
             }
 
             // The little watt reading the user asked to see next to the clock. Android has

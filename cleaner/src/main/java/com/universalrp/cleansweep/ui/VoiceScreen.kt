@@ -152,6 +152,15 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     checked = state.onlineVoice,
                     onCheckedChange = { vm.setOnlineVoice(it) },
                 )
+                VoiceSwitch(
+                    title = tr("Louder voice alerts"),
+                    subtitle = tr(
+                        "Temporarily maximizes speech volume during voice warnings so charging and " +
+                            "critical alerts are clearly audible, without permanently changing phone media volume."
+                    ),
+                    checked = state.voiceLouder,
+                    onCheckedChange = { vm.setLouderVoice(it) },
+                )
                 Text(
                     tr(
                         "Works in Tamil and English. If the phone has no cloud voice installed, or the " +

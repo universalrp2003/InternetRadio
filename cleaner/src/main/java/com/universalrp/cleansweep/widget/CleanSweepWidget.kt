@@ -71,7 +71,13 @@ class CleanSweepWidget : AppWidgetProvider() {
             }
 
             val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
-            val watts = battery?.powerW?.let { " • " + "%.1f".format(it) + " W" }.orEmpty()
+            val watts = if (battery?.charging == true && battery.powerW != null) {
+                " • %.1f W".format(battery.powerW)
+            } else if (battery?.charging == false) {
+                " • Discharging"
+            } else {
+                ""
+            }
             views.setTextViewText(R.id.widget_battery, percent + watts)
 
             val free = health?.storage?.free?.formatBytes() ?: "—"
@@ -85,12 +91,13 @@ class CleanSweepWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_brief, line)
 
             val stamp = battery?.statusLabel.orEmpty()
+            val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
             views.setTextViewText(
                 R.id.widget_state,
                 if (stamp.isNotBlank()) {
-                    stamp + " • " + SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    "$stamp • updated $timeFmt"
                 } else {
-                    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+                    "updated $timeFmt"
                 },
             )
 

@@ -20,6 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -89,17 +95,17 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        // Top bar
+        // Top bar - neat and compact header, prevents wrapping on small screens
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
                 contentAlignment = Alignment.Center,
             ) {
@@ -107,48 +113,81 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     Icons.Outlined.CleaningServices,
                     contentDescription = null,
                     tint = TextPrimary,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(19.dp),
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     tr(Lang.appName()),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    Lang.tagline(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
             // One tap between தமிழ் and English, right where the eye already is. The full
             // choice (and the note about the launcher name) stays in Settings → Language.
-            TextButton(onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) }) {
+            TextButton(
+                onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            ) {
                 Text(
-                    if (state.lang == AppLang.TA) tr("EN") else tr("த"),
+                    if (state.lang == AppLang.TA) "EN" else "த",
                     color = AccentCyan,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.VOICE) }) {
+            IconButton(
+                onClick = { vm.navigate(Screen.VOICE) },
+                modifier = Modifier.size(38.dp),
+            ) {
                 Icon(
                     if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
                     contentDescription = "Voice",
                     tint = if (state.voiceOn) AccentCyan else TextSecondary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.SETTINGS) }) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.SETTINGS) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
-            IconButton(onClick = { vm.navigate(Screen.ABOUT) }) {
-                Icon(Icons.Outlined.Info, contentDescription = "About", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.ABOUT) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = "About",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
 
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+
+        if (state.tamilInfoVisible && state.tamilInfoItems.isNotEmpty()) {
+            TamilInfoStrip(
+                items = state.tamilInfoItems,
+                isPaused = state.tamilInfoPaused,
+                onTogglePause = { vm.toggleTamilInfoPause() },
+                onHide = { vm.toggleTamilInfoVisibility() },
+                onRefresh = { vm.loadTamilInfoStrip(force = true) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
 
         LazyColumn(
             state = listState,
@@ -454,8 +493,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     }
                 }
             }
-
-            item(key = "tip") { PhoneTipCard() }
         }
     }
 }
@@ -743,24 +780,102 @@ private fun SurfaceHighCard(modifier: Modifier = Modifier, content: @Composable 
 }
 
 @Composable
-private fun PhoneTipCard() {
-    PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(tr("Works on every Android phone"),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentViolet,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
-                    "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
-                    "CleanSweep never touches your personal files unless you select them, and the only " +
-                    "thing that ever uses the internet is the AI analysis you start yourself. " +
-                    "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
+fun TamilInfoStrip(
+    items: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item>,
+    isPaused: Boolean,
+    onTogglePause: () -> Unit,
+    onHide: () -> Unit,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (items.isEmpty()) return
+    var currentIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
+
+    androidx.compose.runtime.LaunchedEffect(isPaused, items) {
+        while (!isPaused) {
+            kotlinx.coroutines.delay(6_000)
+            currentIndex = (currentIndex + 1) % items.size
+        }
+    }
+
+    val item = items[currentIndex.coerceIn(0, items.size - 1)]
+
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .semantics { contentDescription = "Tamil updates: ${item.category} - ${item.title}" },
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceHigh,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineC),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(if (item.category.contains("பாதுகாப்பு")) DangerRed.copy(alpha = 0.2f) else AccentCyan.copy(alpha = 0.2f))
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    item.category,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (item.category.contains("பாதுகாப்பு")) DangerRed else AccentCyan,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = TextPrimary,
+                )
+                Text(
+                    "${item.source} • ${item.date}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            IconButton(
+                onClick = onTogglePause,
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    if (isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                    contentDescription = if (isPaused) "Play updates" else "Pause updates",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            IconButton(
+                onClick = onRefresh,
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Refresh,
+                    contentDescription = "Refresh news",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+            IconButton(
+                onClick = onHide,
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Close,
+                    contentDescription = "Hide news strip",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
         }
     }
 }
