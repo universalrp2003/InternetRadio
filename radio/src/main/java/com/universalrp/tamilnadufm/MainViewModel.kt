@@ -421,6 +421,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resumeLast() {
+        val prefs = ctx.getSharedPreferences("last_session", Context.MODE_PRIVATE)
+        val uri = prefs.getString("uri", null)
+        if (uri != null && (uri.startsWith("content:") || uri.startsWith("file:"))) {
+            val track = _state.value.localTracks.firstOrNull { it.uri.toString() == uri }
+                ?: LocalTrack(Uri.parse(uri), prefs.getString("title", "Audio file") ?: "Audio file", "", 0)
+            playLocal(track)
+            return
+        }
         val last = repo.lastPlayed() ?: return
         play(last)
     }

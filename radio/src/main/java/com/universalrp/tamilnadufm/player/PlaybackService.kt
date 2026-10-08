@@ -68,6 +68,10 @@ class PlaybackService : MediaSessionService() {
         }
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            mediaItem?.let {
+                getSharedPreferences("last_session", MODE_PRIVATE).edit()
+                    .putString("uri", it.mediaId).putString("title", it.mediaMetadata.title?.toString()).apply()
+            }
             publishWidgetState()
         }
 
@@ -173,7 +177,7 @@ class PlaybackService : MediaSessionService() {
             return
         }
         val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
-        val currentId = exo.currentMediaItem?.mediaId ?: prefs.getString("last_url", null)
+        val currentId = exo.currentMediaItem?.mediaId ?: getSharedPreferences("last_session", MODE_PRIVATE).getString("uri", null) ?: prefs.getString("last_url", null)
         val at = urls.indexOfFirst { it == currentId }
         val nextIndex = if (at < 0) {
             if (direction > 0) 0 else urls.size - 1
@@ -186,7 +190,7 @@ class PlaybackService : MediaSessionService() {
     /** Used by the widget when nothing is loaded yet: bring back the last station. */
     private fun resumeLastStation(player: ExoPlayer) {
         val prefs = getSharedPreferences("tamilnadufm", MODE_PRIVATE)
-        val url = prefs.getString("last_url", null)
+        val url = getSharedPreferences("last_session", MODE_PRIVATE).getString("uri", null) ?: prefs.getString("last_url", null)
         // Resume inside the saved queue when the last station is part of it, so the very
         // next widget tap on next/previous already works.
         val queue = com.universalrp.tamilnadufm.data.StationRepository(this).loadQueue()
