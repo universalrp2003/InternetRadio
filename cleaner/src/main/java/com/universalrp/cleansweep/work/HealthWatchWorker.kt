@@ -86,7 +86,7 @@ class HealthWatchWorker(
 
     // ------------------------------------------------------------------ warnings
 
-    private fun warnings(ctx: Context) {
+    private suspend fun warnings(ctx: Context) {
         // Wi-Fi ⇄ mobile data changed — first, so a bad battery read cannot skip it.
         networkTransportChanged(ctx)
         val battery = try {
