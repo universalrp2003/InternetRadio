@@ -223,8 +223,12 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                             22 to 7,
                             0 to 23,
                         ).forEach { (start, end) ->
+                            val startH = if (start == 0 || start == 12) 12 else start % 12
+                            val startAmPm = if (start < 12) "AM" else "PM"
+                            val endH = if (end == 0 || end == 12) 12 else end % 12
+                            val endAmPm = if (end < 12) "AM" else "PM"
                             ModeChipExtra(
-                                label = if (start == 0) tr("All day") else "%02d:00–%02d:00".format(start, end),
+                                label = if (start == 0) tr("All day") else "$startH $startAmPm – $endH $endAmPm",
                                 selected = state.voiceQuietStart == start && state.voiceQuietEnd == end,
                                 onClick = { vm.setQuietHours(start, end) },
                             )
@@ -378,7 +382,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(5, 6, 7, 8, 9).forEach { hour ->
                             ModeChipExtra(
-                                label = "%02d:00".format(hour),
+                                label = "%d:00 AM".format(hour),
                                 selected = state.voiceUnplugStart == hour,
                                 onClick = { vm.setUnplugStartHour(hour) },
                             )
@@ -392,9 +396,9 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     )
                     Spacer(Modifier.height(6.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(9, 13, 18, 20, 21).forEach { hour ->
+                        listOf(9 to "9:00 AM", 13 to "1:00 PM", 18 to "6:00 PM", 20 to "8:00 PM", 21 to "9:00 PM").forEach { (hour, label) ->
                             ModeChipExtra(
-                                label = "%02d:00".format(hour),
+                                label = label,
                                 selected = state.dailyHour == hour,
                                 onClick = { vm.setDailyHour(hour) },
                             )
@@ -476,15 +480,17 @@ private fun VoiceChip(
     }
 }
 
-/** Hour stepper: −1 / +1 with the hour in the middle, so no tiny dropdown is needed. */
+/** Hour stepper: −1 / +1 with the hour in 12-hour AM/PM format. */
 @Composable
 private fun HourPicker(value: Int, onPick: (Int) -> Unit) {
+    val h = if (value == 0 || value == 12) 12 else value % 12
+    val ampm = if (value < 12) "AM" else "PM"
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { onPick((value + 23) % 24) }) {
             Text("−", style = MaterialTheme.typography.titleMedium, color = AccentCyan)
         }
         Text(
-            "%02d:00".format(value),
+            "$h:00 $ampm",
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = TextPrimary,

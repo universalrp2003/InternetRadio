@@ -88,10 +88,19 @@ class CleanSweepWidget : AppWidgetProvider() {
                 brief.isBlank() -> "No brief yet — tap to open CleanSweep"
                 else -> brief.lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
             }
-            views.setTextViewText(R.id.widget_brief, line)
+
+            // Check if there are critical security warnings to highlight on the widget
+            val prefs = context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+            val secWarning = prefs.getString("widget_security_alert", null)
+            val displayLine = if (!secWarning.isNullOrBlank()) {
+                "⚠️ $secWarning"
+            } else {
+                line
+            }
+            views.setTextViewText(R.id.widget_brief, displayLine)
 
             val stamp = battery?.statusLabel.orEmpty()
-            val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date())
+            val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
             views.setTextViewText(
                 R.id.widget_state,
                 if (stamp.isNotBlank()) {

@@ -2245,4 +2245,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun toggleTamilInfoVisibility() {
         mutate { it.copy(tamilInfoVisible = !it.tamilInfoVisible) }
     }
+
+    fun speakTamilText(text: String) {
+        if (text.isNotBlank()) {
+            Announcer.speakTamil(ctx, text, Announcer.Event.TEST)
+        }
+    }
 }

@@ -232,11 +232,23 @@ object ChargeNotifier {
         val battery = read(app) ?: return
         if (!battery.charging) return
 
+        // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
+        val tempC = battery.temperatureC
+        if (tempC != null && tempC >= 42.0f) {
+            val tempRound = tempC.toInt()
+            val warnTamil = "எச்சரிக்கை! போன் மிக அதிக வெப்பமாக உள்ளது ($tempRound டிகிரி). வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும் அல்லது சார்ஜரை அகற்றவும்."
+            Announcer.speakTamil(app, warnTamil, Announcer.Event.OVERHEAT)
+            return
+        }
+
         val percent = battery.percent.coerceAtLeast(0)
         val watts = battery.powerW
+        // Remaining time estimate: only announce when charging is stable and verified
+        val currentA = battery.currentA
         val timeEstimate = try {
             val mins = batteryTimeMinutes(battery)
-            if (mins != null && mins in 1..720) {
+            // Only speak time estimate when current is steady (> 0.25A) and percent is between 5% and 94%
+            if (mins != null && mins in 2..480 && currentA != null && currentA > 0.25f && percent in 5..94) {
                 val h = mins / 60
                 val m = mins % 60
                 if (h > 0) "$h மணி $m நிமிடம்" else "$m நிமிடம்"
@@ -246,7 +258,7 @@ object ChargeNotifier {
         }
 
         // Brief, spoken in Tamil:
-        // "சார்ஜர் இணைக்கப்பட்டது — 85%. நிறைவடைய 25 நிமிடம்."
+        // "சார்ஜர் இணைக்கப்பட்டது: 85 சதவீதம். நிறைவடைய 25 நிமிடம்."
         val tamil = buildString {
             if (watts != null && watts < 4.0f && percent < 90) {
                 append("மெதுவான சார்ஜிங்: $percent சதவீதம்.")

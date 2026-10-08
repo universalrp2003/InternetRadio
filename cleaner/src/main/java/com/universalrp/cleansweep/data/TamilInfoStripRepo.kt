@@ -31,7 +31,7 @@ object TamilInfoStripRepo {
     private const val PREFS = "cleansweep_info_strip"
     private const val KEY_LAST_FETCH = "last_fetch_ms"
     private const val KEY_ITEMS_JSON = "cached_items"
-    private const val CACHE_VALIDITY_MS = 90 * 60 * 1000L // 90 minutes
+    private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L // 30 minutes periodic refresh
 
     // Fallback curated alerts to ensure something is always displayed if offline
     private val DEFAULT_ITEMS = listOf(

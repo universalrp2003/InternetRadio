@@ -180,13 +180,37 @@ class HealthWatchWorker(
                 prefs.edit().putLong(Announcer.KEY_LAST_HOT, now).apply()
                 val batteryText = battery.temperatureC?.let { "%.0f".format(it) } ?: "?"
                 val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
-                val which = if (batteryHot && cpuHot) "battery and processor" else if (batteryHot) "battery" else "processor"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
+                val plugWarning = if (battery.charging) " வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும்." else ""
                 Announcer.speakTamil(
                     ctx,
-                    "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.",
+                    "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.$plugWarning",
                     Announcer.Event.OVERHEAT,
                 )
+            }
+        }
+
+        // Weekly high security risks check (remind once a week)
+        val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
+        if (now - lastSecReminder > 7 * 24 * 60 * 60 * 1000L) {
+            val highRisks = try {
+                val apps = AppInventoryLoader.load(ctx, includeSystem = false).rows
+                val report = SecurityScanner.scan(ctx, apps)
+                report.findings.filter { it.severity == Severity.HIGH }
+            } catch (e: Exception) {
+                emptyList()
+            }
+            if (highRisks.isNotEmpty()) {
+                prefs.edit().putLong("last_sec_reminder_ms", now).apply()
+                val riskCount = highRisks.size
+                prefs.edit().putString("widget_security_alert", "$riskCount critical security alert${if (riskCount > 1) "s" else ""}").apply()
+                Announcer.speakTamil(
+                    ctx,
+                    "பாதுகாப்பு நினைவூட்டல்: $riskCount முக்கிய பாதுகாப்பு அமைப்புகளை சரிபார்க்கவும்.",
+                    Announcer.Event.TEST,
+                )
+            } else {
+                prefs.edit().remove("widget_security_alert").apply()
             }
         }
     }
@@ -315,7 +339,6 @@ class HealthWatchWorker(
         // ---- the full text (notification body + the app's "last brief" card)
         val full = buildString {
             appendLine(if (tamil) "தினசரி அறிக்கை" else "Daily brief")
-            appendLine()
             appendLine((if (tamil) "பேட்டரி" else "Battery") + ": ${battery?.percent ?: "?"}% — " +
                 (battery?.statusLabel ?: "?") + ", $batteryTemp°C" +
                 (timeToFull?.let { " ($it)" } ?: ""))

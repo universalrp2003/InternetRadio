@@ -185,6 +185,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 onTogglePause = { vm.toggleTamilInfoPause() },
                 onHide = { vm.toggleTamilInfoVisibility() },
                 onRefresh = { vm.loadTamilInfoStrip(force = true) },
+                onSpeak = { text -> vm.speakTamilText(text) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 14.dp, vertical = 6.dp),
@@ -483,10 +484,10 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
-                                    "${stats.items} items • ${
-                                        SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
-                                            .format(Date(stats.atMs))
-                                    }",
+                                "${stats.items} items • ${
+                                    SimpleDateFormat("dd MMM, h:mm a", Locale.getDefault())
+                                        .format(Date(stats.atMs))
+                                }",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = TextSecondary,
                                 )
@@ -726,6 +727,15 @@ private fun StorageCard(state: UiState) {
                     color = if (pct > 90) WarnAmber else TextSecondary,
                     fontWeight = FontWeight.SemiBold,
                 )
+                Spacer(Modifier.height(6.dp))
+                val isTa = state.lang == AppLang.TA
+                val phoneAge = remember { com.universalrp.cleansweep.data.PhoneAgeEstimator.estimateAge() }
+                Text(
+                    (if (isTa) "போன் வயது: " else "Est. phone age: ") + phoneAge.displayString(isTa),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Medium,
+                )
             }
         }
     }
@@ -788,6 +798,7 @@ fun TamilInfoStrip(
     onTogglePause: () -> Unit,
     onHide: () -> Unit,
     onRefresh: () -> Unit,
+    onSpeak: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty()) return
@@ -815,25 +826,27 @@ fun TamilInfoStrip(
                 .padding(horizontal = 10.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(if (item.category.contains("பாதுகாப்பு")) DangerRed.copy(alpha = 0.2f) else AccentCyan.copy(alpha = 0.2f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    item.category,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (item.category.contains("பாதுகாப்பு")) DangerRed else AccentCyan,
-                    fontWeight = FontWeight.Bold,
-                )
+            if (item.category.contains("பாதுகாப்பு") || item.category.contains("Security")) {
+                Box(
+                    Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(DangerRed.copy(alpha = 0.2f))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        "பாதுகாப்பு",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DangerRed,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+                Spacer(Modifier.width(6.dp))
             }
-            Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     item.title,
                     style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     color = TextPrimary,
                 )
@@ -844,7 +857,18 @@ fun TamilInfoStrip(
                     maxLines = 1,
                 )
             }
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
+            IconButton(
+                onClick = { onSpeak(item.title) },
+                modifier = Modifier.size(28.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.VolumeUp,
+                    contentDescription = "Read headline",
+                    tint = AccentCyan,
+                    modifier = Modifier.size(16.dp),
+                )
+            }
             IconButton(
                 onClick = onTogglePause,
                 modifier = Modifier.size(28.dp),
