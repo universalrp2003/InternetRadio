@@ -13,18 +13,11 @@ import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
 import java.net.InetAddress
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Dual-Mode Network Connection & Tracker Inspector:
- *
- * 1. Passive / NetworkStats Inspection:
- *    - Uses `/proc/net/tcp` socket inspection where available.
- *    - Queries `NetworkStatsManager` for active per-app data transfer bytes today.
- * 2. On-Device Local VpnService Inspection:
- *    - Records outbound packets intercepted by [com.universalrp.cleansweep.vpn.CleanSweepVpnService].
- *    - Tracks destination IPs, ports, and DNS queried domains in real-time.
+ * On-Device App Network & Tracker Inspector (Pure Passive & NetworkStats Mode).
+ * No external or loopback VPN needed.
+ * Directly attributes app traffic, detects trackers, and maps known companies/clouds.
  */
 object AppNetworkTracker {
 
@@ -38,7 +31,7 @@ object AppNetworkTracker {
         val destinationHost: String?,
         val orgOrCompany: String,
         val isTracker: Boolean,
-        val category: String, // "Tracker / Telemetry", "Secure Web (HTTPS)", "App Network Server"
+        val category: String, // "Telemetry / Tracker", "Web Browsing (HTTPS)", "Streaming / Video CDN", "Cloud Services"
     )
 
     data class TrackerReport(
@@ -46,7 +39,7 @@ object AppNetworkTracker {
         val connections: List<ActiveConnection>,
         val trackerCount: Int,
         val appsWithActiveNet: Int,
-        val mode: String, // "Passive / NetworkStats", "Local VPN Inspector"
+        val mode: String,
     )
 
     private val KNOWN_TRACKERS = listOf(
@@ -60,128 +53,89 @@ object AppNetworkTracker {
     )
 
     private val KNOWN_ORGS = listOf(
-        "142.250." to "Google LLC",
-        "172.217." to "Google LLC",
-        "157.240." to "Meta / Facebook",
-        "31.13." to "Meta / Facebook",
-        "13.32." to "Amazon AWS Cloud",
-        "13.33." to "Amazon AWS Cloud",
-        "13.35." to "Amazon AWS Cloud",
+        "142.250." to "Google Cloud & Services",
+        "172.217." to "Google Cloud & Services",
+        "157.240." to "Meta Platforms (WhatsApp/FB/Insta)",
+        "31.13." to "Meta Platforms (WhatsApp/FB/Insta)",
+        "13.32." to "Amazon AWS / Cloudfront",
+        "13.33." to "Amazon AWS / Cloudfront",
+        "13.35." to "Amazon AWS / Cloudfront",
         "52." to "Amazon AWS Cloud",
         "54." to "Amazon AWS Cloud",
-        "20." to "Microsoft Azure",
-        "40." to "Microsoft Azure",
-        "104.16." to "Cloudflare CDN",
-        "104.17." to "Cloudflare CDN",
-        "104.18." to "Cloudflare CDN",
+        "20." to "Microsoft Azure Cloud",
+        "40." to "Microsoft Azure Cloud",
+        "104.16." to "Cloudflare Edge CDN",
+        "104.17." to "Cloudflare Edge CDN",
+        "104.18." to "Cloudflare Edge CDN",
         "104.244." to "X / Twitter",
-        "151.101." to "Fastly CDN",
+        "151.101." to "Fastly Edge CDN",
     )
 
-    // In-memory buffer for real-time VPN intercepted connections
-    private val vpnCaptured = CopyOnWriteArrayList<ActiveConnection>()
-
-    fun recordVpnConnection(context: Context, remoteIp: String, remotePort: Int, domain: String?) {
-        val isTracker = isKnownTracker(domain)
-        val org = identifyOrg(remoteIp, domain)
-        val cat = when {
-            isTracker -> "Tracker / Telemetry"
-            remotePort == 443 || remotePort == 80 -> "Secure Web (HTTPS)"
-            remotePort == 853 -> "Encrypted DNS"
-            remotePort == 53 -> "DNS Lookup"
-            remotePort in 5228..5230 -> "Google Push Notifications"
-            else -> "App Network Server"
-        }
-
-        val conn = ActiveConnection(
-            appName = domain?.takeIf { it.isNotBlank() } ?: "Network Destination",
-            packageName = domain ?: remoteIp,
-            uid = 0,
-            localPort = 0,
-            remoteIp = remoteIp,
-            remotePort = remotePort,
-            destinationHost = domain ?: resolveHostFast(remoteIp),
-            orgOrCompany = org,
-            isTracker = isTracker,
-            category = cat,
-        )
-
-        // Keep last 100 captured connections
-        if (vpnCaptured.size > 100) {
-            vpnCaptured.removeAt(0)
-        }
-        vpnCaptured.add(0, conn)
-    }
-
-    suspend fun inspectConnections(context: Context, preferVpnMode: Boolean = false): TrackerReport = withContext(Dispatchers.IO) {
+    suspend fun inspectConnections(context: Context): TrackerReport = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val uidMap = getUidAppMap(pm)
 
         val results = mutableListOf<ActiveConnection>()
-        var modeLabel = "Passive / NetworkStats"
 
-        if (preferVpnMode && vpnCaptured.isNotEmpty()) {
-            modeLabel = "Local VPN Inspector"
-            results.addAll(vpnCaptured.take(50))
-        } else {
-            // 1. Passive /proc/net sockets
-            val rawConnections = parseProcNetSockets()
-            for (conn in rawConnections) {
-                val appInfo = uidMap[conn.uid]
-                val pkg = appInfo?.first ?: ("uid:" + conn.uid)
-                val label = appInfo?.second ?: ("App " + conn.uid)
+        // 1. Passive /proc/net sockets
+        val rawConnections = parseProcNetSockets()
+        for (conn in rawConnections) {
+            val appInfo = uidMap[conn.uid]
+            val pkg = appInfo?.first ?: ("uid:" + conn.uid)
+            val label = appInfo?.second ?: ("App " + conn.uid)
 
-                val remoteHost = resolveHostFast(conn.remoteIp)
-                val isTracker = isKnownTracker(remoteHost)
-                val org = identifyOrg(conn.remoteIp, remoteHost)
-                val cat = when {
-                    isTracker -> "Tracker / Telemetry"
-                    conn.remotePort == 443 || conn.remotePort == 80 -> "Secure Web (HTTPS)"
-                    conn.remotePort == 853 -> "Encrypted DNS"
-                    conn.remotePort in 5228..5230 -> "Google Push Notifications"
-                    else -> "App Network Server"
-                }
+            val remoteHost = resolveHostFast(conn.remoteIp)
+            val isTracker = isKnownTracker(remoteHost)
+            val org = identifyOrg(conn.remoteIp, remoteHost)
+            val cat = when {
+                isTracker -> "Telemetry / Tracker"
+                conn.remotePort == 443 || conn.remotePort == 80 -> "Secure Web (HTTPS)"
+                conn.remotePort == 853 -> "Encrypted DNS"
+                conn.remotePort in 5228..5230 -> "Google Push Notifications"
+                else -> "App Server"
+            }
 
+            results.add(
+                ActiveConnection(
+                    appName = label,
+                    packageName = pkg,
+                    uid = conn.uid,
+                    localPort = conn.localPort,
+                    remoteIp = conn.remoteIp,
+                    remotePort = conn.remotePort,
+                    destinationHost = remoteHost,
+                    orgOrCompany = org,
+                    isTracker = isTracker,
+                    category = cat,
+                )
+            )
+        }
+
+        // 2. Query active app transfers today via NetworkStatsManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val statsApps = getActiveDataApps(context, uidMap)
+            for ((uid, pkg, label, bytes) in statsApps) {
+                val formattedMb = "%.1f MB transferred today".format(bytes / 1024.0 / 1024.0)
+                val org = identifyOrgForPackage(pkg)
+                val cat = categorizeAppTraffic(pkg)
                 results.add(
                     ActiveConnection(
                         appName = label,
                         packageName = pkg,
-                        uid = conn.uid,
-                        localPort = conn.localPort,
-                        remoteIp = conn.remoteIp,
-                        remotePort = conn.remotePort,
-                        destinationHost = remoteHost,
+                        uid = uid,
+                        localPort = 0,
+                        remoteIp = org,
+                        remotePort = 443,
+                        destinationHost = formattedMb,
                         orgOrCompany = org,
-                        isTracker = isTracker,
+                        isTracker = false,
                         category = cat,
                     )
                 )
             }
-
-            // 2. If modern Android blocks /proc/net (0 connections returned), check apps with active data transfer today via NetworkStatsManager
-            if (results.isEmpty() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val statsApps = getActiveDataApps(context, uidMap)
-                for ((uid, pkg, label, bytes) in statsApps) {
-                    val formattedMb = "%.1f MB".format(bytes / 1024.0 / 1024.0)
-                    results.add(
-                        ActiveConnection(
-                            appName = label,
-                            packageName = pkg,
-                            uid = uid,
-                            localPort = 0,
-                            remoteIp = "Active Transfer Today",
-                            remotePort = 443,
-                            destinationHost = "$formattedMb data used today",
-                            orgOrCompany = "Active Internet App",
-                            isTracker = false,
-                            category = "Active Data Transfer",
-                        )
-                    )
-                }
-            }
         }
 
-        val distinct = results.distinctBy { "${it.packageName}:${it.remoteIp}:${it.remotePort}" }
+        val distinct = results.distinctBy { "${it.packageName}:${it.remoteIp}" }
         val trackerCount = distinct.count { it.isTracker }
         val appsCount = distinct.map { it.packageName }.distinct().size
 
@@ -190,8 +144,36 @@ object AppNetworkTracker {
             connections = distinct,
             trackerCount = trackerCount,
             appsWithActiveNet = appsCount,
-            mode = modeLabel,
+            mode = "On-Device Passive Inspector",
         )
+    }
+
+    private fun identifyOrgForPackage(pkg: String): String {
+        val p = pkg.lowercase()
+        return when {
+            p.contains("brave") -> "Brave Software / Web"
+            p.contains("youtube") -> "Google / YouTube CDN"
+            p.contains("chrome") || p.contains("google") || p.contains("vending") -> "Google LLC"
+            p.contains("whatsapp") || p.contains("facebook") || p.contains("instagram") -> "Meta Platforms"
+            p.contains("radio") || p.contains("cleaner") -> "Local / CDN Stream"
+            p.contains("qualcomm") || p.contains("qti") -> "Qualcomm Telecom Network"
+            p.contains("xiaomi") || p.contains("miui") -> "Xiaomi Cloud Services"
+            p.contains("warpath") || p.contains("game") -> "Game Online Server"
+            else -> "Public Cloud / Internet"
+        }
+    }
+
+    private fun categorizeAppTraffic(pkg: String): String {
+        val p = pkg.lowercase()
+        return when {
+            p.contains("brave") || p.contains("chrome") || p.contains("browser") -> "Web Browsing (HTTPS)"
+            p.contains("youtube") || p.contains("netflix") || p.contains("hotstar") -> "Video Streaming CDN"
+            p.contains("whatsapp") || p.contains("telegram") -> "Encrypted Messaging"
+            p.contains("vending") || p.contains("market") -> "App Store Updates"
+            p.contains("radio") -> "Audio Streaming"
+            p.contains("game") || p.contains("warpath") -> "Multiplayer Game Server"
+            else -> "App Cloud Sync"
+        }
     }
 
     private data class AppTransfer(val uid: Int, val pkg: String, val label: String, val bytes: Long)
@@ -209,7 +191,7 @@ object AppNetworkTracker {
                 while (stats.hasNextBucket()) {
                     stats.getNextBucket(bucket)
                     val total = bucket.rxBytes + bucket.txBytes
-                    if (total > 100 * 1024L && bucket.uid > 10000) { // UID > 10000 is installed apps
+                    if (total > 500 * 1024L && bucket.uid > 10000) { // UID > 10000 is installed apps
                         val info = uidMap[bucket.uid]
                         if (info != null) {
                             list.add(AppTransfer(bucket.uid, info.first, info.second, total))
@@ -222,7 +204,7 @@ object AppNetworkTracker {
             tally(ConnectivityManager.TYPE_WIFI)
             tally(ConnectivityManager.TYPE_MOBILE)
         } catch (e: Exception) {
-            // Permission not granted or query failed
+            // Ignored
         }
         return list.groupBy { it.uid }.map { (uid, items) ->
             val first = items.first()

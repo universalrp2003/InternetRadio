@@ -723,16 +723,6 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
 @Composable
 private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
     val report = state.appTrackerReport
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val vpnLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
-        contract = androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        if (result.resultCode == android.app.Activity.RESULT_OK) {
-            vm.startTrackerVpn()
-        } else {
-            vm.setTrackerVpnMode(false)
-        }
-    }
 
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
@@ -758,53 +748,14 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.height(8.dp))
             Text(
                 tr(
-                    "Inspects on-device socket connections and attributes them to apps. " +
-                        "Choose between standard passive inspection or local on-device VPN loopback for deep packet inspection."
+                    "Inspects on-device socket connections and data transfers directly without needing VPN. " +
+                        "Attributes network traffic to specific apps, companies (Google, Meta, Cloudflare), and telemetry trackers."
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
             )
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(12.dp))
 
-            // Dual Mode Switches: Passive vs Local VPN
-            Row(
-                Modifier
-                    .fillMaxWidth()
-                    .background(SurfaceHigh, RoundedCornerShape(10.dp))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        tr("Local On-Device VPN Mode"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        if (state.appTrackerVpnActive) tr("VPN Active (zero external data)")
-                        else tr("Intercepts live outbound sockets & DNS queries"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (state.appTrackerVpnActive) GoodGreen else TextSecondary,
-                    )
-                }
-                Switch(
-                    checked = state.appTrackerVpnMode,
-                    onCheckedChange = { enable ->
-                        if (enable) {
-                            val vpnIntent = android.net.VpnService.prepare(context)
-                            if (vpnIntent != null) {
-                                vpnLauncher.launch(vpnIntent)
-                            } else {
-                                vm.setTrackerVpnMode(true)
-                            }
-                        } else {
-                            vm.setTrackerVpnMode(false)
-                        }
-                    },
-                )
-            }
-
-            Spacer(Modifier.height(10.dp))
             GradientButton(
                 text = if (state.appTrackerBusy) tr("Inspecting connections…") else tr("Inspect App Trackers"),
                 icon = Icons.Outlined.Refresh,

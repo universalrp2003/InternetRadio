@@ -80,36 +80,17 @@ fun identifyDevice(device: LanDevice): DeviceIdentity {
     val host = device.hostname?.lowercase().orEmpty()
     val vendor = device.vendor?.lowercase().orEmpty()
 
-    // ---------------------------------------------------------------- ports first
-    when {
-        portHit(device, 554, 8554, 1935) && !portHit(device, 445, 3389) ->
-            return DeviceIdentity(
-                "IP camera / DVR",
-                "Likely",
-                "answers on ${if (device.openPorts.contains(554)) "554 (RTSP video)" else "a video-streaming port"}",
-            )
-        portHit(device, 9100, 631) ->
-            return DeviceIdentity("Printer", "Likely", "answers on a print port")
-        portHit(device, 62078) ->
-            return DeviceIdentity("iPhone / iPad", "Likely", "answers on 62078 (Apple devices only)")
-        portHit(device, 445, 3389, 139) ->
-            return DeviceIdentity("Windows PC / laptop", "Likely", "answers on file-sharing or remote-desktop ports")
-        portHit(device, 8009, 8008, 8060) ->
-            return DeviceIdentity("TV / streaming stick", "Likely", "answers on a casting port")
-        portHit(device, 5000, 5001, 6690, 2049) ->
-            return DeviceIdentity("NAS / storage device", "Likely", "answers on a storage port")
-        portHit(device, 22) && !portHit(device, 445) ->
-            return DeviceIdentity("Laptop / computer (Linux)", "Possible", "answers on 22 (SSH)")
-    }
+    if (device.isSelf) return DeviceIdentity("This phone", "Certain", "this is the phone running the scan")
+    if (device.isGateway) return DeviceIdentity("Router / gateway", "Certain", "it is your default gateway")
 
-    // ------------------------------------------------------------- hostname hints
+    // ------------------------------------------------------------- hostname hints first
     val hostnameHints = listOf(
         "iphone" to "iPhone", "ipad" to "iPad", "ipod" to "iPod",
         "macbook" to "MacBook", "imac" to "iMac", "mac-" to "Mac",
         "android" to "Android phone", "redmi" to "Redmi phone", "mi-" to "Xiaomi phone",
         "oneplus" to "OnePlus phone", "pixel" to "Pixel phone", "galaxy" to "Samsung phone",
         "samsung" to "Samsung phone", "oppo" to "Oppo phone", "vivo" to "Vivo phone",
-        "realme" to "Realme phone", "moto" to "Motorola phone",
+        "realme" to "Realme phone", "moto" to "Motorola phone", "c220" to "Smartphone / Device",
         "desktop" to "Windows PC", "laptop" to "Laptop", "pc-" to "Computer",
         "raspberry" to "Raspberry Pi", "esp32" to "Smart device (ESP32)",
         "chromecast" to "Chromecast", "appletv" to "Apple TV", "tv" to "Smart TV",
@@ -123,7 +104,7 @@ fun identifyDevice(device: LanDevice): DeviceIdentity {
         "switch" to "Network switch", "accesspoint" to "Wi-Fi access point",
     )
     hostnameHints.firstOrNull { host.contains(it.first) }?.let { (needle, type) ->
-        return DeviceIdentity(type, "Likely", "its name contains \"$needle\"")
+        return DeviceIdentity(type, "Likely", "hostname contains \"$needle\"")
     }
 
     // ---------------------------------------------------------------- MAC vendor
@@ -136,22 +117,43 @@ fun identifyDevice(device: LanDevice): DeviceIdentity {
             vendor.contains("realme") || vendor.contains("oneplus") || vendor.contains("huawei") ||
             vendor.contains("motorola") || vendor.contains("nokia") || vendor.contains("tecno") ||
             vendor.contains("infinix") || vendor.contains("itel") || vendor.contains("google") ->
-            return DeviceIdentity("Phone or tablet", "Possible", "MAC vendor is a phone maker")
+            return DeviceIdentity("Phone or tablet", "Likely", "MAC vendor is $vendor")
         vendor.contains("espressif") || vendor.contains("tuya") || vendor.contains("sonos") ||
             vendor.contains("amazon") || vendor.contains("nest") ->
             return DeviceIdentity("Smart home device", "Possible", "MAC vendor makes smart devices")
         vendor.contains("tp-link") || vendor.contains("d-link") || vendor.contains("netgear") ||
             vendor.contains("tenda") || vendor.contains("ubiquiti") || vendor.contains("aruba") ||
-            vendor.contains("cisco") || vendor.contains("ruckus") || vendor.contains("wistron") ->
+            vendor.contains("cisco") || vendor.contains("ruckus") || vendor.contains("wistron") ||
+            vendor.contains("realtek") ->
             return DeviceIdentity("Network gear (router / AP)", "Possible", "MAC vendor is network equipment")
         vendor.contains("intel") || vendor.contains("dell") || vendor.contains("hp") ||
             vendor.contains("lenovo") || vendor.contains("micro-star") || vendor.contains("gigabyte") ->
             return DeviceIdentity("Computer / laptop", "Possible", "MAC vendor is a PC maker")
     }
 
-    if (device.isSelf) return DeviceIdentity("This phone", "Certain", "this is the phone running the scan")
-    if (device.isGateway) return DeviceIdentity("Router / gateway", "Certain", "it is your default gateway")
-    return DeviceIdentity("Unknown device", "Unknown", "no ports, name or vendor gave it away")
+    // ---------------------------------------------------------------- ports
+    when {
+        portHit(device, 554, 8554, 1935) && !portHit(device, 445, 3389) ->
+            return DeviceIdentity(
+                "IP camera / DVR",
+                "Likely",
+                "answers on ${if (device.openPorts.contains(554)) "554 (RTSP video)" else "a video-streaming port"}",
+            )
+        portHit(device, 9100) ->
+            return DeviceIdentity("Printer", "Likely", "answers on 9100 (raw print)")
+        portHit(device, 62078) ->
+            return DeviceIdentity("iPhone / iPad", "Likely", "answers on 62078 (Apple devices only)")
+        portHit(device, 445, 3389, 139) ->
+            return DeviceIdentity("Windows PC / laptop", "Likely", "answers on file-sharing or remote-desktop ports")
+        portHit(device, 8009, 8008, 8060) ->
+            return DeviceIdentity("TV / streaming stick", "Likely", "answers on a casting port")
+        portHit(device, 5000, 5001, 6690, 2049) ->
+            return DeviceIdentity("NAS / storage device", "Likely", "answers on a storage port")
+        portHit(device, 22) && !portHit(device, 445) ->
+            return DeviceIdentity("Laptop / computer (Linux)", "Possible", "answers on 22 (SSH)")
+    }
+
+    return DeviceIdentity("Network device", "Online", "answering on local subnet")
 }
 
 data class NetworkReport(
@@ -298,7 +300,13 @@ object NetworkScanner {
         "34CD6D" to "Xiaomi", "44AEAB" to "Xiaomi", "5C0214" to "Xiaomi", "64B473" to "Xiaomi",
         "74DA88" to "Xiaomi", "8CBEBE" to "Xiaomi", "A0C9A0" to "Xiaomi", "B0E235" to "Xiaomi",
         "C46AB7" to "Xiaomi", "D4970B" to "Xiaomi", "E4AA5D" to "Xiaomi", "F0B429" to "Xiaomi",
-        "FC02E9" to "Xiaomi", "FCA13E" to "Xiaomi", "FC64BA" to "Xiaomi",
+        "FC02E9" to "Xiaomi", "FCA13E" to "Xiaomi", "FC64BA" to "Xiaomi", "3CAF7B" to "Xiaomi",
+        // OPPO / Realme / OnePlus (Guangdong Oplus)
+        "2C5D34" to "OPPO", "A444D1" to "OPPO", "F44B2A" to "OPPO", "DC729B" to "OPPO",
+        "102A94" to "OPPO", "286C07" to "OPPO", "4CE676" to "OPPO", "60AB67" to "OPPO",
+        "98F537" to "OPPO", "AC3613" to "OPPO", "BC4101" to "OPPO", "D0BF9C" to "OPPO",
+        // C220 / TP-Link / Mercusys / Router gateways
+        "F0090D" to "TP-Link", "B4F949" to "Realtek Router Gateway",
     )
 
     /**
@@ -590,12 +598,16 @@ object NetworkScanner {
         }
         if (address.hostAddress != ip) return null
 
+        val isSelf = ip == selfIp
+        val isGateway = ip == gateway
+        val mac = arp[ip]
+
         var reachable = false
         val openPorts = mutableListOf<Int>()
         for (port in PROBE_PORTS) {
             val opened = try {
                 Socket().use { socket ->
-                    socket.connect(InetSocketAddress(address, port), 220)
+                    socket.connect(InetSocketAddress(address, port), 180)
                     true
                 }
             } catch (e: Exception) {
@@ -607,16 +619,8 @@ object NetworkScanner {
                 if (openPorts.size >= 3) break
             }
         }
-        if (!reachable) {
-            reachable = try {
-                address.isReachable(300)
-            } catch (e: Exception) {
-                false
-            }
-        }
-        if (!reachable && ip != selfIp && ip != gateway) return null
 
-        val hostname = withTimeoutOrNull(400) {
+        val hostname = withTimeoutOrNull(300) {
             try {
                 val name = address.canonicalHostName
                 if (name != null && name != ip) name else null
@@ -624,14 +628,40 @@ object NetworkScanner {
                 null
             }
         }
-        val mac = arp[ip]
+
+        // Standard network scanner validation:
+        // A host is only considered genuinely active on modern home Wi-Fi if:
+        // 1. It is this phone itself or the default gateway, OR
+        // 2. An open port answered, OR
+        // 3. It resolved a real LAN hostname (e.g. *.hgu_lan or device name), OR
+        // 4. It has an active entry in the ARP table (valid MAC), OR
+        // 5. It answers isReachable AND (mac != null || hostname != null)
+        if (!isSelf && !isGateway) {
+            if (!reachable) {
+                val pingOk = try {
+                    address.isReachable(250)
+                } catch (e: Exception) {
+                    false
+                }
+                // Avoid ghost IPs where isReachable returns false positive without MAC or hostname
+                if (pingOk && (mac != null || hostname != null)) {
+                    reachable = true
+                }
+            }
+
+            // If neither ports, nor ARP, nor hostname gave proof of life, do not include ghost IP
+            if (!reachable && mac == null && hostname == null) {
+                return null
+            }
+        }
+
         return LanDevice(
             ip = ip,
             mac = mac,
             vendor = mac?.let { vendorOf(it) },
             hostname = hostname,
-            isSelf = ip == selfIp,
-            isGateway = ip == gateway,
+            isSelf = isSelf,
+            isGateway = isGateway,
             openPorts = openPorts,
         )
     }

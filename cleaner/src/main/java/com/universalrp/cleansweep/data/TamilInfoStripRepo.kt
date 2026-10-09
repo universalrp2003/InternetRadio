@@ -135,20 +135,44 @@ object TamilInfoStripRepo {
         val list = mutableListOf<Item>()
         try {
             val pm = context.packageManager
+            val defaultSms = try {
+                android.provider.Telephony.Sms.getDefaultSmsPackage(context)
+            } catch (e: Exception) {
+                null
+            }
             val installed = pm.getInstalledApplications(0)
             for (app in installed) {
-                // Ignore system apps
-                if (SecurityScanner.isSystemPackage(app.packageName)) continue
-                val label = try { pm.getApplicationLabel(app).toString() } catch (e: Exception) { app.packageName }
-                
-                // Check SMS permission (High risk for non-banking apps)
-                val hasSms = pm.checkPermission(android.Manifest.permission.READ_SMS, app.packageName) == PackageManager.PERMISSION_GRANTED
-                if (hasSms && !SecurityScanner.isBankingOrPaymentApp(app.packageName, label)) {
+                val pkg = app.packageName
+                val isSystemFlag = (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
+                // Strictly exclude Android OS, system vendors, OEMs, Google services, default SMS app, and our own apps
+                if (isSystemFlag ||
+                    SecurityScanner.isSystemPackage(pkg) ||
+                    pkg.startsWith("com.qualcomm.") ||
+                    pkg.startsWith("com.qti.") ||
+                    pkg.startsWith("com.xiaomi.") ||
+                    pkg.startsWith("com.miui.") ||
+                    pkg.startsWith("com.google.android.") ||
+                    pkg.startsWith("com.android.") ||
+                    pkg.contains("cleaner") ||
+                    pkg.contains("cleansweep") ||
+                    pkg.contains("radio") ||
+                    pkg.contains("launcher") ||
+                    pkg == defaultSms
+                ) {
+                    continue
+                }
+
+                val label = try { pm.getApplicationLabel(app).toString() } catch (e: Exception) { pkg }
+                if (label.isBlank() || label.startsWith("com.")) continue
+
+                // Check SMS permission (High risk for unknown 3rd-party non-banking apps)
+                val hasSms = pm.checkPermission(android.Manifest.permission.READ_SMS, pkg) == PackageManager.PERMISSION_GRANTED
+                if (hasSms && !SecurityScanner.isBankingOrPaymentApp(pkg, label)) {
                     list.add(
                         Item(
                             category = "பாதுகாப்பு எச்சரிக்கை (High Risk)",
-                            title = "எச்சரிக்கை: '$label' செயலி உங்கள் தனிப்பட்ட SMS செய்திகளைப் படிக்கும் அனுமதி பெற்றுள்ளது. தேவை இல்லையெனில் அனுமதியை நீக்கவும்.",
-                            source = "CleanSweep பாதுகாப்பு ஆய்வு",
+                            title = "எச்சரிக்கை: '$label' செயலி தனிப்பட்ட SMS செய்திகளைப் படிக்கும் அனுமதி பெற்றுள்ளது. தேவை இல்லையெனில் அனுமதியை நீக்கவும்.",
+                            source = "பாதுகாப்பு ஆய்வு",
                             date = "உடனடி நடவடிக்கை",
                             link = "",
                             isSecurityAlert = true,
@@ -159,22 +183,22 @@ object TamilInfoStripRepo {
                 // Check overlay permission (draw over other apps)
                 val hasOverlay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
                     val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
-                    appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, app.uid, app.packageName) == android.app.AppOpsManager.MODE_ALLOWED
+                    appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, app.uid, pkg) == android.app.AppOpsManager.MODE_ALLOWED
                 } else false
 
-                if (hasOverlay && !app.packageName.contains("launcher") && !app.packageName.contains("cleaner") && !app.packageName.contains("radio")) {
+                if (hasOverlay) {
                     list.add(
                         Item(
                             category = "பாதுகாப்பு எச்சரிக்கை (Medium Risk)",
-                            title = "கவனம்: '$label' செயலி மற்ற திரைகளின் மேல் தோன்றும் அனுமதி (Overlay) பெற்றுள்ளது. இது திரையைப் பதிவு செய்ய வாய்ப்புள்ளது.",
-                            source = "CleanSweep பாதுகாப்பு ஆய்வு",
+                            title = "கவனம்: '$label' செயலி மற்ற திரைகளின் மேல் தோன்றும் அனுமதி (Overlay) பெற்றுள்ளது.",
+                            source = "பாதுகாப்பு ஆய்வு",
                             date = "சரிபார்க்கவும்",
                             link = "",
                             isSecurityAlert = true,
                         )
                     )
                 }
-                if (list.size >= 8) break
+                if (list.size >= 4) break
             }
         } catch (e: Exception) {
             // Ignore

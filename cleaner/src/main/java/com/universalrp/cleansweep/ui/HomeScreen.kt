@@ -486,6 +486,7 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
                         val q = quickQuestion.trim()
                         if (q.isNotBlank()) {
                             vm.askAssistant(q)
+                            vm.openAssistant()
                         } else {
                             vm.openAssistant()
                         }

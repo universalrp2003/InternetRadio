@@ -251,8 +251,6 @@ data class UiState(
     val customDeviceNames: Map<String, String> = emptyMap(),
     val appTrackerReport: com.universalrp.cleansweep.data.AppNetworkTracker.TrackerReport? = null,
     val appTrackerBusy: Boolean = false,
-    val appTrackerVpnActive: Boolean = false,
-    val appTrackerVpnMode: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -384,20 +382,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             emptyMap()
         }
-        val vpnPref = prefs.getBoolean("tracker_vpn_mode_pref", false)
-
-        if (bgWifiScan) {
-            com.universalrp.cleansweep.work.WifiScanWorker.schedule(ctx)
-        }
-
         mutate {
             it.copy(
                 verifiedWifiMacs = savedVerified,
                 customDeviceNames = namesMap,
                 autoWifiScanOnOpen = autoWifiScan,
                 bgWifiScanEnabled = bgWifiScan,
-                appTrackerVpnMode = vpnPref,
-                appTrackerVpnActive = com.universalrp.cleansweep.vpn.CleanSweepVpnService.isVpnRunning,
             )
         }
         refresh()
@@ -2350,42 +2340,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(bgWifiScanEnabled = enabled) }
     }
 
-    fun setTrackerVpnMode(preferVpn: Boolean) {
-        prefs.edit().putBoolean("tracker_vpn_mode_pref", preferVpn).apply()
-        mutate { it.copy(appTrackerVpnMode = preferVpn) }
-        if (preferVpn) {
-            startTrackerVpn()
-        } else {
-            stopTrackerVpn()
-        }
-    }
-
-    fun startTrackerVpn() {
-        val intent = android.content.Intent(ctx, com.universalrp.cleansweep.vpn.CleanSweepVpnService::class.java)
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-            ctx.startForegroundService(intent)
-        } else {
-            ctx.startService(intent)
-        }
-        mutate { it.copy(appTrackerVpnActive = true) }
-    }
-
-    fun stopTrackerVpn() {
-        com.universalrp.cleansweep.vpn.CleanSweepVpnService.stop(ctx)
-        mutate { it.copy(appTrackerVpnActive = false) }
-    }
-
     fun scanAppTrackers() {
         if (_state.value.appTrackerBusy) return
         mutate {
-            it.copy(
-                appTrackerBusy = true,
-                appTrackerVpnActive = com.universalrp.cleansweep.vpn.CleanSweepVpnService.isVpnRunning,
-            )
+            it.copy(appTrackerBusy = true)
         }
         viewModelScope.launch {
             val report = runCatching {
-                com.universalrp.cleansweep.data.AppNetworkTracker.inspectConnections(ctx, _state.value.appTrackerVpnMode)
+                com.universalrp.cleansweep.data.AppNetworkTracker.inspectConnections(ctx)
             }.getOrNull()
             mutate { it.copy(appTrackerBusy = false, appTrackerReport = report) }
         }
