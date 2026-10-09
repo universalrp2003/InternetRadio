@@ -70,18 +70,31 @@ class CleanSweepWidget : AppWidgetProvider() {
                 null
             }
 
+            val dataUsage = try {
+                DataUsageTracker.getUsageInfo(context)
+            } catch (e: Exception) {
+                null
+            }
+
             val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
-            val watts = if (battery?.charging == true && battery.powerW != null) {
+            val dataText = if (dataUsage != null) {
+                " • ${dataUsage.formattedToday} data"
+            } else if (battery?.charging == true && battery.powerW != null) {
                 " • %.1f W".format(battery.powerW)
             } else if (battery?.charging == false) {
                 " • Discharging"
             } else {
                 ""
             }
-            views.setTextViewText(R.id.widget_battery, percent + watts)
+            views.setTextViewText(R.id.widget_battery, percent + dataText)
 
-            val free = health?.storage?.free?.formatBytes() ?: "—"
-            views.setTextViewText(R.id.widget_storage, free)
+            val freeStorage = health?.storage?.free?.formatBytes() ?: "—"
+            val packText = if (dataUsage != null) {
+                "$freeStorage free • Pack: ${dataUsage.formattedPackTotal}"
+            } else {
+                "$freeStorage free"
+            }
+            views.setTextViewText(R.id.widget_storage, packText)
 
             val brief = Announcer.lastBrief(context)
             val line = when {

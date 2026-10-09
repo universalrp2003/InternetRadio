@@ -836,14 +836,20 @@ private fun TrackerItemCard(conn: com.universalrp.cleansweep.data.AppNetworkTrac
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                "Company / Network: ${conn.orgOrCompany}",
+                "Company / Provider: ${conn.orgOrCompany}",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextPrimary,
             )
+            val destinationLine = if (conn.localPort == 0 && conn.destinationHost?.contains("transferred") == true) {
+                // Today's total data usage entry
+                "Data Transferred: ${conn.destinationHost}"
+            } else {
+                "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}"
+            }
             Text(
-                "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}",
+                destinationLine,
                 style = MaterialTheme.typography.labelSmall,
-                color = TextSecondary,
+                color = AccentCyan,
             )
         }
     }
@@ -877,18 +883,62 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     UsageTile(
-                        label = tr("Mobile data"),
+                        label = tr("Mobile data (Today)"),
                         value = usage.todayMobileBytes?.let { formatBytesSafe(it) } ?: "—",
                         color = AccentViolet,
                         modifier = Modifier.weight(1f),
                     )
                     UsageTile(
-                        label = tr("Wi-Fi"),
+                        label = tr("Wi-Fi (Today)"),
                         value = usage.todayWifiBytes?.let { formatBytesSafe(it) } ?: "—",
                         color = AccentCyan,
                         modifier = Modifier.weight(1f),
                     )
                 }
+
+                // Cumulative Pack Total (for 6GB / 12GB data plan users)
+                val pack = state.dataPackInfo
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Data Pack Total (Untill Reset)"),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                (pack?.formattedPackTotal ?: "0 MB") + " used on mobile plan",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = AccentCyan,
+                                fontWeight = FontWeight.Bold,
+                            )
+                            Text(
+                                tr("Tracks usage for 6GB/12GB booster packs until you reset."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                        Button(
+                            onClick = { vm.resetDataPackCount() },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentViolet.copy(alpha = 0.2f),
+                                contentColor = AccentViolet,
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                        ) {
+                            Text(tr("Reset Pack"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+
                 usage.todayTotalBytes?.let { total ->
                     Spacer(Modifier.height(6.dp))
                     Text(

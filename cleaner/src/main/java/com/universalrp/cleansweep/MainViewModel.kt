@@ -186,6 +186,7 @@ data class UiState(
     val speedError: String? = null,
     val usage: DataUsageReport? = null,
     val usageBusy: Boolean = false,
+    val dataPackInfo: com.universalrp.cleansweep.data.DataUsageTracker.UsageInfo? = null,
     // Which attempt the AI is on, so a busy provider is explained instead of looking frozen
     val aiAttempt: Int = 0,
     val aiAttempts: Int = 0,
@@ -2183,8 +2184,22 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(usageBusy = true) }
         viewModelScope.launch {
             val usage = runCatching { UsageStats.read(ctx) }.getOrNull()
-            mutate { it.copy(usageBusy = false, usage = usage ?: it.usage) }
+            val pack = runCatching { com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx) }.getOrNull()
+            mutate { it.copy(usageBusy = false, usage = usage ?: it.usage, dataPackInfo = pack ?: it.dataPackInfo) }
+            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
         }
+    }
+
+    fun resetDataPackCount() {
+        com.universalrp.cleansweep.data.DataUsageTracker.resetPackUsage(ctx)
+        val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
+        mutate {
+            it.copy(
+                dataPackInfo = pack,
+                message = "Recharge pack usage counter reset to 0 MB.",
+            )
+        }
+        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
     }
 
     /** Asks the provider for the model list ("Load models" button). */

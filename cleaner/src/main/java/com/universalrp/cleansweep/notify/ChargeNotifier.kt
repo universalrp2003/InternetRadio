@@ -79,7 +79,17 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val dataUsage = try {
+            com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(context)
+        } catch (e: Exception) {
+            null
+        }
+
         val title = when {
+            dataUsage != null && battery.charging ->
+                "Charging • ${battery.percent}% • Data: ${dataUsage.formattedToday}"
+            dataUsage != null ->
+                "Data: ${dataUsage.formattedToday} (Pack: ${dataUsage.formattedPackTotal}) • ${battery.percent}%"
             battery.charging && battery.percent >= 100 -> "Battery full — unplug to save power"
             battery.charging -> {
                 val watts = battery.powerW
@@ -99,6 +109,9 @@ object ChargeNotifier {
         } ?: "Time estimate not available yet"
 
         val details = buildString {
+            if (dataUsage != null) {
+                append("Today's Mobile Data: ${dataUsage.formattedToday} • Pack Total: ${dataUsage.formattedPackTotal}\n")
+            }
             append(timeLine)
             battery.currentA?.let { append(" • %.2f A".format(it)) }
             battery.voltageV?.let { append(" • %.2f V".format(it)) }
@@ -125,7 +138,7 @@ object ChargeNotifier {
         )
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_battery)
+            .setSmallIcon(R.drawable.ic_stat_data)
             .setContentTitle(title)
             .setContentText(details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
