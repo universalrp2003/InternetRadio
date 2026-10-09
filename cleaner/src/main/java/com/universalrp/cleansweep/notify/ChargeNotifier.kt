@@ -127,19 +127,8 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-        if (dataUsage != null) {
-            try {
-                val icon = DataIconFactory.createIcon(dataUsage.todayMobileBytes)
-                builder.setSmallIcon(icon)
-            } catch (e: Exception) {
-                builder.setSmallIcon(R.drawable.ic_stat_data)
-            }
-        } else {
-            builder.setSmallIcon(R.drawable.ic_stat_data)
-        }
-
-        return builder
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_data)
             .setContentTitle(title)
             .setContentText(details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
@@ -169,19 +158,8 @@ object ChargeNotifier {
         } catch (e: Exception) {
             null
         }
-        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
-        if (dataUsage != null) {
-            try {
-                val icon = DataIconFactory.createIcon(dataUsage.todayMobileBytes)
-                builder.setSmallIcon(icon)
-            } catch (e: Exception) {
-                builder.setSmallIcon(R.drawable.ic_stat_data)
-            }
-        } else {
-            builder.setSmallIcon(R.drawable.ic_stat_data)
-        }
-
-        return builder
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_stat_data)
             .setContentTitle("CleanSweep Monitoring")
             .setContentText("CleanSweep is monitoring mobile data and device stats.")
             .setOngoing(true)
