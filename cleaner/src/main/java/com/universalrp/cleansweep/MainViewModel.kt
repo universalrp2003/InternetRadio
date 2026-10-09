@@ -2066,6 +2066,38 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         refreshNetworkDetails()
     }
 
+    fun openAutoStartSettings() {
+        val intentList = listOf(
+            // Xiaomi / Redmi / POCO (MIUI / HyperOS)
+            android.content.Intent().setComponent(android.content.ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+            // Oppo / Realme (ColorOS)
+            android.content.Intent().setComponent(android.content.ComponentName("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")),
+            android.content.Intent().setComponent(android.content.ComponentName("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")),
+            // Vivo / iQOO (FuntouchOS / OriginOS)
+            android.content.Intent().setComponent(android.content.ComponentName("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")),
+            android.content.Intent().setComponent(android.content.ComponentName("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")),
+            // Huawei / Honor (EMUI / MagicOS)
+            android.content.Intent().setComponent(android.content.ComponentName("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")),
+            // Samsung (One UI)
+            android.content.Intent().setComponent(android.content.ComponentName("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")),
+            // Android 8.0 - 16+ Battery & App Info fallback
+            android.content.Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+            android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = android.net.Uri.fromParts("package", ctx.packageName, null)
+            }
+        )
+
+        for (intent in intentList) {
+            try {
+                intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                ctx.startActivity(intent)
+                return
+            } catch (e: Exception) {
+                // Try next OEM intent
+            }
+        }
+    }
+
     fun openUsageAccess() = AppCacheRepo.openUsageAccessSettings(ctx)
 
     /** Latency and jitter to three public endpoints — a few kilobytes, never a speed test. */
