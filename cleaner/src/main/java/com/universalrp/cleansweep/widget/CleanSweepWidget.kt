@@ -11,6 +11,7 @@ import android.widget.RemoteViews
 import com.universalrp.cleansweep.MainActivity
 import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
+import com.universalrp.cleansweep.data.DataUsageTracker
 import com.universalrp.cleansweep.data.DeviceHealthReader
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.voice.Announcer
