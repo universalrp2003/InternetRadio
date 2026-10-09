@@ -954,6 +954,8 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                     Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
+                                Text(
+                                    tr("Data Pack Plan"),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = TextSecondary,
