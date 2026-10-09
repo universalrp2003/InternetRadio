@@ -64,18 +64,44 @@ fun RadioScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         item {
-            Column(Modifier.padding(top = 10.dp)) {
-                Text(
-                    "Ramesh Radio",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Saffron,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    "Tamil FM from Tamil Nadu and around the world — live.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Ramesh Radio",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = Saffron,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "Tamil FM from Tamil Nadu and around the world — live.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                }
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceHigh,
+                ) {
+                    val dataMb = state.todayDataUsageMb
+                    val text = if (dataMb >= 1024.0) {
+                        "%.2f GB இன்று".format(dataMb / 1024.0)
+                    } else {
+                        "%.1f MB இன்று".format(dataMb)
+                    }
+                    Text(
+                        text = text,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Saffron,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                    )
+                }
             }
         }
 
@@ -89,13 +115,17 @@ fun RadioScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
                 val chips = listOf(
                     // தமிழ் first: it is the default selection, so the app opens on Tamil.
                     Category.TAMIL,
-                    Category.ALL,
+                    Category.TAMIL_ILAYARAJA,
+                    Category.TAMIL_MSV,
+                    Category.TAMIL_AR_RAHMAN,
+                    Category.TAMIL_80S_90S,
+                    Category.TAMIL_DEVOTIONAL,
+                    Category.TOWNS,
+                    Category.TAMIL_NEWS,
                     Category.FAVOURITES,
                     Category.RECENT,
-                    Category.TOWNS,
+                    Category.ALL,
                     Category.TAMIL_FM,
-                    Category.TAMIL_DEVOTIONAL,
-                    Category.TAMIL_NEWS,
                     Category.ENGLISH,
                     Category.CUSTOM,
                 )

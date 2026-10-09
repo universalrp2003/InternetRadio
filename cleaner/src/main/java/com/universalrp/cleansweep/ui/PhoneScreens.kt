@@ -1127,20 +1127,28 @@ private fun DeviceCard(
                 },
                 contentDescription = null,
                 tint = if (device.isSelf || device.isGateway) AccentCyan else TextSecondary,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val displayName = device.customName ?: (device.ip + (device.hostname?.let { " • $it" } ?: ""))
                     Text(
-                        displayName,
+                        device.displayTitle,
                         style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
+                        fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (device.isSelf) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "This Phone",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
                     if (device.isVerifiedKnown) {
                         Spacer(Modifier.width(6.dp))
                         Text(
@@ -1151,31 +1159,32 @@ private fun DeviceCard(
                         )
                     }
                 }
-                if (device.customName != null) {
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        device.ip + (device.hostname?.let { " • $it" } ?: ""),
+                        device.ip,
                         style = MaterialTheme.typography.labelSmall,
                         color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold,
                     )
+                    device.latencyMs?.let { latency ->
+                        Text(
+                            " • ${latency}ms",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoodGreen,
+                        )
+                    }
                 }
                 Text(
                     buildString {
                         append(device.identity.type)
-                        append(" • ").append(device.identity.confidence)
-                        append(" (").append(device.identity.evidence).append(")")
+                        device.vendor?.let { append(" • ").append(it) }
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
-                device.vendor?.let { vendor ->
-                    Text(
-                        "Maker: $vendor",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                    )
-                }
                 device.mac?.let {
-                    Text("MAC $it", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("MAC: $it", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
             }
             if (device.openPorts.isNotEmpty()) {

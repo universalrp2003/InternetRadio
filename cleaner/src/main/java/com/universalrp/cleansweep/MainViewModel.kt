@@ -1569,10 +1569,41 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     mutate { it.copy(message = "$detail — consider uninstalling it.") }
                 }
                 is BazaarVerdict.Clean -> {
-                    mutate { it.copy(message = "${app.label}: no match in MalwareBazaar — not known malware.") }
+                    val vtKey = AiSettings.vtKey(ctx).trim()
+                    if (vtKey.isNotBlank()) {
+                        val vt = MalwareCheck.queryVirusTotal(vtKey, hash)
+                        if (vt != null && vt.malicious > 0) {
+                            mutate { it.copy(message = "${app.label} flagged by VirusTotal: ${vt.malicious}/${vt.total} engines.") }
+                        } else {
+                            mutate { it.copy(message = "${app.label}: safe (no match in MalwareBazaar / VirusTotal).") }
+                        }
+                    } else {
+                        mutate { it.copy(message = "${app.label}: safe (no match in MalwareBazaar).") }
+                    }
                 }
                 is BazaarVerdict.Unknown -> {
-                    mutate { it.copy(message = "Could not check ${app.label} (${verdict.reason}).") }
+                    val vtKey = AiSettings.vtKey(ctx).trim()
+                    if (vtKey.isNotBlank()) {
+                        val vt = MalwareCheck.queryVirusTotal(vtKey, hash)
+                        if (vt != null) {
+                            if (vt.malicious > 0) {
+                                mutate { it.copy(message = "VirusTotal flags ${app.label}: ${vt.malicious}/${vt.total} engines.") }
+                            } else {
+                                mutate { it.copy(message = "${app.label}: 0/${vt.total} engines flagged on VirusTotal (clean).") }
+                            }
+                            return@launch
+                        }
+                    }
+                    if (verdict.reason.contains("401") || verdict.reason.contains("Auth")) {
+                        mutate {
+                            it.copy(
+                                message = "${app.label}: MalwareBazaar API offline/restricted. " +
+                                    "Save a free VirusTotal key in App settings for instant second-opinion checks."
+                            )
+                        }
+                    } else {
+                        mutate { it.copy(message = "Could not check ${app.label} (${verdict.reason}).") }
+                    }
                 }
             }
         }

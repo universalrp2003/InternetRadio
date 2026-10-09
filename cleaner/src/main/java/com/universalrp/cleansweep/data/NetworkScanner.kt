@@ -57,7 +57,32 @@ data class LanDevice(
     val openPorts: List<Int>,
     val isVerifiedKnown: Boolean = false,
     val customName: String? = null,
+    val latencyMs: Long? = null,
 ) {
+    /**
+     * Clean friendly display title formatted like standard network tools:
+     * - "This Device (Redmi 13 5G)" or custom name
+     * - "Router / Gateway (Realtek)"
+     * - "OPPO A3s" or "C220 Device"
+     */
+    val displayTitle: String
+        get() {
+            if (!customName.isNullOrBlank()) return customName
+            val cleanHost = hostname?.replace(Regex("(?i)\\.hgu_lan$"), "")
+                ?.replace(Regex("(?i)\\.lan$"), "")
+                ?.replace(Regex("(?i)\\.local$"), "")
+                ?.replace(Regex("(?i)\\.home$"), "")
+                ?.replace("_", " ") ?: ""
+
+            return when {
+                isSelf -> "This Phone" + (if (cleanHost.isNotBlank()) " ($cleanHost)" else "")
+                isGateway -> "Wi-Fi Router / Gateway" + (if (vendor != null) " ($vendor)" else "")
+                cleanHost.isNotBlank() && cleanHost != ip -> cleanHost
+                vendor != null -> "$vendor Device"
+                else -> identity.type
+            }
+        }
+
     /**
      * Device type guessed from three real signals, in order of strength:
      * open ports (a camera answers RTSP 554, a printer IPP 9100, an iPhone 62078,
@@ -602,6 +627,9 @@ object NetworkScanner {
         val isGateway = ip == gateway
         val mac = arp[ip]
 
+        val startMs = System.currentTimeMillis()
+        var latency: Long? = null
+
         var reachable = false
         val openPorts = mutableListOf<Int>()
         for (port in PROBE_PORTS) {
@@ -615,6 +643,7 @@ object NetworkScanner {
             }
             if (opened) {
                 reachable = true
+                latency = System.currentTimeMillis() - startMs
                 openPorts.add(port)
                 if (openPorts.size >= 3) break
             }
@@ -639,7 +668,10 @@ object NetworkScanner {
         if (!isSelf && !isGateway) {
             if (!reachable) {
                 val pingOk = try {
-                    address.isReachable(250)
+                    val pStart = System.currentTimeMillis()
+                    val ok = address.isReachable(250)
+                    if (ok) latency = System.currentTimeMillis() - pStart
+                    ok
                 } catch (e: Exception) {
                     false
                 }
@@ -653,6 +685,8 @@ object NetworkScanner {
             if (!reachable && mac == null && hostname == null) {
                 return null
             }
+        } else if (isSelf) {
+            latency = 0L
         }
 
         return LanDevice(
@@ -663,6 +697,7 @@ object NetworkScanner {
             isSelf = isSelf,
             isGateway = isGateway,
             openPorts = openPorts,
+            latencyMs = latency,
         )
     }
 
