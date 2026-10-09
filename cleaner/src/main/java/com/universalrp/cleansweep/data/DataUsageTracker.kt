@@ -22,6 +22,7 @@ object DataUsageTracker {
     private const val KEY_PACK_START_MS = "pack_start_ms"
     private const val KEY_PACK_BASELINE_BYTES = "pack_baseline_bytes"
     private const val KEY_PACK_LIMIT_GB = "pack_limit_gb"
+    private const val KEY_UNLIMITED_5G = "unlimited_5g_enabled"
     private const val KEY_LAST_DAY = "last_recorded_day"
     private const val KEY_TODAY_BASELINE_BYTES = "today_baseline_bytes"
 
@@ -40,10 +41,21 @@ object DataUsageTracker {
         val formattedRemaining: String,
         val formattedPackLimit: String,
         val progressRatio: Float,
+        val isUnlimited5g: Boolean = false,
     )
 
     private fun getPrefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+
+    fun isUnlimited5g(context: Context): Boolean =
+        getPrefs(context).getBoolean(KEY_UNLIMITED_5G, false)
+
+    fun setUnlimited5g(context: Context, enabled: Boolean) {
+        getPrefs(context).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
+        // Also persist in the main app prefs as backup so an update never loses it
+        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
+    }
 
     fun getPackLimitGb(context: Context): Float {
         return getPrefs(context).getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
@@ -52,6 +64,8 @@ object DataUsageTracker {
     fun setPackLimitGb(context: Context, limitGb: Float) {
         val safe = if (limitGb > 0f) limitGb else DEFAULT_PACK_LIMIT_GB
         getPrefs(context).edit().putFloat(KEY_PACK_LIMIT_GB, safe).apply()
+        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+            .edit().putFloat(KEY_PACK_LIMIT_GB, safe).apply()
     }
 
     fun resetPackUsage(context: Context, newLimitGb: Float? = null) {
@@ -72,8 +86,15 @@ object DataUsageTracker {
 
         if (newLimitGb != null && newLimitGb > 0f) {
             editor.putFloat(KEY_PACK_LIMIT_GB, newLimitGb)
+            context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+                .edit().putFloat(KEY_PACK_LIMIT_GB, newLimitGb).apply()
         }
         editor.apply()
+        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_PACK_START_MS, now)
+            .putLong(KEY_PACK_BASELINE_BYTES, currentCumulativeMobile)
+            .apply()
     }
 
     fun getUsageInfo(context: Context): UsageInfo {
@@ -123,7 +144,13 @@ object DataUsageTracker {
             packMobile = if (currentMobile >= packBaseline) (currentMobile - packBaseline) else currentMobile
         }
 
-        val limitGb = prefs.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
+        val fallbackPrefs = context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+        val limitGb = if (prefs.contains(KEY_PACK_LIMIT_GB)) {
+            prefs.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
+        } else {
+            fallbackPrefs.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
+        }
+        val isUnlimited = prefs.getBoolean(KEY_UNLIMITED_5G, false) || fallbackPrefs.getBoolean(KEY_UNLIMITED_5G, false)
         val limitBytes = (limitGb.toDouble() * 1024.0 * 1024.0 * 1024.0).toLong()
         val remainingBytes = (limitBytes - packMobile).coerceAtLeast(0L)
         val progressRatio = if (limitBytes > 0L) {
@@ -149,6 +176,7 @@ object DataUsageTracker {
             formattedRemaining = formatBytesSafe(remainingBytes),
             formattedPackLimit = formattedLimit,
             progressRatio = progressRatio,
+            isUnlimited5g = isUnlimited,
         )
     }
 

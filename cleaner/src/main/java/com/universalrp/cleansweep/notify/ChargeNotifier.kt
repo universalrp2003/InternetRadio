@@ -74,8 +74,11 @@ object ChargeNotifier {
             null
         }
 
-        val title = if (dataUsage != null) {
+        val isUnlimited = dataUsage?.isUnlimited5g == true
+        val title = if (dataUsage != null && !isUnlimited) {
             "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
+        } else if (dataUsage != null && isUnlimited) {
+            if (battery.charging) "Unlimited 5G • Charging ${battery.percent}%" else "Unlimited 5G Plan • Battery ${battery.percent}%"
         } else if (battery.charging) {
             val watts = battery.powerW
             if (watts != null) {
@@ -94,8 +97,10 @@ object ChargeNotifier {
         } ?: "Battery: ${battery.percent}%"
 
         val details = buildString {
-            if (dataUsage != null) {
+            if (dataUsage != null && !isUnlimited) {
                 append("Pack Used: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} • Left: ${dataUsage.formattedRemaining}\n")
+            } else if (isUnlimited) {
+                append("Unlimited 5G Active • Quota counting paused\n")
             }
             if (battery.charging) {
                 append("Charging: $timeLine")
@@ -211,7 +216,12 @@ object ChargeNotifier {
         } catch (e: Exception) {
             null
         }
+        val isUnlimited = dataUsage?.isUnlimited5g == true
         val text = when {
+            isUnlimited && battery.charging && battery.powerW != null ->
+                "⚡ %.1f W".format(battery.powerW)
+            isUnlimited ->
+                "5G Unlimited"
             dataUsage != null && battery.charging && battery.powerW != null ->
                 "${dataUsage.formattedToday} • ⚡ %.1f W".format(battery.powerW)
             dataUsage != null ->

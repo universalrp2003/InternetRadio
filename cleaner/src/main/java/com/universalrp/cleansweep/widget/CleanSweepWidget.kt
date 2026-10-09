@@ -73,27 +73,40 @@ class CleanSweepWidget : AppWidgetProvider() {
                 null
             }
 
-            // Prominent Display: Real Today's Mobile Data Usage (in GB/MB)
-            val todayDataDisplay = if (dataUsage != null) {
-                "${dataUsage.formattedToday} Today"
-            } else {
+            val isUnlimited = dataUsage?.isUnlimited5g == true
+            val freeStorage = health?.storage?.free?.formatBytes() ?: "—"
+
+            if (isUnlimited) {
+                // Unlimited 5G: Hide pack countdown and daily usage display
                 val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
-                if (battery?.charging == true && battery.powerW != null) {
+                val topDisplay = if (battery?.charging == true && battery.powerW != null) {
                     "$percent • %.1f W".format(battery.powerW)
                 } else {
-                    percent
+                    "$percent • Unlimited 5G"
                 }
-            }
-            views.setTextViewText(R.id.widget_battery, todayDataDisplay)
-
-            // Pack Status & Storage: "Pack: 1.2 GB / 12 GB • 10.8 GB left"
-            val freeStorage = health?.storage?.free?.formatBytes() ?: "—"
-            val secondaryText = if (dataUsage != null) {
-                "Pack: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} (${dataUsage.formattedRemaining} left) • $freeStorage free"
+                views.setTextViewText(R.id.widget_battery, topDisplay)
+                views.setTextViewText(R.id.widget_storage, "$freeStorage free • Unlimited 5G Plan")
             } else {
-                "$freeStorage free"
+                // Standard: Prominent Display of Real Today's Mobile Data Usage
+                val todayDataDisplay = if (dataUsage != null) {
+                    "${dataUsage.formattedToday} Today"
+                } else {
+                    val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
+                    if (battery?.charging == true && battery.powerW != null) {
+                        "$percent • %.1f W".format(battery.powerW)
+                    } else {
+                        percent
+                    }
+                }
+                views.setTextViewText(R.id.widget_battery, todayDataDisplay)
+
+                val secondaryText = if (dataUsage != null) {
+                    "Pack: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} (${dataUsage.formattedRemaining} left) • $freeStorage free"
+                } else {
+                    "$freeStorage free"
+                }
+                views.setTextViewText(R.id.widget_storage, secondaryText)
             }
-            views.setTextViewText(R.id.widget_storage, secondaryText)
 
             val brief = Announcer.lastBrief(context)
             val line = when {

@@ -903,10 +903,49 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
 
                 // Cumulative Pack Total & Variable Quota Entry
                 val pack = state.dataPackInfo
+                val isUnlimited = pack?.isUnlimited5g == true
                 var showResetDialog by remember { mutableStateOf(false) }
                 var showQuotaDialog by remember { mutableStateOf(false) }
 
                 Spacer(Modifier.height(10.dp))
+                // Unlimited 5G Switch
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Unlimited 5G Data Plan"),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                            )
+                            Text(
+                                tr("Turns off pack limit countdown & daily counters"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                        Switch(
+                            checked = isUnlimited,
+                            onCheckedChange = { vm.setUnlimited5g(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = AccentCyan,
+                                checkedTrackColor = AccentCyan.copy(alpha = 0.35f),
+                            ),
+                        )
+                    }
+                }
+
+                if (!isUnlimited) {
+                    Spacer(Modifier.height(10.dp))
+                }
+                if (!isUnlimited) {
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = SurfaceHigh,
@@ -915,8 +954,6 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                     Column(Modifier.padding(14.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
-                                Text(
-                                    tr("Data Pack Plan"),
                                     style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.Bold,
                                     color = TextSecondary,
@@ -991,6 +1028,7 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                             }
                         }
                     }
+                }
                 }
 
                 if (showResetDialog) {

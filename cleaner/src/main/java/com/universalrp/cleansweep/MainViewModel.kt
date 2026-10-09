@@ -1653,8 +1653,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val customNames = _state.value.customDeviceNames
             val updatedReport = report?.let { r ->
                 r.copy(devices = r.devices.map { d ->
-                    val isV = d.mac != null && d.mac in verified
-                    val cName = d.mac?.let { customNames[it] }
+                    val key = d.mac ?: d.ip
+                    val isV = (d.mac != null && d.mac in verified) || (d.ip in verified)
+                    val cName = (d.mac?.let { customNames[it] }) ?: customNames[d.ip]
                     d.copy(isVerifiedKnown = isV, customName = cName)
                 })
             }
@@ -2352,27 +2353,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------- Wi-Fi Verified Devices & Auto-Scan
 
-    fun toggleDeviceVerified(mac: String) {
+    fun toggleDeviceVerified(key: String) {
         val current = _state.value.verifiedWifiMacs.toMutableSet()
-        if (mac in current) current.remove(mac) else current.add(mac)
+        if (key in current) current.remove(key) else current.add(key)
         prefs.edit().putStringSet("verified_wifi_macs", current).apply()
         mutate { state ->
             val updatedReport = state.networkReport?.let { r ->
                 r.copy(devices = r.devices.map { d ->
-                    if (d.mac == mac) d.copy(isVerifiedKnown = mac in current) else d
+                    val dKey = d.mac ?: d.ip
+                    if (dKey == key || d.mac == key || d.ip == key) {
+                        d.copy(isVerifiedKnown = key in current)
+                    } else d
                 })
             }
             state.copy(verifiedWifiMacs = current, networkReport = updatedReport)
         }
     }
 
-    fun setCustomDeviceName(mac: String, name: String) {
+    fun setCustomDeviceName(key: String, name: String) {
         val trimmed = name.trim()
         val current = _state.value.customDeviceNames.toMutableMap()
         if (trimmed.isBlank()) {
-            current.remove(mac)
+            current.remove(key)
         } else {
-            current[mac] = trimmed
+            current[key] = trimmed
         }
         val json = org.json.JSONObject()
         current.forEach { (k, v) -> json.put(k, v) }
@@ -2381,11 +2385,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { state ->
             val updatedReport = state.networkReport?.let { r ->
                 r.copy(devices = r.devices.map { d ->
-                    if (d.mac == mac) d.copy(customName = trimmed.ifBlank { null }) else d
+                    val dKey = d.mac ?: d.ip
+                    if (dKey == key || d.mac == key || d.ip == key) {
+                        d.copy(customName = trimmed.ifBlank { null })
+                    } else d
                 })
             }
             state.copy(customDeviceNames = current, networkReport = updatedReport)
         }
+    }
+
+    fun setUnlimited5g(enabled: Boolean) {
+        com.universalrp.cleansweep.data.DataUsageTracker.setUnlimited5g(ctx, enabled)
+        val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
+        mutate {
+            it.copy(
+                dataPackInfo = pack,
+                message = if (enabled) "Unlimited 5G enabled — pack & daily usage count hidden." else "Unlimited 5G disabled — standard data monitoring active.",
+            )
+        }
+        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
     }
 
     fun setAutoWifiScanOnOpen(enabled: Boolean) {

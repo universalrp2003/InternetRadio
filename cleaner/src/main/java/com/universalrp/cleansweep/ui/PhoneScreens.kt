@@ -997,10 +997,11 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
 
                 if (loaded.devices.isNotEmpty()) {
                     items(loaded.devices, key = { it.ip }) { device ->
+                        val devKey = device.mac ?: device.ip
                         DeviceCard(
                             device = device,
-                            onToggleVerified = { device.mac?.let { mac -> vm.toggleDeviceVerified(mac) } },
-                            onRename = { newName -> device.mac?.let { mac -> vm.setCustomDeviceName(mac, newName) } },
+                            onToggleVerified = { vm.toggleDeviceVerified(devKey) },
+                            onRename = { newName -> vm.setCustomDeviceName(devKey, newName) },
                         )
                     }
                 }
@@ -1194,7 +1195,7 @@ private fun DeviceCard(
                     color = AccentViolet,
                 )
             }
-            if (!device.isSelf && !device.isGateway && device.mac != null) {
+            if (!device.isSelf && !device.isGateway) {
                 Spacer(Modifier.width(4.dp))
                 IconButton(onClick = { showRenameDialog = true }) {
                     Icon(
