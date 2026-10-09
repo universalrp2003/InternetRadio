@@ -22,11 +22,21 @@ class SettingsRepo(context: Context) {
 
     private val appContext = context.applicationContext
 
-    private val store: DataStore<Preferences> = PreferenceDataStoreFactory.create(
-        scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    ) {
-        appContext.filesDir.resolve("cleansweep_settings.preferences_pb")
+    companion object {
+        @Volatile
+        private var instance: DataStore<Preferences>? = null
+
+        private fun getStore(context: Context): DataStore<Preferences> =
+            instance ?: synchronized(this) {
+                instance ?: PreferenceDataStoreFactory.create(
+                    scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+                ) {
+                    context.applicationContext.filesDir.resolve("cleansweep_settings.preferences_pb")
+                }.also { instance = it }
+            }
     }
+
+    private val store: DataStore<Preferences> get() = getStore(appContext)
 
     private object Keys {
         val SOUNDS = booleanPreferencesKey("sounds_enabled")

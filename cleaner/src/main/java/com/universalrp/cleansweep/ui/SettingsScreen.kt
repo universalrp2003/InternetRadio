@@ -259,6 +259,44 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            // Autostart permission helper for Xiaomi, Oppo, Vivo, Samsung phones
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Auto-start after phone restart"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                tr("Xiaomi / Oppo / Vivo require enabling Autostart in Security settings so background monitoring and widgets restore after reboot."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { vm.openAutoStartSettings() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentCyan.copy(alpha = 0.2f),
+                            contentColor = AccentCyan,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(tr("Open Autostart Settings"), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
             PanelCard(Modifier.fillMaxWidth()) {
                 Column {
                     SettingSwitch(
