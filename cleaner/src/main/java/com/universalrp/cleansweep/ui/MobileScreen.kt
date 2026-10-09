@@ -28,6 +28,11 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -896,47 +901,194 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                     )
                 }
 
-                // Cumulative Pack Total (for 6GB / 12GB data plan users)
+                // Cumulative Pack Total & Variable Quota Entry
                 val pack = state.dataPackInfo
+                var showResetDialog by remember { mutableStateOf(false) }
+                var showQuotaDialog by remember { mutableStateOf(false) }
+
                 Spacer(Modifier.height(10.dp))
                 Surface(
-                    shape = RoundedCornerShape(10.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = SurfaceHigh,
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Row(
-                        Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                tr("Data Pack Total (Untill Reset)"),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                (pack?.formattedPackTotal ?: "0 MB") + " used on mobile plan",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = AccentCyan,
-                                fontWeight = FontWeight.Bold,
-                            )
-                            Text(
-                                tr("Tracks usage for 6GB/12GB booster packs until you reset."),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    tr("Data Pack Plan"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextSecondary,
+                                )
+                                Text(
+                                    (pack?.formattedPackTotal ?: "0 MB") + " / " + (pack?.formattedPackLimit ?: "12 GB"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = AccentCyan,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    (pack?.formattedRemaining ?: "12 GB") + " left",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = GoodGreen,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    tr("Strict Mobile Only"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+
+                        // Progress Bar
+                        val progress = pack?.progressRatio ?: 0f
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(progress)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (progress >= 0.9f) DangerRed else AccentCyan)
                             )
                         }
-                        Button(
-                            onClick = { vm.resetDataPackCount() },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentViolet.copy(alpha = 0.2f),
-                                contentColor = AccentViolet,
-                            ),
-                            shape = RoundedCornerShape(8.dp),
+
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            Text(tr("Reset Pack"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = { showQuotaDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceHigh.copy(alpha = 0.6f),
+                                    contentColor = AccentCyan,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Set Pack Size"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { showResetDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentViolet.copy(alpha = 0.25f),
+                                    contentColor = AccentViolet,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Reset Recharge"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
                         }
                     }
+                }
+
+                if (showResetDialog) {
+                    var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+                    AlertDialog(
+                        onDismissRequest = { showResetDialog = false },
+                        title = { Text(tr("Reset Recharge Data Pack"), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text(
+                                    tr("Did you recharge a new data pack? Enter your pack size in GB (e.g. 1.5, 3, 6, 12, 25, 50 GB) and reset the counter to zero."),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = inputGb,
+                                    onValueChange = { inputGb = it },
+                                    label = { Text(tr("Pack Size in GB")) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val size = inputGb.toFloatOrNull()
+                                    vm.resetDataPackCount(size)
+                                    showResetDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
+                            ) {
+                                Text(tr("Reset to 0 MB"), fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showResetDialog = false }) {
+                                Text(tr("Cancel"), color = TextSecondary)
+                            }
+                        },
+                    )
+                }
+
+                if (showQuotaDialog) {
+                    var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+                    AlertDialog(
+                        onDismissRequest = { showQuotaDialog = false },
+                        title = { Text(tr("Change Data Pack Limit"), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text(
+                                    tr("Update your total data quota in GB without resetting current usage counter:"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = inputGb,
+                                    onValueChange = { inputGb = it },
+                                    label = { Text(tr("Pack Quota (GB)")) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val size = inputGb.toFloatOrNull() ?: 12f
+                                    vm.updateDataPackLimit(size)
+                                    showQuotaDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            ) {
+                                Text(tr("Save Limit"), fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showQuotaDialog = false }) {
+                                Text(tr("Cancel"), color = TextSecondary)
+                            }
+                        },
+                    )
                 }
 
                 usage.todayTotalBytes?.let { total ->

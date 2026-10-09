@@ -2190,13 +2190,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun resetDataPackCount() {
-        com.universalrp.cleansweep.data.DataUsageTracker.resetPackUsage(ctx)
+    fun resetDataPackCount(newLimitGb: Float? = null) {
+        com.universalrp.cleansweep.data.DataUsageTracker.resetPackUsage(ctx, newLimitGb)
+        val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
+        val msg = if (newLimitGb != null && newLimitGb > 0f) {
+            "Recharge pack set to %.1f GB and counter reset to 0 MB.".format(newLimitGb)
+        } else {
+            "Recharge pack usage counter reset to 0 MB."
+        }
+        mutate {
+            it.copy(
+                dataPackInfo = pack,
+                message = msg,
+            )
+        }
+        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
+    }
+
+    fun updateDataPackLimit(limitGb: Float) {
+        com.universalrp.cleansweep.data.DataUsageTracker.setPackLimitGb(ctx, limitGb)
         val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
         mutate {
             it.copy(
                 dataPackInfo = pack,
-                message = "Recharge pack usage counter reset to 0 MB.",
+                message = "Data pack quota updated to %.1f GB.".format(limitGb),
             )
         }
         com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)

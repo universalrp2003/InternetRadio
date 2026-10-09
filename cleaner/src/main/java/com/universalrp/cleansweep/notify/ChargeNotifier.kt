@@ -12,24 +12,13 @@ import com.universalrp.cleansweep.MainActivity
 import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
+import com.universalrp.cleansweep.data.DataUsageTracker
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
- * The charging card and the spoken plug-in line, in one place.
- *
- * There are two ways CleanSweep can watch a charger, and both must show the same thing:
- *
- *  * [ChargeMonitorService] — the plain foreground service. Best case: a live card that
- *    updates every five seconds while the charger is in.
- *  * [com.universalrp.cleansweep.work.ChargerWatchWorker] — the road that always works.
- *    Android 12 and newer refuse to let a broadcast receiver start a foreground service, so
- *    the plug-in broadcast hands the work to a job, which is allowed to run, and the job
- *    keeps the same card and readings alive from inside itself.
- *
- * Nothing here needs a new permission: the numbers come from the system battery broadcast and
- * the card goes to the notification channel the app already has.
+ * The ongoing mobile data & charging status card and spoken announcements.
  */
 object ChargeNotifier {
 
@@ -54,11 +43,10 @@ object ChargeNotifier {
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Charging status",
+                    "Mobile data & battery status",
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Charging power, battery level and time to full while the " +
-                        "charger is connected"
+                    description = "Live mobile data usage, custom data pack balance and battery metrics"
                     setShowBadge(false)
                 }
             )
@@ -68,8 +56,9 @@ object ChargeNotifier {
     }
 
     /**
-     * The ongoing card: charging power in watts, current, voltage, temperature and how long
-     * is left. It cannot be swiped away, and it disappears the moment the charger comes out.
+     * Ongoing notification card:
+     * Prominently displays today's real mobile data usage,
+     * pack status (Used / Quota & Remaining GB left), and secondary battery/charging stats.
      */
     fun build(context: Context, battery: BatteryReading): Notification {
         val openApp = PendingIntent.getActivity(
@@ -80,50 +69,51 @@ object ChargeNotifier {
         )
 
         val dataUsage = try {
-            com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(context)
+            DataUsageTracker.getUsageInfo(context)
         } catch (e: Exception) {
             null
         }
 
-        val title = when {
-            dataUsage != null && battery.charging ->
-                "Charging • ${battery.percent}% • Data: ${dataUsage.formattedToday}"
-            dataUsage != null ->
-                "Data: ${dataUsage.formattedToday} (Pack: ${dataUsage.formattedPackTotal}) • ${battery.percent}%"
-            battery.charging && battery.percent >= 100 -> "Battery full — unplug to save power"
-            battery.charging -> {
-                val watts = battery.powerW
-                if (watts != null) {
-                    "Charging at %.1f W • %d%%".format(watts, battery.percent.coerceAtLeast(0))
-                } else {
-                    "Charging • ${battery.percent}%"
-                }
+        val title = if (dataUsage != null) {
+            "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
+        } else if (battery.charging) {
+            val watts = battery.powerW
+            if (watts != null) {
+                "Charging at %.1f W • %d%%".format(watts, battery.percent.coerceAtLeast(0))
+            } else {
+                "Charging • ${battery.percent}%"
             }
-            else -> "${battery.percent}% • ${battery.statusLabel}"
+        } else {
+            "${battery.percent}% • ${battery.statusLabel}"
         }
 
         val timeLine = try {
             batteryTimeLabel(battery)
         } catch (e: Exception) {
             null
-        } ?: "Time estimate not available yet"
+        } ?: "Battery: ${battery.percent}%"
 
         val details = buildString {
             if (dataUsage != null) {
-                append("Today's Mobile Data: ${dataUsage.formattedToday} • Pack Total: ${dataUsage.formattedPackTotal}\n")
+                append("Pack Used: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} • Left: ${dataUsage.formattedRemaining}\n")
             }
-            append(timeLine)
-            battery.currentA?.let { append(" • %.2f A".format(it)) }
-            battery.voltageV?.let { append(" • %.2f V".format(it)) }
-            battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
+            if (battery.charging) {
+                append("Charging: $timeLine")
+                battery.powerW?.let { append(" • %.1f W".format(it)) }
+                battery.currentA?.let { append(" • %.2f A".format(it)) }
+                battery.voltageV?.let { append(" • %.2f V".format(it)) }
+                battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
+            } else {
+                append("Battery: ${battery.percent}% • ${battery.statusLabel}")
+                battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
+            }
         }
 
         val hint = when {
-            !battery.charging -> "Unplugged — the reading stops here."
-            battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged " +
-                "overnight is fine."
-            battery.percent >= 80 -> "Above 80% charging slows down on purpose — this is normal " +
-                "for lithium batteries."
+            dataUsage != null -> "Mobile data usage is strictly tracked from cellular networks (zero Wi-Fi)."
+            !battery.charging -> "Unplugged — monitoring active."
+            battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged overnight is fine."
+            battery.percent >= 80 -> "Above 80% charging slows down on purpose — this is normal for lithium batteries."
             else -> "Open CleanSweep for CPU temperature, battery health and security."
         }
 
@@ -153,8 +143,7 @@ object ChargeNotifier {
 
     /**
      * The plainest possible card. Used only as a last resort when the battery broadcast
-     * cannot be read at all — starting a foreground service without a valid notification is
-     * a crash, so there is always this to hand.
+     * cannot be read at all.
      */
     fun buildFallback(context: Context): Notification {
         channel(context)
@@ -165,9 +154,9 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_battery)
-            .setContentTitle("Charging")
-            .setContentText("CleanSweep is reading the charging numbers.")
+            .setSmallIcon(R.drawable.ic_stat_data)
+            .setContentTitle("CleanSweep Monitoring")
+            .setContentText("CleanSweep is monitoring mobile data and device stats.")
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -222,17 +211,12 @@ object ChargeNotifier {
 
     /**
      * Says what the charger is doing, once per plug-in.
-     *
-     * A phone reports no current for the first few seconds after the plug goes in, so this
-     * waits before it reads — otherwise the announcement would always be "not charging yet".
-     * The dedupe marker lives in prefs because the service and the fallback job can both ask
-     * for the line, and the user must not hear it twice.
      */
     fun announcePluggedIn(context: Context, delayMs: Long = 800) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        // Deduplicate plug-ins within 15 seconds (reduced from 45s)
+        // Deduplicate plug-ins within 15 seconds
         if (System.currentTimeMillis() - last < 15_000L) return
         prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
 
@@ -260,7 +244,6 @@ object ChargeNotifier {
         val currentA = battery.currentA
         val timeEstimate = try {
             val mins = batteryTimeMinutes(battery)
-            // Only speak time estimate when current is steady (> 0.25A) and percent is between 5% and 94%
             if (mins != null && mins in 2..480 && currentA != null && currentA > 0.25f && percent in 5..94) {
                 val h = mins / 60
                 val m = mins % 60

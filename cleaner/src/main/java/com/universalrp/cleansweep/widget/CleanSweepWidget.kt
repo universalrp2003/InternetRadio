@@ -22,15 +22,11 @@ import java.util.Locale
 /**
  * The home-screen widget: what CleanSweep knows, without opening it.
  *
- *  * the battery percentage and the charging wattage,
- *  * how much storage is free,
- *  * the last daily brief, in one line,
- *  * a tap target for each: "Clean" opens the scanner, the body opens the app, and the speaker
- *    reads the brief out loud.
- *
- * Tapping "Clean" cannot launch straight into a scan (Android forbids starting that work from
- * the background), so it opens the app on the scan screen — which is where the user was going
- * anyway.
+ *  * Primary display: Today's Mobile Data usage prominently formatted in GB/MB.
+ *  * Secondary display: Pack Used / Pack Quota & Remaining GB left.
+ *  * Storage free and battery percentage with state.
+ *  * Last daily brief or security alert in one line.
+ *  * Quick tap actions: refresh on widget body, clean button to open scanning.
  */
 class CleanSweepWidget : AppWidgetProvider() {
 
@@ -77,25 +73,27 @@ class CleanSweepWidget : AppWidgetProvider() {
                 null
             }
 
-            val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
-            val dataText = if (dataUsage != null) {
-                " • ${dataUsage.formattedToday} data"
-            } else if (battery?.charging == true && battery.powerW != null) {
-                " • %.1f W".format(battery.powerW)
-            } else if (battery?.charging == false) {
-                " • Discharging"
+            // Prominent Display: Real Today's Mobile Data Usage (in GB/MB)
+            val todayDataDisplay = if (dataUsage != null) {
+                "${dataUsage.formattedToday} Today"
             } else {
-                ""
+                val percent = battery?.percent?.takeIf { it in 0..100 }?.let { "$it%" } ?: "—"
+                if (battery?.charging == true && battery.powerW != null) {
+                    "$percent • %.1f W".format(battery.powerW)
+                } else {
+                    percent
+                }
             }
-            views.setTextViewText(R.id.widget_battery, percent + dataText)
+            views.setTextViewText(R.id.widget_battery, todayDataDisplay)
 
+            // Pack Status & Storage: "Pack: 1.2 GB / 12 GB • 10.8 GB left"
             val freeStorage = health?.storage?.free?.formatBytes() ?: "—"
-            val packText = if (dataUsage != null) {
-                "$freeStorage free • Pack: ${dataUsage.formattedPackTotal}"
+            val secondaryText = if (dataUsage != null) {
+                "Pack: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} (${dataUsage.formattedRemaining} left) • $freeStorage free"
             } else {
                 "$freeStorage free"
             }
-            views.setTextViewText(R.id.widget_storage, packText)
+            views.setTextViewText(R.id.widget_storage, secondaryText)
 
             val brief = Announcer.lastBrief(context)
             val line = when {
@@ -113,16 +111,14 @@ class CleanSweepWidget : AppWidgetProvider() {
             }
             views.setTextViewText(R.id.widget_brief, displayLine)
 
-            val stamp = battery?.statusLabel.orEmpty()
+            val batteryPart = battery?.percent?.takeIf { it in 0..100 }?.let { "Battery $it%" } ?: ""
             val timeFmt = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
-            views.setTextViewText(
-                R.id.widget_state,
-                if (stamp.isNotBlank()) {
-                    "$stamp • updated $timeFmt"
-                } else {
-                    "updated $timeFmt"
-                },
-            )
+            val stateText = if (batteryPart.isNotBlank()) {
+                "$batteryPart • $timeFmt"
+            } else {
+                "updated $timeFmt"
+            }
+            views.setTextViewText(R.id.widget_state, stateText)
 
             // Tapping widget body refreshes the widget details rather than opening the app,
             // preventing accidental launcher freezes/crashes. The app is only opened when tapping "Clean".
