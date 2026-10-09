@@ -127,8 +127,19 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_data)
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        if (dataUsage != null) {
+            try {
+                val icon = DataIconFactory.createIcon(dataUsage.todayMobileBytes)
+                builder.setSmallIcon(icon)
+            } catch (e: Exception) {
+                builder.setSmallIcon(R.drawable.ic_stat_data)
+            }
+        } else {
+            builder.setSmallIcon(R.drawable.ic_stat_data)
+        }
+
+        return builder
             .setContentTitle(title)
             .setContentText(details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
@@ -153,8 +164,24 @@ object ChargeNotifier {
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_data)
+        val dataUsage = try {
+            DataUsageTracker.getUsageInfo(context)
+        } catch (e: Exception) {
+            null
+        }
+        val builder = NotificationCompat.Builder(context, CHANNEL_ID)
+        if (dataUsage != null) {
+            try {
+                val icon = DataIconFactory.createIcon(dataUsage.todayMobileBytes)
+                builder.setSmallIcon(icon)
+            } catch (e: Exception) {
+                builder.setSmallIcon(R.drawable.ic_stat_data)
+            }
+        } else {
+            builder.setSmallIcon(R.drawable.ic_stat_data)
+        }
+
+        return builder
             .setContentTitle("CleanSweep Monitoring")
             .setContentText("CleanSweep is monitoring mobile data and device stats.")
             .setOngoing(true)
@@ -193,18 +220,30 @@ object ChargeNotifier {
         StatusPill.remove()
     }
 
-    /** The little watt reading in the status bar, when the user switched it on and allowed it. */
+    /** The status bar pill: shows today's mobile data or charging watts in the status bar. */
     fun updatePill(context: Context, battery: BatteryReading) {
         val wanted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(ChargeMonitorService.PILL_KEY, false)
-        if (!wanted || !StatusPill.canDraw(context) || !battery.charging) {
+        if (!wanted || !StatusPill.canDraw(context)) {
             StatusPill.remove()
             return
         }
+        val dataUsage = try {
+            DataUsageTracker.getUsageInfo(context)
+        } catch (e: Exception) {
+            null
+        }
         val text = when {
-            battery.powerW != null -> "\u26A1 %.1f W".format(battery.powerW)
-            battery.currentA != null -> "\u26A1 %.2f A".format(battery.currentA)
-            else -> "\u26A1 ${battery.percent}%"
+            dataUsage != null && battery.charging && battery.powerW != null ->
+                "${dataUsage.formattedToday} • ⚡ %.1f W".format(battery.powerW)
+            dataUsage != null ->
+                dataUsage.formattedToday
+            battery.charging && battery.powerW != null ->
+                "⚡ %.1f W".format(battery.powerW)
+            battery.charging && battery.currentA != null ->
+                "⚡ %.2f A".format(battery.currentA)
+            else ->
+                "${battery.percent}%"
         }
         StatusPill.update(context, text)
     }
