@@ -1,9 +1,10 @@
 # Live Guard (CleanSweep) — cleaner, phone health, security & network
 
-A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi phones
-(HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
-and stock Android. This release still needs real-device validation, especially
-for manufacturer Settings links and overlays.
+A privacy-friendly app targeting **Android 8.0/API 26+**, with guarded settings
+routes and manufacturer-aware fallbacks for Xiaomi/Redmi/Poco (HyperOS / MIUI)
+and other Android phones. This is a compatibility target, not proof that every
+model or ROM has been tested. Manufacturer Settings links, overlays and background
+restrictions still need real-device validation.
 
 ## v2.34 — current release
 
@@ -27,9 +28,11 @@ for manufacturer Settings links and overlays.
   permissions should not be removed just for a score. Advice is manual and may be wrong.
 
 27 regression tests cover display policy, targeted routes, complete prompts and
-privacy. GitHub publication is gated on compilation/tests/APK/signature checks;
-physical-device behaviour is not certified. See the
-[device test plan](../docs/live-guard-2.34-device-test-plan.md) and
+privacy. GitHub publication is gated on compilation/tests/APK/signature checks.
+After publication, the owner confirmed the charging/normal-display transition on
+**Redmi 13 5G**, with screenshots. Its Android/ROM version was not supplied; other
+models and the full feature matrix remain unverified. See the
+[device evidence and test plan](../docs/live-guard-2.34-device-test-plan.md) and
 [release notes](../releases/v2026.10.10-8.md).
 
 ## Historical highlights

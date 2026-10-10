@@ -26,6 +26,32 @@ Pure JVM policy tests do **not** validate Android overlay rendering or an OEM's
 exported Settings activities. No physical phone or emulator was available in this
 coding environment. Those limitations must stay in the release notes.
 
+## Validation evidence (updated 2026-10-10)
+
+- **Automated publication checks passed:** [Build APK run 38059390123](https://github.com/universalrp2003/InternetRadio/actions/runs/38059390123)
+  verified the release from commit `f3e92bec0b5bba4264425b85a91edb646f1aca1c`.
+- **Redmi 13 5G — charging/display user-confirmed after publication.** The owner
+  reported correct operation and supplied screenshots showing:
+  - only watts in the compact pill while charging, without data text or D/U lights;
+  - the normal mobile-data count and D/U lights after unplugging;
+  - a charging-focused notification while connected and the normal mobile-data/
+    battery notification while discharging.
+  There is no visible overlap in the supplied compact-display examples. The
+  automatic unplug restoration is user-reported; screenshots alone do not measure
+  transition time or establish long-term reliability.
+- **Android version and MIUI/HyperOS version were not supplied.** Do not infer the
+  installed OS/ROM from the model or screenshot styling.
+- **Other phone models remain unverified.** Android 8.0/API 26+ is the supported
+  target, with guarded settings routes and fallbacks, not a certification of every
+  manufacturer/model/ROM combination.
+- **Remaining checks:** the screenshots do not establish Security Fix/Manage or
+  AI end-to-end behaviour, full/paused charging, missing sensors, wireless charging,
+  all positioning/scale options, Stop, reboot or OEM background restrictions.
+  Those checks and cross-device testing remain in the procedures below.
+
+Only the observations above are confirmed; this is not a full device-plan pass.
+No supplied screenshots or private browser/session details are published here.
+
 ## Charging display (Xiaomi/Redmi/Poco first, then other manufacturers)
 
 1. Update from v2.33 without uninstalling. Confirm app data, AI config, selected pack

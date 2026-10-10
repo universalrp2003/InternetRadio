@@ -36,8 +36,9 @@ CI artifacts are temporary build downloads, not the public release channel.
   normal data/network view restored on unplug with background monitoring enabled;
   app-specific security Fix/Manage with manufacturer-aware fallbacks; and a fresh,
   complete security AI request that honours app-name/network sharing switches.
-  Includes 27 regression tests. OEM settings and overlay placement still need
-  [real-device validation](docs/live-guard-2.34-device-test-plan.md).
+  Includes 27 regression tests. Charging/display behaviour was user-confirmed on
+  **Redmi 13 5G** after publication; other models and the full feature matrix remain
+  unverified. See the [device evidence and test plan](docs/live-guard-2.34-device-test-plan.md).
 - **Ramesh Radio 1.8:** retains current station-discovery and playback improvements;
   unchanged in this bug-fix release. **PulseEQ 1.2** is also unchanged.
 
