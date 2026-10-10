@@ -2,9 +2,12 @@ package com.universalrp.cleansweep.notify
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
@@ -17,26 +20,99 @@ import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.LinearLayout
 import android.widget.TextView
 import com.universalrp.cleansweep.data.LiveNetworkQuality
 
 /**
- * The little "⚡ 3.9 W" reading that sits in the empty part of the status bar, next to the
- * clock and beside the front-camera cutout — the space the user pointed at in the
- * screenshot. Android gives third-party apps no way to add a real status-bar item, so this
- * is a tiny overlay window that CleanSweep draws there itself. It is:
- *
- *  * off by default and only drawn after the user allows "Display over other apps",
- *  * transparent to touch (it can never block a tap on the status bar),
- *  * only shown while the charger is connected,
- *  * **movable**: every phone writes different things up there (the carrier name, VoLTE,
- *    VPN, battery %), so the arrows in Phone health move the reading anywhere on screen and
- *    the position is remembered,
- *  * nothing but a number and a watt sign — no notifications, no personal data.
- *
- * Because it is an overlay, a phone can hide it in full-screen apps, and it disappears the
- * moment the user turns the switch off.
+ * Animated dual-channel network activity LED meter:
+ * - [D] Download: lights left-to-right (0 -> 1 -> 2)
+ * - [U] Upload: lights right-to-left (2 -> 1 -> 0)
+ * Illuminated in Gold (top quality), Emerald Green (good), Red (poor) with smooth background track.
+ */
+class NetworkLedMeterView(context: Context) : View(context) {
+    var isDownloadActive: Boolean = true
+    var isUploadActive: Boolean = true
+    var qualityGrade: LiveNetworkQuality.QualityGrade? = null
+    var animStep: Int = 0
+
+    private val litPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        typeface = Typeface.DEFAULT_BOLD
+    }
+
+    private fun dp(v: Float): Float = v * resources.displayMetrics.density
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val w = width.toFloat()
+        val h = height.toFloat()
+        if (w <= 0 || h <= 0) return
+
+        val rowH = h / 2f
+        textPaint.textSize = (rowH * 0.72f).coerceAtLeast(dp(6f))
+        val tagW = dp(8f)
+        val barStartX = tagW + dp(2.5f)
+        val barW = (w - barStartX).coerceAtLeast(dp(18f))
+        val barH = dp(2.8f)
+        val numSegments = 3
+        val segGap = dp(1.5f)
+        val totalGaps = (numSegments - 1) * segGap
+        val segW = (barW - totalGaps) / numSegments
+
+        val baseColor = when (qualityGrade) {
+            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> Color.parseColor("#FFD700")
+            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> Color.parseColor("#00E676")
+            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> Color.parseColor("#FF3B30")
+            null -> Color.parseColor("#38BDF8")
+        }
+
+        // Row 1: Download [D] (lights left to right)
+        val dCenterY = rowH * 0.5f
+        textPaint.color = if (isDownloadActive) baseColor else Color.parseColor("#66FFFFFF")
+        canvas.drawText("D", 0f, dCenterY + textPaint.textSize * 0.35f, textPaint)
+        for (i in 0 until numSegments) {
+            val left = barStartX + i * (segW + segGap)
+            val top = dCenterY - barH / 2f
+            val rect = RectF(left, top, left + segW, top + barH)
+            val isLit = isDownloadActive && ((animStep % numSegments) >= i)
+            if (isLit) {
+                litPaint.color = baseColor
+                litPaint.alpha = 255
+            } else {
+                litPaint.color = Color.parseColor("#33FFFFFF")
+            }
+            canvas.drawRoundRect(rect, dp(1.2f), dp(1.2f), litPaint)
+        }
+
+        // Row 2: Upload [U] (lights right to left: from mobile data count inwards)
+        val uCenterY = rowH * 1.5f
+        textPaint.color = if (isUploadActive) baseColor else Color.parseColor("#66FFFFFF")
+        canvas.drawText("U", 0f, uCenterY + textPaint.textSize * 0.35f, textPaint)
+        for (i in 0 until numSegments) {
+            val left = barStartX + i * (segW + segGap)
+            val top = uCenterY - barH / 2f
+            val rect = RectF(left, top, left + segW, top + barH)
+            val revIndex = (numSegments - 1) - i
+            val isLit = isUploadActive && ((animStep % numSegments) >= revIndex)
+            if (isLit) {
+                litPaint.color = baseColor
+                litPaint.alpha = 255
+            } else {
+                litPaint.color = Color.parseColor("#33FFFFFF")
+            }
+            canvas.drawRoundRect(rect, dp(1.2f), dp(1.2f), litPaint)
+        }
+    }
+}
+
+/**
+ * Expanded status bar pill overlay:
+ * Houses the colored `↑↓` indicator, the real-time mobile data count (or charging watts),
+ * and the animated dual-track LED meter with [D] and [U] glowing indicator bars.
  */
 object StatusPill {
 
@@ -47,14 +123,11 @@ object StatusPill {
     const val KEY_AUTO = "pill_auto"
 
     private val main = Handler(Looper.getMainLooper())
-    private var view: TextView? = null
+    private var rootContainer: LinearLayout? = null
+    private var dataTextView: TextView? = null
+    private var meterView: NetworkLedMeterView? = null
     private var params: WindowManager.LayoutParams? = null
 
-    /**
-     * True only while the user is placing the reading with their finger. Outside drag mode the
-     * pill stays [WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE], so it can never swallow a tap
-     * meant for the phone's own status bar.
-     */
     @Volatile
     private var draggable = false
 
@@ -70,18 +143,13 @@ object StatusPill {
 
     fun isAuto(context: Context): Boolean = prefs(context).getBoolean(KEY_AUTO, true)
 
-    /**
-     * Moves the reading by a number of screen pixels and remembers it, so the user can push
-     * it out of the way of anything their phone puts up there — or drop it below the status
-     * bar entirely.
-     */
+    /** Moves the reading by a number of screen pixels and remembers it. */
     fun moveBy(context: Context, dx: Int, dy: Int) {
         val app = context.applicationContext
         nudge(app, dx, dy)
         redraw(app)
     }
 
-    /** Adds [dx], [dy] to the remembered spot, without touching the window. */
     private fun nudge(context: Context, dx: Int, dy: Int) {
         val (x, y) = offsets(context)
         prefs(context).edit()
@@ -91,24 +159,19 @@ object StatusPill {
             .apply()
     }
 
-    /**
-     * Drag mode: with it on, the reading itself follows the finger, and the user can drop it
-     * anywhere on the screen — including right under the status bar. Turned off, the pill goes
-     * back to being touch-through.
-     */
     fun setDraggable(context: Context, on: Boolean) {
         draggable = on
         val app = context.applicationContext
         main.post {
-            val pill = view ?: return@post
+            val root = rootContainer ?: return@post
             val layout = params ?: return@post
-            val manager = pill.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            val manager = root.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
                 ?: return@post
             layout.flags = flags()
             try {
-                manager.updateViewLayout(pill, layout)
+                manager.updateViewLayout(root, layout)
             } catch (e: Exception) {
-                // The window went away between frames.
+                // Window went away.
             }
         }
     }
@@ -119,7 +182,6 @@ object StatusPill {
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
 
-    /** Back to the automatic spot (centred, beside the camera cutout). */
     fun resetPosition(context: Context) {
         val app = context.applicationContext
         prefs(app).edit()
@@ -130,103 +192,73 @@ object StatusPill {
         redraw(app)
     }
 
-    /** Re-reads the position and moves the pill, if it is on screen right now. */
     fun redraw(context: Context) {
         val app = context.applicationContext
         main.post {
-            val pill = view ?: return@post
-            val manager = pill.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
+            val root = rootContainer ?: return@post
+            val manager = root.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
                 ?: return@post
-            position(app, manager, pill)
-            pill.post { position(app, manager, pill) }
+            position(app, manager, root)
+            root.post { position(app, manager, root) }
         }
     }
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
-    /**
-     * Shows [text] (or hides the pill when it is null/blank). Safe to call from any thread
-     * and from a service: the work is posted to the main looper.
-     */
     private var blinkState = false
-
-    private fun getPillBackground(context: Context, grade: LiveNetworkQuality.QualityGrade?): GradientDrawable {
-        val gd = GradientDrawable().apply {
-            cornerRadius = dp(context, 7).toFloat()
-            setColor(Color.parseColor("#CC000000"))
-        }
-        when (grade) {
-            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> {
-                // Gold flashing top quality
-                val strokeColor = if (blinkState) Color.parseColor("#FFD700") else Color.parseColor("#FFA500")
-                gd.setStroke(dp(context, 1), strokeColor)
-            }
-            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> {
-                // Medium quality: Green fill with Gold outline
-                gd.setColor(Color.parseColor("#B8083818"))
-                gd.setStroke(dp(context, 1), Color.parseColor("#FFD700"))
-            }
-            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> {
-                // Bad quality: Red color blinking
-                val strokeColor = if (blinkState) Color.parseColor("#FF3B30") else Color.parseColor("#88FF3B30")
-                gd.setStroke(dp(context, 1), strokeColor)
-                if (blinkState) gd.setColor(Color.parseColor("#B8420000"))
-            }
-            null -> {
-                gd.setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
-            }
-        }
-        return gd
-    }
+    private var animCounter = 0
 
     fun remove() {
         main.post { hide() }
     }
 
     private fun hide() {
-        val current = view ?: return
+        val current = rootContainer ?: return
         val manager = current.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
         try {
             manager?.removeViewImmediate(current)
         } catch (e: Exception) {
             // Already detached.
         }
-        view = null
+        rootContainer = null
+        dataTextView = null
+        meterView = null
         params = null
     }
 
     private fun applyStyle(
-        pill: TextView,
+        root: LinearLayout,
+        tv: TextView,
+        meter: NetworkLedMeterView,
         context: Context,
         rawText: String,
         packPercent: Int?,
-        qualityGrade: LiveNetworkQuality.QualityGrade?
+        qualityGrade: LiveNetworkQuality.QualityGrade?,
+        rxSpeed: Long,
+        txSpeed: Long
     ) {
         val gd = GradientDrawable().apply {
-            cornerRadius = dp(context, 7).toFloat()
-            setColor(Color.parseColor("#E0000000"))
+            cornerRadius = dp(context, 8).toFloat()
+            setColor(Color.parseColor("#E6000000"))
         }
 
-        // 1. Arrow indicator color based on network quality
+        // Arrow indicator color based on network quality
         val arrowStr = "↑↓ "
         val arrowColor = when (qualityGrade) {
             LiveNetworkQuality.QualityGrade.TOP_QUALITY -> {
-                // Gold / Amber Gold flashing
                 if (blinkState) Color.parseColor("#FFD700") else Color.parseColor("#FFA500")
             }
             LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> {
-                // Emerald Green
                 Color.parseColor("#00E676")
             }
             LiveNetworkQuality.QualityGrade.BAD_QUALITY -> {
-                // Bad quality Red blink
                 if (blinkState) Color.parseColor("#FF3B30") else Color.parseColor("#88FF3B30")
             }
             null -> Color.parseColor("#38BDF8")
         }
 
-        // 2. Data text color and pill border
+        // Pack alert styling
         val textColor: Int
         if (packPercent == null) {
             textColor = Color.parseColor("#E8FBFF")
@@ -280,48 +312,79 @@ object StatusPill {
             Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
         )
 
-        pill.text = sb
-        pill.background = gd
+        tv.text = sb
+        root.background = gd
+
+        // Update animated LED meter
+        // If speed > 100 bytes/sec, consider active transfer; default active if network is connected
+        meter.isDownloadActive = rxSpeed > 200L || (qualityGrade != null && rxSpeed >= 0)
+        meter.isUploadActive = txSpeed > 200L || (qualityGrade != null && txSpeed >= 0)
+        meter.qualityGrade = qualityGrade
+        meter.animStep = animCounter
+        meter.invalidate()
     }
 
     fun update(
         context: Context,
         text: String?,
         packPercent: Int? = null,
-        qualityGrade: LiveNetworkQuality.QualityGrade? = null
+        qualityGrade: LiveNetworkQuality.QualityGrade? = null,
+        rxSpeed: Long = 0L,
+        txSpeed: Long = 0L
     ) {
         if (text.isNullOrBlank() || !canDraw(context)) {
             remove()
             return
         }
         val app = context.applicationContext
-        main.post { show(app, text, packPercent, qualityGrade) }
+        main.post { show(app, text, packPercent, qualityGrade, rxSpeed, txSpeed) }
     }
 
     private fun show(
         context: Context,
         text: String,
         packPercent: Int? = null,
-        qualityGrade: LiveNetworkQuality.QualityGrade? = null
+        qualityGrade: LiveNetworkQuality.QualityGrade? = null,
+        rxSpeed: Long = 0L,
+        txSpeed: Long = 0L
     ) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
-        val pill = view ?: createPill(context, manager) ?: return
+        val root = rootContainer ?: createPill(context, manager) ?: return
+        val tv = dataTextView ?: return
+        val meter = meterView ?: return
+
         blinkState = !blinkState
-        applyStyle(pill, context, text, packPercent, qualityGrade)
-        position(context, manager, pill)
-        pill.post { position(context, manager, pill) }
+        animCounter++
+
+        applyStyle(root, tv, meter, context, text, packPercent, qualityGrade, rxSpeed, txSpeed)
+        position(context, manager, root)
+        root.post { position(context, manager, root) }
     }
 
-    /** Adds the window; returns null when the phone refuses to let us draw there. */
-    private fun createPill(context: Context, manager: WindowManager): TextView? {
-        val pill = TextView(context).apply {
+    private fun createPill(context: Context, manager: WindowManager): LinearLayout? {
+        val root = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(context, 7), dp(context, 2), dp(context, 7), dp(context, 2))
+        }
+
+        val tv = TextView(context).apply {
             setTextColor(Color.parseColor("#E8FBFF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.5f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
-            setPadding(dp(context, 6), dp(context, 1), dp(context, 6), dp(context, 1))
-            background = getPillBackground(context, null)
         }
+
+        val meter = NetworkLedMeterView(context).apply {
+            val lp = LinearLayout.LayoutParams(dp(context, 34), dp(context, 14)).apply {
+                marginStart = dp(context, 6)
+            }
+            layoutParams = lp
+        }
+
+        root.addView(tv)
+        root.addView(meter)
+
         val layout = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -335,11 +398,10 @@ object StatusPill {
             PixelFormat.TRANSLUCENT,
         )
         layout.gravity = Gravity.TOP or Gravity.START
-        // Finger dragging, only while the user asked for it: each move is the same arithmetic
-        // the arrows use, so the two can never disagree about where the reading is.
+
         var lastX = 0f
         var lastY = 0f
-        pill.setOnTouchListener { v, event ->
+        root.setOnTouchListener { v, event ->
             if (!draggable) return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
@@ -354,7 +416,7 @@ object StatusPill {
                     lastY = event.rawY
                     if (dx != 0 || dy != 0) {
                         nudge(context, dx, dy)
-                        position(context, manager, pill)
+                        position(context, manager, root)
                     }
                     true
                 }
@@ -362,31 +424,31 @@ object StatusPill {
                 else -> false
             }
         }
+
         return try {
-            manager.addView(pill, layout)
-            view = pill
+            manager.addView(root, layout)
+            rootContainer = root
+            dataTextView = tv
+            meterView = meter
             params = layout
-            pill
+            root
         } catch (e: Exception) {
-            // Some phones refuse the window; then there is simply no pill.
             null
         }
     }
 
-    private fun position(context: Context, manager: WindowManager, pill: TextView) {
+    private fun position(context: Context, manager: WindowManager, root: View) {
         val layout = params ?: return
         val screenWidth = context.resources.displayMetrics.widthPixels
         val screenHeight = context.resources.displayMetrics.heightPixels
         val statusHeight = statusBarHeight(context)
-        val width = if (pill.width > 0) pill.width else dp(context, 56)
-        val height = if (pill.height > 0) pill.height else dp(context, 16)
+        val width = if (root.width > 0) root.width else dp(context, 100)
+        val height = if (root.height > 0) root.height else dp(context, 18)
         val margin = dp(context, 2)
 
-        // Default: the empty middle of the status bar, between the clock and the icons.
         var x = (screenWidth - width) / 2
         var y = (statusHeight - height) / 2
 
-        // With a punch-hole camera up there, sit beside it instead of behind it.
         val cutout = topCutout(manager)
         if (cutout != null && cutout.width() > 0 && cutout.width() < screenWidth / 2) {
             val gap = dp(context, 5)
@@ -399,8 +461,6 @@ object StatusPill {
             if (x + width > screenWidth - margin) x = cutout.left - width - gap
         }
 
-        // The user's own position, when they have moved it: every phone writes different
-        // words up there (VoLTE, VPN, carrier name), so it has to be movable.
         if (!isAuto(context)) {
             val (dx, dy) = offsets(context)
             x += dx
@@ -410,13 +470,12 @@ object StatusPill {
         layout.x = x.coerceIn(margin, (screenWidth - width - margin).coerceAtLeast(margin))
         layout.y = y.coerceIn(0, (screenHeight - height - margin).coerceAtLeast(0))
         try {
-            manager.updateViewLayout(pill, layout)
+            manager.updateViewLayout(root, layout)
         } catch (e: Exception) {
-            // The window went away between frames.
+            // Window went away between frames.
         }
     }
 
-    /** The camera cutout at the very top of the screen, when the phone reports one. */
     private fun topCutout(manager: WindowManager): Rect? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         return try {

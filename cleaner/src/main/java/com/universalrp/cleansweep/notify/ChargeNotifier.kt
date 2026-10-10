@@ -272,7 +272,14 @@ object ChargeNotifier {
             null
         }
 
-        StatusPill.update(context, text, packPercent, netQuality?.grade)
+        StatusPill.update(
+            context,
+            text,
+            packPercent,
+            netQuality?.grade,
+            netQuality?.rxSpeedBytesPerSec ?: 0L,
+            netQuality?.txSpeedBytesPerSec ?: 0L
+        )
     }
 
     /**
