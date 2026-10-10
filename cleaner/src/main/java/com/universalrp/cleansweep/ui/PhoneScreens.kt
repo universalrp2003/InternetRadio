@@ -48,6 +48,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -65,6 +66,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +77,7 @@ import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppRow
 import com.universalrp.cleansweep.data.Finding
 import com.universalrp.cleansweep.data.LanDevice
+import com.universalrp.cleansweep.data.SecurityFixHelper
 import com.universalrp.cleansweep.data.Severity
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.tr
@@ -606,13 +609,14 @@ private fun FindingCard(finding: Finding) {
                     }
                 }
                 if (finding.samples.size > 6) {
+                    val showLessText = tr("Show less")
+                    val showAllText = tr("Show all %d", finding.samples.size)
                     TextButton(
                         onClick = { expanded = !expanded },
                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                     ) {
                         Text(
-                            if (expanded) tr("Show less")
-                            else tr("Show all %d", finding.samples.size),
+                            if (expanded) showLessText else showAllText,
                             color = AccentCyan,
                             fontWeight = FontWeight.Bold,
                         )
