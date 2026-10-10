@@ -18,7 +18,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.UiState
+import com.universalrp.cleansweep.data.tr
 import com.universalrp.cleansweep.notify.StatusPill
+import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.SurfaceHigh
+import com.universalrp.cleansweep.ui.theme.TextPrimary
+import com.universalrp.cleansweep.ui.theme.TextSecondary
 
 @Composable
 fun StatusPillHomeControls(state: UiState, vm: MainViewModel) {

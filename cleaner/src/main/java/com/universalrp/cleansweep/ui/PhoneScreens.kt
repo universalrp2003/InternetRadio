@@ -1256,39 +1256,17 @@ fun CheckLine(text: String, ok: Boolean) {
         Text(text, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
     }
 }
-package com.universalrp.cleansweep.ui
-
-import android.content.Context
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.universalrp.cleansweep.MainViewModel
-import com.universalrp.cleansweep.data.Finding
-import com.universalrp.cleansweep.data.SecurityFixHelper
-import com.universalrp.cleansweep.data.Severity
 
 @Composable
 fun SecurityGuidanceCard(vm: MainViewModel) {
     var expanded by remember { mutableStateOf(false) }
-    val guidance = remember { SecurityFixHelper.getDeviceGuidance() }
+    val guidance = remember { com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance() }
 
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Outlined.AutoAwesome,
+                    Icons.Outlined.Security,
                     contentDescription = null,
                     tint = AccentCyan,
                     modifier = Modifier.size(24.dp),
@@ -1308,7 +1286,7 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
                 }
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
-                        if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        if (expanded) Icons.Outlined.Close else Icons.Outlined.ChevronRight,
                         contentDescription = "Expand",
                         tint = TextSecondary,
                     )
@@ -1316,7 +1294,7 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
             }
 
             Spacer(Modifier.height(8.dp))
-            Surface(
+            androidx.compose.material3.Surface(
                 color = SurfaceHigh,
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.fillMaxWidth(),
@@ -1326,7 +1304,6 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
                         guidance,
                         style = MaterialTheme.typography.bodySmall,
                         color = TextPrimary,
-                        lineHeight = 20.sp,
                     )
                 }
             }
@@ -1346,18 +1323,19 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f),
                 ) {
-                    Icon(Icons.Outlined.Psychology, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
                     Text(tr("Ask AI to Fix (100/100)"), color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
 
-                FilledTonalButton(
+                Button(
                     onClick = {
                         vm.speakTamilText("உங்கள் போனில் நூற்றுக்கு நூறு பாதுகாப்பு பெற, அங்கீகரிக்கப்படாத செயலிகளின் அனுமதிகளை சரிபார்த்து ரத்து செய்யவும்.")
                     },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentViolet.copy(alpha = 0.2f)),
                     shape = RoundedCornerShape(8.dp),
                 ) {
-                    Icon(Icons.Outlined.VolumeUp, contentDescription = "Voice Guide", tint = AccentViolet, modifier = Modifier.size(18.dp))
+                    Text("Voice Guide", color = AccentViolet, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
         }

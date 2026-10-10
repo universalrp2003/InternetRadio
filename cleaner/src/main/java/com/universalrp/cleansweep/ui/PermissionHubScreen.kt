@@ -10,7 +10,6 @@ import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
@@ -25,11 +24,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.universalrp.cleansweep.MainViewModel
-import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.SecurityFixHelper
-import com.universalrp.cleansweep.data.StorageAccess
+import com.universalrp.cleansweep.data.tr
+import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.GoodGreen
+import com.universalrp.cleansweep.ui.theme.SurfaceHigh
+import com.universalrp.cleansweep.ui.theme.TextPrimary
+import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PermissionHubCard(vm: MainViewModel) {
     val context = LocalContext.current
@@ -44,7 +47,7 @@ fun PermissionHubCard(vm: MainViewModel) {
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Outlined.AdminPanelSettings, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(24.dp))
+                Icon(Icons.Outlined.Security, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(24.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(

@@ -1,7 +1,6 @@
 package com.universalrp.cleansweep.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -12,18 +11,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.universalrp.cleansweep.AppLang
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.UiState
+import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.LiveNetworkQuality
 import com.universalrp.cleansweep.data.PhoneAgeEstimator
 import com.universalrp.cleansweep.data.formatBytes
+import com.universalrp.cleansweep.data.tr
+import com.universalrp.cleansweep.ui.theme.AccentCyan
+import com.universalrp.cleansweep.ui.theme.DangerRed
+import com.universalrp.cleansweep.ui.theme.GoodGreen
+import com.universalrp.cleansweep.ui.theme.SurfaceHigh
+import com.universalrp.cleansweep.ui.theme.TextPrimary
+import com.universalrp.cleansweep.ui.theme.TextSecondary
+import com.universalrp.cleansweep.ui.theme.WarnAmber
 
 @Composable
 fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
@@ -46,7 +52,7 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Outlined.Shield,
+                        Icons.Outlined.Security,
                         contentDescription = null,
                         tint = AccentCyan,
                         modifier = Modifier.size(20.dp),
@@ -144,7 +150,9 @@ private fun MetricPillarCard(
     tagColor: Color,
     onClick: (() -> Unit)? = null,
 ) {
-    SurfaceHighCard(
+    androidx.compose.material3.Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = SurfaceHigh,
         modifier = modifier
             .clip(RoundedCornerShape(14.dp))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
