@@ -1659,14 +1659,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     val prompt = "Identify this device brand and model in 2-3 words. IP: ${d.ip}, MAC: ${d.mac ?: "none"}, Vendor: ${d.vendor ?: "unknown"}, Ports: ${d.openPorts.joinToString()}, Hostname: ${d.hostname ?: "none"}."
                     val aiResp = try {
                         val config = _state.value.aiConfig
-                        val res = com.universalrp.cleansweep.ai.AiClient.ask(
+                        val res: com.universalrp.cleansweep.ai.AiClient.Result = com.universalrp.cleansweep.ai.AiClient.ask(
                             config = config,
                             systemPrompt = "Identify hardware brand & type concisely.",
                             userPrompt = prompt,
                             allowSearch = false,
                         )
-                        if (res.first == com.universalrp.cleansweep.ai.AiClient.Result.SUCCESS && !res.second.isNullOrBlank()) {
-                            res.second?.trim()?.lines()?.firstOrNull()?.take(28)
+                        if (res.ok && res.text.isNotBlank()) {
+                            res.text.trim().lines().firstOrNull()?.take(28)
                         } else null
                     } catch (e: Exception) {
                         null
