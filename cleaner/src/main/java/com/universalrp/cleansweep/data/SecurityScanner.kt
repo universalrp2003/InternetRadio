@@ -77,6 +77,24 @@ object SecurityScanner {
     private val ROOT_TOOL_NAME =
         Regex("(?i)\\broot\\b|rooted|magisk|supersu|kingroot|apatch|kernelsu")
 
+    /**
+     * Recognized banking and UPI payment apps that legitimately require SMS permission
+     * to perform SIM binding, account verification, and transaction tracking.
+     */
+    private val BANKING_OR_PAYMENT_HINTS = listOf(
+        "bank", "upi", "paytm", "phonepe", "gpay", "bhim", "cred", "yono", "imobile",
+        "kotak", "axis", "hdfc", "icici", "pnb", "bob", "canara", "unionbank", "indusind",
+        "slice", "jupiter", "fi.money", "mobikwik", "freecharge", "navi", "bajaj", "postpe"
+    )
+
+    fun isBankingOrPaymentApp(pkg: String, label: String): Boolean {
+        val lowerPkg = pkg.lowercase()
+        val lowerLabel = label.lowercase()
+        return BANKING_OR_PAYMENT_HINTS.any { hint ->
+            lowerPkg.contains(hint) || lowerLabel.contains(hint)
+        }
+    }
+
     suspend fun scan(
         context: Context,
         apps: List<AppRow>,
@@ -232,26 +250,47 @@ object SecurityScanner {
         // must disappear from this finding (v2.7 — \"revoked but still showing\").
         // v2.8: the default SMS app is supposed to read SMS — flagging it HIGH is a false
         // alarm, so it is excluded and named in the detail line instead.
+        // Also distinguish banking/UPI applications that legitimately need SMS to verify
+        // bank accounts and receive OTPs (tagged INFO/review rather than high-risk malware alarm).
         val defaultSmsPkg = defaultSmsPackage(context)
-        val smsApps = apps.filter {
+        val allSmsApps = apps.filter {
             it.pkg != defaultSmsPkg &&
                 it.grantedPermissions.any { p ->
                     p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
                 } && !it.isSystem
         }
-        if (smsApps.isNotEmpty()) {
+        val (bankingSmsApps, unexpectedSmsApps) = allSmsApps.partition {
+            isBankingOrPaymentApp(it.pkg, it.label)
+        }
+
+        if (unexpectedSmsApps.isNotEmpty()) {
             val defaultSmsName = defaultSmsPkg?.let { labelFor(context, it) }
             val defaultNote = if (defaultSmsName != null) " Your default SMS app ($defaultSmsName) is not listed." else ""
             findings.add(
                 Finding(
                     id = "sms_readers",
-                    title = if (smsApps.size == 1) "1 installed app can read your SMS"
-                    else "${smsApps.size} installed apps can read your SMS",
-                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.$defaultNote",
+                    title = if (unexpectedSmsApps.size == 1) "1 non-banking app can read your SMS"
+                    else "${unexpectedSmsApps.size} non-banking apps can read your SMS",
+                    detail = "SMS is where OTPs arrive. Only your messaging app and trusted banking apps should need this.$defaultNote",
                     severity = Severity.HIGH,
-                    count = smsApps.size,
-                    samples = smsApps.map { it.label },
+                    count = unexpectedSmsApps.size,
+                    samples = unexpectedSmsApps.map { it.label },
                     fixHint = "Revoke SMS permission for anything that is not your SMS app.",
+                )
+            )
+        }
+
+        if (bankingSmsApps.isNotEmpty()) {
+            findings.add(
+                Finding(
+                    id = "banking_sms_readers",
+                    title = if (bankingSmsApps.size == 1) "1 banking/payment app has SMS permission"
+                    else "${bankingSmsApps.size} banking/payment apps have SMS permission",
+                    detail = "Banking & UPI payment apps legitimately use SMS for SIM verification and OTPs. Kept under weekly reminder check.",
+                    severity = Severity.INFO,
+                    count = bankingSmsApps.size,
+                    samples = bankingSmsApps.map { it.label },
+                    fixHint = "Safe for verified banking apps (PhonePe, GPay, Bank apps). Revoke if unused.",
                 )
             )
         }

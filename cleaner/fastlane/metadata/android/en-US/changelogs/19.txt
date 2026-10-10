@@ -1,0 +1,5 @@
+Accurate battery-side power and honest discharging display in widget with updated timestamps.
+Optional persistent background battery/health monitor with Stop button in notification.
+Tamil voice alerts for charging, slow charge, full battery and overheating, with optional louder alert toggle.
+Compact single-line home header and new attributed Tamil news and cyber alert strip with pause/hide controls.
+Normalized Gemini model support (e.g. gemini-3.8-flash) without spurious readiness errors, and skipped web searches for greetings.

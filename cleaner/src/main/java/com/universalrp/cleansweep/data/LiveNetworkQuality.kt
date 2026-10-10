@@ -11,8 +11,8 @@ import java.net.Socket
 
 /**
  * Passive, zero-waste live network quality meter:
- * Measures throughput (KB/s or MB/s), ping latency, and jitter directly from the user's
- * active traffic (both Wi-Fi and Cellular) without running heavy speed tests that waste data.
+ * Measures throughput (KB/s or MB/s), ping latency, and jitter directly from user's
+ * active traffic (both Wi-Fi and Cellular) without running heavy speed tests that burn data.
  *
  * Quality ratings:
  *  - TOP_QUALITY: Throughput > 2 MB/s or Ping < 50ms & Jitter < 15ms -> Gold / Flashing Gold
@@ -76,7 +76,7 @@ object LiveNetworkQuality {
         val isWifi = caps?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
         val isMobile = caps?.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) == true
 
-        // Measure a light passive ping without transferring data (socket connect to DNS gateway or reliable edge)
+        // Measure light passive ping without transferring data (socket connect to Cloudflare DNS 1.1.1.1:53)
         val currentPing = measureLightPing(caps)
         var jitter: Long? = null
 

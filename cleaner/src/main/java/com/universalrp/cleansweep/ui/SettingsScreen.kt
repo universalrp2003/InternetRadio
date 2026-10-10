@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -259,13 +260,63 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            // Autostart permission helper for Xiaomi, Oppo, Vivo, Samsung phones
             PanelCard(Modifier.fillMaxWidth()) {
-                SettingSwitch(
-                    title = tr("Charging status in the status bar"),
-                    subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
-                    checked = state.chargeMonitor,
-                    onCheckedChange = { vm.setChargeMonitor(it) },
-                )
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Auto-start after phone restart"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                tr("Xiaomi / Oppo / Vivo require enabling Autostart in Security settings so background monitoring and widgets restore after reboot."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { vm.openAutoStartSettings() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentCyan.copy(alpha = 0.2f),
+                            contentColor = AccentCyan,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(tr("Open Autostart Settings"), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column {
+                    SettingSwitch(
+                        title = tr("Charging status in the status bar"),
+                        subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
+                        checked = state.chargeMonitor,
+                        onCheckedChange = { vm.setChargeMonitor(it) },
+                    )
+                    SettingSwitch(
+                        title = tr("Background battery & health monitor"),
+                        subtitle = tr(
+                            "Keeps low-priority background monitoring active with a persistent notification " +
+                                "and an instant Stop button. Note: OEM power savers may restrict background execution, " +
+                                "and no app survives an Android force-stop."
+                        ),
+                        checked = state.persistentMonitor,
+                        onCheckedChange = { vm.setPersistentMonitor(it) },
+                    )
+                }
             }
 
             // The little watt reading the user asked to see next to the clock. Android has

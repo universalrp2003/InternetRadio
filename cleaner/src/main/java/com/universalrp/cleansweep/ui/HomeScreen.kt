@@ -20,6 +20,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material.icons.outlined.Pause
+import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.ChevronRight
@@ -28,6 +34,7 @@ import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.SmartToy
@@ -43,9 +50,22 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -59,6 +79,7 @@ import androidx.compose.material.icons.outlined.FileDownload
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.Screen
@@ -89,17 +110,17 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        // Top bar
+        // Top bar - neat and compact header, prevents wrapping on small screens
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
+                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 Modifier
-                    .size(38.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
                     .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
                 contentAlignment = Alignment.Center,
             ) {
@@ -107,48 +128,82 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     Icons.Outlined.CleaningServices,
                     contentDescription = null,
                     tint = TextPrimary,
-                    modifier = Modifier.size(22.dp),
+                    modifier = Modifier.size(19.dp),
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     tr(Lang.appName()),
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    Lang.tagline(),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
             }
             // One tap between தமிழ் and English, right where the eye already is. The full
             // choice (and the note about the launcher name) stays in Settings → Language.
-            TextButton(onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) }) {
+            TextButton(
+                onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) },
+                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
+            ) {
                 Text(
-                    if (state.lang == AppLang.TA) tr("EN") else tr("த"),
+                    if (state.lang == AppLang.TA) "EN" else "த",
                     color = AccentCyan,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.VOICE) }) {
+            IconButton(
+                onClick = { vm.navigate(Screen.VOICE) },
+                modifier = Modifier.size(38.dp),
+            ) {
                 Icon(
                     if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
                     contentDescription = "Voice",
                     tint = if (state.voiceOn) AccentCyan else TextSecondary,
+                    modifier = Modifier.size(20.dp),
                 )
             }
-            IconButton(onClick = { vm.navigate(Screen.SETTINGS) }) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.SETTINGS) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Settings,
+                    contentDescription = "Settings",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
-            IconButton(onClick = { vm.navigate(Screen.ABOUT) }) {
-                Icon(Icons.Outlined.Info, contentDescription = "About", tint = TextSecondary)
+            IconButton(
+                onClick = { vm.navigate(Screen.ABOUT) },
+                modifier = Modifier.size(38.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Info,
+                    contentDescription = "About",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(20.dp),
+                )
             }
         }
 
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+
+        if (state.tamilInfoVisible && state.tamilInfoItems.isNotEmpty()) {
+            TamilInfoStrip(
+                items = state.tamilInfoItems,
+                isPaused = state.tamilInfoPaused,
+                onTogglePause = { vm.toggleTamilInfoPause() },
+                onHide = { vm.toggleTamilInfoVisibility() },
+                onRefresh = { vm.loadTamilInfoStrip(force = true) },
+                onSpeak = { text -> vm.speakTamilText(text) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 6.dp),
+            )
+        }
 
         LazyColumn(
             state = listState,
@@ -164,67 +219,16 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
 
             item(key = "storage") { StorageCard(state) }
 
-            // The daily brief card: what CleanSweep found for you today, and the switch that
-            // turns the whole daily watch on or off without digging into Settings.
-            item(key = "brief") {
-                PanelCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Outlined.RecordVoiceOver,
-                                contentDescription = null,
-                                tint = AccentCyan,
-                                modifier = Modifier.size(20.dp),
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                tr("Daily brief"),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f),
-                            )
-                            if (state.voiceOn) {
-                                Icon(
-                                    Icons.Outlined.VolumeUp,
-                                    contentDescription = null,
-                                    tint = AccentCyan,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                        }
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            if (state.lastBrief.isNotBlank()) state.lastBrief
-                            else tr(
-                                "Once a day CleanSweep checks the battery, temperature, storage, " +
-                                    "junk and security, says a short summary out loud and keeps " +
-                                    "the full report here."
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                        )
-                        Spacer(Modifier.height(10.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-                        ) {
-                            TextButton(onClick = { vm.runDailyBriefNow() }) {
-                                Text(
-                                    tr("Run the daily check now"),
-                                    color = AccentCyan,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            TextButton(onClick = { vm.navigate(Screen.VOICE) }) {
-                                Text(
-                                    if (state.dailyScanOn) tr("Daily brief: on") else tr("Daily brief: off"),
-                                    color = if (state.dailyScanOn) GoodGreen else TextSecondary,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                        }
-                    }
-                }
+            item(key = "mobile_data_window") { HomeMobileDataCard(state, vm) }
+
+            item(key = "scanbutton") {
+                GradientButton(
+                    text = if (state.report != null) "Scan again" else "Scan & clean junk",
+                    icon = Icons.Outlined.AutoFixHigh,
+                    onClick = { vm.startScan() },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = state.hasAllFilesAccess && state.legacyStorageOk,
+                )
             }
 
             if (!state.legacyStorageOk) {
@@ -270,18 +274,6 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                         }
                     }
                 }
-            }
-
-            item(key = "aistatus") { AiStatusCard(state, vm) }
-
-            item(key = "scanbutton") {
-                GradientButton(
-                    text = if (state.report != null) "Scan again" else "Scan & clean junk",
-                    icon = Icons.Outlined.AutoFixHigh,
-                    onClick = { vm.startScan() },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = state.hasAllFilesAccess && state.legacyStorageOk,
-                )
             }
 
             item(key = "assistant") { AssistantCard(state, vm) }
@@ -421,187 +413,108 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     }
                 }
             }
-
-            state.lastClean?.let { stats ->
-                item(key = "lastclean") {
-                    PanelCard(Modifier.fillMaxWidth()) {
-                        Row(
-                            Modifier.padding(16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Outlined.CleaningServices,
-                                contentDescription = null,
-                                tint = GoodGreen,
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    "Last clean: ${stats.freedBytes.formatBytes()} freed",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    "${stats.items} items • ${
-                                        SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
-                                            .format(Date(stats.atMs))
-                                    }",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = TextSecondary,
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            item(key = "tip") { PhoneTipCard() }
         }
     }
 }
 
-/** Entry point for the on-device assistant (v1.3). */
+/** Entry point for the on-device assistant (v1.3) with quick question input directly on Home. */
 @Composable
 private fun AssistantCard(state: UiState, vm: MainViewModel) {
     val totalCache = state.appCaches.sumOf { if (it.cacheBytes > 0L) it.cacheBytes else 0L }
-    // Which engine is answering *now*. The old build hard-coded "ON-DEVICE" even after
-    // the user switched to Online AI, which is exactly what the screenshot complained about.
     val online = state.assistantOnline && state.aiConfig.ready
     val badge = if (online) "ONLINE AI" else "ON-DEVICE"
     val badgeColor = if (online) GoodGreen else AccentCyan
-    val subtitle = when {
-        online -> "Answered by ${state.aiEngineLabel} — tap to ask or change"
-        state.report != null -> "Ask me what the scan found — I work offline"
-        totalCache > 0L -> "${totalCache.formatBytes()} of app cache found — ask me what to do"
-        else -> "Free space, safe deletes, cache help — answers stay on this phone"
-    }
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .clickable { vm.openAssistant() }
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(
-                Modifier
-                    .size(42.dp)
-                    .clip(RoundedCornerShape(14.dp))
-                    .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    Icons.Outlined.SmartToy,
-                    contentDescription = null,
-                    tint = TextPrimary,
-                    modifier = Modifier.size(24.dp),
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(tr("Ask the assistant"),
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        badge,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF04202A),
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(badgeColor)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary,
-                )
-            }
-            Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
-        }
-    }
-}
+    var quickQuestion by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
 
-/**
- * "Is my AI actually able to answer?" — checked on every app start. Green when the chosen
- * provider answered a moment ago, red with the real reason when it did not, and always
- * with a one-tap way out: fix the settings, check again, or switch to a free AI.
- */
-@Composable
-private fun AiStatusCard(state: UiState, vm: MainViewModel) {
-    val configured = state.aiConfig.ready
-    val ok = configured && state.aiStatusOk
-    val accent = when {
-        !configured -> WarnAmber
-        ok -> GoodGreen
-        else -> DangerRed
-    }
-    PanelCard(
-        Modifier
-            .fillMaxWidth()
-            .border(1.dp, accent.copy(alpha = 0.55f), RoundedCornerShape(20.dp))
-    ) {
+    PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    if (ok) Icons.Outlined.CheckCircle else Icons.Outlined.Warning,
-                    contentDescription = null,
-                    tint = accent,
-                )
-                Spacer(Modifier.width(10.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        when {
-                            state.aiStatusChecking -> "Checking your AI…"
-                            ok -> "AI ready"
-                            configured -> "AI is not answering"
-                            else -> "AI is not set up"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        when {
-                            state.aiStatusChecking -> "Asking ${state.aiEngineLabel} for a quick hello."
-                            ok -> state.aiEngineLabel + " answered. Every answer will show its model."
-                            configured -> state.aiStatusText
-                                ?: "The provider did not answer. You can try a free AI instead."
-                            else -> state.aiStatusText
-                                ?: "Add a free Gemini key, or use the free no-key option."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary,
-                    )
-                }
-            }
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    .clickable { vm.openAssistant() },
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                TextButton(onClick = { vm.openAiSettings() }) {
-                    Text(tr("AI settings"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                Box(
+                    Modifier
+                        .size(40.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Brush.linearGradient(listOf(AccentCyan, AccentViolet))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        Icons.Outlined.SmartToy,
+                        contentDescription = null,
+                        tint = TextPrimary,
+                        modifier = Modifier.size(22.dp),
+                    )
                 }
-                if (configured) {
-                    TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
-                        Text(tr("Check again"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            tr("Ask the assistant"),
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            badge,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF04202A),
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(badgeColor)
+                                .padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
                     }
+                    Text(
+                        if (online) state.aiEngineLabel else tr("Free space, cache help — answers on this phone"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        maxLines = 1,
+                    )
                 }
-                if (!ok) {
-                    TextButton(onClick = { vm.useAnotherFreeAi() }) {
-                        Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
-                    }
+                Icon(Icons.Outlined.ChevronRight, contentDescription = null, tint = TextSecondary)
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Direct question bar on Home screen
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                androidx.compose.material3.OutlinedTextField(
+                    value = quickQuestion,
+                    onValueChange = { quickQuestion = it },
+                    placeholder = { Text(tr("Ask any question…"), style = MaterialTheme.typography.bodySmall) },
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = {
+                        val q = quickQuestion.trim()
+                        if (q.isNotBlank()) {
+                            vm.askAssistant(q)
+                            vm.openAssistant()
+                        } else {
+                            vm.openAssistant()
+                        }
+                    },
+                    modifier = Modifier
+                        .size(42.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AccentCyan),
+                ) {
+                    Icon(
+                        Icons.Outlined.Search,
+                        contentDescription = "Ask",
+                        tint = Color(0xFF04202A),
+                        modifier = Modifier.size(20.dp),
+                    )
                 }
             }
         }
@@ -645,6 +558,7 @@ private fun SetupCard(vm: MainViewModel) {
 @Composable
 private fun StorageCard(state: UiState) {
     val storage = state.storage
+    val freeRam = state.health?.device?.availableRamBytes
     PanelCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -666,10 +580,19 @@ private fun StorageCard(state: UiState) {
                         textAlign = TextAlign.Center,
                     )
                     Text(
-                        "free",
-                        style = MaterialTheme.typography.labelMedium,
+                        "free storage",
+                        style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                    if (freeRam != null && freeRam > 0L) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            "${freeRam.formatBytes()} RAM",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = GoodGreen,
+                        )
+                    }
                 }
             }
             Spacer(Modifier.width(20.dp))
@@ -686,6 +609,15 @@ private fun StorageCard(state: UiState) {
                     style = MaterialTheme.typography.bodySmall,
                     color = if (pct > 90) WarnAmber else TextSecondary,
                     fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.height(6.dp))
+                val isTa = state.lang == AppLang.TA
+                val phoneAge = remember { com.universalrp.cleansweep.data.PhoneAgeEstimator.estimateAge() }
+                Text(
+                    (if (isTa) "போன் வயது: " else "Est. phone age: ") + phoneAge.displayString(isTa),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Medium,
                 )
             }
         }
@@ -743,24 +675,82 @@ private fun SurfaceHighCard(modifier: Modifier = Modifier, content: @Composable 
 }
 
 @Composable
-private fun PhoneTipCard() {
-    PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
-            Text(tr("Works on every Android phone"),
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = AccentViolet,
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
-                    "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
-                    "CleanSweep never touches your personal files unless you select them, and the only " +
-                    "thing that ever uses the internet is the AI analysis you start yourself. " +
-                    "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
+fun TamilInfoStrip(
+    items: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item>,
+    isPaused: Boolean,
+    onTogglePause: () -> Unit,
+    onHide: () -> Unit,
+    onRefresh: () -> Unit,
+    onSpeak: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (items.isEmpty()) return
+    var currentIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
+
+    androidx.compose.runtime.LaunchedEffect(isPaused, items) {
+        while (!isPaused) {
+            kotlinx.coroutines.delay(6_000)
+            currentIndex = (currentIndex + 1) % items.size
+        }
+    }
+
+    val item = items[currentIndex.coerceIn(0, items.size - 1)]
+    val isAlert = item.isSecurityAlert
+
+    androidx.compose.material3.Surface(
+        modifier = modifier
+            .clickable { onSpeak(item.title) }
+            .semantics { contentDescription = "Updates: ${item.title}" },
+        shape = RoundedCornerShape(10.dp),
+        color = if (isAlert) DangerRed.copy(alpha = 0.12f) else SurfaceHigh,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp,
+            if (isAlert) DangerRed.copy(alpha = 0.6f) else OutlineC
+        ),
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 7.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (isAlert) {
+                Icon(
+                    Icons.Outlined.Warning,
+                    contentDescription = null,
+                    tint = DangerRed,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    item.title,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                    color = if (isAlert) DangerRed else TextPrimary,
+                    fontWeight = if (isAlert) FontWeight.SemiBold else FontWeight.Normal,
+                )
+                Text(
+                    "${item.source} • ${item.date} • ${item.category} • tap to listen",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (isAlert) DangerRed.copy(alpha = 0.8f) else TextSecondary,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(6.dp))
+            IconButton(
+                onClick = onRefresh,
+                modifier = Modifier.size(32.dp),
+            ) {
+                Icon(
+                    Icons.Outlined.Refresh,
+                    contentDescription = "New News",
+                    tint = AccentCyan,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
         }
     }
 }
@@ -802,5 +792,292 @@ private fun LegacyStorageCard(vm: MainViewModel) {
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+    }
+}
+
+
+@Composable
+private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
+    val pack = state.dataPackInfo
+    val isUnlimited = pack?.isUnlimited5g == true
+    var showQuotaDialog by remember { mutableStateOf(false) }
+    var showResetDialog by remember { mutableStateOf(false) }
+
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.SignalCellularAlt,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(22.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Mobile & Data Pack"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        if (isUnlimited) tr("Unlimited 5G Active • Counters paused") else tr("Today & Pack quota tracking"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                IconButton(onClick = { vm.loadUsage() }, modifier = Modifier.size(32.dp)) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            // Unlimited 5G Toggle Row
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(SurfaceHigh)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Unlimited 5G Pack"),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                    )
+                    Text(
+                        tr("Hide daily limit & quota countdown on unlimited plans"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                Switch(
+                    checked = isUnlimited,
+                    onCheckedChange = { vm.setUnlimited5g(it) },
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AccentCyan,
+                        checkedTrackColor = AccentCyan.copy(alpha = 0.35f),
+                    ),
+                )
+            }
+
+            if (!isUnlimited) {
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceHigh)
+                            .padding(12.dp)
+                    ) {
+                        Text(tr("Mobile data (Today)"), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            pack?.formattedToday ?: "0 MB",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentViolet,
+                        )
+                    }
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(SurfaceHigh)
+                            .padding(12.dp)
+                    ) {
+                        Text(tr("Pack balance left"), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            (pack?.formattedRemaining ?: "12 GB") + " left",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = GoodGreen,
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                tr("Pack Plan: ") + (pack?.formattedPackTotal ?: "0 MB") + " / " + (pack?.formattedPackLimit ?: "12 GB"),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = AccentCyan,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                tr("Strict Mobile Only"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+
+                        // Progress Bar
+                        val progress = pack?.progressRatio ?: 0f
+                        Spacer(Modifier.height(6.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(progress)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (progress >= 0.9f) DangerRed else AccentCyan)
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = { showQuotaDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceHigh.copy(alpha = 0.6f),
+                                    contentColor = AccentCyan,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Set Pack Size"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { showResetDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentViolet.copy(alpha = 0.25f),
+                                    contentColor = AccentViolet,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Reset Recharge"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    tr("Enjoy high-speed 5G without quota limits. Daily data tracking and pack warnings are hidden."),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = AccentCyan,
+                )
+            }
+        }
+    }
+
+    if (showResetDialog) {
+        var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+        AlertDialog(
+            onDismissRequest = { showResetDialog = false },
+            title = { Text(tr("Reset Recharge Data Pack"), fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        tr("Did you recharge a new data pack? Enter your pack size in GB (e.g. 1.5, 3, 6, 12, 25, 50 GB) and reset the counter to zero."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = inputGb,
+                        onValueChange = { inputGb = it },
+                        label = { Text(tr("Pack Size in GB")) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val size = inputGb.toFloatOrNull()
+                        vm.resetDataPackCount(size)
+                        showResetDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
+                ) {
+                    Text(tr("Reset to 0 MB"), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showResetDialog = false }) {
+                    Text(tr("Cancel"), color = TextSecondary)
+                }
+            },
+        )
+    }
+
+    if (showQuotaDialog) {
+        var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+        AlertDialog(
+            onDismissRequest = { showQuotaDialog = false },
+            title = { Text(tr("Change Data Pack Limit"), fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        tr("Update your total data quota in GB without resetting current usage counter:"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = inputGb,
+                        onValueChange = { inputGb = it },
+                        label = { Text(tr("Pack Quota (GB)")) },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            focusedBorderColor = AccentCyan,
+                            unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val size = inputGb.toFloatOrNull() ?: 12f
+                        vm.updateDataPackLimit(size)
+                        showQuotaDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                ) {
+                    Text(tr("Save Limit"), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showQuotaDialog = false }) {
+                    Text(tr("Cancel"), color = TextSecondary)
+                }
+            },
+        )
     }
 }

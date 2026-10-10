@@ -126,57 +126,6 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                 item { MemoryCard(health) }
                 item { DeviceCard(health) }
             }
-
-            item {
-                val config = state.aiConfig
-                PanelCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentViolet)
-                            Spacer(Modifier.width(10.dp))
-                            Text(tr("Full analysis with AI"),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            "Sends this report (numbers, and app names if you allow it) to the AI " +
-                                "provider you choose, and explains what is worth fixing: battery, heat, " +
-                                "bloatware, security and network.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        GradientButton(
-                            text = if (config.ready) "Analyse my phone" else "Set up AI analysis",
-                            icon = if (config.ready) Icons.Outlined.SmartToy else Icons.Outlined.Settings,
-                            onClick = {
-                                if (config.ready) {
-                                    vm.runAiAnalysis()
-                                } else {
-                                    vm.navigate(Screen.AI_SETTINGS)
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            when {
-                                !config.ready ->
-                                    "No key yet: the free option needs no signup, and Gemini / NVIDIA / " +
-                                        "OpenRouter / Groq / OpenAI keys can be pasted in AI settings."
-                                config.provider.id == "free" ->
-                                    "Using the free keyless endpoints — shared and rate-limited."
-                                else ->
-                                    "Using ${config.provider.label} • model ${config.resolvedModel}"
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                        )
-                    }
-                }
-            }
         }
     }
 }

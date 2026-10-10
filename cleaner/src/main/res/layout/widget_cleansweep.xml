@@ -69,31 +69,15 @@
 
         <TextView
             android:id="@+id/widget_clean"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:background="#1F38BDF8"
             android:gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
+            android:paddingTop="8dp"
+            android:paddingBottom="8dp"
             android:text="@string/widget_clean"
             android:textColor="#7FE3F7"
-            android:textSize="12sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_speak"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="8dp"
-            android:background="#1F38BDF8"
-            android:gravity="center"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:text="@string/widget_speak"
-            android:textColor="#7FE3F7"
-            android:textSize="12sp"
+            android:textSize="13sp"
             android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

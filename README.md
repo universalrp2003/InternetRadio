@@ -18,11 +18,11 @@ legacy projects, but are not part of this release or the current development foc
 
 | App | Version | Installable APK |
 |---|---|---|
-| CleanSweep | 2.13 | [CleanSweep-v2.13.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/CleanSweep-v2.13.apk) |
-| Ramesh Radio | 1.7 | [Ramesh-Radio-v1.7.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/Ramesh-Radio-v1.7.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08/PulseEQ-v1.2.apk) |
+| CleanSweep | 2.14 | [CleanSweep-v2.14.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/CleanSweep-v2.14.apk) |
+| Ramesh Radio | 1.7 | [Ramesh-Radio-v1.7.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/Ramesh-Radio-v1.7.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.08)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.08-1)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -32,6 +32,7 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
+- **CleanSweep 2.14:** accurate battery-side wattage & honest discharging display on widget with timestamp, optional persistent background monitoring mode with Stop button, Tamil voice alerts, compact header, attributed Tamil news and cybersecurity alerts strip, normalized Gemini model readiness check without spurious errors, and greeting lookup bypass.
 - **CleanSweep 2.13:** evidence-based officeholder replies, dated news RSS, raw-JSON
   suppression, keyboard fixes and clearer phone-analysis guidance.
 - **Ramesh Radio 1.7:** single-file picker reconnection fix, persistent folder queues,
@@ -44,7 +45,7 @@ CI artifacts are temporary build downloads, not the public release channel.
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
-See [full release notes](releases/v2026.10.08.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.08-1.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 
