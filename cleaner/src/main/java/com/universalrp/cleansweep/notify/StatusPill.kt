@@ -2,6 +2,7 @@ package com.universalrp.cleansweep.notify
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
@@ -21,7 +22,6 @@ import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -38,6 +38,7 @@ class NetworkLedMeterView(context: Context) : View(context) {
     var isUploadActive: Boolean = true
     var qualityGrade: LiveNetworkQuality.QualityGrade? = null
     var animStep: Int = 0
+    var scaleFactor: Float = 1.0f
 
     private val litPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -54,12 +55,12 @@ class NetworkLedMeterView(context: Context) : View(context) {
 
         val rowH = h / 2f
         textPaint.textSize = (rowH * 0.72f).coerceAtLeast(dp(6f))
-        val tagW = dp(8f)
+        val tagW = dp(8f) * scaleFactor
         val barStartX = tagW + dp(2.5f)
-        val barW = (w - barStartX).coerceAtLeast(dp(18f))
-        val barH = dp(2.8f)
+        val barW = (w - barStartX).coerceAtLeast(dp(18f) * scaleFactor)
+        val barH = dp(2.8f) * scaleFactor
         val numSegments = 3
-        val segGap = dp(1.5f)
+        val segGap = dp(1.5f) * scaleFactor
         val totalGaps = (numSegments - 1) * segGap
         val segW = (barW - totalGaps) / numSegments
 
@@ -110,17 +111,22 @@ class NetworkLedMeterView(context: Context) : View(context) {
 }
 
 /**
- * Expanded status bar pill overlay:
- * Houses the colored `↑↓` indicator, the real-time mobile data count (or charging watts),
- * and the animated dual-track LED meter with [D] and [U] glowing indicator bars.
+ * Live Guard Status Bar Pill Overlay:
+ * Clean, compact, customizable floating pill.
+ * Features:
+ * - Real-time mobile data (cleanly hidden if on Wi-Fi / Unlimited 5G per user choice)
+ * - Animated D & U LED meter bars
+ * - Move, drag, and resize controls
+ * - Landscape transparent touch-through behavior
  */
 object StatusPill {
 
-    /** Position prefs, in the same plain file the charging service reads. */
     const val PREFS = "cleansweep_state"
     const val KEY_DX = "pill_dx"
     const val KEY_DY = "pill_dy"
     const val KEY_AUTO = "pill_auto"
+    const val KEY_SCALE = "pill_scale"
+    const val KEY_HIDE_DATA_ON_WIFI = "pill_hide_data_on_wifi"
 
     private val main = Handler(Looper.getMainLooper())
     private var rootContainer: LinearLayout? = null
@@ -131,11 +137,9 @@ object StatusPill {
     @Volatile
     private var draggable = false
 
-    /** True when the "Display over other apps" permission is granted. */
     fun canDraw(context: Context): Boolean =
         Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(context)
 
-    /** Where the user last moved it. 0,0 with auto = the middle of the status bar. */
     fun offsets(context: Context): Pair<Int, Int> {
         val prefs = prefs(context)
         return prefs.getInt(KEY_DX, 0) to prefs.getInt(KEY_DY, 0)
@@ -143,7 +147,23 @@ object StatusPill {
 
     fun isAuto(context: Context): Boolean = prefs(context).getBoolean(KEY_AUTO, true)
 
-    /** Moves the reading by a number of screen pixels and remembers it. */
+    fun scale(context: Context): Float = prefs(context).getFloat(KEY_SCALE, 1.0f).coerceIn(0.7f, 1.5f)
+
+    fun setScale(context: Context, newScale: Float) {
+        val app = context.applicationContext
+        prefs(app).edit().putFloat(KEY_SCALE, newScale.coerceIn(0.7f, 1.5f)).apply()
+        redraw(app)
+    }
+
+    fun isHideDataOnWifi(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_HIDE_DATA_ON_WIFI, false)
+
+    fun setHideDataOnWifi(context: Context, hide: Boolean) {
+        val app = context.applicationContext
+        prefs(app).edit().putBoolean(KEY_HIDE_DATA_ON_WIFI, hide).apply()
+        redraw(app)
+    }
+
     fun moveBy(context: Context, dx: Int, dy: Int) {
         val app = context.applicationContext
         nudge(app, dx, dy)
@@ -167,7 +187,7 @@ object StatusPill {
             val layout = params ?: return@post
             val manager = root.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
                 ?: return@post
-            layout.flags = flags()
+            layout.flags = flags(app)
             try {
                 manager.updateViewLayout(root, layout)
             } catch (e: Exception) {
@@ -176,11 +196,17 @@ object StatusPill {
         }
     }
 
-    private fun flags(): Int =
-        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-            (if (draggable) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) or
+    private fun isLandscape(context: Context): Boolean {
+        return context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    }
+
+    private fun flags(context: Context): Int {
+        val landscape = isLandscape(context)
+        return WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            (if (draggable && !landscape) 0 else WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE) or
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+    }
 
     fun resetPosition(context: Context) {
         val app = context.applicationContext
@@ -238,85 +264,67 @@ object StatusPill {
         rxSpeed: Long,
         txSpeed: Long
     ) {
-        val gd = GradientDrawable().apply {
-            cornerRadius = dp(context, 8).toFloat()
-            setColor(Color.parseColor("#E6000000"))
-        }
+        val currentScale = scale(context)
+        val landscape = isLandscape(context)
 
-        // Arrow indicator color based on network quality
-        val arrowStr = "↑↓ "
-        val arrowColor = when (qualityGrade) {
-            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> {
-                if (blinkState) Color.parseColor("#FFD700") else Color.parseColor("#FFA500")
-            }
-            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> {
-                Color.parseColor("#00E676")
-            }
-            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> {
-                if (blinkState) Color.parseColor("#FF3B30") else Color.parseColor("#88FF3B30")
-            }
-            null -> Color.parseColor("#38BDF8")
+        // Landscape touch & opacity handling: make unobtrusively transparent in landscape mode
+        val bgAlpha = if (landscape) 0x66 else 0xE6
+        val strokeAlpha = if (landscape) 0x33 else 0x66
+
+        val gd = GradientDrawable().apply {
+            cornerRadius = (dp(context, 8) * currentScale).coerceAtLeast(dp(context, 4).toFloat())
+            setColor((bgAlpha shl 24) or 0x000000)
         }
 
         // Pack alert styling
         val textColor: Int
         if (packPercent == null) {
             textColor = Color.parseColor("#E8FBFF")
-            gd.setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
+            gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), (strokeAlpha shl 24) or 0x38BDF8)
         } else {
             val isFlashingStep = (packPercent >= 75)
             when {
                 packPercent >= 90 -> {
                     if (isFlashingStep && blinkState) {
                         textColor = Color.parseColor("#FFFFFF")
-                        gd.setColor(Color.parseColor("#E6CC0000"))
-                        gd.setStroke(dp(context, 1), Color.parseColor("#FFFF3B30"))
+                        gd.setColor((bgAlpha shl 24) or 0xCC0000)
+                        gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), Color.parseColor("#FFFF3B30"))
                     } else {
                         textColor = Color.parseColor("#FF5252")
-                        gd.setColor(Color.parseColor("#E0000000"))
-                        gd.setStroke(dp(context, 1), Color.parseColor("#FF3B30"))
+                        gd.setColor((bgAlpha shl 24) or 0x000000)
+                        gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), Color.parseColor("#FF3B30"))
                     }
                 }
                 packPercent >= 75 -> {
                     if (isFlashingStep && blinkState) {
                         textColor = Color.parseColor("#FFFFFF")
-                        gd.setColor(Color.parseColor("#E6B87800"))
-                        gd.setStroke(dp(context, 1), Color.parseColor("#FFFFD700"))
+                        gd.setColor((bgAlpha shl 24) or 0xB87800)
+                        gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), Color.parseColor("#FFFFD700"))
                     } else {
                         textColor = Color.parseColor("#FFB74D")
-                        gd.setColor(Color.parseColor("#E0000000"))
-                        gd.setStroke(dp(context, 1), Color.parseColor("#FFA726"))
+                        gd.setColor((bgAlpha shl 24) or 0x000000)
+                        gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), Color.parseColor("#FFA726"))
                     }
                 }
                 else -> {
                     textColor = Color.parseColor("#E8FBFF")
-                    gd.setStroke(dp(context, 1), Color.parseColor("#4438BDF8"))
+                    gd.setStroke((dp(context, 1) * currentScale).toInt().coerceAtLeast(1), (strokeAlpha shl 24) or 0x38BDF8)
                 }
             }
         }
 
-        val sb = SpannableStringBuilder()
-        sb.append(arrowStr)
-        sb.setSpan(
-            ForegroundColorSpan(arrowColor),
-            0,
-            arrowStr.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
-        val textStart = sb.length
-        sb.append(rawText)
-        sb.setSpan(
-            ForegroundColorSpan(textColor),
-            textStart,
-            sb.length,
-            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
-        )
+        if (rawText.isBlank()) {
+            tv.visibility = View.GONE
+        } else {
+            tv.visibility = View.VISIBLE
+            val sb = SpannableStringBuilder(rawText)
+            sb.setSpan(ForegroundColorSpan(textColor), 0, sb.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            tv.text = sb
+            tv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f * currentScale)
+        }
 
-        tv.text = sb
         root.background = gd
-
-        // Update animated LED meter
-        // If speed > 100 bytes/sec, consider active transfer; default active if network is connected
+        meter.scaleFactor = currentScale
         meter.isDownloadActive = rxSpeed > 200L || (qualityGrade != null && rxSpeed >= 0)
         meter.isUploadActive = txSpeed > 200L || (qualityGrade != null && txSpeed >= 0)
         meter.qualityGrade = qualityGrade
@@ -332,12 +340,12 @@ object StatusPill {
         rxSpeed: Long = 0L,
         txSpeed: Long = 0L
     ) {
-        if (text.isNullOrBlank() || !canDraw(context)) {
+        if (!canDraw(context)) {
             remove()
             return
         }
         val app = context.applicationContext
-        main.post { show(app, text, packPercent, qualityGrade, rxSpeed, txSpeed) }
+        main.post { show(app, text.orEmpty(), packPercent, qualityGrade, rxSpeed, txSpeed) }
     }
 
     private fun show(
@@ -362,22 +370,32 @@ object StatusPill {
     }
 
     private fun createPill(context: Context, manager: WindowManager): LinearLayout? {
+        val currentScale = scale(context)
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(context, 7), dp(context, 2), dp(context, 7), dp(context, 2))
+            setPadding(
+                (dp(context, 7) * currentScale).toInt(),
+                (dp(context, 2) * currentScale).toInt(),
+                (dp(context, 7) * currentScale).toInt(),
+                (dp(context, 2) * currentScale).toInt()
+            )
         }
 
         val tv = TextView(context).apply {
             setTextColor(Color.parseColor("#E8FBFF"))
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f * currentScale)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
         }
 
         val meter = NetworkLedMeterView(context).apply {
-            val lp = LinearLayout.LayoutParams(dp(context, 34), dp(context, 14)).apply {
-                marginStart = dp(context, 6)
+            scaleFactor = currentScale
+            val lp = LinearLayout.LayoutParams(
+                (dp(context, 34) * currentScale).toInt(),
+                (dp(context, 14) * currentScale).toInt()
+            ).apply {
+                marginStart = (dp(context, 5) * currentScale).toInt()
             }
             layoutParams = lp
         }
@@ -394,7 +412,7 @@ object StatusPill {
                 @Suppress("DEPRECATION")
                 WindowManager.LayoutParams.TYPE_PHONE
             },
-            flags(),
+            flags(context),
             PixelFormat.TRANSLUCENT,
         )
         layout.gravity = Gravity.TOP or Gravity.START
@@ -402,7 +420,7 @@ object StatusPill {
         var lastX = 0f
         var lastY = 0f
         root.setOnTouchListener { v, event ->
-            if (!draggable) return@setOnTouchListener false
+            if (!draggable || isLandscape(context)) return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
                     lastX = event.rawX
@@ -442,7 +460,7 @@ object StatusPill {
         val screenWidth = context.resources.displayMetrics.widthPixels
         val screenHeight = context.resources.displayMetrics.heightPixels
         val statusHeight = statusBarHeight(context)
-        val width = if (root.width > 0) root.width else dp(context, 100)
+        val width = if (root.width > 0) root.width else dp(context, 85)
         val height = if (root.height > 0) root.height else dp(context, 18)
         val margin = dp(context, 2)
 

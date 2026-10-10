@@ -217,7 +217,9 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 item(key = "setup") { SetupCard(vm) }
             }
 
-            item(key = "storage") { StorageCard(state) }
+            item(key = "storage") { LiveGuardMetricsMatrix(state, vm) }
+
+            item(key = "status_pill_controls") { StatusPillHomeControls(state, vm) }
 
             item(key = "mobile_data_window") { HomeMobileDataCard(state, vm) }
 

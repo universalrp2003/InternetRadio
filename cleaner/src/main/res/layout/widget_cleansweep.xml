@@ -1,21 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!--
-  The CleanSweep home-screen widget. Deliberately plain Views, not Compose: widgets are
-  inflated by the launcher, which cannot run a Compose runtime.
--->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:background="#E60A1420"
+    android:background="#ED07111E"
     android:padding="12dp">
 
+    <!-- Header: Title + Security badge + State/Time -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
 
         <TextView
             android:id="@+id/widget_title"
@@ -23,7 +20,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/app_name"
-            android:textColor="#7FE3F7"
+            android:textColor="#38BDF8"
             android:textSize="13sp"
             android:textStyle="bold" />
 
@@ -31,36 +28,41 @@
             android:id="@+id/widget_state"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textColor="#9AAEBF"
-            android:textSize="11sp" />
+            android:textColor="#94A3B8"
+            android:textSize="10.5sp" />
     </LinearLayout>
 
+    <!-- Row 1: Primary Data Reading -->
     <TextView
         android:id="@+id/widget_battery"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:textColor="#E8FBFF"
-        android:textSize="20sp"
+        android:layout_marginTop="5dp"
+        android:textColor="#F8FAFC"
+        android:textSize="19sp"
         android:textStyle="bold" />
 
+    <!-- Row 2: Secondary info (Storage, RAM, Plan status) -->
     <TextView
         android:id="@+id/widget_storage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textColor="#9AAEBF"
-        android:textSize="12sp" />
+        android:layout_marginTop="2dp"
+        android:textColor="#38BDF8"
+        android:textSize="11.5sp" />
 
+    <!-- Row 3: Security & Daily Brief -->
     <TextView
         android:id="@+id/widget_brief"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:maxLines="2"
+        android:layout_marginTop="5dp"
         android:ellipsize="end"
-        android:textColor="#C7D6E2"
+        android:maxLines="2"
+        android:textColor="#E2E8F0"
         android:textSize="11sp" />
 
+    <!-- Row 4: Action button bar (Clean) -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -71,13 +73,13 @@
             android:id="@+id/widget_clean"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#1F38BDF8"
+            android:background="#2638BDF8"
             android:gravity="center"
-            android:paddingTop="8dp"
-            android:paddingBottom="8dp"
+            android:paddingTop="7dp"
+            android:paddingBottom="7dp"
             android:text="@string/widget_clean"
-            android:textColor="#7FE3F7"
-            android:textSize="13sp"
+            android:textColor="#7DD3FC"
+            android:textSize="12.5sp"
             android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

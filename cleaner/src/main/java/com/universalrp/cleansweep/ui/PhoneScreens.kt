@@ -520,6 +520,10 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                     }
                 }
 
+                item(key = "guidance") {
+                    SecurityGuidanceCard(vm)
+                }
+
                 item(key = "malware") {
                     MalwareCard(state, vm)
                 }
@@ -572,10 +576,34 @@ private fun FindingCard(finding: Finding) {
                 color = TextSecondary,
             )
             if (finding.samples.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(8.dp))
+                val context = LocalContext.current
                 val shown = if (expanded) finding.samples else finding.samples.take(6)
                 shown.forEach { sample ->
-                    Text("• $sample", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Text(
+                            "• $sample",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = TextPrimary,
+                            modifier = Modifier.weight(1f),
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                SecurityFixHelper.openSpecificSettings(context, finding.id)
+                            },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            shape = RoundedCornerShape(6.dp),
+                            modifier = Modifier.height(26.dp),
+                        ) {
+                            Text("Manage", style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                        }
+                    }
                 }
                 if (finding.samples.size > 6) {
                     TextButton(
@@ -592,13 +620,30 @@ private fun FindingCard(finding: Finding) {
                 }
             }
             finding.fixHint?.let { hint ->
-                Spacer(Modifier.height(8.dp))
-                Text(
-                    hint,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = AccentCyan,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Spacer(Modifier.height(10.dp))
+                val context = LocalContext.current
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        hint,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = { SecurityFixHelper.openSpecificSettings(context, finding.id) },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text("Fix", color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
         }
     }
@@ -1209,5 +1254,112 @@ fun CheckLine(text: String, ok: Boolean) {
         )
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+    }
+}
+package com.universalrp.cleansweep.ui
+
+import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.data.Finding
+import com.universalrp.cleansweep.data.SecurityFixHelper
+import com.universalrp.cleansweep.data.Severity
+
+@Composable
+fun SecurityGuidanceCard(vm: MainViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    val guidance = remember { SecurityFixHelper.getDeviceGuidance() }
+
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Phone-Specific 100/100 Security Guide"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr("Tailored instructions for your phone model and ROM"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                        contentDescription = "Expand",
+                        tint = TextSecondary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Surface(
+                color = SurfaceHigh,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        guidance,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary,
+                        lineHeight = 20.sp,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = {
+                        vm.openAssistant()
+                        vm.askAssistant("How do I fix all my security check warnings on my phone to get a 100/100 security score?")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Outlined.Psychology, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(tr("Ask AI to Fix (100/100)"), color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+
+                FilledTonalButton(
+                    onClick = {
+                        vm.speakTamilText("உங்கள் போனில் நூற்றுக்கு நூறு பாதுகாப்பு பெற, அங்கீகரிக்கப்படாத செயலிகளின் அனுமதிகளை சரிபார்த்து ரத்து செய்யவும்.")
+                    },
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Icon(Icons.Outlined.VolumeUp, contentDescription = "Voice Guide", tint = AccentViolet, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
     }
 }

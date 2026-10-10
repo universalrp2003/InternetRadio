@@ -517,6 +517,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            PermissionHubCard(vm)
+
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
                     title = tr("Only flag APKs of installed apps"),

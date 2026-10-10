@@ -272,9 +272,17 @@ object ChargeNotifier {
             null
         }
 
+        val hideDataOnWifi = StatusPill.isHideDataOnWifi(context)
+        val isOnWifiOrUnlimited = (netQuality?.isWifi == true) || isUnlimited
+        val displayText = if (hideDataOnWifi && isOnWifiOrUnlimited && !battery.charging) {
+            "" // cleanly hide data count, only show active LED activity lights
+        } else {
+            text
+        }
+
         StatusPill.update(
             context,
-            text,
+            displayText,
             packPercent,
             netQuality?.grade,
             netQuality?.rxSpeedBytesPerSec ?: 0L,
