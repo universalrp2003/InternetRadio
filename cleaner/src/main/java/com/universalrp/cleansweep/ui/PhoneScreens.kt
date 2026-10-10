@@ -73,6 +73,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppRow
@@ -194,6 +195,8 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                                 color = TextSecondary,
                             )
                             Spacer(Modifier.height(4.dp))
+                            Text(tr("Permission/settings review only — not proof that the phone is safe."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Text(tr("Permission/settings review only — not proof that the phone is safe."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                             Text(
                                 tr("Last checked %s", checkedAt(loaded.scannedAtMs)),
                                 style = MaterialTheme.typography.labelSmall,
@@ -340,6 +343,7 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
                 // v2.7: granted vs revoked. The old dialog listed everything the app ever asked
                 // for, so a revoked permission kept showing as held. Now \"has\" means Android
                 // grants it right now, and taken-away permissions are listed as removed.
+                if (!row.permissionsObserved) Text(tr("Permission grant state was not reported; do not infer granted or revoked access."), style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                 if (row.riskyPermissions.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(tr("Permissions this app has right now"),
@@ -468,6 +472,14 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "security_tools") {
+                Column {
+                    TextButton(onClick = { vm.openInsights(InsightsTab.SECURITY_HISTORY) }) { Text(tr("What changed? Security timeline")) }
+                    TextButton(onClick = { vm.openInsights(InsightsTab.ACTION_CHECKLIST) }) { Text(tr("Action checklist")) }
+                    state.securityReadError?.let { Text(it, color = WarnAmber, style = MaterialTheme.typography.bodySmall) }
+                    if (state.securityReport?.unavailableChecks?.isNotEmpty() == true) Text(tr("Some checks are unavailable. Missing observations are not proof of safety."), color = WarnAmber, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             if (state.securityBusy) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -484,16 +496,16 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                                 Icon(
                                     Icons.Outlined.Security,
                                     contentDescription = null,
-                                    tint = scoreColor(loaded.score),
+                                    tint = if (loaded.unavailableChecks.isEmpty()) scoreColor(loaded.score) else TextSecondary,
                                     modifier = Modifier.size(30.dp),
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        "${loaded.score}/100",
+                                        com.universalrp.cleansweep.data.ReadingPolicy.securityValue(loaded),
                                         style = MaterialTheme.typography.headlineSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = scoreColor(loaded.score),
+                                        color = if (loaded.unavailableChecks.isEmpty()) scoreColor(loaded.score) else TextSecondary,
                                     )
                                     Text(
                                         loaded.verdict,

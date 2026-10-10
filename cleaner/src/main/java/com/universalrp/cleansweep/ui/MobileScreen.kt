@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.CellTower
@@ -119,6 +120,8 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
                 }
             }
         }
+
+        item { TextButton(onClick = { vm.openInsights(InsightsTab.DATA_BUDGET) }) { Text(tr("Data budget & history")) } }
 
         // ------------------------------------------------------------ signal card
         val mobile = state.mobile

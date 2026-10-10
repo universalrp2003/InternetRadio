@@ -82,6 +82,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.formatBytes
@@ -105,6 +112,12 @@ import java.util.Locale
 
 @Composable
 fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) { vm.refreshDashboardReadings(); delay(15_000) }
+        }
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -222,6 +235,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             item(key = "status_pill_controls") { StatusPillHomeControls(state, vm) }
 
             item(key = "mobile_data_window") { HomeMobileDataCard(state, vm) }
+
+            item(key = "history_tools") { InsightsShortcut(vm) }
 
             item(key = "scanbutton") {
                 GradientButton(
@@ -822,7 +837,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
                         fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        if (isUnlimited) tr("Unlimited 5G Active • Counters paused") else tr("Today & Pack quota tracking"),
+                        if (isUnlimited) tr("Unlimited 5G mode • Counters hidden (user-set)") else tr("Today & Pack quota tracking"),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
@@ -833,6 +848,10 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
             }
 
             Spacer(Modifier.height(10.dp))
+            Text(tr("Android usage is an estimate, not the carrier's balance. Unlimited 5G is a user-set preference."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            if (pack != null) Text(tr("Last checked %s", readingTime(pack.capturedAtMs)), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            if (pack?.isPartial == true) Text(tr("Partial observed mobile counter; full-period history may be unavailable."), style = MaterialTheme.typography.labelSmall, color = WarnAmber)
+            TextButton(onClick = { vm.openInsights(InsightsTab.DATA_BUDGET) }) { Text(tr("Data budget & history")) }
 
             // Unlimited 5G Toggle Row
             Row(
@@ -879,7 +898,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
                         Text(tr("Mobile data (Today)"), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            pack?.formattedToday ?: "0 MB",
+                            pack?.formattedToday ?: tr("Not measured"),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = AccentViolet,
@@ -895,7 +914,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
                         Text(tr("Pack balance left"), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                         Spacer(Modifier.height(2.dp))
                         Text(
-                            (pack?.formattedRemaining ?: "12 GB") + " left",
+                            (pack?.formattedRemaining ?: tr("Not measured")),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = GoodGreen,
@@ -912,7 +931,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
                     Column(Modifier.padding(12.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                tr("Pack Plan: ") + (pack?.formattedPackTotal ?: "0 MB") + " / " + (pack?.formattedPackLimit ?: "12 GB"),
+                                tr("Pack Plan: ") + (pack?.formattedPackTotal ?: tr("Not measured")) + " / " + (pack?.formattedPackLimit ?: tr("Not loaded")),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
                                 color = AccentCyan,

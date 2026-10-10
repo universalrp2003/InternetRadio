@@ -5,6 +5,12 @@ import android.content.Context
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.universalrp.cleansweep.data.*
+import com.universalrp.cleansweep.ai.ActionChecklistPolicy
+import com.universalrp.cleansweep.ai.ActionChecklistCodec
+import com.universalrp.cleansweep.ai.AiActionAdvice
+import com.universalrp.cleansweep.ai.ChecklistAction
+import com.universalrp.cleansweep.ai.ChecklistRoute
 import com.universalrp.cleansweep.ai.AiClient
 import com.universalrp.cleansweep.ai.AiConfig
 import com.universalrp.cleansweep.ai.AiProvider
@@ -81,8 +87,10 @@ import android.os.Environment
 
 enum class Screen {
     HOME, SCANNING, RESULTS, APP_CACHE, ASSISTANT, SETTINGS, ABOUT,
-    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT, VOICE
+    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT, VOICE, INSIGHTS
 }
+
+enum class InsightsTab { COMPATIBILITY, SECURITY_HISTORY, CHARGING_HISTORY, DATA_BUDGET, ACTION_CHECKLIST }
 
 /** Filter ids for the installed-apps screen. */
 object AppFilter {
@@ -256,6 +264,23 @@ data class UiState(
     val customDeviceNames: Map<String, String> = emptyMap(),
     val appTrackerReport: com.universalrp.cleansweep.data.AppNetworkTracker.TrackerReport? = null,
     val appTrackerBusy: Boolean = false,
+    val liveNetworkQuality: LiveNetworkQuality.QualitySnapshot? = null,
+    val insightsTab: InsightsTab = InsightsTab.COMPATIBILITY,
+    val insightsBusy: Boolean = false,
+    val insightsError: String? = null,
+    val compatibilityReport: CompatibilityReport? = null,
+    val securitySnapshot: SecuritySnapshot? = null,
+    val securityReadError: String? = null,
+    val securityHistory: SecurityHistoryState = SecurityHistoryState(),
+    val securityHistoryEnabled: Boolean = false,
+    val chargeHistory: ChargeHistoryState = ChargeHistoryState(),
+    val chargeHistoryEnabled: Boolean = false,
+    val dailyDataHistory: List<DailyDataPoint> = emptyList(),
+    val dataHistoryEnabled: Boolean = false,
+    val dataBudgetConfig: DataBudgetConfig = DataBudgetConfig(),
+    val actionChecklist: List<ChecklistAction> = emptyList(),
+    val aiActionAdvice: List<AiActionAdvice> = emptyList(),
+    val actionRecheckPending: Boolean = false,
 )
 
 class MainViewModel(app: Application) : AndroidViewModel(app) {
@@ -271,6 +296,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var scanJob: Job? = null
     private var speedJob: Job? = null
     private var malwareJob: Job? = null
+    private var homeReadingJob: Job? = null
+    private var healthReadingJob: Job? = null
     private var currentSettings = ScanSettings()
     /** Screens the user actually visited, so the back button can walk them again. */
     private val navStack = ArrayDeque<Screen>()
@@ -402,7 +429,180 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Mobile readings are cheap: read them once at start so the card is never empty.
         loadMobile()
         loadTamilInfoStrip()
+        viewModelScope.launch { savedInsights() }
 
+    }
+
+    // ----------------------------------------------------- local history & useful, user-controlled tools
+
+    private fun rebuildChecklist() {
+        val s = _state.value
+        val actions = ActionChecklistPolicy.build(s.securitySnapshot, s.securityHistory, s.health, s.storage, s.dataPackInfo, s.liveNetworkQuality)
+        mutate { it.copy(actionChecklist = actions) }
+    }
+
+    private suspend fun savedInsights() {
+        val saved = withContext(Dispatchers.IO) {
+            Triple(SecurityHistoryRepo.load(ctx), ChargeHistoryRepo.load(ctx), DataBudgetRepo.load(ctx))
+        }
+        mutate { it.copy(securityHistory = saved.first, chargeHistory = saved.second, dailyDataHistory = saved.third,
+            securityHistoryEnabled = SecurityHistoryRepo.enabled(ctx), chargeHistoryEnabled = ChargeHistoryRepo.enabled(ctx),
+            dataHistoryEnabled = DataBudgetRepo.enabled(ctx), dataBudgetConfig = DataBudgetRepo.config(ctx),
+            insightsError = listOfNotNull(SecurityHistoryRepo.warning(), ChargeHistoryRepo.warning(), DataBudgetRepo.warning()).distinct().joinToString("\n").ifBlank { null }) }
+        rebuildChecklist()
+    }
+
+    /** Runs only while Home is visible, not a new background service. All reads/probes are off the UI thread. */
+    fun refreshDashboardReadings() {
+        if (homeReadingJob?.isActive == true) return
+        homeReadingJob = viewModelScope.launch {
+            val values = withContext(Dispatchers.IO) {
+                val health = runCatching { DeviceHealthReader.read(ctx) }.getOrNull()
+                health?.battery?.let { runCatching { ChargeHistoryRepo.record(ctx, it) } }
+                val network = runCatching { LiveNetworkQuality.measure(ctx) }.getOrNull()
+                val pack = runCatching { DataUsageTracker.getUsageInfo(ctx) }.getOrNull()
+                Triple(health, network, pack)
+            }
+            mutate { it.copy(health = values.first ?: it.health, storage = values.first?.storage ?: it.storage,
+                liveNetworkQuality = values.second ?: it.liveNetworkQuality, dataPackInfo = values.third ?: it.dataPackInfo) }
+            rebuildChecklist()
+        }
+    }
+
+    fun openInsights(tab: InsightsTab = InsightsTab.COMPATIBILITY) {
+        mutate { it.copy(insightsTab = tab) }
+        navigate(Screen.INSIGHTS)
+        refreshInsights()
+        if (tab == InsightsTab.ACTION_CHECKLIST || tab == InsightsTab.SECURITY_HISTORY) loadSecurity(navigateToSecurity = false)
+    }
+
+    fun selectInsightsTab(tab: InsightsTab) {
+        if (_state.value.insightsBusy) return
+        mutate { it.copy(insightsTab = tab) }
+        refreshInsights()
+        if ((tab == InsightsTab.ACTION_CHECKLIST || tab == InsightsTab.SECURITY_HISTORY) && _state.value.securityReport == null) loadSecurity(false)
+    }
+
+    fun refreshInsights() {
+        if (_state.value.insightsBusy) return
+        val tab = _state.value.insightsTab
+        mutate { it.copy(insightsBusy = true, insightsError = null) }
+        viewModelScope.launch {
+            try {
+                when (tab) {
+                    InsightsTab.COMPATIBILITY -> {
+                        val report = withContext(Dispatchers.IO) { CompatibilityCollector.collect(ctx) }
+                        mutate { it.copy(compatibilityReport = report) }
+                    }
+                    InsightsTab.CHARGING_HISTORY -> {
+                        val health = withContext(Dispatchers.IO) { DeviceHealthReader.read(ctx).also { ChargeHistoryRepo.record(ctx, it.battery) } }
+                        mutate { it.copy(health = health) }
+                    }
+                    InsightsTab.DATA_BUDGET -> {
+                        val data = withContext(Dispatchers.IO) {
+                            val usage = DataUsageTracker.getUsageInfo(ctx)
+                            val days = DataBudgetRepo.merge(ctx, DataUsageTracker.recentDays(ctx))
+                            usage to days
+                        }
+                        mutate { it.copy(dataPackInfo = data.first, dailyDataHistory = data.second) }
+                    }
+                    else -> Unit
+                }
+                // Don't discard the read-only recent-day chart when saving history is OFF.
+                val temporaryDays = _state.value.dailyDataHistory
+                savedInsights()
+                if (tab == InsightsTab.DATA_BUDGET && !DataBudgetRepo.enabled(ctx)) mutate { it.copy(dailyDataHistory = temporaryDays) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { mutate { it.copy(insightsError = "This local check could not finish. No setting was changed.") } }
+            finally { mutate { it.copy(insightsBusy = false) } }
+        }
+    }
+
+    fun setChargeHistoryEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                ChargeHistoryRepo.setEnabled(ctx, enabled)
+                if (enabled) ChargeHistoryRepo.record(ctx, com.universalrp.cleansweep.data.BatteryReader.read(ctx))
+            }
+            savedInsights()
+        }
+    }
+
+    fun setSecurityHistoryEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { SecurityHistoryRepo.setEnabled(ctx, enabled) }
+            savedInsights()
+            if (enabled) loadSecurity(false)
+        }
+    }
+
+    fun setDataHistoryEnabled(enabled: Boolean) {
+        DataBudgetRepo.setEnabled(ctx, enabled)
+        mutate { it.copy(dataHistoryEnabled = enabled) }
+        refreshInsights()
+    }
+
+    fun clearLocalHistory(kind: InsightsTab) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                when (kind) {
+                    InsightsTab.CHARGING_HISTORY -> ChargeHistoryRepo.clear(ctx)
+                    InsightsTab.SECURITY_HISTORY -> SecurityHistoryRepo.clear(ctx)
+                    InsightsTab.DATA_BUDGET -> DataBudgetRepo.clear(ctx)
+                    else -> Unit
+                }
+            }
+            savedInsights()
+            mutate { it.copy(message = "Local history cleared. Recording switches are unchanged.") }
+        }
+    }
+
+    fun openOwnAppSettings() {
+        val result = com.universalrp.cleansweep.data.SecurityFixHelper.openAppInfo(ctx, ctx.packageName)
+        if (!result.opened) mutate { it.copy(message = result.guidance) }
+    }
+
+    fun saveDataExpiry(text: String) {
+        val clean = text.trim()
+        if (clean.isNotBlank() && DataBudgetPolicy.dateOrNull(clean) == null) {
+            mutate { it.copy(message = "Use a valid expiry date: YYYY-MM-DD.") }; return
+        }
+        DataBudgetRepo.setExpiry(ctx, clean.ifBlank { null })
+        mutate { it.copy(dataBudgetConfig = DataBudgetRepo.config(ctx), message = "Plan date saved. No counter was reset and no recharge was assumed.") }
+    }
+
+    /** Only a known current local action can open a route; AI text/URLs never reach Android intents. */
+    fun openChecklistAction(key: String) {
+        val s = _state.value
+        if (s.securityBusy || s.aiBusy) return
+        val action = s.actionChecklist.firstOrNull { it.observation.key == key } ?: return
+        when (action.route) {
+            ChecklistRoute.SETTINGS -> {
+                val result = com.universalrp.cleansweep.data.SecurityFixHelper.openSpecificSettings(ctx, action.observation.findingId, action.observation.app)
+                mutate { it.copy(actionRecheckPending = result.opened, message = result.guidance) }
+            }
+            ChecklistRoute.HEALTH -> navigate(Screen.HEALTH)
+            ChecklistRoute.APP_CACHE -> { navigate(Screen.APP_CACHE); loadAppCaches() }
+            ChecklistRoute.DATA_BUDGET -> openInsights(InsightsTab.DATA_BUDGET)
+            ChecklistRoute.MOBILE -> { navigate(Screen.MOBILE); loadMobile() }
+            null -> mutate { it.copy(message = action.instructions) }
+        }
+    }
+
+    fun markActionReviewed(key: String, reviewed: Boolean) {
+        val s = _state.value
+        if (s.securityBusy || s.securityReadError != null || s.aiBusy) return
+        val item = s.actionChecklist.firstOrNull { it.observation.key == key }?.observation ?: return
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { SecurityHistoryRepo.review(ctx, item, reviewed) }
+            savedInsights()
+        }
+    }
+
+    fun recheckActionChecklist() {
+        refreshHealth()
+        loadUsage()
+        loadSecurity(navigateToSecurity = false)
     }
 
     private var widgetTick = 0
@@ -458,7 +658,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (_state.value.screen == Screen.SECURITY) {
             loadSecurity()
+        } else if (_state.value.actionRecheckPending) {
+            loadSecurity(navigateToSecurity = false)
         }
+        if (_state.value.screen == Screen.INSIGHTS) refreshInsights()
     }
 
     /**
@@ -1249,11 +1452,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // ---------------------------------------------------------------- health
 
     fun refreshHealth() {
-        val snapshot = runCatching { DeviceHealthReader.read(ctx) }.getOrNull() ?: return
-        mutate { it.copy(health = snapshot) }
-        // Keep the charging card in the status bar in step with reality: it appears when
-        // the charger is connected and removes itself when the cable comes out.
-        com.universalrp.cleansweep.notify.ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+        if (healthReadingJob?.isActive == true) return
+        healthReadingJob = viewModelScope.launch {
+            val snapshot = withContext(Dispatchers.IO) { runCatching { DeviceHealthReader.read(ctx).also { ChargeHistoryRepo.record(ctx, it.battery) } }.getOrNull() } ?: return@launch
+            mutate { it.copy(health = snapshot, storage = snapshot.storage) }
+            rebuildChecklist()
+            ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
+        }
     }
 
     fun setChargeMonitor(enabled: Boolean) {
@@ -1396,25 +1601,21 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------------------------------------------------------------- security
 
-    fun loadSecurity() {
+    fun loadSecurity(navigateToSecurity: Boolean = true) {
         if (_state.value.securityBusy) return
-        mutate { it.copy(securityBusy = true, screen = Screen.SECURITY) }
+        mutate { it.copy(securityBusy = true, securityReadError = null, screen = if (navigateToSecurity) Screen.SECURITY else it.screen) }
         viewModelScope.launch {
-            // v2.7: always re-read the installed apps first. The old build reused the cached
-            // inventory when it had one, so a permission revoked in Settings kept showing as
-            // held until the app was restarted. The fresh inventory is shared with the apps
-            // screen, so both always agree.
-            val inventory = runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }.getOrNull()
-            if (inventory != null) mutate { it.copy(appInventory = inventory) }
-            val apps = inventory?.rows ?: _state.value.appInventory?.rows.orEmpty()
-            val report = runCatching { SecurityScanner.scan(ctx, apps) }.getOrNull()
-            mutate {
-                it.copy(
-                    securityBusy = false,
-                    securityReport = report ?: it.securityReport,
-                    message = if (report == null) "Security check could not run." else null,
-                )
-            }
+            try {
+                val inventory = localReading { AppInventoryLoader.load(ctx, includeSystem = true) }
+                val report = inventory?.let { localReading { SecurityScanner.scan(ctx, it.rows) } }
+                val snapshot = report?.let { SecurityHistoryPolicy.snapshot(it, SecurityHistoryRepo.packages(inventory!!.rows)) }
+                mutate { it.copy(appInventory = inventory ?: it.appInventory, securityReport = report ?: it.securityReport,
+                    securitySnapshot = snapshot ?: it.securitySnapshot,
+                    securityReadError = if (report == null) "Latest security read failed. Any displayed previous report keeps its original date." else null,
+                    message = if (report == null) "Security check could not run. No issue is marked resolved." else null) }
+                savedInsights()
+            } catch (cancelled: CancellationException) { throw cancelled }
+            finally { mutate { it.copy(securityBusy = false, actionRecheckPending = false) } }
         }
     }
 
@@ -2009,98 +2210,48 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         val s = _state.value
         if (s.aiBusy) return
         val config = s.aiConfig
-        AiClient.attemptListener = { attempt, of, _ ->
-            if (of > 1) mutate { it.copy(aiAttempt = attempt, aiAttempts = of) }
-        }
-        mutate {
-            it.copy(
-                aiBusy = true,
-                aiSecurityFocus = securityFocus,
-                aiPromptPreview = "",
-                aiError = null,
-                aiAnswer = null,
-                aiFallbackNote = null,
-                aiUsedMs = 0L,
-                aiAttempt = 1,
-                aiAttempts = 1,
-                screen = Screen.AI_REPORT,
-            )
-        }
+        if (s.screen != Screen.AI_REPORT) navigate(Screen.AI_REPORT)
+        AiClient.attemptListener = { attempt, of, _ -> if (of > 1) mutate { it.copy(aiAttempt = attempt, aiAttempts = of) } }
+        mutate { it.copy(aiBusy = true, aiSecurityFocus = securityFocus, aiPromptPreview = "", aiError = null, aiAnswer = null,
+            aiActionAdvice = emptyList(), aiFallbackNote = null, aiUsedMs = 0L, aiAttempt = 1, aiAttempts = 1, screen = Screen.AI_REPORT) }
         viewModelScope.launch {
             try {
-                // A permissions fix may have happened in Settings just before this tap.
-                // ALWAYS re-read, rather than recycle cached app grants/security findings.
-                val health = localReading { withContext(Dispatchers.IO) { DeviceHealthReader.read(ctx) } }
+                val health = localReading { withContext(Dispatchers.IO) { DeviceHealthReader.read(ctx).also { ChargeHistoryRepo.record(ctx, it.battery) } } }
                 val apps = localReading { AppInventoryLoader.load(ctx, includeSystem = true) }
-                val security = apps?.let { inventory ->
-                    localReading { SecurityScanner.scan(ctx, inventory.rows) }
-                }
-                val storage = health?.storage ?: localReading {
-                    withContext(Dispatchers.IO) { StorageInfoProvider.read() }
-                }
-                mutate {
-                    it.copy(
-                        health = health ?: it.health,
-                        appInventory = apps ?: it.appInventory,
-                        securityReport = security ?: it.securityReport,
-                        storage = storage ?: it.storage,
-                    )
-                }
+                val security = apps?.let { localReading { SecurityScanner.scan(ctx, it.rows) } }
+                val storage = health?.storage ?: localReading { withContext(Dispatchers.IO) { StorageInfoProvider.read() } }
+                val liveNetwork = if (config.includeNetwork) localReading { withContext(Dispatchers.IO) { LiveNetworkQuality.measure(ctx) } } else null
+                val dataPack = if (config.includeNetwork) localReading { withContext(Dispatchers.IO) { DataUsageTracker.getUsageInfo(ctx) } } else null
+                val snapshot = security?.let { SecurityHistoryPolicy.snapshot(it, SecurityHistoryRepo.packages(apps!!.rows)) }
+                val history = withContext(Dispatchers.IO) { SecurityHistoryRepo.load(ctx) }
+                // Freeze token -> trusted local identity/evidence bindings for THIS request.
+                val bindings = ActionChecklistPolicy.build(snapshot, history, health, storage, dataPack, liveNetwork)
+                mutate { it.copy(health = health ?: it.health, appInventory = apps ?: it.appInventory,
+                    securityReport = security ?: it.securityReport, securitySnapshot = snapshot ?: it.securitySnapshot,
+                    securityHistory = history, storage = storage ?: it.storage, liveNetworkQuality = liveNetwork ?: it.liveNetworkQuality,
+                    dataPackInfo = dataPack ?: it.dataPackInfo,
+                    securityReadError = if (security == null) "Fresh security read unavailable; previous findings retain their original date." else null) }
+                rebuildChecklist()
                 val current = _state.value
-                val prompt = if (securityFocus) {
-                    val liveNetwork = if (config.includeNetwork) localReading {
-                        withContext(Dispatchers.IO) { com.universalrp.cleansweep.data.LiveNetworkQuality.measure(ctx) }
-                    } else null
-                    val dataPack = if (config.includeNetwork) localReading {
-                        withContext(Dispatchers.IO) { com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx) }
-                    } else null
-                    SecurityAiPrompt.build(
-                        config = config,
-                        health = health,
-                        apps = apps,
-                        security = security,
-                        network = current.networkReport,
-                        storage = storage,
-                        malware = current.malwareReport,
-                        junk = current.report,
-                        networkQuality = liveNetwork,
-                        dataUsage = dataPack,
-                        appCacheBytes = current.appCaches.takeIf { it.isNotEmpty() }?.sumOf { it.cacheBytes },
-                        hasUsageAccess = AppCacheRepo.hasUsageAccess(ctx),
-                        hasStorageAccess = hasAllFilesAccess() && legacyStorageGranted(),
-                        malwareScanInProgress = current.malwareBusy,
-                        deviceGuidance = com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance(),
-                    )
-                } else {
-                    AiReport.build(config, health, apps, security, current.networkReport, storage)
-                }
+                val facts = if (securityFocus) SecurityAiPrompt.build(
+                    config, health, apps, security, current.networkReport, storage, current.malwareReport, current.report,
+                    liveNetwork, dataPack, current.appCaches.takeIf { it.isNotEmpty() }?.sumOf { it.cacheBytes },
+                    AppCacheRepo.hasUsageAccess(ctx), hasAllFilesAccess() && legacyStorageGranted(), current.malwareBusy,
+                    com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance(),
+                ) else AiReport.build(config, health, apps, security, current.networkReport, storage)
+                val prompt = facts + "\n\n" + ActionChecklistCodec.instructions(bindings, config.includeAppNames)
                 mutate { it.copy(aiPromptPreview = prompt) }
                 val (result, fallbackNote, elapsedMs) = askWithFallback(
-                    systemPrompt = (if (securityFocus) SecurityAiPrompt.systemPrompt() else AiReport.systemPrompt()) +
-                        "\n" + answerLanguageRule(),
-                    userPrompt = prompt,
-                    allowSearch = false,
-                    config = config,
+                    systemPrompt = (if (securityFocus) SecurityAiPrompt.systemPrompt() else AiReport.systemPrompt()) + "\n" + answerLanguageRule(),
+                    userPrompt = prompt, allowSearch = false, config = config,
                 )
-                mutate {
-                    it.copy(
-                        aiAnswer = if (result.ok) result.text else null,
-                        aiError = if (result.ok) null else result.error,
-                        aiUsedProvider = result.providerLabel,
-                        aiUsedModel = result.model,
-                        aiUsedMs = elapsedMs,
-                        aiFallbackNote = fallbackNote,
-                        aiStatusOk = result.ok,
-                    )
-                }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (e: Exception) {
-                mutate { it.copy(aiError = "Could not prepare the phone report. Please retry: ${e.message ?: "local reading unavailable"}") }
-            } finally {
-                AiClient.attemptListener = null
-                mutate { it.copy(aiBusy = false, aiAttempt = 0, aiAttempts = 0) }
-            }
+                val advice = if (result.ok) ActionChecklistCodec.parse(result.text, bindings, System.currentTimeMillis()) else emptyList()
+                mutate { it.copy(aiAnswer = if (result.ok) result.text else null, aiError = if (result.ok) null else result.error,
+                    aiActionAdvice = advice, aiUsedProvider = result.providerLabel, aiUsedModel = result.model,
+                    aiUsedMs = elapsedMs, aiFallbackNote = fallbackNote, aiStatusOk = result.ok) }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (e: Exception) { mutate { it.copy(aiError = "Could not prepare the phone report. Retry or use the local action checklist.") } }
+            finally { AiClient.attemptListener = null; mutate { it.copy(aiBusy = false, aiAttempt = 0, aiAttempts = 0) } }
         }
     }
 
@@ -2336,6 +2487,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val usage = runCatching { UsageStats.read(ctx) }.getOrNull()
             val pack = runCatching { com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx) }.getOrNull()
             mutate { it.copy(usageBusy = false, usage = usage ?: it.usage, dataPackInfo = pack ?: it.dataPackInfo) }
+            rebuildChecklist()
             com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
         }
     }

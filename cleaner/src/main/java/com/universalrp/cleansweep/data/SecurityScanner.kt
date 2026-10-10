@@ -69,14 +69,19 @@ object SecurityScanner {
     suspend fun scan(
         context: Context,
         apps: List<AppRow>,
+        includesSystemApps: Boolean = true,
     ): SecurityReport = withContext(Dispatchers.IO) {
         val findings = mutableListOf<Finding>()
+        val unavailable = mutableSetOf<String>()
+        if (apps.isEmpty()) unavailable += SecurityHistoryPolicy.appChecks() + setOf("accessibility", "notification_listeners", "device_admin")
+        unavailable += apps.flatMap { it.unavailablePermissionChecks }
+        if (!includesSystemApps) unavailable += setOf("facebook_stubs", "root_tools")
         val pm = context.packageManager
 
         // ---------------------------------------------------- usability checks
-        val accessibility = enabledServices(
-            context, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ).filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
+        val accessibilityRead = enabledServices(context, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        if (accessibilityRead == null) unavailable += "accessibility"
+        val accessibility = accessibilityRead.orEmpty().filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
         if (accessibility.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -94,9 +99,9 @@ object SecurityScanner {
             )
         }
 
-        val listeners = enabledServices(
-            context, ENABLED_NOTIFICATION_LISTENERS
-        ).filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
+        val listenersRead = enabledServices(context, ENABLED_NOTIFICATION_LISTENERS)
+        if (listenersRead == null) unavailable += "notification_listeners"
+        val listeners = listenersRead.orEmpty().filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
         if (listeners.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -115,7 +120,9 @@ object SecurityScanner {
 
         // com.google.android.gms is Find My Device — a device admin on every GMS phone by
         // design, not something the user did wrong. Only anything *else* is worth flagging.
-        val admins = activeAdmins(context).filter { it.packageName != "com.google.android.gms" }
+        val adminsRead = activeAdmins(context)
+        if (adminsRead == null) unavailable += "device_admin"
+        val admins = adminsRead.orEmpty().filter { it.packageName != "com.google.android.gms" }
         if (admins.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -138,7 +145,11 @@ object SecurityScanner {
         // v2.9: the OS and its stores install apps by design; only user apps count here.
         val installers = apps.filter {
             !it.isSystem && "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions
-        }.filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
+        }.filter {
+            val allowed = AppInventoryLoader.canInstallPackages(context, it.pkg)
+            if (allowed == null) unavailable += "install_other_apps"
+            allowed == true
+        }
         if (installers.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -159,7 +170,11 @@ object SecurityScanner {
         val usageApps = apps.filter {
             !it.isSystem &&
                 "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
-                AppInventoryLoader.hasUsageAccess(context, it.pkg)
+                run {
+                    val allowed = AppInventoryLoader.hasUsageAccess(context, it.pkg)
+                    if (allowed == null) unavailable += "usage_access"
+                    allowed == true
+                }
         }
         if (usageApps.size > 3) {
             findings.add(
@@ -231,7 +246,9 @@ object SecurityScanner {
         // alarm, so it is excluded and named in the detail line instead.
         // Also distinguish banking/UPI applications that legitimately need SMS to verify
         // bank accounts and receive OTPs (tagged INFO/review rather than high-risk malware alarm).
-        val defaultSmsPkg = defaultSmsPackage(context)
+        val defaultSmsPkg = try { android.provider.Telephony.Sms.getDefaultSmsPackage(context) } catch (e: Exception) {
+            unavailable += setOf("sms_readers", "banking_sms_readers"); null
+        }
         val allSmsApps = apps.filter {
             it.pkg != defaultSmsPkg &&
                 it.grantedPermissions.any { p ->
@@ -316,7 +333,9 @@ object SecurityScanner {
         }
 
         // ------------------------------------------------------ device checks
-        if (!isScreenLocked(context)) {
+        val locked = isScreenLocked(context)
+        if (locked == null) unavailable += "no_lock"
+        if (locked == false) {
             findings.add(
                 Finding(
                     id = "no_lock",
@@ -329,7 +348,9 @@ object SecurityScanner {
             )
         }
 
-        if (developerOptionsEnabled(context)) {
+        val developer = developerOptionsEnabled(context)
+        if (developer == null) unavailable += "developer_options"
+        if (developer == true) {
             findings.add(
                 Finding(
                     id = "developer_options",
@@ -343,6 +364,7 @@ object SecurityScanner {
         }
 
         val patchAge = securityPatchAgeMonths(context)
+        if (patchAge == null) unavailable += "old_patch"
         if (patchAge != null && patchAge > 12) {
             findings.add(
                 Finding(
@@ -388,12 +410,15 @@ object SecurityScanner {
         )
 
         val score = score(findings)
-        SecurityReport(
+        val report = SecurityReport(
             findings = findings.sortedByDescending { it.severity.ordinal * -1 },
             score = score,
             appsChecked = apps.size,
             scannedAtMs = System.currentTimeMillis(),
+            unavailableChecks = unavailable,
         )
+        runCatching { SecurityHistoryRepo.record(context, report, apps) }
+        report
     }
 
     /** Findings are ordered worst-first, so sort on a numeric weight instead. */
@@ -410,19 +435,19 @@ object SecurityScanner {
         return score.coerceIn(0, 100)
     }
 
-    private fun enabledServices(context: Context, key: String): List<String> = try {
+    private fun enabledServices(context: Context, key: String): List<String>? = try {
         val raw = Settings.Secure.getString(context.contentResolver, key) ?: ""
         raw.split(':').map { it.trim() }.filter { it.isNotEmpty() }
     } catch (e: Exception) {
-        emptyList()
+        null
     }
 
-    private fun activeAdmins(context: Context): List<ComponentName> = try {
+    private fun activeAdmins(context: Context): List<ComponentName>? = try {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
         @Suppress("DEPRECATION")
-        dpm?.activeAdmins?.distinct().orEmpty()
+        if (dpm == null) null else dpm.activeAdmins?.distinct().orEmpty()
     } catch (e: Exception) {
-        emptyList()
+        null
     }
 
     private fun serviceApp(context: Context, rawComponent: String): FindingApp? {
@@ -449,20 +474,20 @@ object SecurityScanner {
         null
     }
 
-    private fun isScreenLocked(context: Context): Boolean = try {
+    private fun isScreenLocked(context: Context): Boolean? = try {
         val km = context.getSystemService(Context.KEYGUARD_SERVICE)
             as? android.app.KeyguardManager
-        km?.isDeviceSecure ?: true
+        km?.isDeviceSecure
     } catch (e: Exception) {
-        true
+        null
     }
 
-    private fun developerOptionsEnabled(context: Context): Boolean = try {
+    private fun developerOptionsEnabled(context: Context): Boolean? = try {
         Settings.Global.getInt(
             context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0
         ) == 1
     } catch (e: Exception) {
-        false
+        null
     }
 
     private fun securityPatchAgeMonths(context: Context): Int? {

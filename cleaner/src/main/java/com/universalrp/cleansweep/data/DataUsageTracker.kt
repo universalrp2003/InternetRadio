@@ -1,23 +1,17 @@
 package com.universalrp.cleansweep.data
 
-import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import android.content.Context
-import android.content.SharedPreferences
 import android.net.ConnectivityManager
 import android.net.TrafficStats
-import android.os.Build
+import android.os.SystemClock
+import android.provider.Settings
+import java.time.LocalDate
+import java.time.ZoneId
 import java.util.Calendar
 
-/**
- * Tracks daily mobile data usage (auto-resets daily at midnight)
- * and cumulative billing cycle/pack usage with a custom user-configurable pack limit in GB
- * (supports any variable plan: 1.5GB, 6GB, 12GB, 25GB, etc.).
- *
- * Strictly measures mobile cellular traffic (TYPE_MOBILE) - zero Wi-Fi traffic is included.
- */
+/** Device-wide MOBILE traffic only. Carrier billing/zero-rating is not exposed by these APIs. */
 object DataUsageTracker {
-
     private const val PREFS = "cleansweep_data_pack"
     private const val KEY_PACK_START_MS = "pack_start_ms"
     private const val KEY_PACK_BASELINE_BYTES = "pack_baseline_bytes"
@@ -25,7 +19,6 @@ object DataUsageTracker {
     private const val KEY_UNLIMITED_5G = "unlimited_5g_enabled"
     private const val KEY_LAST_DAY = "last_recorded_day"
     private const val KEY_TODAY_BASELINE_BYTES = "today_baseline_bytes"
-
     const val DEFAULT_PACK_LIMIT_GB = 12.0f
 
     data class UsageInfo(
@@ -42,163 +35,105 @@ object DataUsageTracker {
         val formattedPackLimit: String,
         val progressRatio: Float,
         val isUnlimited5g: Boolean = false,
+        val readingAvailable: Boolean = true,
+        val isPartial: Boolean = false,
+        val source: String = "Android mobile network statistics",
+        val capturedAtMs: Long = 0,
     )
 
-    private fun getPrefs(context: Context): SharedPreferences =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-
-    fun isUnlimited5g(context: Context): Boolean =
-        getPrefs(context).getBoolean(KEY_UNLIMITED_5G, false)
-
+    private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    fun isUnlimited5g(context: Context) = prefs(context).getBoolean(KEY_UNLIMITED_5G, false)
     fun setUnlimited5g(context: Context, enabled: Boolean) {
-        getPrefs(context).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
-        // Also persist in the main app prefs as backup so an update never loses it
-        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
+        prefs(context).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
+        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
     }
-
-    fun getPackLimitGb(context: Context): Float {
-        return getPrefs(context).getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
-    }
-
+    fun getPackLimitGb(context: Context) = prefs(context).getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
     fun setPackLimitGb(context: Context, limitGb: Float) {
-        val safe = if (limitGb > 0f) limitGb else DEFAULT_PACK_LIMIT_GB
-        getPrefs(context).edit().putFloat(KEY_PACK_LIMIT_GB, safe).apply()
-        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
-            .edit().putFloat(KEY_PACK_LIMIT_GB, safe).apply()
+        if (!limitGb.isFinite() || limitGb <= 0 || limitGb > 100_000) return
+        prefs(context).edit().putFloat(KEY_PACK_LIMIT_GB, limitGb).apply()
+        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).edit().putFloat(KEY_PACK_LIMIT_GB, limitGb).apply()
     }
 
-    fun resetPackUsage(context: Context, newLimitGb: Float? = null) {
-        val now = System.currentTimeMillis()
-        val prefs = getPrefs(context)
-        val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
-        val hasAccess = UsageStats.hasUsageAccess(context)
-
-        val currentCumulativeMobile = if (hasAccess && manager != null) {
-            queryMobileTotal(manager, 0L, now)
-        } else {
-            TrafficStats.getMobileRxBytes().coerceAtLeast(0L) + TrafficStats.getMobileTxBytes().coerceAtLeast(0L)
-        }
-
-        val editor = prefs.edit()
-            .putLong(KEY_PACK_START_MS, now)
-            .putLong(KEY_PACK_BASELINE_BYTES, currentCumulativeMobile)
-
-        if (newLimitGb != null && newLimitGb > 0f) {
-            editor.putFloat(KEY_PACK_LIMIT_GB, newLimitGb)
-            context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
-                .edit().putFloat(KEY_PACK_LIMIT_GB, newLimitGb).apply()
-        }
-        editor.apply()
-        context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
-            .edit()
-            .putLong(KEY_PACK_START_MS, now)
-            .putLong(KEY_PACK_BASELINE_BYTES, currentCumulativeMobile)
-            .apply()
+    @Synchronized fun resetPackUsage(context: Context, newLimitGb: Float? = null) {
+        if (newLimitGb != null) setPackLimitGb(context, newLimitGb)
+        val current = mobileCounter()
+        val edit = prefs(context).edit().putLong(KEY_PACK_START_MS, System.currentTimeMillis()).putLong("observed_pack_bytes", 0)
+        if (current != null) edit.putLong(KEY_PACK_BASELINE_BYTES, current).putLong("last_mobile_counter", current)
+        edit.apply()
     }
 
-    fun getUsageInfo(context: Context): UsageInfo {
-        val prefs = getPrefs(context)
+    @Synchronized fun getUsageInfo(context: Context): UsageInfo {
+        val store = prefs(context)
         val now = System.currentTimeMillis()
-        val hasAccess = UsageStats.hasUsageAccess(context)
+        val calendar = Calendar.getInstance()
+        val todayKey = "${calendar.get(Calendar.YEAR)}${calendar.get(Calendar.DAY_OF_YEAR)}" // Preserve the previous counter's day key on upgrade.
+        calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0); calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
+        val midnight = calendar.timeInMillis
+        var start = store.getLong(KEY_PACK_START_MS, 0)
+        if (start <= 0 || start > now) { start = midnight; store.edit().putLong(KEY_PACK_START_MS, start).apply() }
+        val access = UsageStats.hasUsageAccess(context)
         val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
-
-        // Today midnight calculation
-        val cal = Calendar.getInstance()
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val todayMidnight = cal.timeInMillis
-        val todayKey = "day_${cal.get(Calendar.YEAR)}_${cal.get(Calendar.DAY_OF_YEAR)}"
-
-        var packStart = prefs.getLong(KEY_PACK_START_MS, 0L)
-        if (packStart == 0L) {
-            packStart = todayMidnight
-            prefs.edit().putLong(KEY_PACK_START_MS, packStart).apply()
-        }
-
-        var todayMobile = 0L
-        var packMobile = 0L
-
-        if (hasAccess && manager != null) {
-            todayMobile = queryMobileTotal(manager, todayMidnight, now)
-            packMobile = queryMobileTotal(manager, packStart, now)
-        } else {
-            // Strict mobile-only fallback via TrafficStats
-            val currentMobile = (TrafficStats.getMobileRxBytes().coerceAtLeast(0L) +
-                TrafficStats.getMobileTxBytes().coerceAtLeast(0L))
-
-            val lastDay = prefs.getString(KEY_LAST_DAY, "")
-            var todayBaseline = prefs.getLong(KEY_TODAY_BASELINE_BYTES, -1L)
-            if (lastDay != todayKey || todayBaseline < 0L) {
-                todayBaseline = currentMobile
-                prefs.edit()
-                    .putString(KEY_LAST_DAY, todayKey)
-                    .putLong(KEY_TODAY_BASELINE_BYTES, todayBaseline)
-                    .apply()
+        val fullToday = if (access && manager != null) queryMobileTotal(manager, midnight, now) else null
+        val fullPack = if (access && manager != null) queryMobileTotal(manager, start, now) else null
+        var available = fullToday != null && fullPack != null
+        val partial = !available
+        var today = fullToday ?: 0
+        var pack = fullPack ?: 0
+        if (!available) {
+            val current = mobileCounter()
+            available = current != null
+            if (current != null) {
+                val last = store.getLong("last_mobile_counter", -1).takeIf { it >= 0 }
+                val uptime = SystemClock.elapsedRealtime()
+                val boot = runCatching { Settings.Global.getInt(context.contentResolver, "boot_count") }.getOrNull()
+                val oldDay = store.getString(KEY_LAST_DAY, "").orEmpty()
+                val previous = MobileCounterPolicy.migrate(last, current,
+                    store.getLong(KEY_PACK_BASELINE_BYTES, current), store.getLong(KEY_TODAY_BASELINE_BYTES, current),
+                    store.getLong("observed_pack_bytes", -1).takeIf { it >= 0 }, store.getLong("observed_today_bytes", -1).takeIf { it >= 0 },
+                    oldDay, store.getLong("observed_uptime", 0), store.getInt("observed_boot", -1).takeIf { it >= 0 })
+                val observed = MobileCounterPolicy.observe(previous, current, todayKey, uptime, boot)
+                pack = observed.packBytes ?: 0; today = observed.todayBytes ?: 0
+                store.edit().putLong("last_mobile_counter", current).putLong("observed_pack_bytes", pack).putLong("observed_today_bytes", today)
+                    .putLong("observed_uptime", uptime).putInt("observed_boot", boot ?: -1).putString(KEY_LAST_DAY, todayKey)
+                    .apply { if (oldDay != todayKey) putLong(KEY_TODAY_BASELINE_BYTES, current) }.apply()
             }
-            todayMobile = if (currentMobile >= todayBaseline) (currentMobile - todayBaseline) else currentMobile
-
-            val packBaseline = prefs.getLong(KEY_PACK_BASELINE_BYTES, 0L)
-            packMobile = if (currentMobile >= packBaseline) (currentMobile - packBaseline) else currentMobile
         }
-
-        val fallbackPrefs = context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
-        val limitGb = if (prefs.contains(KEY_PACK_LIMIT_GB)) {
-            prefs.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
-        } else {
-            fallbackPrefs.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
-        }
-        val isUnlimited = prefs.getBoolean(KEY_UNLIMITED_5G, false) || fallbackPrefs.getBoolean(KEY_UNLIMITED_5G, false)
-        val limitBytes = (limitGb.toDouble() * 1024.0 * 1024.0 * 1024.0).toLong()
-        val remainingBytes = (limitBytes - packMobile).coerceAtLeast(0L)
-        val progressRatio = if (limitBytes > 0L) {
-            (packMobile.toFloat() / limitBytes.toFloat()).coerceIn(0f, 1f)
-        } else 0f
-
-        val formattedLimit = if (limitGb % 1.0f == 0.0f) {
-            "%.0f GB".format(limitGb)
-        } else {
-            "%.1f GB".format(limitGb)
-        }
-
-        return UsageInfo(
-            hasUsageAccess = hasAccess,
-            todayMobileBytes = todayMobile,
-            packTotalMobileBytes = packMobile,
-            packStartDateMs = packStart,
-            packLimitGb = limitGb,
-            packLimitBytes = limitBytes,
-            packRemainingBytes = remainingBytes,
-            formattedToday = formatBytesSafe(todayMobile),
-            formattedPackTotal = formatBytesSafe(packMobile),
-            formattedRemaining = formatBytesSafe(remainingBytes),
-            formattedPackLimit = formattedLimit,
-            progressRatio = progressRatio,
-            isUnlimited5g = isUnlimited,
-        )
+        val fallback = context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
+        val configured = if (store.contains(KEY_PACK_LIMIT_GB)) store.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB) else fallback.getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
+        val limitGb = configured.takeIf { it.isFinite() && it > 0 && it <= 100_000 } ?: DEFAULT_PACK_LIMIT_GB
+        val unlimited = store.getBoolean(KEY_UNLIMITED_5G, false) || fallback.getBoolean(KEY_UNLIMITED_5G, false)
+        val limit = (limitGb * 1024.0 * 1024.0 * 1024.0).toLong()
+        val remaining = (limit - pack).coerceAtLeast(0)
+        val result = UsageInfo(access, today, pack, start, limitGb, limit, remaining,
+            if (available) formatBytesSafe(today) else "Not measured", if (available) formatBytesSafe(pack) else "Not measured",
+            if (available) formatBytesSafe(remaining) else "Not measured", "%.1f GB".format(limitGb),
+            if (available && limit > 0) (pack.toFloat() / limit).coerceIn(0f, 1f) else 0f, unlimited, available, partial,
+            if (!available) "Mobile statistics unavailable" else if (partial) "Observed mobile counter (partial)" else "Android mobile network statistics", now)
+        runCatching { DataBudgetRepo.recordToday(context, result) }
+        return result
     }
 
-    private fun queryMobileTotal(manager: NetworkStatsManager, start: Long, end: Long): Long = try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val bucket = manager.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, null, start, end)
-            (bucket.rxBytes + bucket.txBytes).coerceAtLeast(0L)
-        } else 0L
-    } catch (e: Exception) {
-        0L
-    }
-
-    fun formatBytesSafe(bytes: Long): String {
-        if (bytes <= 0L) return "0 MB"
-        val gb = bytes / (1024.0 * 1024.0 * 1024.0)
-        val mb = bytes / (1024.0 * 1024.0)
-        return if (gb >= 1.0) {
-            "%.2f GB".format(gb)
-        } else if (mb >= 1.0) {
-            "%.1f MB".format(mb)
-        } else {
-            "%.0f KB".format(bytes / 1024.0)
+    /** Complete past local-calendar days only; unknown days remain null. Never includes Wi-Fi. */
+    fun recentDays(context: Context, count: Int = 7): List<DailyDataPoint> {
+        if (!UsageStats.hasUsageAccess(context)) return emptyList()
+        val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager ?: return emptyList()
+        val today = LocalDate.now(); val zone = ZoneId.systemDefault(); val now = System.currentTimeMillis()
+        return (count.coerceIn(1, 30) downTo 1).map { offset ->
+            val day = today.minusDays(offset.toLong())
+            val bytes = queryMobileTotal(manager, day.atStartOfDay(zone).toInstant().toEpochMilli(), day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli())
+            DailyDataPoint(day.toString(), bytes, bytes != null, "Android mobile network statistics", now)
         }
+    }
+    private fun mobileCounter(): Long? = sumOrNull(TrafficStats.getMobileRxBytes(), TrafficStats.getMobileTxBytes())
+    private fun queryMobileTotal(manager: NetworkStatsManager, start: Long, end: Long): Long? = try {
+        val bucket = manager.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, null, start, end)
+        sumOrNull(bucket.rxBytes, bucket.txBytes)
+    } catch (e: Exception) { null }
+    private fun sumOrNull(rx: Long, tx: Long): Long? = if (rx < 0 || tx < 0 || rx > Long.MAX_VALUE - tx) null else rx + tx
+    fun formatBytesSafe(bytes: Long): String = when {
+        bytes <= 0 -> "0 MB"
+        bytes >= 1_073_741_824 -> "%.2f GB".format(bytes / 1_073_741_824.0)
+        bytes >= 1_048_576 -> "%.1f MB".format(bytes / 1_048_576.0)
+        else -> "%.0f KB".format(bytes / 1024.0)
     }
 }

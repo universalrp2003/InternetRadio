@@ -68,7 +68,7 @@ class NetworkLedMeterView(context: Context) : View(context) {
             LiveNetworkQuality.QualityGrade.TOP_QUALITY -> Color.parseColor("#00E676")    // Very Good = Green
             LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> Color.parseColor("#FFD600") // Medium = Yellow
             LiveNetworkQuality.QualityGrade.BAD_QUALITY -> Color.parseColor("#FF3B30")    // Bad = Red
-            null -> Color.parseColor("#38BDF8")
+            LiveNetworkQuality.QualityGrade.UNKNOWN, null -> Color.parseColor("#38BDF8")
         }
 
         // Row 1: Download [D] (lights left to right)

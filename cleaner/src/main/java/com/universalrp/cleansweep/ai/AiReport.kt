@@ -62,13 +62,13 @@ object AiReport {
             out.appendLine("Android ${h.device.androidVersion} (API ${h.device.sdk}), security patch ${h.device.securityPatch}")
             out.appendLine("CPU: ${h.device.cores} cores, ABI ${h.device.abi}")
             out.appendLine(
-                "RAM: ${gb(h.device.totalRamBytes)} total, ${gb(h.device.availableRamBytes)} available"
+                if (h.device.totalRamBytes > 0) "RAM: ${gb(h.device.totalRamBytes)} total, ${gb(h.device.availableRamBytes)} available" else "RAM: not reported"
             )
             out.appendLine("Uptime: ${formatUptime(h.device.uptimeMs)}")
             out.appendLine()
 
             out.appendLine("== Battery ==")
-            out.appendLine("Charge ${h.battery.percent}% — ${h.battery.statusLabel} (${h.battery.pluggedLabel}); external power connected: ${h.battery.powerConnected}")
+            out.appendLine("Charge ${h.battery.percent.takeIf { it >= 0 }?.let { "$it%" } ?: "not reported"} — ${h.battery.statusLabel} (${h.battery.pluggedLabel}); external power connected: ${h.battery.powerConnected}")
             out.appendLine("Battery health reported by Android: ${h.battery.healthLabel}")
             out.appendLine("Temperature: ${h.battery.temperatureC?.let { "%.1f C".format(it) } ?: "not reported"}")
             out.appendLine("Voltage: ${h.battery.voltageV?.let { "%.2f V".format(it) } ?: "not reported"}")
@@ -130,6 +130,7 @@ object AiReport {
         } else {
             out.appendLine("== Security check (all on-phone findings) ==")
             out.appendLine("Checked at ${security.scannedAtMs} milliseconds since Unix epoch. Live Guard score: ${security.score}/100 (${security.verdict}) over ${security.appsChecked} apps.")
+            if (security.unavailableChecks.isNotEmpty()) out.appendLine("Partial/unavailable checks: ${security.unavailableChecks.sorted().joinToString()}. Missing observations cannot establish safety.")
             security.findings.forEach { f ->
                 out.appendLine("- [${f.severity}] [${f.id}] ${f.title}: ${f.detail} (affected count: ${f.count})")
                 if (config.includeAppNames) {
@@ -151,7 +152,7 @@ object AiReport {
         }
         if (health == null) out.appendLine("Current battery/hardware readings are unavailable; do not invent them.")
         if (apps == null) out.appendLine("Current app inventory is unavailable; installed-app checks may be incomplete.")
-        if (storage == null) out.appendLine("Current storage readings are unavailable.")
+        if (storage == null || storage.total <= 0) out.appendLine("Current storage readings are unavailable.")
         if (config.includeNetwork && network == null) out.appendLine("No completed local-network scan is available; do not infer zero devices.")
 
         if (config.includeNetwork && network != null) {

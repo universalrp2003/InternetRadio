@@ -45,6 +45,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.BatteryReading
@@ -72,10 +76,10 @@ import kotlinx.coroutines.isActive
 fun HealthScreen(state: UiState, vm: MainViewModel) {
     // Re-read the sensors while this screen is open. Two seconds is fast enough to
     // watch the charging current change without waking the phone constantly.
-    LaunchedEffect(Unit) {
-        while (isActive) {
-            vm.refreshHealth()
-            delay(2000)
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(owner) {
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (isActive) { vm.refreshHealth(); delay(2000) }
         }
     }
 
@@ -109,6 +113,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
+            item { TextButton(onClick = { vm.openInsights(InsightsTab.CHARGING_HISTORY) }) { Text(tr("Charging history & charts")) } }
             if (health == null) {
                 item {
                     PanelCard(Modifier.fillMaxWidth()) {
@@ -462,11 +467,7 @@ private fun CpuCard(health: HealthSnapshot) {
 @Composable
 private fun MemoryCard(health: HealthSnapshot) {
     val usedRam = (health.device.totalRamBytes - health.device.availableRamBytes).coerceAtLeast(0L)
-    val ramFraction = if (health.device.totalRamBytes > 0L) {
-        usedRam.toFloat() / health.device.totalRamBytes.toFloat()
-    } else {
-        0f
-    }
+    val ramFraction = com.universalrp.cleansweep.data.ReadingPolicy.ramUsedFraction(health.device.totalRamBytes, health.device.availableRamBytes)
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -479,11 +480,12 @@ private fun MemoryCard(health: HealthSnapshot) {
             }
             Spacer(Modifier.height(10.dp))
             Text(
-                "RAM: ${usedRam.formatBytes()} used of ${health.device.totalRamBytes.formatBytes()}",
+                if (ramFraction != null) "RAM: ${usedRam.formatBytes()} used of ${health.device.totalRamBytes.formatBytes()}" else "RAM: ${tr("Not reported")}",
                 style = MaterialTheme.typography.bodyMedium,
             )
-            Bar(value = ramFraction, color = if (ramFraction > 0.85f) WarnAmber else AccentViolet)
+            if (ramFraction != null) Bar(value = ramFraction, color = if (ramFraction > 0.85f) WarnAmber else AccentViolet)
             Spacer(Modifier.height(12.dp))
+            if (health.storage.total > 0) {
             Text(
                 "Storage: ${health.storage.used.formatBytes()} used of " +
                     "${health.storage.total.formatBytes()} — ${health.storage.free.formatBytes()} free",
@@ -493,6 +495,7 @@ private fun MemoryCard(health: HealthSnapshot) {
                 value = health.storage.usedFraction,
                 color = if (health.storage.usedFraction > 0.9f) DangerRed else AccentCyan,
             )
+            } else Text("Storage: ${tr("Not reported")}")
             Spacer(Modifier.height(8.dp))
             Text(
                 "Android keeps RAM busy on purpose — cached apps are what make switching back " +

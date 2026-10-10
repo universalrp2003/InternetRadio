@@ -9,6 +9,15 @@ EXPECTED = {
     "com.universalrp.cleansweep.notify.StatusPillContentTest": 6,
     "com.universalrp.cleansweep.data.SecuritySettingsRoutesTest": 12,
     "com.universalrp.cleansweep.ai.SecurityAiPromptTest": 9,
+    "com.universalrp.cleansweep.data.ReadingPolicyTest": 10,
+    "com.universalrp.cleansweep.data.CompatibilityReportTest": 4,
+    "com.universalrp.cleansweep.data.SecurityHistoryPolicyTest": 12,
+    "com.universalrp.cleansweep.data.ChargeHistoryPolicyTest": 12,
+    "com.universalrp.cleansweep.data.DataBudgetPolicyTest": 12,
+    "com.universalrp.cleansweep.data.MobileCounterPolicyTest": 8,
+    "com.universalrp.cleansweep.data.PermissionObservationPolicyTest": 6,
+    "com.universalrp.cleansweep.data.InsightsJsonTest": 6,
+    "com.universalrp.cleansweep.ai.ActionChecklistTest": 12,
 }
 
 
@@ -35,7 +44,7 @@ def verify(results_root: Path) -> list[str]:
         if any(int(report.get(field, "0")) for report in reports for field in ("failures", "errors")):
             raise ValueError(f"{variant}: an existing CleanSweep test failed")
         total = sum(int(report.get("tests", "0")) for report in reports)
-        summaries.append(f"CleanSweep {variant.lower()}: {total} tests passed; all {sum(EXPECTED.values())} required new regression tests ran, none skipped.")
+        summaries.append(f"CleanSweep {variant.lower()}: {total} tests passed; all {sum(EXPECTED.values())} required regression tests ran, none skipped.")
     return summaries
 
 

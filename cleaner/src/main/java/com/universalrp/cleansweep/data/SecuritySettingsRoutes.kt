@@ -146,7 +146,7 @@ object SecuritySettingsRoutes {
             "usage_access" -> "Usage access → $selected → Permit usage access. Keep access for tools you intentionally use."
             "overlay" -> "Display over other apps → $selected. Android 11+ may open the app list; select this app. On MIUI/HyperOS it may be under Apps → Manage apps → app → Other permissions."
             "sms_readers", "banking_sms_readers" -> "App info / App permissions → $selected → Permissions → SMS. Revoke only if unnecessary; verified messaging, banking and UPI apps may need it. On MIUI/HyperOS choose Permission management / App permissions."
-            "sideloaded", "odd_installer", "root_tools" -> "App info → $selected. Verify its source and purpose; uninstall only if you recognise it as unwanted."
+            "app_info", "sideloaded", "odd_installer", "root_tools" -> "App info → $selected. Verify its source and purpose; uninstall only if you recognise it as unwanted."
             "facebook_stubs" -> "App info → $selected → Disable, if available and you do not need it. Do not remove unrelated system components."
             "no_lock" -> "Security / Passwords and security → Screen lock → set a PIN, pattern or password."
             "developer_options" -> "System / Additional settings → Developer options. Turn off debugging/options only if you do not use them."

@@ -60,6 +60,7 @@ object SecurityAiPrompt {
         if (security == null) {
             appendLine("The fresh security scan was unavailable. Do not infer that there are no issues.")
         } else {
+            if (security.unavailableChecks.isNotEmpty()) appendLine("Unavailable/partial security checks: ${security.unavailableChecks.sorted().joinToString()}. Missing observations here are not resolved or safe.")
             security.findings.forEach { finding ->
                 appendLine("[${finding.id}] ${SecuritySettingsRoutes.instructions(finding.id)}")
             }
@@ -103,6 +104,7 @@ object SecurityAiPrompt {
             if (dataUsage == null) appendLine("Mobile data accounting is not available.")
             else {
                 appendLine("Today cellular: ${dataUsage.formattedToday}; pack used ${dataUsage.formattedPackTotal} of ${dataUsage.formattedPackLimit}; remaining ${dataUsage.formattedRemaining}.")
+                appendLine("Accounting source: ${dataUsage.source}; available: ${dataUsage.readingAvailable}; partial: ${dataUsage.isPartial}; captured at ${dataUsage.capturedAtMs} ms since Unix epoch.")
                 appendLine("Usage access: ${dataUsage.hasUsageAccess}; unlimited-5G plan setting (user supplied): ${dataUsage.isUnlimited5g}. These readings are not the carrier's bill or verification of the tariff.")
             }
         }

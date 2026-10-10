@@ -31,7 +31,7 @@ object ChargeNotifier {
     private const val KEY_LAST_PLUG_ANNOUNCE = "last_plug_announce"
 
     fun read(context: Context): BatteryReading? = try {
-        BatteryReader.read(context)
+        BatteryReader.read(context).also { runCatching { com.universalrp.cleansweep.data.ChargeHistoryRepo.record(context, it) } }
     } catch (e: Exception) {
         null
     }
@@ -81,7 +81,7 @@ object ChargeNotifier {
             battery.powerConnected -> chargingContent.text
             dataUsage != null && !isUnlimited ->
                 "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
-            isUnlimited -> "Unlimited 5G Plan • Battery ${battery.percent}%"
+            isUnlimited -> "Unlimited 5G mode (user-set) • Battery ${battery.percent}%"
             else -> "${battery.percent}% • ${battery.statusLabel}"
         }
 
@@ -108,7 +108,7 @@ object ChargeNotifier {
             if (dataUsage != null && !isUnlimited) {
                 append("Pack Used: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} • Left: ${dataUsage.formattedRemaining}\n")
             } else if (isUnlimited) {
-                append("Unlimited 5G Active • Quota counting paused\n")
+                append("Unlimited 5G mode (user-set) • quota display hidden\n")
             }
             if (battery.powerConnected) {
                 append("Charger connected: $timeLine")
@@ -125,7 +125,9 @@ object ChargeNotifier {
         val hint = when {
             battery.powerConnected && battery.powerW == null -> "Charging power is not reported by this phone. No wattage is guessed."
             battery.powerConnected -> "Watts are measured at the battery, not at the charger adapter."
-            dataUsage != null -> "Mobile data usage is strictly tracked from cellular networks (zero Wi-Fi)."
+            dataUsage != null && !dataUsage.readingAvailable -> "Mobile data statistics are unavailable; no usage or remaining quota is guessed."
+            dataUsage?.isPartial == true -> "Partial observed mobile counter; gaps/reboots can miss traffic. Not the carrier's official balance. Wi-Fi excluded."
+            dataUsage != null -> "Mobile data usage is tracked from cellular networks (zero Wi-Fi), not the carrier's official bill."
             !battery.charging -> "Unplugged — monitoring active."
             battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged overnight is fine."
             battery.percent >= 80 -> "Above 80% charging slows down on purpose — this is normal for lithium batteries."

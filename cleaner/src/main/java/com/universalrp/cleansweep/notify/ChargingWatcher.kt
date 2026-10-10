@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import com.universalrp.cleansweep.voice.Announcer
+import kotlinx.coroutines.launch
 
 /**
  * Starts and stops the charging monitor the moment the cable goes in or comes out, so the
@@ -17,6 +18,19 @@ class ChargingWatcher : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
         val app = context?.applicationContext ?: return
         val action = intent?.action ?: return
+        if (com.universalrp.cleansweep.data.ChargeHistoryRepo.enabled(app) &&
+            (action == Intent.ACTION_POWER_CONNECTED || action == Intent.ACTION_POWER_DISCONNECTED)) {
+            val pending = goAsync()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    com.universalrp.cleansweep.data.ChargeHistoryRepo.record(app,
+                        com.universalrp.cleansweep.data.BatteryReader.read(app),
+                        plugEvent = action == Intent.ACTION_POWER_CONNECTED,
+                        unplugEvent = action == Intent.ACTION_POWER_DISCONNECTED)
+                } catch (e: Exception) { /* A history failure must not break the existing monitor. */ }
+                finally { pending.finish() }
+            }
+        }
         val prefs = app.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
         // The service runs when the user wants any of the three: the status-bar card, the
         // watt pill, or the spoken "charging started" line.

@@ -193,13 +193,11 @@ class HealthWatchWorker(
         // Weekly high security risks check (remind once a week)
         val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
         if (now - lastSecReminder > 7 * 24 * 60 * 60 * 1000L) {
-            val highRisks = try {
-                val apps = AppInventoryLoader.load(ctx, includeSystem = false).rows
-                val report = SecurityScanner.scan(ctx, apps)
-                report.findings.filter { it.severity == Severity.HIGH }
-            } catch (e: Exception) {
-                emptyList()
-            }
+            val weeklyReport = try {
+                val apps = AppInventoryLoader.load(ctx, includeSystem = true).rows
+                SecurityScanner.scan(ctx, apps)
+            } catch (e: Exception) { null }
+            val highRisks = weeklyReport?.findings?.filter { it.severity == Severity.HIGH }.orEmpty()
             if (highRisks.isNotEmpty()) {
                 prefs.edit().putLong("last_sec_reminder_ms", now).apply()
                 val riskCount = highRisks.size
@@ -209,8 +207,10 @@ class HealthWatchWorker(
                     "பாதுகாப்பு நினைவூட்டல்: $riskCount முக்கிய பாதுகாப்பு அமைப்புகளை சரிபார்க்கவும்.",
                     Announcer.Event.TEST,
                 )
-            } else {
+            } else if (weeklyReport != null && weeklyReport.unavailableChecks.isEmpty()) {
                 prefs.edit().remove("widget_security_alert").apply()
+            } else if (prefs.getString("widget_security_alert", "").orEmpty().isNotBlank()) {
+                prefs.edit().putString("widget_security_alert", "Previous alert not verified; latest review incomplete").apply()
             }
         }
     }
@@ -347,7 +347,7 @@ class HealthWatchWorker(
             )
             appendLine(
                 (if (tamil) "பாதுகாப்பு மதிப்பெண்" else "Security score") + ": " +
-                    (security?.let { "${it.score}/100, ${it.findings.size} " +
+                    (security?.let { "${com.universalrp.cleansweep.data.ReadingPolicy.securityValue(it)}, ${it.findings.size} " +
                         (if (tamil) "கண்டுபிடிப்புகள்" else "findings") } ?: "?")
             )
         }.trim()
@@ -386,7 +386,11 @@ class HealthWatchWorker(
 
         // A hand-run brief keeps the day free, so the evening brief still arrives.
         Announcer.saveBrief(ctx, today, full, markDay = !forced)
-        val notifSummary = spokenFinal ?: if (tamil) "பாதுகாப்பு நிலை சீராக உள்ளது" else "All security checks passed"
+        val notifSummary = spokenFinal ?: when {
+            security == null || security.unavailableChecks.isNotEmpty() -> if (tamil) "பாதுகாப்பு ஆய்வு முழுமையடையவில்லை" else "Security review incomplete"
+            tamil -> "அதிக/மிதமான எச்சரிக்கை காணப்படவில்லை; பாதுகாப்புச் சான்றல்ல"
+            else -> "No high/medium warnings observed; not a safety verdict"
+        }
         notify(ctx, full, notifSummary)
         if (spokenFinal != null) {
             Announcer.speak(

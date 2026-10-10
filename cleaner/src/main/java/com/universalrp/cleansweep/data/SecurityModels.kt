@@ -25,12 +25,15 @@ data class SecurityReport(
     val score: Int,
     val appsChecked: Int,
     val scannedAtMs: Long,
+    /** Failed or out-of-scope reads cannot support a safety/resolution claim. */
+    val unavailableChecks: Set<String> = emptySet(),
 ) {
     val highCount: Int get() = findings.count { it.severity == Severity.HIGH }
     val mediumCount: Int get() = findings.count { it.severity == Severity.MEDIUM }
     val verdict: String
         get() = when {
-            score >= 90 -> "Looking good"
+            unavailableChecks.isNotEmpty() -> "Incomplete permission review"
+            score >= 90 -> "Few observed permission warnings"
             score >= 75 -> "A few things to check"
             score >= 55 -> "Needs attention"
             else -> "Act on the red items"

@@ -373,6 +373,10 @@ jobs:
             exit 1
           fi
           echo "OK: no Accessibility service in CleanSweep's manifest"
+          for symbol in ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
+            if grep -aq "$symbol" "$WORK/cleaner.dex"; then echo "OK: $symbol is in the APK"
+            else echo "FAIL: approved history/tools feature $symbol missing from APK"; exit 1; fi
+          done
 
           if grep -aq "CacheCleanerService" "$WORK/cleaner.dex"; then
             echo "FAIL: CacheCleanerService is still compiled into the APK"

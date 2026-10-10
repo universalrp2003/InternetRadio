@@ -649,14 +649,13 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
             // ------------------------------------------- local vitals, side by side
             item {
                 Text(
-                    "Your phone right now",
+                    tr("Last observed phone readings"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    "These numbers are read from your phone, not from the AI. Green = healthy, " +
-                        "amber = worth watching, red = do something.",
+                    "These are dated phone observations, not AI measurements. Colours are review hints, not a safety or battery-health certification.",
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
@@ -664,7 +663,10 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
 
             item {
                 state.health?.let { health ->
-                    VitalsGrid(health, state.securityReport?.score, state.storage)
+                    Column {
+                    Text(tr("Last checked %s", readingTime(health.capturedAtMs)), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    VitalsGrid(health, state.securityReport?.takeIf { it.unavailableChecks.isEmpty() }?.score, state.storage)
+                    }
                 } ?: PanelCard(Modifier.fillMaxWidth()) {
                     Text(tr("Reading the sensors…"), Modifier.padding(16.dp), color = TextSecondary)
                 }
@@ -774,9 +776,11 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            item(key = "action_checklist_entry") { AiChecklistEntry(state, vm) }
+
             // ----------------------------------------------- the answer, sectioned
             state.aiAnswer?.let { answer ->
-                val sections = splitAnswer(answer)
+                val sections = splitAnswer(com.universalrp.cleansweep.ai.ActionChecklistCodec.narrative(answer).ifBlank { "Use the local action checklist; no human-readable AI explanation was returned." })
                 sections.forEach { section ->
                     item {
                         AiSectionCard(section)
@@ -1012,17 +1016,12 @@ private fun VitalsGrid(
             )
         }
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            val ramFraction = if (health.device.totalRamBytes > 0L) {
-                (health.device.totalRamBytes - health.device.availableRamBytes).toFloat() /
-                    health.device.totalRamBytes.toFloat()
-            } else {
-                0f
-            }
+            val ramFraction = com.universalrp.cleansweep.data.ReadingPolicy.ramUsedFraction(health.device.totalRamBytes, health.device.availableRamBytes)
             VitalBox(
                 "RAM in use",
-                "${(ramFraction * 100).toInt()}%",
+                ramFraction?.let { "${(it * 100).toInt()}%" } ?: "Not reported",
                 "Android keeps RAM busy on purpose — over 80% is normal on a phone with many apps.",
-                if (ramFraction > 0.9f) WarnAmber else GoodGreen,
+                if (ramFraction == null) TextSecondary else if (ramFraction > 0.9f) WarnAmber else AccentCyan,
                 Modifier.weight(cell),
             )
             VitalBox(
@@ -1046,9 +1045,9 @@ private fun VitalsGrid(
                 securityScore?.let { "$it/100" } ?: "Not run yet",
                 when {
                     securityScore == null -> "Run the security check for a score."
-                    securityScore >= 90 -> "High-permission apps are under control."
+                    securityScore >= 90 -> "Few permission warnings observed; this does not prove safety."
                     securityScore >= 75 -> "A couple of settings are worth a look."
-                    else -> "Some apps hold permissions they do not need."
+                    else -> "Review observed permissions and whether you need them. No access is automatically revoked."
                 },
                 when {
                     securityScore == null -> TextSecondary

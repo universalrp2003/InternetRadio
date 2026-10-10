@@ -69,6 +69,10 @@ class ChargeMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP_SERVICE) {
+            com.universalrp.cleansweep.work.ChargerWatchWorker.cancel(this)
+            val app = applicationContext
+            val historyId = com.universalrp.cleansweep.data.ChargeHistoryRepo.load(app).active?.id
+            if (historyId != null) CoroutineScope(Dispatchers.IO).launch { runCatching { com.universalrp.cleansweep.data.ChargeHistoryRepo.interrupt(app, historyId) } }
             stopSelf()
             return START_NOT_STICKY
         }
