@@ -26,6 +26,8 @@ class InsightsJsonTest {
         assertEquals(0L, restored[0].bytes); assertNull(restored[1].bytes)
     }
     @Test fun corruptOrFutureSchemaCannotGenerateFakeResolutions() {
+        assertFalse(InsightsJson.validSecurity("not-json")); assertFalse(InsightsJson.validCharge("""{"schema":99}""")); assertFalse(InsightsJson.validData("{}"))
+        assertTrue(InsightsJson.validSecurity(InsightsJson.security(SecurityHistoryState())))
         assertEquals(SecurityHistoryState(), InsightsJson.readSecurity("not-json"))
         assertEquals(ChargeHistoryState(), InsightsJson.readCharge("{\"schema\":99}"))
         assertTrue(InsightsJson.readData(null).isEmpty())

@@ -10,6 +10,7 @@ data class ChargeSample(
     val temperatureC: Double?,
     val connectionEvent: Boolean = false,
     val disconnectionEvent: Boolean = false,
+    val bootCount: Int? = null,
 )
 
 data class ChargeSession(
@@ -33,6 +34,7 @@ data class ChargeSession(
     val atTwentyElapsedMs: Long? = null,
     val atEightyElapsedMs: Long? = null,
     val thresholdGap: Boolean = false,
+    val bootCount: Int? = null,
 ) {
     val durationMs: Long get() = (lastElapsedMs - startedElapsedMs).coerceAtLeast(0)
     val averageWatts: Double? get() = if (measuredPowerMs > 0)
@@ -50,6 +52,11 @@ object ChargeHistoryPolicy {
     const val MAX_SESSIONS = 30
     const val RETENTION_MS = 30L * 24 * 60 * 60 * 1000
 
+    fun prune(state: ChargeHistoryState, nowMs: Long): ChargeHistoryState = state.copy(
+        active = state.active?.takeIf { it.lastAtMs >= nowMs - RETENTION_MS },
+        sessions = state.sessions.filter { (it.endedAtMs ?: it.lastAtMs) >= nowMs - RETENTION_MS }.takeLast(MAX_SESSIONS),
+    )
+
     fun observe(state: ChargeHistoryState, input: ChargeSample): ChargeHistoryState {
         if (input.atMs <= 0 || input.elapsedMs < 0) return state
         val sample = input.copy(
@@ -59,10 +66,14 @@ object ChargeHistoryPolicy {
         )
         var active = state.active
         var sessions = state.sessions.filter { (it.endedAtMs ?: it.lastAtMs) >= input.atMs - RETENTION_MS }
-        if (active != null && sample.elapsedMs < active.lastElapsedMs) {
-            // Reboot/elapsed-clock reset. Never connect the two boots into a fabricated session.
-            sessions = sessions + active.copy(endedAtMs = active.lastAtMs, interrupted = true, thresholdGap = true)
-            active = null
+        var disrupted = false
+        if (active != null && (sample.elapsedMs < active.lastElapsedMs || sample.elapsedMs - active.lastElapsedMs > MAX_GAP_MS ||
+            (sample.bootCount != null && active.bootCount != null && sample.bootCount != active.bootCount))) {
+            // Reboot OR a missed interval may hide unplug/replug. Close at the last observation.
+            // Do not join boots or fill the gap, even when the new boot's uptime overtook the old one.
+            sessions = sessions + active.copy(endedAtMs = active.lastAtMs, interrupted = true,
+                endObserved = false, thresholdGap = active.thresholdGap || active.atEightyElapsedMs == null)
+            active = null; disrupted = true
         }
         if (active != null && sample.connected && sample.elapsedMs == active.lastElapsedMs) return state
         if (!sample.connected) {
@@ -86,7 +97,7 @@ object ChargeHistoryPolicy {
                 id = "${sample.atMs}-${sample.elapsedMs}", startedAtMs = sample.atMs, lastAtMs = sample.atMs,
                 startedElapsedMs = sample.elapsedMs, lastElapsedMs = sample.elapsedMs,
                 startPercent = sample.percent, endPercent = sample.percent, samples = listOf(sample), lastSample = sample,
-                observedFromPlug = sample.connectionEvent,
+                observedFromPlug = sample.connectionEvent, interrupted = disrupted, bootCount = sample.bootCount,
                 peakWatts = sample.watts, maxTemperatureC = sample.temperatureC,
                 atTwentyElapsedMs = sample.elapsedMs.takeIf { sample.percent == 20 },
             )
@@ -99,10 +110,10 @@ object ChargeHistoryPolicy {
             val points = if (sample.elapsedMs - (active.samples.lastOrNull()?.elapsedMs ?: 0L) >= 30_000 || sample.percent != active.endPercent || sample.connectionEvent)
                 (active.samples + sample).takeLast(MAX_POINTS) else active.samples
             val at20 = active.atTwentyElapsedMs ?: sample.elapsedMs.takeIf {
-                active.endPercent != null && active.endPercent < 20 && sample.percent != null && sample.percent >= 20 && !gap
+                sample.percent == 20 && !gap
             }
             val at80 = active.atEightyElapsedMs ?: sample.elapsedMs.takeIf {
-                at20 != null && active.endPercent != null && active.endPercent < 80 && sample.percent != null && sample.percent >= 80 && !gap
+                at20 != null && active.endPercent != null && active.endPercent < 80 && sample.percent == 80 && !gap
             }
             active = active.copy(
                 lastAtMs = sample.atMs, lastElapsedMs = sample.elapsedMs, endPercent = sample.percent ?: active.endPercent,

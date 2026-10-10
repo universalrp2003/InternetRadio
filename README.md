@@ -18,11 +18,11 @@ legacy projects, but are not part of this release or the current development foc
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.34 | [CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.35 | [CleanSweep-v2.35.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/CleanSweep-v2.35.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.10-8)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.10-9)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -32,15 +32,20 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
-- **Live Guard / CleanSweep 2.34:** watts-only status pill while a charger is connected;
-  normal data/network view restored on unplug with background monitoring enabled;
-  app-specific security Fix/Manage with manufacturer-aware fallbacks; and a fresh,
-  complete security AI request that honours app-name/network sharing switches.
-  Includes 27 regression tests. Charging/display behaviour was user-confirmed on
-  **Redmi 13 5G** after publication; other models and the full feature matrix remain
-  unverified. See the [device evidence and test plan](docs/live-guard-2.34-device-test-plan.md).
-- **Ramesh Radio 1.8:** retains current station-discovery and playback improvements;
-  unchanged in this bug-fix release. **PulseEQ 1.2** is also unchanged.
+- **Live Guard / CleanSweep 2.35:** all six improvements: honest dated dashboard,
+  phone compatibility self-test with previewable safe diagnostics, opt-in local
+  security changes and charging history/charts, expiry-aware data budgeting/history,
+  and grounded AI-linked Do first / Optional / Leave alone review steps.
+  No made-up readings, automatic security actions or silent background-monitor enablement.
+  Histories default off and have bounded private retention/clear controls.
+  Watts-only charging, normal unplug behaviour, relevant settings routes and fresh
+  privacy-controlled AI reports are retained. CI enforces **113 required regression
+  cases per CleanSweep variant** plus existing tests/build/signing gates. See the
+  [2.35 device test plan](docs/live-guard-2.35-device-test-plan.md).
+  The owner's earlier **Redmi 13 5G** confirmation is limited to **2.34 charging/display**;
+  no new 2.35 feature or all-manufacturer physical test pass is claimed.
+- **Ramesh Radio 1.8** and **PulseEQ 1.2** are unchanged maintained companions;
+  all maintained/legacy modules remain in the build.
 
 Earlier highlights:
 
@@ -57,7 +62,7 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
-See [full release notes](releases/v2026.10.10-8.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.10-9.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

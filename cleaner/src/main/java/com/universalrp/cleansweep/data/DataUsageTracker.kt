@@ -56,9 +56,21 @@ object DataUsageTracker {
 
     @Synchronized fun resetPackUsage(context: Context, newLimitGb: Float? = null) {
         if (newLimitGb != null) setPackLimitGb(context, newLimitGb)
+        setPeriodStart(context, System.currentTimeMillis())
+    }
+    @Synchronized fun setPackStartDay(context: Context, day: LocalDate) {
+        require(DataBudgetPolicy.validPeriodStart(day.toString(), LocalDate.now()) != null)
+        setPeriodStart(context, day.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli())
+    }
+    private fun setPeriodStart(context: Context, atMs: Long) {
+        // Account for today's already-observed delta before moving the shared fallback baseline.
+        getUsageInfo(context)
         val current = mobileCounter()
-        val edit = prefs(context).edit().putLong(KEY_PACK_START_MS, System.currentTimeMillis()).putLong("observed_pack_bytes", 0)
+        val boot = runCatching { Settings.Global.getInt(context.contentResolver, "boot_count") }.getOrNull()
+        val edit = prefs(context).edit().putLong(KEY_PACK_START_MS, atMs).putLong("observed_pack_bytes", 0)
+            .putLong("observed_uptime", SystemClock.elapsedRealtime()).putInt("observed_boot", boot ?: -1)
         if (current != null) edit.putLong(KEY_PACK_BASELINE_BYTES, current).putLong("last_mobile_counter", current)
+        else edit.remove(KEY_PACK_BASELINE_BYTES).remove("last_mobile_counter")
         edit.apply()
     }
 
@@ -70,7 +82,7 @@ object DataUsageTracker {
         calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0); calendar.set(Calendar.SECOND, 0); calendar.set(Calendar.MILLISECOND, 0)
         val midnight = calendar.timeInMillis
         var start = store.getLong(KEY_PACK_START_MS, 0)
-        if (start <= 0 || start > now) { start = midnight; store.edit().putLong(KEY_PACK_START_MS, start).apply() }
+        if (start <= 0) { start = midnight; store.edit().putLong(KEY_PACK_START_MS, start).apply() }
         val access = UsageStats.hasUsageAccess(context)
         val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
         val fullToday = if (access && manager != null) queryMobileTotal(manager, midnight, now) else null
@@ -126,6 +138,7 @@ object DataUsageTracker {
     }
     private fun mobileCounter(): Long? = sumOrNull(TrafficStats.getMobileRxBytes(), TrafficStats.getMobileTxBytes())
     private fun queryMobileTotal(manager: NetworkStatsManager, start: Long, end: Long): Long? = try {
+        require(start <= end)
         val bucket = manager.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, null, start, end)
         sumOrNull(bucket.rxBytes, bucket.txBytes)
     } catch (e: Exception) { null }

@@ -544,22 +544,37 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearLocalHistory(kind: InsightsTab) {
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
+            val cleared = withContext(Dispatchers.IO) {
                 when (kind) {
                     InsightsTab.CHARGING_HISTORY -> ChargeHistoryRepo.clear(ctx)
                     InsightsTab.SECURITY_HISTORY -> SecurityHistoryRepo.clear(ctx)
                     InsightsTab.DATA_BUDGET -> DataBudgetRepo.clear(ctx)
-                    else -> Unit
+                    else -> true
                 }
             }
             savedInsights()
-            mutate { it.copy(message = "Local history cleared. Recording switches are unchanged.") }
+            mutate { it.copy(message = if (cleared) "Local history cleared. Recording switches are unchanged." else "Local history could not be cleared; saved records remain.") }
         }
     }
 
     fun openOwnAppSettings() {
         val result = com.universalrp.cleansweep.data.SecurityFixHelper.openAppInfo(ctx, ctx.packageName)
         if (!result.opened) mutate { it.copy(message = result.guidance) }
+    }
+
+    fun setDataDateMode(nextResetDay: Boolean) {
+        DataBudgetRepo.setDateMode(ctx, nextResetDay)
+        mutate { it.copy(dataBudgetConfig = DataBudgetRepo.config(ctx)) }
+    }
+
+    fun saveDataPeriodStart(text: String) {
+        val day = DataBudgetPolicy.validPeriodStart(text.trim(), java.time.LocalDate.now())
+        if (day == null) { mutate { it.copy(message = "Use a valid period start date no later than today.") }; return }
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) { DataUsageTracker.setPackStartDay(ctx, day) }
+            refreshInsights()
+            mutate { it.copy(message = "Local period start changed. Full Android history may cover it; fallback counters remain partial. Expiry is unchanged.") }
+        }
     }
 
     fun saveDataExpiry(text: String) {
@@ -2493,32 +2508,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun resetDataPackCount(newLimitGb: Float? = null) {
-        com.universalrp.cleansweep.data.DataUsageTracker.resetPackUsage(ctx, newLimitGb)
-        val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
-        val msg = if (newLimitGb != null && newLimitGb > 0f) {
-            "Recharge pack set to %.1f GB and counter reset to 0 MB.".format(newLimitGb)
-        } else {
-            "Recharge pack usage counter reset to 0 MB."
+        if (newLimitGb != null && (!newLimitGb.isFinite() || newLimitGb <= 0 || newLimitGb > 100_000)) {
+            mutate { it.copy(message = "Enter a valid positive quota (up to 100000 GB).") }; return
         }
-        mutate {
-            it.copy(
-                dataPackInfo = pack,
-                message = msg,
-            )
+        viewModelScope.launch {
+            val pack = withContext(Dispatchers.IO) {
+                DataUsageTracker.resetPackUsage(ctx, newLimitGb)
+                DataUsageTracker.getUsageInfo(ctx)
+            }
+            mutate { it.copy(dataPackInfo = pack, message = "Data pack counter reset locally; expiry is unchanged. Carrier billing is not changed.") }
+            rebuildChecklist()
+            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
         }
-        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
     }
 
     fun updateDataPackLimit(limitGb: Float) {
-        com.universalrp.cleansweep.data.DataUsageTracker.setPackLimitGb(ctx, limitGb)
-        val pack = com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx)
-        mutate {
-            it.copy(
-                dataPackInfo = pack,
-                message = "Data pack quota updated to %.1f GB.".format(limitGb),
-            )
+        if (!limitGb.isFinite() || limitGb <= 0 || limitGb > 100_000) {
+            mutate { it.copy(message = "Enter a valid positive quota (up to 100000 GB).") }; return
         }
-        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
+        viewModelScope.launch {
+            val pack = withContext(Dispatchers.IO) {
+                DataUsageTracker.setPackLimitGb(ctx, limitGb)
+                DataUsageTracker.getUsageInfo(ctx)
+            }
+            mutate { it.copy(dataPackInfo = pack, message = "Configured data quota updated to %.1f GB; not a carrier balance.".format(limitGb)) }
+            rebuildChecklist()
+            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
+        }
     }
 
     /** Asks the provider for the model list ("Load models" button). */

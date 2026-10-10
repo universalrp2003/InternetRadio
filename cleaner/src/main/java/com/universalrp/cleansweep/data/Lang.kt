@@ -697,6 +697,16 @@ object Lang {
         "Android usage is an estimate, not the carrier's balance. Unlimited 5G is a user-set preference." to "ஆண்ட்ராய்டு பயன்பாடு ஒரு மதிப்பீடு; ஆபரேட்டரின் மீதமுள்ள அளவு அல்ல. Unlimited 5G என்பது உங்கள் தேர்வு.",
         "Partial observed mobile counter; full-period history may be unavailable." to "கவனித்த பகுதி மொபைல் கணக்கு; முழுக் கால வரலாறு கிடைக்காமல் இருக்கலாம்.",
         "No daily history available yet." to "தினசரி வரலாறு இன்னும் கிடைக்கவில்லை.",
+        "Recharge / period start date" to "ரீசார்ஜ் / கணக்கின் தொடக்க தேதி",
+        "Apply start date" to "தொடக்க தேதியை அமை",
+        "Change local period start?" to "இந்த போனின் கணக்குத் தொடக்கத்தை மாற்றவா?",
+        "Expiry day (inclusive)" to "முடிவு தினம் (அன்றையும் சேர்)",
+        "Next reset day (exclusive)" to "அடுத்த தொடக்க தினம் (அன்றை சேர்க்காதே)",
+        "Android history will use this date's midnight. Partial counter tracking restarts from now; earlier missing traffic is not guessed. Carrier billing and expiry are unchanged." to "ஆண்ட்ராய்டு வரலாறு இந்த தேதியின் நள்ளிரவிலிருந்து கணக்கிடும். பகுதி கணக்கு இப்போதிலிருந்து தொடங்கும்; விடுபட்ட பழைய டேட்டா ஊகிக்கப்படாது. ஆபரேட்டர் கட்டணம் மற்றும் முடிவு தேதி மாறாது.",
+        "Diagnostic report copied" to "சோதனை அறிக்கை நகலெடுக்கப்பட்டது",
+        "Could not copy; the preview remains available." to "நகலெடுக்க முடியவில்லை; முன்பார்வையில் அறிக்கையைப் படிக்கலாம்.",
+        "No share activity available; use Copy or read the preview." to "பகிரும் ஆப் கிடைக்கவில்லை; நகலெடுக்கவும் அல்லது முன்பார்வையைப் படிக்கவும்.",
+        "Recording began while connected; the earlier plug time and percentage are unknown." to "சார்ஜர் இணைந்திருக்கும்போதே பதிவு தொடங்கியது; அதற்கு முந்தைய இணைப்பு நேரம் மற்றும் சதவீதம் தெரியாது.",
     )
 }
 

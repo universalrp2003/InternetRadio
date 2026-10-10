@@ -73,10 +73,29 @@ class ChargeHistoryPolicyTest {
         var state = ChargeHistoryPolicy.observe(ChargeHistoryState(), sample(0, percent = 10))
         listOf(20, 40, 60, 80).forEachIndexed { i, percent -> state = ChargeHistoryPolicy.observe(state, sample((i + 1) * 60_000L, percent = percent)) }
         assertEquals(180_000L, state.active!!.twentyToEightyMs)
+        var skipped = ChargeHistoryPolicy.observe(ChargeHistoryState(), sample(0, percent = 19))
+        skipped = ChargeHistoryPolicy.observe(skipped, sample(30_000, percent = 21))
+        skipped = ChargeHistoryPolicy.observe(skipped, sample(60_000, percent = 81))
+        assertNull(skipped.active!!.twentyToEightyMs) // Do not invent exact 20/80 readings from skipped thresholds.
     }
     @Test fun fullOrPausedButPhysicallyConnectedStillFormsAnUnknownPowerSession() {
         var state = ChargeHistoryPolicy.observe(ChargeHistoryState(), sample(0, percent = 100, watts = null, plug = true))
         state = ChargeHistoryPolicy.observe(state, sample(60_000, percent = 100, watts = null))
         assertNotNull(state.active); assertNull(state.active!!.averageWatts); assertNull(state.active!!.peakWatts)
     }
+    @Test fun rebootWithLongerNewUptimeStillStartsANewPartialSession() {
+        var state = ChargeHistoryPolicy.observe(ChargeHistoryState(), sample(1000, plug = true).copy(bootCount = 1))
+        state = ChargeHistoryPolicy.observe(state, sample(2000).copy(bootCount = 2))
+        assertEquals(1, state.sessions.size); assertTrue(state.sessions.single().interrupted)
+        assertEquals(0L, state.active!!.durationMs); assertFalse(state.active!!.observedFromPlug)
+    }
+    @Test fun retentionPrunesOnReadAndGapDoesNotEraseAlreadyObservedInterval() {
+        var state = ChargeHistoryPolicy.observe(ChargeHistoryState(), sample(0, percent = 20))
+        state = ChargeHistoryPolicy.observe(state, sample(60_000, percent = 80))
+        state = ChargeHistoryPolicy.observe(state, sample(300_000, percent = 90))
+        assertEquals(60_000L, state.sessions.single().twentyToEightyMs)
+        assertEquals(0L, state.active!!.durationMs)
+        assertEquals(ChargeHistoryState(), ChargeHistoryPolicy.prune(state, 1_000_000 + 300_000 + ChargeHistoryPolicy.RETENTION_MS + 1))
+    }
+
 }

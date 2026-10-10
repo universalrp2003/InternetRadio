@@ -15,12 +15,12 @@ object InsightsJson {
     private fun sample(value: ChargeSample) = JSONObject().apply {
         put("at", value.atMs); put("elapsed", value.elapsedMs); put("connected", value.connected)
         putNullable("percent", value.percent); putNullable("watts", value.watts); putNullable("temp", value.temperatureC)
-        put("plug", value.connectionEvent); put("unplug", value.disconnectionEvent)
+        put("plug", value.connectionEvent); put("unplug", value.disconnectionEvent); putNullable("boot", value.bootCount)
     }
     private fun readSample(value: JSONObject) = ChargeSample(
         value.getLong("at"), value.getLong("elapsed"), value.getBoolean("connected"),
         value.nullLong("percent")?.takeIf { it in 0..100 }?.toInt(), value.nullDouble("watts")?.takeIf { it in 0.0..150.0 },
-        value.nullDouble("temp")?.takeIf { it in -30.0..90.0 }, value.optBoolean("plug"), value.optBoolean("unplug"),
+        value.nullDouble("temp")?.takeIf { it in -30.0..90.0 }, value.optBoolean("plug"), value.optBoolean("unplug"), value.nullLong("boot")?.takeIf { it <= Int.MAX_VALUE }?.toInt(),
     )
     private fun session(value: ChargeSession) = JSONObject().apply {
         put("id", value.id); put("start", value.startedAtMs); put("last", value.lastAtMs)
@@ -30,7 +30,7 @@ object InsightsJson {
         put("from_plug", value.observedFromPlug); put("end_observed", value.endObserved); put("interrupted", value.interrupted)
         put("power_ms", value.measuredPowerMs); put("energy_wh", value.measuredEnergyWh)
         putNullable("peak_w", value.peakWatts); putNullable("max_temp", value.maxTemperatureC)
-        putNullable("at20", value.atTwentyElapsedMs); putNullable("at80", value.atEightyElapsedMs); put("threshold_gap", value.thresholdGap)
+        putNullable("at20", value.atTwentyElapsedMs); putNullable("at80", value.atEightyElapsedMs); put("threshold_gap", value.thresholdGap); putNullable("boot", value.bootCount)
     }
     private fun readSession(value: JSONObject): ChargeSession = ChargeSession(
         id = value.getString("id"), startedAtMs = value.getLong("start"), lastAtMs = value.getLong("last"),
@@ -42,15 +42,17 @@ object InsightsJson {
         observedFromPlug = value.optBoolean("from_plug"), endObserved = value.optBoolean("end_observed"), interrupted = value.optBoolean("interrupted"),
         measuredPowerMs = value.optLong("power_ms").coerceAtLeast(0), measuredEnergyWh = value.getDouble("energy_wh").also { require(it.isFinite() && it >= 0) },
         peakWatts = value.nullDouble("peak_w")?.takeIf { it in 0.0..150.0 }, maxTemperatureC = value.nullDouble("max_temp")?.takeIf { it in -30.0..90.0 },
-        atTwentyElapsedMs = value.nullLong("at20"), atEightyElapsedMs = value.nullLong("at80"), thresholdGap = value.optBoolean("threshold_gap"),
+        atTwentyElapsedMs = value.nullLong("at20"), atEightyElapsedMs = value.nullLong("at80"), thresholdGap = value.optBoolean("threshold_gap"), bootCount = value.nullLong("boot")?.takeIf { it <= Int.MAX_VALUE }?.toInt(),
     )
     fun charge(state: ChargeHistoryState): String = JSONObject().apply {
         put("schema", 1); putNullable("active", state.active?.let(::session)); put("sessions", array(state.sessions.map(::session)))
     }.toString()
-    fun readCharge(raw: String?): ChargeHistoryState = try {
-        val root = JSONObject(raw ?: "{}"); require(root.getInt("schema") == 1)
-        ChargeHistoryState(root.optJSONObject("active")?.let(::readSession), objects(root.optJSONArray("sessions"), ChargeHistoryPolicy.MAX_SESSIONS).map(::readSession))
-    } catch (e: Exception) { ChargeHistoryState() }
+    private fun decodeCharge(raw: String): ChargeHistoryState {
+        val root = JSONObject(raw); require(root.getInt("schema") == 1)
+        return ChargeHistoryState(root.optJSONObject("active")?.let(::readSession), objects(root.getJSONArray("sessions"), ChargeHistoryPolicy.MAX_SESSIONS).map(::readSession))
+    }
+    fun readCharge(raw: String?): ChargeHistoryState = try { if (raw == null) ChargeHistoryState() else decodeCharge(raw) } catch (e: Exception) { ChargeHistoryState() }
+    fun validCharge(raw: String): Boolean = runCatching { decodeCharge(raw) }.isSuccess
 
     private fun app(value: FindingApp?) = value?.let { JSONObject().put("pkg", it.packageName).put("label", it.label).putNullable("component", it.componentName) }
     private fun readApp(value: JSONObject?) = value?.let {
@@ -92,25 +94,29 @@ object InsightsJson {
         put("schema", 1); putNullable("latest", state.latest?.let(::snapshot)); put("events", array(state.events.map(::event)))
         put("reviewed", JSONObject(state.reviewed)); put("baselined", JSONArray(state.baselinedChecks.toList()))
     }.toString()
-    fun readSecurity(raw: String?): SecurityHistoryState = try {
-        val root = JSONObject(raw ?: "{}"); require(root.getInt("schema") == 1)
+    private fun decodeSecurity(raw: String): SecurityHistoryState {
+        val root = JSONObject(raw); require(root.getInt("schema") == 1)
         val reviewed = root.optJSONObject("reviewed") ?: JSONObject()
         val baselined = root.optJSONArray("baselined")
-        SecurityHistoryState(root.optJSONObject("latest")?.let(::readSnapshot), objects(root.optJSONArray("events"), SecurityHistoryPolicy.MAX_EVENTS).map(::readEvent),
+        return SecurityHistoryState(root.optJSONObject("latest")?.let(::readSnapshot), objects(root.getJSONArray("events"), SecurityHistoryPolicy.MAX_EVENTS).map(::readEvent),
             reviewed.keys().asSequence().take(4096).associateWith { reviewed.getString(it) },
             (0 until minOf(baselined?.length() ?: 0, 100)).mapNotNull { baselined?.optString(it) }.toSet())
-    } catch (e: Exception) { SecurityHistoryState() }
+    }
+    fun readSecurity(raw: String?): SecurityHistoryState = try { if (raw == null) SecurityHistoryState() else decodeSecurity(raw) } catch (e: Exception) { SecurityHistoryState() }
+    fun validSecurity(raw: String): Boolean = runCatching { decodeSecurity(raw) }.isSuccess
 
     fun data(history: List<DailyDataPoint>): String = JSONObject().apply {
         put("schema", 1); put("days", array(history.map { point -> JSONObject().apply {
             put("day", point.day); putNullable("bytes", point.bytes); put("complete", point.complete); put("source", point.source); put("at", point.observedAtMs)
         } }))
     }.toString()
-    fun readData(raw: String?): List<DailyDataPoint> = try {
-        val root = JSONObject(raw ?: "{}"); require(root.getInt("schema") == 1)
-        objects(root.optJSONArray("days"), 90).mapNotNull { value ->
+    private fun decodeData(raw: String): List<DailyDataPoint> {
+        val root = JSONObject(raw); require(root.getInt("schema") == 1)
+        return objects(root.getJSONArray("days"), 90).mapNotNull { value ->
             val day = value.getString("day")
             if (DataBudgetPolicy.dateOrNull(day) == null) null else DailyDataPoint(day, value.nullLong("bytes"), value.optBoolean("complete"), value.optString("source"), value.optLong("at"))
         }
-    } catch (e: Exception) { emptyList() }
+    }
+    fun readData(raw: String?): List<DailyDataPoint> = try { if (raw == null) emptyList() else decodeData(raw) } catch (e: Exception) { emptyList() }
+    fun validData(raw: String): Boolean = runCatching { decodeData(raw) }.isSuccess
 }

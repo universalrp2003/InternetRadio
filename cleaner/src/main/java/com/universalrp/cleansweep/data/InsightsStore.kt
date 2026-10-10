@@ -20,7 +20,9 @@ internal object InsightsStore {
         }
     } catch (e: Exception) { errors[name] = "Local history could not be read. Clear it to establish a new baseline."; null }
 
+    @Synchronized fun invalid(name: String) { errors[name] = "Local history could not be read. Clear it to establish a new baseline." }
     @Synchronized fun write(context: Context, name: String, raw: String): Boolean {
+        if (errors[name]?.startsWith("Local history could not be read.") == true) return false
         val atomic = AtomicFile(file(context, name))
         var stream: FileOutputStream? = null
         return try {
@@ -32,9 +34,12 @@ internal object InsightsStore {
             errors[name] = "Local history could not be saved. Current readings may be lost when the process stops."; false
         }
     }
-    @Synchronized fun clear(context: Context, name: String) {
-        runCatching { AtomicFile(file(context, name)).delete() }
-        if (file(context, name).exists()) errors[name] = "Local history could not be deleted." else errors.remove(name)
+    @Synchronized fun clear(context: Context, name: String): Boolean {
+        val base = file(context, name)
+        runCatching { AtomicFile(base).delete() }
+        val cleared = listOf(base, File(base.path + ".bak"), File(base.path + ".new")).none { it.exists() }
+        if (!cleared) errors[name] = "Local history could not be deleted; saved records remain." else errors.remove(name)
+        return cleared
     }
     @Synchronized fun warning(name: String): String? = errors[name]
 }
@@ -48,7 +53,13 @@ object ChargeHistoryRepo {
     fun enabled(context: Context) = flags(context).getBoolean("charge_history", false)
     @Synchronized fun load(context: Context): ChargeHistoryState {
         val current = context.noBackupFilesDir.path
-        if (path != current) { cache = InsightsJson.readCharge(InsightsStore.read(context, NAME)); path = current }
+        if (path != current) {
+            val raw = InsightsStore.read(context, NAME)
+            if (raw != null && !InsightsJson.validCharge(raw)) InsightsStore.invalid(NAME)
+            cache = InsightsJson.readCharge(raw); path = current
+        }
+        val retained = ChargeHistoryPolicy.prune(cache, System.currentTimeMillis())
+        if (retained != cache) { cache = retained; InsightsStore.write(context, NAME, InsightsJson.charge(cache)) }
         return cache
     }
     @Synchronized fun setEnabled(context: Context, value: Boolean) {
@@ -61,7 +72,8 @@ object ChargeHistoryRepo {
         val before = load(context)
         val sample = ChargeSample(System.currentTimeMillis(), elapsed,
             plugEvent || (!unplugEvent && battery.powerConnected), battery.percent.takeIf { it >= 0 },
-            battery.powerW?.toDouble(), battery.temperatureC?.toDouble(), plugEvent, unplugEvent)
+            battery.powerW?.toDouble(), battery.temperatureC?.toDouble(), plugEvent, unplugEvent,
+            runCatching { android.provider.Settings.Global.getInt(context.contentResolver, "boot_count") }.getOrNull())
         cache = ChargeHistoryPolicy.observe(before, sample)
         // Aggregation is in memory; disk is written at most once a minute, or on a connection/end event.
         if (plugEvent || unplugEvent || before.active?.id != cache.active?.id || elapsed - lastWriteElapsed >= 60_000 || elapsed < lastWriteElapsed) {
@@ -72,11 +84,14 @@ object ChargeHistoryRepo {
         val state = load(context)
         state.active?.let { active ->
             if (expectedId != null && active.id != expectedId) return
-            cache = ChargeHistoryState(sessions = (state.sessions + active.copy(endedAtMs = active.lastAtMs, interrupted = true, thresholdGap = true)).takeLast(ChargeHistoryPolicy.MAX_SESSIONS))
+            cache = ChargeHistoryState(sessions = (state.sessions + active.copy(endedAtMs = active.lastAtMs, interrupted = true, thresholdGap = active.thresholdGap || active.atEightyElapsedMs == null)).takeLast(ChargeHistoryPolicy.MAX_SESSIONS))
             InsightsStore.write(context, NAME, InsightsJson.charge(cache))
         }
     }
-    @Synchronized fun clear(context: Context) { cache = ChargeHistoryState(); path = context.noBackupFilesDir.path; InsightsStore.clear(context, NAME) }
+    @Synchronized fun clear(context: Context): Boolean {
+        if (!InsightsStore.clear(context, NAME)) return false
+        cache = ChargeHistoryState(); path = context.noBackupFilesDir.path; return true
+    }
     fun warning(): String? = InsightsStore.warning(NAME)
 }
 
@@ -88,7 +103,11 @@ object SecurityHistoryRepo {
     fun enabled(context: Context) = flags(context).getBoolean("security_history", false)
     @Synchronized fun load(context: Context): SecurityHistoryState {
         val current = context.noBackupFilesDir.path
-        if (path != current) { cache = InsightsJson.readSecurity(InsightsStore.read(context, NAME)); path = current }
+        if (path != current) {
+            val raw = InsightsStore.read(context, NAME)
+            if (raw != null && !InsightsJson.validSecurity(raw)) InsightsStore.invalid(NAME)
+            cache = InsightsJson.readSecurity(raw); path = current
+        }
         return cache
     }
     @Synchronized fun setEnabled(context: Context, value: Boolean) {
@@ -107,7 +126,10 @@ object SecurityHistoryRepo {
         cache = if (enabled(context)) next else next.copy(events = current.events)
         InsightsStore.write(context, NAME, InsightsJson.security(cache))
     }
-    @Synchronized fun clear(context: Context) { cache = SecurityHistoryState(); path = context.noBackupFilesDir.path; InsightsStore.clear(context, NAME) }
+    @Synchronized fun clear(context: Context): Boolean {
+        if (!InsightsStore.clear(context, NAME)) return false
+        cache = SecurityHistoryState(); path = context.noBackupFilesDir.path; return true
+    }
     fun warning(): String? = InsightsStore.warning(NAME)
 }
 
@@ -119,14 +141,19 @@ object DataBudgetRepo {
     private fun flags(context: Context) = context.getSharedPreferences("liveguard_insights", Context.MODE_PRIVATE)
     fun enabled(context: Context) = flags(context).getBoolean("data_history", false)
     fun setEnabled(context: Context, value: Boolean) { flags(context).edit().putBoolean("data_history", value).apply() }
-    fun config(context: Context) = DataBudgetConfig(flags(context).getString("expires_on", null))
+    fun config(context: Context) = DataBudgetConfig(flags(context).getString("expires_on", null), flags(context).getBoolean("reset_at_start_of_day", false))
+    fun setDateMode(context: Context, nextResetDay: Boolean) { flags(context).edit().putBoolean("reset_at_start_of_day", nextResetDay).apply() }
     fun setExpiry(context: Context, date: String?) {
         require(date == null || DataBudgetPolicy.dateOrNull(date) != null)
         flags(context).edit().apply { if (date == null) remove("expires_on") else putString("expires_on", date) }.apply()
     }
     @Synchronized fun load(context: Context): List<DailyDataPoint> {
         val current = context.noBackupFilesDir.path
-        if (path != current) { cache = InsightsJson.readData(InsightsStore.read(context, NAME)); path = current }
+        if (path != current) {
+            val raw = InsightsStore.read(context, NAME)
+            if (raw != null && !InsightsJson.validData(raw)) InsightsStore.invalid(NAME)
+            cache = InsightsJson.readData(raw); path = current
+        }
         return cache
     }
     @Synchronized fun recordToday(context: Context, usage: DataUsageTracker.UsageInfo) {
@@ -145,6 +172,9 @@ object DataBudgetRepo {
         if (enabled(context)) { cache = next; InsightsStore.write(context, NAME, InsightsJson.data(cache)) }
         return next // Read-only history remains usable in this screen when saving is off.
     }
-    @Synchronized fun clear(context: Context) { cache = emptyList(); path = context.noBackupFilesDir.path; InsightsStore.clear(context, NAME) }
+    @Synchronized fun clear(context: Context): Boolean {
+        if (!InsightsStore.clear(context, NAME)) return false
+        cache = emptyList(); path = context.noBackupFilesDir.path; return true
+    }
     fun warning(): String? = InsightsStore.warning(NAME)
 }

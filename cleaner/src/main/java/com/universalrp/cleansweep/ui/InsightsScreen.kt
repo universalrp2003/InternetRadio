@@ -181,6 +181,7 @@ private fun LazyListScope.securityTimeline(state: UiState, vm: MainViewModel, on
             Row { TextButton(onClick = { vm.recheckActionChecklist() }, enabled = !state.securityBusy) { Text(tr("Run a fresh check")) }
                 TextButton(onClick = onClear) { Text(tr("Clear history")) } }
             state.securityHistory.latest?.let { latest ->
+                if (state.securityReport?.scannedAtMs?.let { it < latest.atMs } == true) Notice("This report predates the stored baseline; it is not compared. Recheck and verify the phone clock.", WarnAmber)
                 Notice(tr("Last recorded check %s", readingTime(latest.atMs)))
                 if (latest.unavailableChecks.isNotEmpty()) Notice("Some checks were unavailable; their previous observations are retained, not marked resolved.", WarnAmber)
             }
@@ -240,6 +241,8 @@ private fun ChargeSessionCard(session: ChargeSession, active: Boolean) {
             Text(tr(if (active) "Recording observed session" else if (session.partial) "Partial observed session" else "Observed charging session"),
                 fontWeight = FontWeight.SemiBold, color = AccentCyan)
             Notice(readingTime(session.startedAtMs) + (session.endedAtMs?.let { " → ${readingTime(it)}" } ?: ""))
+            Notice(if (active || !session.endObserved) "Percentages/time are observed start and latest sample, not an inferred final unplug reading." else "Start/end percentages and times were observed; the true moment can fall between samples.")
+            if (!session.observedFromPlug) Notice("Recording began while connected; the earlier plug time and percentage are unknown.")
             Text("${session.startPercent?.let { "$it%" } ?: "—"} → ${session.endPercent?.let { "$it%" } ?: "—"} • ${duration(session.durationMs)}")
             Text(tr("Sampled average / peak") + ": ${number(session.averageWatts, "W")} / ${number(session.peakWatts, "W")}", style = MaterialTheme.typography.bodySmall)
             Text(tr("Highest observed temperature") + ": ${number(session.maxTemperatureC, "°C")}", style = MaterialTheme.typography.bodySmall)
@@ -283,6 +286,13 @@ private fun SampleLineChart(title: String, points: List<Pair<Long, Double?>>, un
 private fun DataBudgetContent(state: UiState, vm: MainViewModel, onClear: () -> Unit) {
     val context = LocalContext.current
     var expiry by remember(state.dataBudgetConfig.expiresOn) { mutableStateOf(state.dataBudgetConfig.expiresOn.orEmpty()) }
+    var confirmStart by remember { mutableStateOf(false) }
+    val startDate = state.dataPackInfo?.let { Instant.ofEpochMilli(it.packStartDateMs).atZone(ZoneId.systemDefault()).toLocalDate().toString() }.orEmpty()
+    var periodStart by remember(startDate) { mutableStateOf(startDate) }
+    if (confirmStart) AlertDialog(onDismissRequest = { confirmStart = false }, title = { Text(tr("Change local period start?")) },
+        text = { Text(tr("Android history will use this date's midnight. Partial counter tracking restarts from now; earlier missing traffic is not guessed. Carrier billing and expiry are unchanged.")) },
+        confirmButton = { TextButton(onClick = { vm.saveDataPeriodStart(periodStart); confirmStart = false }) { Text(tr("Apply start date")) } },
+        dismissButton = { TextButton(onClick = { confirmStart = false }) { Text(tr("Cancel")) } })
     var confirmReset by remember { mutableStateOf(false) }
     if (confirmReset) AlertDialog(onDismissRequest = { confirmReset = false }, title = { Text(tr("Reset local pack counter?")) },
         text = { Text(tr("Confirm only when your pack/recharge has started. This changes local tracking, not your carrier plan. Set the new expiry separately.")) },
@@ -300,9 +310,16 @@ private fun DataBudgetContent(state: UiState, vm: MainViewModel, onClear: () -> 
             Text(tr("Today so far") + ": ${it.formattedToday}")
             Notice(tr(it.source)); Notice(tr("Last checked %s", readingTime(it.capturedAtMs)))
         }
+        OutlinedTextField(value = periodStart, onValueChange = { periodStart = it.take(10) }, label = { Text(tr("Recharge / period start date")) },
+            placeholder = { Text("YYYY-MM-DD") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        TextButton(onClick = { confirmStart = true }, enabled = !state.insightsBusy) { Text(tr("Apply start date")) }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            FilterChip(selected = !state.dataBudgetConfig.resetAtStartOfDay, onClick = { vm.setDataDateMode(false) }, label = { Text(tr("Expiry day (inclusive)")) })
+            FilterChip(selected = state.dataBudgetConfig.resetAtStartOfDay, onClick = { vm.setDataDateMode(true) }, label = { Text(tr("Next reset day (exclusive)")) })
+        }
         OutlinedTextField(value = expiry, onValueChange = { expiry = it.take(10) }, label = { Text(tr("Pack expiry / next reset date")) },
             placeholder = { Text("YYYY-MM-DD") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        Row {
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
             TextButton(onClick = {
                 val date = DataBudgetPolicy.dateOrNull(expiry) ?: LocalDate.now()
                 android.app.DatePickerDialog(context, { _, y, m, d -> expiry = LocalDate.of(y, m + 1, d).toString() },
@@ -311,7 +328,7 @@ private fun DataBudgetContent(state: UiState, vm: MainViewModel, onClear: () -> 
             TextButton(onClick = { vm.saveDataExpiry(expiry) }) { Text(tr("Save date")) }
             TextButton(onClick = { expiry = ""; vm.saveDataExpiry("") }) { Text(tr("Remove date")) }
         }
-        Notice("Expiry includes the selected local-calendar day. The date does not automatically reset counters or assume a recharge.")
+        Notice("Expiry includes the selected day; a next-reset date excludes that day. Dates do not automatically reset counters or assume a recharge. Start-date history begins at local midnight, not the exact carrier recharge hour.")
         PanelCard(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 when (result.status) {
@@ -331,10 +348,10 @@ private fun DataBudgetContent(state: UiState, vm: MainViewModel, onClear: () -> 
                 }
             }
         }
-        TextButton(onClick = { confirmReset = true }) { Text(tr("Recharge: reset local counter")) }
+        TextButton(onClick = { confirmReset = true }, enabled = !state.insightsBusy) { Text(tr("Recharge: reset local counter")) }
         if (usage?.hasUsageAccess != true) TextButton(onClick = { vm.openUsageAccess() }) { Text(tr("Open Usage access settings")) }
         HistorySwitch("Keep daily mobile history locally", state.dataHistoryEnabled, vm::setDataHistoryEnabled)
-        Notice("Saving is opt-in, up to 90 days. The chart can read seven recent Android-reported days without saving them. Today is in progress; missing days remain unknown.")
+        Notice("Saving is opt-in, up to 90 daily records. The chart can read seven recent Android-reported days without saving them. Today is in progress; missing days remain unknown.")
         DailyDataChart(state.dailyDataHistory)
         state.dailyDataHistory.sortedByDescending { it.day }.take(14).forEach { point ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -446,7 +463,12 @@ private fun Modifier.verticalScrollCompat(): Modifier = this.then(Modifier.verti
 
 private fun duration(ms: Long): String = if (ms < 60_000) "${ms.coerceAtLeast(0) / 1000} s" else formatUptime(ms)
 private fun number(value: Double?, unit: String) = value?.takeIf(Double::isFinite)?.let { String.format(Locale.US, "%.1f %s", it, unit) } ?: tr("Not reported")
-private fun copyDiagnostic(context: Context, text: String) { runCatching { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Live Guard diagnostic report", text)) } }
+private fun copyDiagnostic(context: Context, text: String) {
+    val ok = runCatching { (context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager).setPrimaryClip(ClipData.newPlainText("Live Guard diagnostic report", text)) }.isSuccess
+    android.widget.Toast.makeText(context, tr(if (ok) "Diagnostic report copied" else "Could not copy; the preview remains available."), android.widget.Toast.LENGTH_SHORT).show()
+}
 private fun shareDiagnostic(context: Context, text: String) { runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
     type = "text/plain"; putExtra(Intent.EXTRA_TEXT, text); putExtra(Intent.EXTRA_SUBJECT, "Live Guard compatibility report")
-}, "Share diagnostic report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+}, "Share diagnostic report").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }.onFailure {
+    android.widget.Toast.makeText(context, tr("No share activity available; use Copy or read the preview."), android.widget.Toast.LENGTH_LONG).show()
+} }

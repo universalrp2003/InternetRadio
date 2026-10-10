@@ -40,4 +40,17 @@ class DataBudgetPolicyTest {
         for (i in 1..120) history = DataBudgetPolicy.merge(history, point(today.minusDays(i.toLong()).toString()))
         assertEquals(90, history.size)
     }
+    @Test fun nextResetDateExcludesTheResetDayUnlikeExpiry() {
+        val expired = DataBudgetPolicy.calculate(today, DataBudgetConfig("2026-10-10", true), 100, true, false, emptyList())
+        assertEquals(BudgetStatus.EXPIRED, expired.status)
+        val next = DataBudgetPolicy.calculate(today, DataBudgetConfig("2026-10-12", true), 900, true, false, emptyList())
+        assertEquals(2L, next.daysRemaining); assertEquals(450L, next.dailyBudgetBytes)
+    }
+    @Test fun periodStartCannotBeFutureAndOldHistoryCannotPretendToBeRecent() {
+        assertEquals(today, DataBudgetPolicy.validPeriodStart("2026-10-10", today))
+        assertNull(DataBudgetPolicy.validPeriodStart("2026-10-11", today)); assertNull(DataBudgetPolicy.validPeriodStart("not-date", today))
+        val result = calculate(history = listOf(point("2026-01-01"), point("2026-01-02"), point("2026-01-03")))
+        assertEquals(0, result.completeDays); assertNull(result.forecastDays)
+    }
+
 }

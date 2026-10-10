@@ -13,7 +13,7 @@ data class DailyDataPoint(
     val observedAtMs: Long,
 )
 
-data class DataBudgetConfig(val expiresOn: String? = null)
+data class DataBudgetConfig(val expiresOn: String? = null, val resetAtStartOfDay: Boolean = false)
 
 enum class BudgetStatus { NEED_EXPIRY, EXPIRED, UNAVAILABLE, PARTIAL, UNLIMITED, READY, EXHAUSTED }
 
@@ -31,6 +31,10 @@ object DataBudgetPolicy {
         text?.takeIf { it.matches(Regex("\\d{4}-\\d{2}-\\d{2}")) }?.let(LocalDate::parse)
     } catch (e: Exception) { null }
 
+    fun validPeriodStart(text: String?, today: LocalDate): LocalDate? = dateOrNull(text)?.takeIf {
+        it > LocalDate.of(1970, 1, 1) && it <= today
+    }
+
     /** Expiry is inclusive, in the PHONE'S local calendar, not a 24-hour/DST division. */
     fun calculate(
         today: LocalDate,
@@ -45,11 +49,11 @@ object DataBudgetPolicy {
         if (remainingBytes == null || remainingBytes < 0) return DataBudgetResult(BudgetStatus.UNAVAILABLE)
         if (!readingComplete) return DataBudgetResult(BudgetStatus.PARTIAL)
         val expiry = dateOrNull(config.expiresOn) ?: return DataBudgetResult(BudgetStatus.NEED_EXPIRY)
-        val days = ChronoUnit.DAYS.between(today, expiry) + 1L
+        val days = ChronoUnit.DAYS.between(today, expiry) + if (config.resetAtStartOfDay) 0L else 1L
         if (days <= 0) return DataBudgetResult(BudgetStatus.EXPIRED, daysRemaining = 0)
         val samples = history.distinctBy { it.day }.filter { point ->
             val day = dateOrNull(point.day)
-            day != null && day < today && (packStartDay == null || day >= packStartDay) &&
+            day != null && day < today && day >= today.minusDays(7) && (packStartDay == null || day >= packStartDay) &&
                 point.complete && point.bytes != null && point.bytes >= 0
         }.sortedByDescending { it.day }.take(7)
         // Divide before adding to avoid Long overflow on malformed/extreme counters.

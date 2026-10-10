@@ -6,9 +6,71 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.34 — current release
+## v2.35 — current release
 
-[Install CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk)
+[Install CleanSweep-v2.35.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/CleanSweep-v2.35.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
+
+All six approved improvements are reachable from **Home → History & tools**:
+
+1. **Honest dashboard**: Not checked/measured/reported instead of fabricated scores,
+   ping, RAM or storage. Values carry timestamps; a permission score is not malware safety.
+   UI reads/probes are off the main thread; a failed/missing probe gives unknown quality.
+2. **Phone self-test**: actual model/Android/API/app version, relevant permission,
+   notification/channel/configuration and sensor availability checks. Preview before
+   copy/share of an allowlisted report; no raw state, keys, app identities, SMS/files,
+   prompts/logs, network identifiers or serials. OEM rendering/background/settings
+   behaviour remains a physical-device test, not a flag-based certification.
+3. **Security timeline**: stable package+service identity; first available baselines,
+   newly observed/changed access, manual expected reviews and no-longer-observed findings.
+   Failed/partial or reduced-scope reads do not imply resolution. First seen is not
+   exact install/grant time; no longer listed is not a proven uninstall or safety verdict.
+4. **Observed charging sessions/charts**: percentage, elapsed duration, sampled mean/
+   peak battery-side watts, temperature, coverage, observed 20→80 time and comparisons.
+   Missed starts/ends, reboot/gaps and unavailable sensors are explicit. Charts show
+   nearby samples, not invented continuous sensor data or adapter output.
+5. **Data budgeting**: user recharge/period start and expiry/next-reset date, explicit inclusive
+   expiry or exclusive next-reset days,
+   estimated daily allowance and forecast with at least three usable complete past
+   days. Device-wide cellular history excludes Wi-Fi; incomplete/reboot-sensitive
+   counters withhold unsupported forecasts. Carrier billing/per-SIM/5G eligibility
+   is not inferable. Quota reset/recharge and expiry are separate manual actions.
+6. **AI-linked review checklist**: local Do first / Optional / Leave alone–expected
+   groups and guarded relevant routes. Optional AI explanations are bound to current
+   evidence tokens; arbitrary model intents/URLs/packages/group/completion fields
+   cannot become actions. Local fallback works offline. Reviewed does not revoke access
+   or resolve a finding; recheck fresh facts. Heat/storage/data/network observations
+   open relevant existing tools. No automatic uninstall, permission or file changes.
+
+### Local control and limits
+
+- All three history switches default **OFF**. Enabling history does not enable extra
+  persistent monitoring. Charging uses already-running monitoring and visible-app
+  readings plus connection events; missed observations remain partial.
+- Private no-backup storage only: security **200 events**, charging **30 sessions /
+  30 days**, **240 chart points** per session plus latest sample, mobile **90 daily records**.
+  Charging expiration is pruned on the next local read; no background cleanup job
+  is enabled. Clear controls are on each tab. Off pauses collection but does not erase old history.
+  Explicit reviewed choices are saved when selected, even if passive history is off;
+  clear security history removes those acknowledgements too.
+- The budget screen can query seven complete prior Android-reported days without
+  saving them. Today remains partial/in progress. Unknown is different from measured zero.
+- No history is silently uploaded. The diagnostic share preview contains only safe
+  public device facts and known status IDs. AI sharing remains separately user-controlled;
+  historical local timelines/sessions/day records are not added to the AI request.
+- Home/live quality uses a small TCP probe to Cloudflare, not a large speed test or
+  zero-data monitor. Blocked probes/initial missing jitter stay unknown; one endpoint
+  is not a guarantee about every website.
+
+CI enforces **113 required cases for each CleanSweep debug/release unit-test variant**
+(27 retained + 86 new), existing Radio tests, all-module compilation and release
+APK/version/minSDK/signing/feature checks before publication. No phone/emulator is
+available in the coding environment. **2.35 still needs real-device/OEM checks** in
+[the new test plan](../docs/live-guard-2.35-device-test-plan.md).
+
+## v2.34 fixes retained in 2.35
+
+[Previous CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk)
 (the launcher is **Live Guard**; package/signing key unchanged).
 
 - While any charger is connected the status pill displays **watts only**. Data/5G
@@ -27,9 +89,9 @@ restrictions still need real-device validation.
 - A 100/100 heuristic score does not prove safety. Necessary banking/accessibility
   permissions should not be removed just for a score. Advice is manual and may be wrong.
 
-27 regression tests cover display policy, targeted routes, complete prompts and
+The previous release's 27 regression tests cover display policy, targeted routes, complete prompts and
 privacy. GitHub publication is gated on compilation/tests/APK/signature checks.
-After publication, the owner confirmed the charging/normal-display transition on
+After **2.34** publication, the owner confirmed the charging/normal-display transition on
 **Redmi 13 5G**, with screenshots. Its Android/ROM version was not supplied; other
 models and the full feature matrix remain unverified. See the
 [device evidence and test plan](../docs/live-guard-2.34-device-test-plan.md) and
