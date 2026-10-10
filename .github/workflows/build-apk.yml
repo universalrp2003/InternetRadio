@@ -308,7 +308,13 @@ jobs:
               # Do not mask signature failures with a pipeline or || true.
               "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
               cat "$WORK/signature.txt"
-              ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$WORK/signature.txt" | tr -d ' :\r')
+              # SDK tools use either "Signer #1" or "V2 Signer" (and can report
+              # the same key for multiple schemes). Accept labels, never a different key.
+              ACTUAL_CERT=$(sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' "$WORK/signature.txt" | tr -d ' :\r' | tr 'A-F' 'a-f' | sort -u)
+              if [ -z "$ACTUAL_CERT" ]; then
+                echo "FAIL: could not read the verified APK signing certificate digest"
+                exit 1
+              fi
               if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
                 echo "FAIL: $rel does not use the existing project signing certificate"
                 exit 1
