@@ -58,7 +58,7 @@ class ChargerWatchWorker(
         // 2. The fallback: the system will not give us a foreground service here, so the job
         //    itself keeps the same card alive. It runs in short stretches and re-schedules
         //    itself, which is allowed without any new permission.
-        ChargeNotifier.post(ctx)
+        ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
         ChargeNotifier.announcePluggedIn(ctx)
 
         var ticks = 0
@@ -72,7 +72,7 @@ class ChargerWatchWorker(
                 ChargeNotifier.clear(ctx)
                 return Result.success()
             }
-            ChargeNotifier.post(ctx)
+            ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
             // The piggy-backed charge of the last few percent can be watched, but there is no
             // point shouting about it — the card simply stays until the plug comes out.
             if (now.percent >= 100) break

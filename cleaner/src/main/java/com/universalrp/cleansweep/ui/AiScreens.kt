@@ -675,6 +675,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                     Column(Modifier.padding(16.dp)) {
                         Text(
                             when {
+                                state.aiBusy && state.aiSecurityFocus && state.aiPromptPreview.isBlank() -> "Refreshing current phone issues…"
                                 state.aiBusy -> "The AI is reading your report…"
                                 state.aiAnswer != null -> "What the AI says"
                                 state.aiError != null -> "Could not analyse"
@@ -761,7 +762,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                             Text(error, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                             Spacer(Modifier.height(10.dp))
                             Row {
-                                TextButton(onClick = { vm.runAiAnalysis() }) {
+                                TextButton(onClick = { vm.runAiAnalysis(state.aiSecurityFocus) }) {
                                     Text(tr("Try again"), color = AccentCyan)
                                 }
                                 TextButton(onClick = { vm.navigate(Screen.AI_SETTINGS) }) {

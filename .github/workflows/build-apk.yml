@@ -178,6 +178,19 @@ jobs:
           # apps since 2021); the APKs are what everyone else takes.
           gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
 
+      - name: Verify required CleanSweep regression suites
+        run: python3 tools/verify_cleaner_regressions.py
+
+      - name: Upload unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            cleaner/build/test-results/test*UnitTest/*.xml
+            radio/build/test-results/test*UnitTest/*.xml
+          if-no-files-found: warn
+
       - name: Verify built APKs
         run: |
           set -e
@@ -284,10 +297,33 @@ jobs:
             done
             echo "OK: no release APK carries the debuggable flag"
             APKSIGNER=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1 || true)
-            if [ -n "$APKSIGNER" ]; then
-              echo "--- signing certificate of the release APK (F-Droid AllowedAPKSigningKeys) ---"
-              "$APKSIGNER" verify --print-certs "$CLEANER_REL" | head -6 || true
+            if [ -z "$APKSIGNER" ]; then
+              echo "FAIL: apksigner is required to verify every release APK"
+              exit 1
             fi
+            keytool -exportcert -keystore ci-keystore/release.p12 -storepass cleansweep-ci \
+              -alias cleansweep -file "$WORK/project-certificate.der"
+            EXPECTED_CERT=$(sha256sum "$WORK/project-certificate.der" | cut -d' ' -f1)
+            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+              # Do not mask signature failures with a pipeline or || true.
+              "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
+              cat "$WORK/signature.txt"
+              ACTUAL_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$WORK/signature.txt" | tr -d ' :\r')
+              if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
+                echo "FAIL: $rel does not use the existing project signing certificate"
+                exit 1
+              fi
+              echo "OK: $rel signature verified with the existing project key"
+            done
+            # The version in the download filename must match the installable release,
+            # and API 26 support must not disappear silently.
+            "$AAPT" dump badging "$CLEANER_REL" > "$WORK/cleaner-release-badging.txt"
+            EXPECTED_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
+            EXPECTED_NAME=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+            grep -Fq "versionCode='$EXPECTED_CODE'" "$WORK/cleaner-release-badging.txt"
+            grep -Fq "versionName='$EXPECTED_NAME'" "$WORK/cleaner-release-badging.txt"
+            grep -q "^sdkVersion:'26'$" "$WORK/cleaner-release-badging.txt"
+            echo "OK: CleanSweep release version matches source and still supports API 26"
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi

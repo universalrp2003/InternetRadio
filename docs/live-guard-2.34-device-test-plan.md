@@ -16,8 +16,10 @@ Before publication, Build APK must pass:
   - nine complete AI-prompt, privacy and unavailable-data tests.
 - Existing CleanSweep and Ramesh Radio unit tests.
 - Debug/release APK and release AAB compilation for all five preserved modules.
-- Existing APK/manifest/Dex checks, non-debuggable release checks and signing
-  certificate verification. Added checks confirm the new policy/route/prompt classes
+- Existing APK/manifest/Dex checks, non-debuggable release checks, API-26/version
+  matching and mandatory signature verification for every release APK against the
+  existing project certificate. XML report validation rejects missing/skipped
+  required regression suites. Added checks confirm the new policy/route/prompt classes
   and entry points are actually present in the APK.
 
 Pure JVM policy tests do **not** validate Android overlay rendering or an OEM's

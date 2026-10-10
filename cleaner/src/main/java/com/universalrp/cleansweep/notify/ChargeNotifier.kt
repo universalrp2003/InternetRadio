@@ -195,7 +195,8 @@ object ChargeNotifier {
     }
 
     /** Shows (or refreshes) the card. Silently does nothing when notifications are off. */
-    fun post(context: Context) {
+    fun post(context: Context, stillCurrent: () -> Boolean = { true }) {
+        if (!stillCurrent()) return
         val battery = read(context) ?: return
         if (!battery.powerConnected && !ChargeMonitorService.persistentEnabled(context)) {
             clear(context)
@@ -205,11 +206,13 @@ object ChargeNotifier {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
         try {
-            manager.notify(NOTIFICATION_ID, build(context, battery))
+            val notification = build(context, battery)
+            if (!stillCurrent()) return
+            manager.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             // Notifications switched off by the user: the voice line still works.
         }
-        updatePill(context, battery)
+        updatePill(context, battery, stillCurrent)
     }
 
     fun clear(context: Context) {
@@ -233,7 +236,7 @@ object ChargeNotifier {
         }
         if (battery.powerConnected) {
             val content = StatusPillContent.resolve(true, battery.powerW)
-            StatusPill.update(context, content.text, showNetworkMeter = false)
+            StatusPill.update(context, content.text, showNetworkMeter = false, stillCurrent = stillCurrent)
             // Keep accounting alive even though its text is hidden. Do this AFTER the
             // immediate mode switch, so a slow stats query cannot leave the old wide pill up.
             runCatching { DataUsageTracker.getUsageInfo(context) }
@@ -265,6 +268,7 @@ object ChargeNotifier {
             netQuality?.rxSpeedBytesPerSec ?: 0L,
             netQuality?.txSpeedBytesPerSec ?: 0L,
             showNetworkMeter = content.showNetworkMeter,
+            stillCurrent = stillCurrent,
         )
     }
 

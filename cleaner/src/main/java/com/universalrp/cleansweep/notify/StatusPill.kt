@@ -369,6 +369,7 @@ object StatusPill {
         rxSpeed: Long = 0L,
         txSpeed: Long = 0L,
         showNetworkMeter: Boolean = true,
+        stillCurrent: () -> Boolean = { true },
     ) {
         if (!canDraw(context)) {
             remove()
@@ -376,7 +377,11 @@ object StatusPill {
         }
         val app = context.applicationContext
         val reading = Reading(text.orEmpty(), packPercent, qualityGrade, rxSpeed, txSpeed, showNetworkMeter)
-        main.post { show(app, reading) }
+        main.post {
+            // The service can be stopped or a newer plug event can arrive BETWEEN the
+            // worker's last check and this UI frame. Never resurrect a cancelled refresh.
+            if (stillCurrent()) show(app, reading)
+        }
     }
 
     private fun show(context: Context, reading: Reading) {
