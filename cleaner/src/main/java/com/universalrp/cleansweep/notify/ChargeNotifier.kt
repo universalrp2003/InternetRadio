@@ -260,7 +260,7 @@ object ChargeNotifier {
         }
 
         val packPercent = if (dataUsage != null && dataUsage.packLimitBytes > 0 && !isUnlimited) {
-            val consumed = (dataUsage.totalBytesSinceBaseline.toDouble() / dataUsage.packLimitBytes.toDouble()) * 100.0
+            val consumed = (dataUsage.packTotalMobileBytes.toDouble() / dataUsage.packLimitBytes.toDouble()) * 100.0
             consumed.coerceIn(0.0, 100.0).toInt()
         } else {
             null

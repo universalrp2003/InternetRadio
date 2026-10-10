@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
@@ -1180,7 +1181,7 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                         ) {
                             Column(Modifier.padding(12.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Icon(Icons.Outlined.Wifi, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
+                                    Icon(Icons.Filled.Wifi, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
                                     Spacer(Modifier.width(8.dp))
                                     Text(
                                         tr("Personal Hotspot Active"),
