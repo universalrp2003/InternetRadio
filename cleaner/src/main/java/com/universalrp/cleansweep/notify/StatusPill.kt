@@ -177,15 +177,6 @@ object StatusPill {
         return gd
     }
 
-    fun update(context: Context, text: String?, grade: LiveNetworkQuality.QualityGrade? = null) {
-        if (text.isNullOrBlank() || !canDraw(context)) {
-            remove()
-            return
-        }
-        val app = context.applicationContext
-        main.post { show(app, text, grade) }
-    }
-
     fun remove() {
         main.post { hide() }
     }
@@ -202,14 +193,65 @@ object StatusPill {
         params = null
     }
 
-    private fun show(context: Context, text: String, grade: LiveNetworkQuality.QualityGrade? = null) {
+    private fun applyStyle(pill: TextView, context: Context, packPercent: Int?) {
+        val gd = GradientDrawable().apply {
+            cornerRadius = dp(context, 7).toFloat()
+            setColor(Color.parseColor("#E0000000"))
+        }
+
+        if (packPercent == null) {
+            pill.setTextColor(Color.parseColor("#E8FBFF"))
+            gd.setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
+        } else {
+            val isFlashingStep = (packPercent >= 75)
+            when {
+                packPercent >= 90 -> {
+                    if (isFlashingStep && blinkState) {
+                        pill.setTextColor(Color.parseColor("#FFFFFF"))
+                        gd.setColor(Color.parseColor("#E6CC0000"))
+                        gd.setStroke(dp(context, 1), Color.parseColor("#FFFF3B30"))
+                    } else {
+                        pill.setTextColor(Color.parseColor("#FF5252"))
+                        gd.setColor(Color.parseColor("#E0000000"))
+                        gd.setStroke(dp(context, 1), Color.parseColor("#FF3B30"))
+                    }
+                }
+                packPercent >= 75 -> {
+                    if (isFlashingStep && blinkState) {
+                        pill.setTextColor(Color.parseColor("#FFFFFF"))
+                        gd.setColor(Color.parseColor("#E6B87800"))
+                        gd.setStroke(dp(context, 1), Color.parseColor("#FFFFD700"))
+                    } else {
+                        pill.setTextColor(Color.parseColor("#FFB74D"))
+                        gd.setColor(Color.parseColor("#E0000000"))
+                        gd.setStroke(dp(context, 1), Color.parseColor("#FFA726"))
+                    }
+                }
+                else -> {
+                    pill.setTextColor(Color.parseColor("#E8FBFF"))
+                    gd.setStroke(dp(context, 1), Color.parseColor("#4438BDF8"))
+                }
+            }
+        }
+        pill.background = gd
+    }
+
+    fun update(context: Context, text: String?, packPercent: Int? = null) {
+        if (text.isNullOrBlank() || !canDraw(context)) {
+            remove()
+            return
+        }
+        val app = context.applicationContext
+        main.post { show(app, text, packPercent) }
+    }
+
+    private fun show(context: Context, text: String, packPercent: Int? = null) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val pill = view ?: createPill(context, manager) ?: return
         if (pill.text != text) pill.text = text
         blinkState = !blinkState
-        pill.background = getPillBackground(context, grade)
+        applyStyle(pill, context, packPercent)
         position(context, manager, pill)
-        // And once more after the text has been measured, so it lands in the right place.
         pill.post { position(context, manager, pill) }
     }
 

@@ -30,8 +30,8 @@ object Lang {
     const val KEY = "app_lang"
 
     /** Where the Tamil name of the app lives, so every screen can show it consistently. */
-    private const val APP_NAME_EN = "CleanSweep"
-    private const val APP_NAME_TA = "சுத்தம் செய்பவர்"
+    private const val APP_NAME_EN = "Live Guard"
+    private const val APP_NAME_TA = "லைவ் கார்டு"
 
     @Volatile
     var current: AppLang = AppLang.EN
@@ -95,8 +95,8 @@ object Lang {
      */
     private val TAMIL: Map<String, String> = mapOf(
         // ------------------------------------------------------------- app chrome
-        "CleanSweep" to "சுத்தம் செய்பவர்",
-        "About CleanSweep" to "சுத்தம் செய்பவர் பற்றி",
+        "Live Guard" to "லைவ் கார்டு",
+        "About Live Guard" to "லைவ் கார்டு பற்றி",
         "CleanSweep v2.16" to "சுத்தம் செய்பவர் v2.16",
         "CleanSweep v2.15" to "சுத்தம் செய்பவர் v2.15",
         "CleanSweep v2.14" to "சுத்தம் செய்பவர் v2.14",
@@ -523,6 +523,7 @@ object Lang {
             "நீங்கள் மொபைல் டேட்டாவில் உள்ளீர்கள் — இந்த பரிசோதனை பதிவிறக்குவது சுமார்",
         "twice (download + upload)" to "இரண்டு மடங்கு (பதிவிறக்கம் + பதிவேற்றம்)",
         "Unlimited 5G" to "அன்லிமிடெட் 5G",
+        "Scan my network with AI" to "AI மூலம் நெட்வொர்க்கை ஸ்கேன் செய்க",
         "About" to "பற்றி",
         "Where it sits" to "எங்கே இருக்கும்",
         "Each tap moves it a little; “Auto” puts it back beside the camera." to

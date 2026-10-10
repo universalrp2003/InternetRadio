@@ -21,6 +21,13 @@ import android.os.Build
  */
 data class DataAppUse(val label: String, val pkg: String, val bytes: Long)
 
+data class HotspotInfo(
+    val isHotspotActive: Boolean,
+    val hotspotBytesToday: Long,
+    val connectedDeviceCount: Int,
+    val sharingMode: String,
+)
+
 data class DataUsageReport(
     val hasUsageAccess: Boolean,
     val todayMobileBytes: Long?,
@@ -31,12 +38,84 @@ data class DataUsageReport(
     val sinceBootTxBytes: Long,
     val sinceBootMobileBytes: Long,
     val sinceBootWifiBytes: Long,
+    val hotspot: HotspotInfo? = null,
     val note: String,
 ) {
     val todayTotalBytes: Long? get() = when {
         todayMobileBytes == null && todayWifiBytes == null -> null
         else -> (todayMobileBytes ?: 0L) + (todayWifiBytes ?: 0L)
     }
+
+    private fun detectHotspotStats(
+        context: Context,
+        manager: NetworkStatsManager,
+        start: Long,
+        end: Long,
+        mobileBytes: Long,
+        wifiBytes: Long,
+    ): HotspotInfo {
+        var isApOn = false
+        var deviceCount = 0
+
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            if (wifiManager != null) {
+                val method = wifiManager.javaClass.getDeclaredMethod("isWifiApEnabled")
+                method.isAccessible = true
+                isApOn = method.invoke(wifiManager) as? Boolean ?: false
+            }
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        try {
+            val file = java.io.File("/proc/net/arp")
+            if (file.exists() && file.canRead()) {
+                file.readLines().drop(1).forEach { line ->
+                    val p = line.trim().split(Regex("\\s+"))
+                    if (p.size >= 6) {
+                        val dev = p[5]
+                        val mac = p[3]
+                        if ((dev.contains("ap") || dev.contains("swlan") || dev.contains("wlan1") || dev.contains("rndis")) &&
+                            mac != "00:00:00:00:00:00" && mac.length >= 17) {
+                            deviceCount++
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        var tetheringBytes = 0L
+        try {
+            val stats = manager.querySummary(ConnectivityManager.TYPE_MOBILE, null, start, end)
+            val bucket = NetworkStats.Bucket()
+            while (stats.hasNextBucket()) {
+                stats.getNextBucket(bucket)
+                if (bucket.uid == -5 || bucket.uid == -4 || bucket.uid == 1052) {
+                    tetheringBytes += (bucket.rxBytes + bucket.txBytes).coerceAtLeast(0L)
+                }
+            }
+            stats.close()
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        val sharingMode = if (mobileBytes > 0 && (wifiBytes == 0L || !isApOn)) {
+            "Mobile Data Shared via Hotspot"
+        } else {
+            "Wi-Fi / Shared Connection Hotspot"
+        }
+
+        return HotspotInfo(
+            isHotspotActive = isApOn || deviceCount > 0 || tetheringBytes > 0L,
+            hotspotBytesToday = tetheringBytes,
+            connectedDeviceCount = deviceCount,
+            sharingMode = sharingMode,
+        )
+    }
+
 }
 
 object UsageStats {
@@ -84,11 +163,13 @@ object UsageStats {
 
         val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
 
+        var hotspotInfo: HotspotInfo? = null
         if (hasAccess && manager != null) {
             todayMobile = queryDevice(manager, ConnectivityManager.TYPE_MOBILE, start, end)
             todayWifi = queryDevice(manager, ConnectivityManager.TYPE_WIFI, start, end)
             appMobile = topApps(context, manager, ConnectivityManager.TYPE_MOBILE, start, end)
             appWifi = topApps(context, manager, ConnectivityManager.TYPE_WIFI, start, end)
+            hotspotInfo = detectHotspotStats(context, manager, start, end, todayMobile ?: 0L, todayWifi ?: 0L)
         }
 
         return DataUsageReport(
@@ -106,6 +187,7 @@ object UsageStats {
                     ((TrafficStats.getTotalTxBytes().takeIf { it >= 0 } ?: 0L) -
                         (TrafficStats.getMobileTxBytes().takeIf { it >= 0 } ?: 0L))
                 ).coerceAtLeast(0L),
+            hotspot = hotspotInfo,
             note = if (hasAccess) {
                 "Numbers come from Android's own per-app network accounting, from midnight today."
             } else {
@@ -151,15 +233,97 @@ object UsageStats {
             .take(8)
             .mapNotNull { (uid, bytes) ->
                 if (bytes <= 0L) return@mapNotNull null
-                val pkg = pm.getPackagesForUid(uid)?.firstOrNull() ?: return@mapNotNull null
-                val label = try {
-                    pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-                } catch (e: Exception) {
-                    pkg
+                val pkgs = pm.getPackagesForUid(uid)
+                val (pkg, label) = when {
+                    uid == -5 || uid == -4 -> "tethering.hotspot" to "Personal Hotspot / Tethering"
+                    uid == 1000 -> "android.system" to "Android System OS"
+                    uid == 1001 -> "android.phone" to "Phone & Cellular Services"
+                    uid == 1073 || uid == 1052 -> "android.network" to "Network Stack & Hotspot"
+                    pkgs.isNullOrEmpty() -> ("uid:" + uid) to ("System Service (" + uid + ")")
+                    else -> {
+                        val p = pkgs.first()
+                        val l = try {
+                            pm.getApplicationLabel(pm.getApplicationInfo(p, 0)).toString()
+                        } catch (e: Exception) {
+                            p
+                        }
+                        p to l
+                    }
                 }
                 DataAppUse(label, pkg, bytes)
             }
     } catch (e: Exception) {
         emptyList()
     }
+
+    private fun detectHotspotStats(
+        context: Context,
+        manager: NetworkStatsManager,
+        start: Long,
+        end: Long,
+        mobileBytes: Long,
+        wifiBytes: Long,
+    ): HotspotInfo {
+        var isApOn = false
+        var deviceCount = 0
+
+        try {
+            val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? android.net.wifi.WifiManager
+            if (wifiManager != null) {
+                val method = wifiManager.javaClass.getDeclaredMethod("isWifiApEnabled")
+                method.isAccessible = true
+                isApOn = method.invoke(wifiManager) as? Boolean ?: false
+            }
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        try {
+            val file = java.io.File("/proc/net/arp")
+            if (file.exists() && file.canRead()) {
+                file.readLines().drop(1).forEach { line ->
+                    val p = line.trim().split(Regex("\\s+"))
+                    if (p.size >= 6) {
+                        val dev = p[5]
+                        val mac = p[3]
+                        if ((dev.contains("ap") || dev.contains("swlan") || dev.contains("wlan1") || dev.contains("rndis")) &&
+                            mac != "00:00:00:00:00:00" && mac.length >= 17) {
+                            deviceCount++
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        var tetheringBytes = 0L
+        try {
+            val stats = manager.querySummary(ConnectivityManager.TYPE_MOBILE, null, start, end)
+            val bucket = NetworkStats.Bucket()
+            while (stats.hasNextBucket()) {
+                stats.getNextBucket(bucket)
+                if (bucket.uid == -5 || bucket.uid == -4 || bucket.uid == 1052) {
+                    tetheringBytes += (bucket.rxBytes + bucket.txBytes).coerceAtLeast(0L)
+                }
+            }
+            stats.close()
+        } catch (e: Exception) {
+            // Ignored
+        }
+
+        val sharingMode = if (mobileBytes > 0 && (wifiBytes == 0L || !isApOn)) {
+            "Mobile Data Shared via Hotspot"
+        } else {
+            "Wi-Fi / Shared Connection Hotspot"
+        }
+
+        return HotspotInfo(
+            isHotspotActive = isApOn || deviceCount > 0 || tetheringBytes > 0L,
+            hotspotBytesToday = tetheringBytes,
+            connectedDeviceCount = deviceCount,
+            sharingMode = sharingMode,
+        )
+    }
+
 }

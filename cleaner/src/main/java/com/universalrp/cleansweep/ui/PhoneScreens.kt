@@ -928,9 +928,9 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                             }
                             Spacer(Modifier.height(10.dp))
                             GradientButton(
-                                text = if (state.networkBusy) "Scanning…" else "Scan my network",
-                                icon = Icons.Outlined.Router,
-                                onClick = { vm.scanNetwork() },
+                                text = if (state.networkBusy) "Scanning with AI…" else tr("Scan my network with AI"),
+                                icon = Icons.Outlined.Devices,
+                                onClick = { vm.scanNetworkWithAi() },
                                 enabled = !state.networkBusy,
                                 modifier = Modifier.fillMaxWidth(),
                             )

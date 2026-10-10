@@ -1631,6 +1631,72 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun scanNetworkWithAi() {
+        mutate {
+            it.copy(
+                networkBusy = true,
+                networkProgress = 0 to 1,
+                screen = Screen.NETWORK,
+            )
+        }
+        viewModelScope.launch {
+            val report = runCatching {
+                NetworkScanner.sweep(ctx) { done, total ->
+                    mutate { it.copy(networkProgress = done to total) }
+                }
+            }.getOrNull()
+
+            val verified = _state.value.verifiedWifiMacs
+            val customNames = _state.value.customDeviceNames.toMutableMap()
+
+            // Pass discovered devices and network details to AI for device identification
+            val identifiedDevices = report?.devices?.map { d ->
+                val key = d.mac ?: d.ip
+                val isV = (d.mac != null && d.mac in verified) || (d.ip in verified)
+                var currentName = (d.mac?.let { customNames[it] }) ?: customNames[d.ip]
+
+                if (currentName == null && !d.isSelf) {
+                    val prompt = "Identify this device brand and model in 2-3 words. IP: ${d.ip}, MAC: ${d.mac ?: "none"}, Vendor: ${d.vendor ?: "unknown"}, Ports: ${d.openPorts.joinToString()}, Hostname: ${d.hostname ?: "none"}."
+                    val aiResp = try {
+                        val config = _state.value.aiConfig
+                        val (result, text, _) = askAssistant(
+                            config = config,
+                            systemPrompt = "Identify hardware brand & type concisely.",
+                            userPrompt = prompt,
+                            allowSearch = false,
+                        )
+                        if (result == com.universalrp.cleansweep.ai.AiClient.Result.SUCCESS && !text.isNullOrBlank()) {
+                            text.trim().lines().firstOrNull()?.take(28)
+                        } else null
+                    } catch (e: Exception) {
+                        null
+                    }
+                    if (!aiResp.isNullOrBlank() && !aiResp.contains("error", ignoreCase = true)) {
+                        currentName = aiResp
+                        customNames[key] = aiResp
+                    }
+                }
+
+                d.copy(isVerifiedKnown = isV, customName = currentName)
+            } ?: emptyList()
+
+            val updatedReport = report?.copy(
+                devices = identifiedDevices,
+                note = "AI Network Analysis Complete: Connected devices and hardware fingerprints have been identified.",
+            )
+
+            mutate {
+                it.copy(
+                    networkBusy = false,
+                    networkProgress = null,
+                    customDeviceNames = customNames,
+                    networkReport = updatedReport ?: it.networkReport,
+                    message = if (identifiedDevices.isNotEmpty()) "Identified ${identifiedDevices.size} network devices with AI" else null,
+                )
+            }
+        }
+    }
+
     fun scanNetwork() {
         if (_state.value.networkBusy) return
         mutate {

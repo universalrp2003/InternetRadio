@@ -29,7 +29,7 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Android
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.ChevronRight
-import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BatteryFull
 import androidx.compose.material.icons.outlined.ContentCopy
@@ -125,7 +125,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    Icons.Outlined.CleaningServices,
+                    Icons.Outlined.Shield,
                     contentDescription = null,
                     tint = TextPrimary,
                     modifier = Modifier.size(19.dp),

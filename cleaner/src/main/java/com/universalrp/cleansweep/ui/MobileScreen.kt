@@ -47,6 +47,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -1168,34 +1169,120 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                         Text(tr("Grant usage access"), fontWeight = FontWeight.Bold)
                     }
                 }
-                if (usage.todayAppMobile.isNotEmpty() || usage.todayAppWifi.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        tr("Apps using the most data today"),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    val apps = (usage.todayAppMobile + usage.todayAppWifi)
-                        .groupBy { it.pkg }
-                        .map { (_, list) -> DataAppUse(list.first().label, list.first().pkg, list.sumOf { it.bytes }) }
-                        .sortedByDescending { it.bytes }
-                        .take(6)
-                    apps.forEach { app ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                            Text(
-                                app.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
+                // Hotspot Data & Connected Devices Section
+                usage.hotspot?.let { hs ->
+                    if (hs.isHotspotActive || hs.hotspotBytesToday > 0L) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = AccentCyan.copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Outlined.Wifi, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        tr("Personal Hotspot Active"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentCyan,
+                                    )
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "${hs.connectedDeviceCount} device(s) connected",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (hs.connectedDeviceCount > 0) GoodGreen else TextSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "Hotspot Data Used Today: ${formatBytesSafe(hs.hotspotBytesToday)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    "${hs.sharingMode} • Hotspot shares your internet connection with connected devices.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Tabbed Mobile Data & Wi-Fi usage by application (including system apps)
+                var selectedDataTab by remember { mutableStateOf(0) }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { selectedDataTab = 0 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedDataTab == 0) AccentViolet else SurfaceHigh,
+                            contentColor = if (selectedDataTab == 0) Color.White else TextSecondary,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(tr("Mobile Data by App"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { selectedDataTab = 1 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedDataTab == 1) AccentCyan else SurfaceHigh,
+                            contentColor = if (selectedDataTab == 1) Color(0xFF03202B) else TextSecondary,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(tr("Wi-Fi Data by App"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                val currentAppList = if (selectedDataTab == 0) usage.todayAppMobile else usage.todayAppWifi
+                val tabColor = if (selectedDataTab == 0) AccentViolet else AccentCyan
+
+                Spacer(Modifier.height(8.dp))
+                if (currentAppList.isNotEmpty()) {
+                    currentAppList.take(10).forEach { app ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    app.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    app.pkg,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Text(
                                 formatBytesSafe(app.bytes),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = tabColor,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
                     }
+                } else {
+                    Text(
+                        if (selectedDataTab == 0) tr("No cellular data used by apps yet today.") else tr("No Wi-Fi data used by apps yet today."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(
