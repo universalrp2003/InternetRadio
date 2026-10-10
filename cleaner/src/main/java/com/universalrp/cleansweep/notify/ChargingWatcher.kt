@@ -22,15 +22,23 @@ class ChargingWatcher : BroadcastReceiver() {
         // watt pill, or the spoken "charging started" line.
         val voiceOn = prefs.getBoolean(Announcer.KEY_ON, true) &&
             prefs.getBoolean(Announcer.KEY_CHARGE, true)
-        val wanted = prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
+        val persistent = ChargeMonitorService.persistentEnabled(app)
+        val wanted = persistent || prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
             prefs.getBoolean(ChargeMonitorService.CARD_KEY, true) ||
             voiceOn
         if (!wanted) return
 
         val service = Intent(app, ChargeMonitorService::class.java)
         if (action == Intent.ACTION_POWER_DISCONNECTED) {
-            app.stopService(service)
-            ChargeNotifier.clear(app)
+            if (persistent) {
+                // Do NOT tear down an opted-in data/meter monitor on unplug. Its battery
+                // receiver restores the normal pill immediately; the job also covers a dead service.
+                com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)
+            } else {
+                com.universalrp.cleansweep.work.ChargerWatchWorker.cancel(app)
+                app.stopService(service)
+                ChargeNotifier.clear(app)
+            }
             return
         }
         // v2.6: a broadcast receiver may no longer start a foreground service on Android 12+.

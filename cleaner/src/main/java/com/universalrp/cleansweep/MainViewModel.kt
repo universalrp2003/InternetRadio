@@ -9,6 +9,7 @@ import com.universalrp.cleansweep.ai.AiClient
 import com.universalrp.cleansweep.ai.AiConfig
 import com.universalrp.cleansweep.ai.AiProvider
 import com.universalrp.cleansweep.ai.AiReport
+import com.universalrp.cleansweep.ai.SecurityAiPrompt
 import com.universalrp.cleansweep.ai.AiSettings
 import com.universalrp.cleansweep.ai.Assistant
 import com.universalrp.cleansweep.ai.AssistantAction
@@ -61,6 +62,8 @@ import com.universalrp.cleansweep.work.HealthWatchWorker
 import android.provider.Settings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -142,6 +145,7 @@ data class UiState(
     val aiAnswer: String? = null,
     val aiError: String? = null,
     val aiPromptPreview: String = "",
+    val aiSecurityFocus: Boolean = false,
     val aiUsedProvider: String = "",
     val aiTestBusy: Boolean = false,
     val aiTestResult: String? = null,
@@ -1288,7 +1292,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             openOverlaySettings()
         } else if (enabled) {
-            mutate { it.copy(message = "Watt reading on — it appears while the charger is connected.") }
+            mutate { it.copy(message = "Status pill on — watts only while connected; normal data/meter view with background monitoring.") }
         }
     }
 
@@ -1923,9 +1927,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         userPrompt: String,
         /** Assistant questions may need live information; reports never do. */
         allowSearch: Boolean = false,
+        config: AiConfig = _state.value.aiConfig,
     ): Triple<AiClient.Result, String?, Long> {
         val started = System.currentTimeMillis()
-        val config = _state.value.aiConfig
         val first = AiClient.ask(config, systemPrompt, userPrompt, allowSearch = allowSearch)
         if (first.ok) {
             rememberEndpoint(first)
@@ -1989,16 +1993,30 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Builds the report and asks the chosen provider. Everything local happens first. */
-    fun runAiAnalysis() {
+    /** A failed/denied local read is unknown, not a zero or an old "current" result. */
+    private suspend fun <T> localReading(block: suspend () -> T): T? = try {
+        block()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (e: Exception) {
+        null
+    }
+
+    fun runSecurityAiAnalysis() = runAiAnalysis(securityFocus = true)
+
+    /** Builds a fresh report and asks the chosen provider. Never searches the web with phone findings. */
+    fun runAiAnalysis(securityFocus: Boolean = false) {
         val s = _state.value
         if (s.aiBusy) return
+        val config = s.aiConfig
         AiClient.attemptListener = { attempt, of, _ ->
             if (of > 1) mutate { it.copy(aiAttempt = attempt, aiAttempts = of) }
         }
         mutate {
             it.copy(
                 aiBusy = true,
+                aiSecurityFocus = securityFocus,
+                aiPromptPreview = "",
                 aiError = null,
                 aiAnswer = null,
                 aiFallbackNote = null,
@@ -2009,44 +2027,79 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             )
         }
         viewModelScope.launch {
-            // Fill in whatever the report needs but has not been collected yet.
-            val health = _state.value.health ?: runCatching { DeviceHealthReader.read(ctx) }
-                .getOrNull()?.also { snapshot -> mutate { it.copy(health = snapshot) } }
-            val apps = _state.value.appInventory
-                ?: runCatching { AppInventoryLoader.load(ctx, includeSystem = true) }
-                    .getOrNull()?.also { report -> mutate { it.copy(appInventory = report) } }
-            val security = _state.value.securityReport
-                ?: runCatching { SecurityScanner.scan(ctx, apps?.rows.orEmpty()) }
-                    .getOrNull()?.also { report -> mutate { it.copy(securityReport = report) } }
-
-            val config = _state.value.aiConfig
-            val prompt = AiReport.build(
-                config = config,
-                health = health,
-                apps = apps,
-                security = security,
-                network = _state.value.networkReport,
-                storage = _state.value.storage,
-            )
-            mutate { it.copy(aiPromptPreview = prompt) }
-
-            val (result, fallbackNote, elapsedMs) = askWithFallback(
-                systemPrompt = AiReport.systemPrompt(),
-                userPrompt = prompt,
-            )
-            mutate {
-                it.copy(
-                    aiBusy = false,
-                    aiAnswer = if (result.ok) result.text else null,
-                    aiError = if (result.ok) null else result.error,
-                    aiUsedProvider = result.providerLabel,
-                    aiUsedModel = result.model,
-                    aiUsedMs = elapsedMs,
-                    aiFallbackNote = fallbackNote,
-                    aiStatusOk = result.ok,
-                    aiAttempt = 0,
-                    aiAttempts = 0,
+            try {
+                // A permissions fix may have happened in Settings just before this tap.
+                // ALWAYS re-read, rather than recycle cached app grants/security findings.
+                val health = localReading { withContext(Dispatchers.IO) { DeviceHealthReader.read(ctx) } }
+                val apps = localReading { AppInventoryLoader.load(ctx, includeSystem = true) }
+                val security = apps?.let { inventory ->
+                    localReading { SecurityScanner.scan(ctx, inventory.rows) }
+                }
+                val storage = health?.storage ?: localReading {
+                    withContext(Dispatchers.IO) { StorageInfoProvider.read() }
+                }
+                mutate {
+                    it.copy(
+                        health = health ?: it.health,
+                        appInventory = apps ?: it.appInventory,
+                        securityReport = security ?: it.securityReport,
+                        storage = storage ?: it.storage,
+                    )
+                }
+                val current = _state.value
+                val prompt = if (securityFocus) {
+                    val liveNetwork = if (config.includeNetwork) localReading {
+                        withContext(Dispatchers.IO) { com.universalrp.cleansweep.data.LiveNetworkQuality.measure(ctx) }
+                    } else null
+                    val dataPack = if (config.includeNetwork) localReading {
+                        withContext(Dispatchers.IO) { com.universalrp.cleansweep.data.DataUsageTracker.getUsageInfo(ctx) }
+                    } else null
+                    SecurityAiPrompt.build(
+                        config = config,
+                        health = health,
+                        apps = apps,
+                        security = security,
+                        network = current.networkReport,
+                        storage = storage,
+                        malware = current.malwareReport,
+                        junk = current.report,
+                        networkQuality = liveNetwork,
+                        dataUsage = dataPack,
+                        appCacheBytes = current.appCaches.takeIf { it.isNotEmpty() }?.sumOf { it.cacheBytes },
+                        hasUsageAccess = AppCacheRepo.hasUsageAccess(ctx),
+                        hasStorageAccess = hasAllFilesAccess() && legacyStorageGranted(),
+                        malwareScanInProgress = current.malwareBusy,
+                        deviceGuidance = com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance(),
+                    )
+                } else {
+                    AiReport.build(config, health, apps, security, current.networkReport, storage)
+                }
+                mutate { it.copy(aiPromptPreview = prompt) }
+                val (result, fallbackNote, elapsedMs) = askWithFallback(
+                    systemPrompt = (if (securityFocus) SecurityAiPrompt.systemPrompt() else AiReport.systemPrompt()) +
+                        "\n" + answerLanguageRule(),
+                    userPrompt = prompt,
+                    allowSearch = false,
+                    config = config,
                 )
+                mutate {
+                    it.copy(
+                        aiAnswer = if (result.ok) result.text else null,
+                        aiError = if (result.ok) null else result.error,
+                        aiUsedProvider = result.providerLabel,
+                        aiUsedModel = result.model,
+                        aiUsedMs = elapsedMs,
+                        aiFallbackNote = fallbackNote,
+                        aiStatusOk = result.ok,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (e: Exception) {
+                mutate { it.copy(aiError = "Could not prepare the phone report. Please retry: ${e.message ?: "local reading unavailable"}") }
+            } finally {
+                AiClient.attemptListener = null
+                mutate { it.copy(aiBusy = false, aiAttempt = 0, aiAttempts = 0) }
             }
         }
     }

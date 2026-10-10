@@ -36,13 +36,14 @@ class ChargerWatchWorker(
 
     override suspend fun doWork(): Result {
         val ctx = applicationContext
-        if (!ChargeMonitorService.cardEnabled(ctx)) {
+        val persistent = ChargeMonitorService.persistentEnabled(ctx)
+        if (!ChargeMonitorService.cardEnabled(ctx) && !persistent) {
             // The user switched the charging card off: nothing to show, nothing to say.
             ChargeNotifier.clear(ctx)
             return Result.success()
         }
         val battery = ChargeNotifier.read(ctx) ?: return Result.success()
-        if (!battery.charging) {
+        if (!battery.powerConnected && !persistent) {
             ChargeNotifier.clear(ctx)
             return Result.success()
         }
@@ -67,7 +68,7 @@ class ChargerWatchWorker(
             delay(30_000)
             ticks++
             val now = ChargeNotifier.read(ctx) ?: break
-            if (!now.charging) {
+            if (!now.powerConnected && !ChargeMonitorService.persistentEnabled(ctx)) {
                 ChargeNotifier.clear(ctx)
                 return Result.success()
             }
@@ -78,7 +79,7 @@ class ChargerWatchWorker(
         }
 
         val still = ChargeNotifier.read(ctx)
-        if (still?.charging == true) schedule(ctx)
+        if (still?.powerConnected == true || ChargeMonitorService.persistentEnabled(ctx)) schedule(ctx)
 
         return Result.success()
     }
@@ -101,6 +102,10 @@ class ChargerWatchWorker(
 
     companion object {
         private const val UNIQUE = "cleansweep_charger_watch"
+
+        fun cancel(context: Context) {
+            runCatching { WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE) }
+        }
 
         /** Schedules the watch. Safe to call from a broadcast receiver. */
         fun schedule(context: Context) {

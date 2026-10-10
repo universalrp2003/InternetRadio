@@ -176,7 +176,7 @@ jobs:
           # that already has the debug build updates to the release one normally.
           # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
           # apps since 2021); the APKs are what everyone else takes.
-          gradle :cleaner:testDebugUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify built APKs
         run: |
@@ -424,7 +424,8 @@ jobs:
                         setVoiceEvent setQuietHours speakNow offlineFallback \
                         SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
                         setUnplugStartHour ChargerWatchWorker ChargeNotifier canSearchWeb \
-                        setOnlineVoice openScanner CrashLog; do
+                        setOnlineVoice openScanner CrashLog StatusPillContent showNetworkMeter \
+                        SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

@@ -1,8 +1,38 @@
-# CleanSweep — cleaner, phone health, security & network
+# Live Guard (CleanSweep) — cleaner, phone health, security & network
 
 A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi phones
 (HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
-and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
+and stock Android. This release still needs real-device validation, especially
+for manufacturer Settings links and overlays.
+
+## v2.34 — current release
+
+[Install CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
+
+- While any charger is connected the status pill displays **watts only**. Data/5G
+  labels, D/U LEDs and quota alert styling are hidden, not overlapped. Missing
+  power is `— W`. Watts are battery-side, not the adapter's advertised output.
+- Unplugging restores normal data/LED display with the existing background-monitor
+  option enabled. Your preferences, accounting, position and scale are unchanged.
+  Charging-only mode still stops on unplug rather than silently enabling persistence.
+- Security **Manage** retains the selected app's package/service ID. **Fix/review**
+  opens the right category or asks which app. Unsupported OEM shortcuts show a
+  named manual path; they never fall through to the Settings homepage.
+- **Ask AI about all current issues** takes a fresh app/security/battery/storage
+  report. All findings and affected apps are included (when names are shared), plus
+  available dated scan results and optional network/data context. Both AI sharing
+  switches are honoured. No files, SMS, contacts, file paths or keys enter the report.
+- A 100/100 heuristic score does not prove safety. Necessary banking/accessibility
+  permissions should not be removed just for a score. Advice is manual and may be wrong.
+
+27 regression tests cover display policy, targeted routes, complete prompts and
+privacy. GitHub publication is gated on compilation/tests/APK/signature checks;
+physical-device behaviour is not certified. See the
+[device test plan](../docs/live-guard-2.34-device-test-plan.md) and
+[release notes](../releases/v2026.10.10-8.md).
+
+## Historical highlights
 
 **v2.6 highlights**
 
@@ -253,7 +283,7 @@ no network call, no API key, no model download, and no data collection of any ki
 - Settings: hidden-folder scan, duplicate min size, large-file threshold,
   old-download age, protected folders list, sound effects, assistant detail level
 - MediaStore cleanup after deletion so gallery/file managers update instantly
-- No ads, no analytics, no accounts, no INTERNET permission
+- No ads, no analytics or developer-run accounts; Internet is used for optional AI, news, network tools, hash checks and release checks.
 
 ## Building the APK
 
@@ -293,14 +323,16 @@ gradle wrapper            # once, if the wrapper is missing
   cleaners. Redmi's built-in *Security → Cleaner* can reach some of them.
 - Cleaning junk frees real disk space; it does not "boost RAM" and it cannot cool a phone
   down. It *measures* heat honestly (CPU/battery sensors) and explains what is normal.
-- The security review is a **permissions and settings review**, not an antivirus: no file
-  hashes are checked anywhere. A phone can have malware that looks like a normal app.
-  Play Protect (and an online scanner) covers that part.
+- The security score is a **permissions and settings review**, not an antivirus. The
+  separate, user-started malware hash card checks known hashes against online databases,
+  not app files. Unknown/skipped hashes do not prove safety. The AI does not start that
+  scan; it may discuss a previously completed result when you ask for analysis.
 - The Wi-Fi device list can only show devices that answer. Sleeping phones, devices that
   block probes, and routers with "AP isolation" will not appear — the screen says so.
 - A few phone makers hide the battery **current** counter from apps, and some kernels do
   not expose a CPU temperature sensor. CleanSweep shows "not reported" rather than a
   made-up number.
-- The optional AI analysis is the only feature that uses the internet. Without a key it
-  uses public keyless endpoints (shared, rate-limited); with a key it uses your own
-  quota. Nothing is ever sent unless you tap **Analyse**.
+- AI reports go to your chosen provider (or a disclosed keyless fallback, shared and
+  rate-limited) on an explicit analysis/ask tap, or for a configured daily brief.
+  News, updates, live quality probes and network tools also use the internet when
+  enabled. See [privacy](../PRIVACY.md) for the details.

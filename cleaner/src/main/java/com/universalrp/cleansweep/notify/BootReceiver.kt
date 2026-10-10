@@ -41,9 +41,11 @@ class BootReceiver : BroadcastReceiver() {
             null
         }
 
-        if (persistentWanted || (battery?.charging == true && ChargeMonitorService.cardEnabled(app))) {
+        if (persistentWanted || (battery?.powerConnected == true && ChargeMonitorService.cardEnabled(app))) {
             try {
-                ChargeMonitorService.start(app)
+                if (!ChargeMonitorService.start(app)) {
+                    com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)
+                }
             } catch (e: Exception) {
                 // If Android restricts background start immediately after boot, ChargerWatchWorker handles it
                 com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)

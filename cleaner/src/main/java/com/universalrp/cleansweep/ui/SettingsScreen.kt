@@ -325,8 +325,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column {
                     SettingSwitch(
-                        title = tr("Watt reading beside the clock"),
-                        subtitle = tr("Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging"),
+                        title = tr("Status-bar data and watts"),
+                        subtitle = tr("Watts only while connected; data and D/U lights return with background monitoring"),
                         checked = state.statusPill,
                         onCheckedChange = { vm.setStatusPill(it) },
                     )
@@ -354,8 +354,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     if (state.statusPill && state.statusPillAllowed) {
                         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
                             Text(
-                                "Ready. It appears only while the charger is connected, cannot be " +
-                                    "tapped, and disappears when you switch this off.",
+                                tr("Ready. Watts only while connected; normal data and D/U lights return after unplugging when background monitoring is enabled. Touch-through except while positioning it."),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )

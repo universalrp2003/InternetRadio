@@ -115,7 +115,8 @@ class NetworkLedMeterView(context: Context) : View(context) {
  * Clean, compact, customizable floating pill.
  * Features:
  * - Real-time mobile data (cleanly hidden if on Wi-Fi / Unlimited 5G per user choice)
- * - Animated D & U LED meter bars
+ * - Watts ONLY while a charger is connected; data and D/U meter automatically return on unplug
+ * - Animated D & U LED meter bars while unplugged
  * - Move, drag, and resize controls
  * - Landscape transparent touch-through behavior
  */
@@ -133,6 +134,16 @@ object StatusPill {
     private var dataTextView: TextView? = null
     private var meterView: NetworkLedMeterView? = null
     private var params: WindowManager.LayoutParams? = null
+
+    private data class Reading(
+        val text: String,
+        val packPercent: Int?,
+        val qualityGrade: LiveNetworkQuality.QualityGrade?,
+        val rxSpeed: Long,
+        val txSpeed: Long,
+        val showNetworkMeter: Boolean,
+    )
+    private var lastReading: Reading? = null
 
     @Volatile
     private var draggable = false
@@ -224,6 +235,9 @@ object StatusPill {
             val root = rootContainer ?: return@post
             val manager = root.context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager
                 ?: return@post
+            val tv = dataTextView ?: return@post
+            val meter = meterView ?: return@post
+            lastReading?.let { applyStyle(root, tv, meter, app, it) }
             position(app, manager, root)
             root.post { position(app, manager, root) }
         }
@@ -250,6 +264,7 @@ object StatusPill {
         rootContainer = null
         dataTextView = null
         meterView = null
+        lastReading = null
         params = null
     }
 
@@ -258,13 +273,26 @@ object StatusPill {
         tv: TextView,
         meter: NetworkLedMeterView,
         context: Context,
-        rawText: String,
-        packPercent: Int?,
-        qualityGrade: LiveNetworkQuality.QualityGrade?,
-        rxSpeed: Long,
-        txSpeed: Long
+        reading: Reading,
     ) {
+        val rawText = reading.text
+        val packPercent = reading.packPercent.takeIf { reading.showNetworkMeter }
         val currentScale = scale(context)
+        root.setPadding(
+            (dp(context, 7) * currentScale).toInt(),
+            (dp(context, 2) * currentScale).toInt(),
+            (dp(context, 7) * currentScale).toInt(),
+            (dp(context, 2) * currentScale).toInt(),
+        )
+        // GONE (not INVISIBLE) releases the meter's width as well as hiding its LEDs.
+        meter.visibility = if (reading.showNetworkMeter) View.VISIBLE else View.GONE
+        meter.layoutParams = (meter.layoutParams as LinearLayout.LayoutParams).apply {
+            width = (dp(context, 34) * currentScale).toInt()
+            height = (dp(context, 14) * currentScale).toInt()
+            marginStart = if (rawText.isNotBlank() && reading.showNetworkMeter) {
+                (dp(context, 5) * currentScale).toInt()
+            } else 0
+        }
         val landscape = isLandscape(context)
 
         // Landscape touch & opacity handling: make unobtrusively transparent in landscape mode
@@ -325,11 +353,12 @@ object StatusPill {
 
         root.background = gd
         meter.scaleFactor = currentScale
-        meter.isDownloadActive = rxSpeed > 200L || (qualityGrade != null && rxSpeed >= 0)
-        meter.isUploadActive = txSpeed > 200L || (qualityGrade != null && txSpeed >= 0)
-        meter.qualityGrade = qualityGrade
+        meter.isDownloadActive = reading.rxSpeed > 200L
+        meter.isUploadActive = reading.txSpeed > 200L
+        meter.qualityGrade = reading.qualityGrade
         meter.animStep = animCounter
-        meter.invalidate()
+        if (reading.showNetworkMeter) meter.invalidate()
+        root.requestLayout()
     }
 
     fun update(
@@ -338,33 +367,28 @@ object StatusPill {
         packPercent: Int? = null,
         qualityGrade: LiveNetworkQuality.QualityGrade? = null,
         rxSpeed: Long = 0L,
-        txSpeed: Long = 0L
+        txSpeed: Long = 0L,
+        showNetworkMeter: Boolean = true,
     ) {
         if (!canDraw(context)) {
             remove()
             return
         }
         val app = context.applicationContext
-        main.post { show(app, text.orEmpty(), packPercent, qualityGrade, rxSpeed, txSpeed) }
+        val reading = Reading(text.orEmpty(), packPercent, qualityGrade, rxSpeed, txSpeed, showNetworkMeter)
+        main.post { show(app, reading) }
     }
 
-    private fun show(
-        context: Context,
-        text: String,
-        packPercent: Int? = null,
-        qualityGrade: LiveNetworkQuality.QualityGrade? = null,
-        rxSpeed: Long = 0L,
-        txSpeed: Long = 0L
-    ) {
+    private fun show(context: Context, reading: Reading) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val root = rootContainer ?: createPill(context, manager) ?: return
         val tv = dataTextView ?: return
         val meter = meterView ?: return
 
+        lastReading = reading
         blinkState = !blinkState
         animCounter++
-
-        applyStyle(root, tv, meter, context, text, packPercent, qualityGrade, rxSpeed, txSpeed)
+        applyStyle(root, tv, meter, context, reading)
         position(context, manager, root)
         root.post { position(context, manager, root) }
     }
@@ -387,6 +411,7 @@ object StatusPill {
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 9.8f * currentScale)
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
+            setSingleLine(true)
         }
 
         val meter = NetworkLedMeterView(context).apply {
@@ -460,8 +485,15 @@ object StatusPill {
         val screenWidth = context.resources.displayMetrics.widthPixels
         val screenHeight = context.resources.displayMetrics.heightPixels
         val statusHeight = statusBarHeight(context)
-        val width = if (root.width > 0) root.width else dp(context, 85)
-        val height = if (root.height > 0) root.height else dp(context, 18)
+        // Re-measure AFTER a mode/size change; root.width can still be the old, wider
+        // data+meter layout until the next window frame and would misplace the watts pill.
+        root.measure(
+            View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST),
+        )
+        val width = root.measuredWidth.coerceAtLeast(dp(context, 28))
+        val height = root.measuredHeight.coerceAtLeast(dp(context, 14))
+        layout.flags = flags(context)
         val margin = dp(context, 2)
 
         var x = (screenWidth - width) / 2

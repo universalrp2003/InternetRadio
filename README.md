@@ -7,7 +7,7 @@ and the device; not every model has been tested.
 
 | App | Module | Purpose |
 |---|---|---|
-| **CleanSweep** | `cleaner` | Phone cleaning, health/security review and optional AI assistance. |
+| **Live Guard (CleanSweep)** | `cleaner` | Phone cleaning, health/security review and optional AI assistance. |
 | **Ramesh Radio** | `radio` | Tamil/world radio, folder-based local music, stereo balance and EQ. |
 | **PulseEQ** | `equalizer` | Local audio DSP and device-dependent external-session equalization. |
 
@@ -18,11 +18,11 @@ legacy projects, but are not part of this release or the current development foc
 
 | App | Version | Installable APK |
 |---|---|---|
-| CleanSweep | 2.14 | [CleanSweep-v2.14.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/CleanSweep-v2.14.apk) |
-| Ramesh Radio | 1.7 | [Ramesh-Radio-v1.7.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/Ramesh-Radio-v1.7.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.08-1/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.34 | [CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.08-1)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.10-8)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -31,6 +31,17 @@ GitHub publication does not mean the apps have been published to Google Play or 
 CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
+
+- **Live Guard / CleanSweep 2.34:** watts-only status pill while a charger is connected;
+  normal data/network view restored on unplug with background monitoring enabled;
+  app-specific security Fix/Manage with manufacturer-aware fallbacks; and a fresh,
+  complete security AI request that honours app-name/network sharing switches.
+  Includes 27 regression tests. OEM settings and overlay placement still need
+  [real-device validation](docs/live-guard-2.34-device-test-plan.md).
+- **Ramesh Radio 1.8:** retains current station-discovery and playback improvements;
+  unchanged in this bug-fix release. **PulseEQ 1.2** is also unchanged.
+
+Earlier highlights:
 
 - **CleanSweep 2.14:** accurate battery-side wattage & honest discharging display on widget with timestamp, optional persistent background monitoring mode with Stop button, Tamil voice alerts, compact header, attributed Tamil news and cybersecurity alerts strip, normalized Gemini model readiness check without spurious errors, and greeting lookup bypass.
 - **CleanSweep 2.13:** evidence-based officeholder replies, dated news RSS, raw-JSON
@@ -45,7 +56,7 @@ CI artifacts are temporary build downloads, not the public release channel.
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
-See [full release notes](releases/v2026.10.08-1.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.10-8.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

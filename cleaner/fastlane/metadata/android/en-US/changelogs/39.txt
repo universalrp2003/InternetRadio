@@ -1,0 +1,6 @@
+Live Guard / CleanSweep 2.34
+- Charger connected: watts only; hides data, network LEDs and quota flashing.
+- Unplug restores the normal view when background monitoring is enabled.
+- Fix/Manage uses exact app and service IDs, targeted settings and honest OEM fallbacks.
+- Security AI receives a fresh report of all current findings and available device/scan context; sharing switches respected.
+- 27 regression tests. Physical-device validation still required.

@@ -632,12 +632,12 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                 Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextSecondary)
             }
             Text(
-                "AI analysis",
+                if (state.aiSecurityFocus) "Security AI review" else "AI analysis",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = { vm.runAiAnalysis() }, enabled = !state.aiBusy) {
+            IconButton(onClick = { vm.runAiAnalysis(state.aiSecurityFocus) }, enabled = !state.aiBusy) {
                 Icon(Icons.Outlined.Refresh, contentDescription = "Analyse again", tint = TextSecondary)
             }
         }

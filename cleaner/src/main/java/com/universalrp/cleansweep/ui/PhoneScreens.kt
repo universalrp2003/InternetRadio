@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,6 +77,7 @@ import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppRow
 import com.universalrp.cleansweep.data.Finding
+import com.universalrp.cleansweep.data.FindingApp
 import com.universalrp.cleansweep.data.LanDevice
 import com.universalrp.cleansweep.data.SecurityFixHelper
 import com.universalrp.cleansweep.data.Severity
@@ -524,7 +526,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                 }
 
                 item(key = "guidance") {
-                    SecurityGuidanceCard(vm)
+                    SecurityGuidanceCard(state, vm)
                 }
 
                 item(key = "malware") {
@@ -541,9 +543,42 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
 
 @Composable
 private fun FindingCard(finding: Finding) {
-    // v2.9: the scanner hands over every name; the card shows the first few and
-    // expands to the full list on tap — no more "6 of 11" guessing.
-    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var expanded by remember(finding.id) { mutableStateOf(false) }
+    var chooseApp by remember(finding.id) { mutableStateOf(false) }
+    var actionGuidance by remember(finding.id) { mutableStateOf<String?>(null) }
+    val apps = finding.affectedApps
+
+    fun manage(app: FindingApp? = null) {
+        val result = SecurityFixHelper.openSpecificSettings(context, finding.id, app)
+        actionGuidance = result.guidance
+        if (!result.direct) {
+            android.widget.Toast.makeText(context, result.guidance, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    if (chooseApp) {
+        AlertDialog(
+            onDismissRequest = { chooseApp = false },
+            title = { Text(tr("Choose the app to manage")) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items(apps, key = { it.componentName ?: it.packageName }) { app ->
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                chooseApp = false
+                                manage(app)
+                            }.padding(vertical = 10.dp),
+                        ) {
+                            Text(app.label, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text(app.componentName ?: app.packageName, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { chooseApp = false }) { Text(tr("Cancel")) } },
+        )
+    }
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -565,89 +600,76 @@ private fun FindingCard(finding: Finding) {
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    finding.severity.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = severityColor(finding.severity),
-                    fontWeight = FontWeight.Bold,
-                )
+                Text(finding.severity.name, style = MaterialTheme.typography.labelSmall,
+                    color = severityColor(finding.severity), fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                finding.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
-            if (finding.samples.isNotEmpty()) {
+            Text(finding.detail, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            if (apps.isNotEmpty()) {
                 Spacer(Modifier.height(8.dp))
-                val context = LocalContext.current
-                val shown = if (expanded) finding.samples else finding.samples.take(6)
-                shown.forEach { sample ->
+                val shown = if (expanded) apps else apps.take(6)
+                shown.forEach { app ->
                     Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 3.dp),
+                        Modifier.fillMaxWidth().padding(vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween,
                     ) {
-                        Text(
-                            "• $sample",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = TextPrimary,
-                            modifier = Modifier.weight(1f),
-                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("• ${app.label}", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                            Text(
+                                app.componentName ?: app.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
                         OutlinedButton(
-                            onClick = {
-                                SecurityFixHelper.openSpecificSettings(context, finding.id)
-                            },
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                            onClick = { manage(app) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                             shape = RoundedCornerShape(6.dp),
-                            modifier = Modifier.height(26.dp),
                         ) {
-                            Text("Manage", style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                            Text(tr("Manage"), style = MaterialTheme.typography.labelSmall, color = AccentCyan)
                         }
                     }
                 }
-                if (finding.samples.size > 6) {
-                    val showLessText = tr("Show less")
-                    val showAllText = tr("Show all %d", finding.samples.size)
-                    TextButton(
-                        onClick = { expanded = !expanded },
-                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
-                    ) {
-                        Text(
-                            if (expanded) showLessText else showAllText,
-                            color = AccentCyan,
-                            fontWeight = FontWeight.Bold,
-                        )
-                    }
+            } else if (finding.samples.isNotEmpty()) {
+                // Unknown/legacy display text is NOT enough to identify an installed app.
+                val shown = if (expanded) finding.samples else finding.samples.take(6)
+                shown.forEach { Text("• $it", style = MaterialTheme.typography.labelMedium, color = TextPrimary) }
+            }
+            val itemCount = maxOf(apps.size, finding.samples.size)
+            if (itemCount > 6) {
+                TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+                    Text(if (expanded) tr("Show less") else tr("Show all %d", itemCount),
+                        color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
             finding.fixHint?.let { hint ->
                 Spacer(Modifier.height(10.dp))
-                val context = LocalContext.current
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    Text(
-                        hint,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = AccentCyan,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(hint, style = MaterialTheme.typography.labelMedium, color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     Spacer(Modifier.width(8.dp))
                     Button(
-                        onClick = { SecurityFixHelper.openSpecificSettings(context, finding.id) },
+                        onClick = {
+                            // A multi-app finding has no single "exact app" until the owner
+                            // chooses it. Never discard that choice or guess from a label.
+                            if (apps.size > 1) chooseApp = true else manage(apps.singleOrNull())
+                        },
                         colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.15f)),
                         shape = RoundedCornerShape(8.dp),
                         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                     ) {
-                        Text("Fix", color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        Text(tr("Fix / review"), color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                     }
                 }
+            }
+            actionGuidance?.let {
+                Spacer(Modifier.height(8.dp))
+                Text(it, style = MaterialTheme.typography.bodySmall, color = WarnAmber)
+                Text(tr("Return here after changing the setting; the security check refreshes automatically."),
+                    style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
         }
     }
@@ -1262,7 +1284,7 @@ fun CheckLine(text: String, ok: Boolean) {
 }
 
 @Composable
-fun SecurityGuidanceCard(vm: MainViewModel) {
+fun SecurityGuidanceCard(state: UiState, vm: MainViewModel) {
     var expanded by remember { mutableStateOf(false) }
     val guidance = remember { com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance() }
 
@@ -1278,7 +1300,7 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        tr("Phone-Specific 100/100 Security Guide"),
+                        tr("Phone-specific security guide"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                     )
@@ -1313,6 +1335,12 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
             }
 
             Spacer(Modifier.height(10.dp))
+            Text(
+                tr("AI reviews a fresh security scan plus battery, storage and available scan results. Sharing follows your AI settings; no files, SMS or contacts are sent."),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(8.dp))
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1320,21 +1348,26 @@ fun SecurityGuidanceCard(vm: MainViewModel) {
             ) {
                 Button(
                     onClick = {
-                        vm.openAssistant()
-                        vm.askAssistant("How do I fix all my security check warnings on my phone to get a 100/100 security score?")
+                        if (state.aiConfig.ready) vm.runSecurityAiAnalysis() else vm.openAiSettings()
                     },
+                    enabled = !state.aiBusy && !state.securityBusy,
                     colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.2f)),
                     shape = RoundedCornerShape(8.dp),
                     modifier = Modifier.weight(1f),
                 ) {
                     Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(tr("Ask AI to Fix (100/100)"), color = AccentCyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        if (state.aiConfig.ready) tr("Ask AI about all current issues") else tr("Set up AI analysis"),
+                        color = AccentCyan,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
                 }
 
                 Button(
                     onClick = {
-                        vm.speakTamilText("உங்கள் போனில் நூற்றுக்கு நூறு பாதுகாப்பு பெற, அங்கீகரிக்கப்படாத செயலிகளின் அனுமதிகளை சரிபார்த்து ரத்து செய்யவும்.")
+                        vm.speakTamilText("ஒவ்வொரு பாதுகாப்பு எச்சரிக்கையையும் படித்து, தேவையற்ற அனுமதிகளை மட்டும் மாற்றவும். வங்கி மற்றும் அணுகல்தன்மை செயலிகளுக்கு தேவையான அனுமதிகளை வைத்திருக்கவும். மாற்றிய பிறகு மீண்டும் பாதுகாப்பு சோதனை செய்யவும்.")
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AccentViolet.copy(alpha = 0.2f)),
                     shape = RoundedCornerShape(8.dp),

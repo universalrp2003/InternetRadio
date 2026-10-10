@@ -13,6 +13,7 @@ import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
 import com.universalrp.cleansweep.data.DataUsageTracker
+import com.universalrp.cleansweep.data.LiveNetworkQuality
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
@@ -68,26 +69,20 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val dataUsage = try {
+        val dataUsage = if (battery.powerConnected) null else try {
             DataUsageTracker.getUsageInfo(context)
         } catch (e: Exception) {
             null
         }
 
         val isUnlimited = dataUsage?.isUnlimited5g == true
-        val title = if (dataUsage != null && !isUnlimited) {
-            "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
-        } else if (dataUsage != null && isUnlimited) {
-            if (battery.charging) "Unlimited 5G • Charging ${battery.percent}%" else "Unlimited 5G Plan • Battery ${battery.percent}%"
-        } else if (battery.charging) {
-            val watts = battery.powerW
-            if (watts != null) {
-                "Charging at %.1f W • %d%%".format(watts, battery.percent.coerceAtLeast(0))
-            } else {
-                "Charging • ${battery.percent}%"
-            }
-        } else {
-            "${battery.percent}% • ${battery.statusLabel}"
+        val chargingContent = StatusPillContent.resolve(battery.powerConnected, battery.powerW)
+        val title = when {
+            battery.powerConnected -> chargingContent.text
+            dataUsage != null && !isUnlimited ->
+                "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
+            isUnlimited -> "Unlimited 5G Plan • Battery ${battery.percent}%"
+            else -> "${battery.percent}% • ${battery.statusLabel}"
         }
 
         val timeLine = try {
@@ -96,8 +91,8 @@ object ChargeNotifier {
             null
         } ?: "Battery: ${battery.percent}%"
 
-        val netQuality = try {
-            com.universalrp.cleansweep.data.LiveNetworkQuality.measure(context)
+        val netQuality = if (battery.powerConnected) null else try {
+            LiveNetworkQuality.measure(context)
         } catch (e: Exception) {
             null
         }
@@ -115,8 +110,8 @@ object ChargeNotifier {
             } else if (isUnlimited) {
                 append("Unlimited 5G Active • Quota counting paused\n")
             }
-            if (battery.charging) {
-                append("Charging: $timeLine")
+            if (battery.powerConnected) {
+                append("Charger connected: $timeLine")
                 battery.powerW?.let { append(" • %.1f W".format(it)) }
                 battery.currentA?.let { append(" • %.2f A".format(it)) }
                 battery.voltageV?.let { append(" • %.2f V".format(it)) }
@@ -128,6 +123,8 @@ object ChargeNotifier {
         }
 
         val hint = when {
+            battery.powerConnected && battery.powerW == null -> "Charging power is not reported by this phone. No wattage is guessed."
+            battery.powerConnected -> "Watts are measured at the battery, not at the charger adapter."
             dataUsage != null -> "Mobile data usage is strictly tracked from cellular networks (zero Wi-Fi)."
             !battery.charging -> "Unplugged — monitoring active."
             battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged overnight is fine."
@@ -145,7 +142,9 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val (netIconRes, netIconColor) = when (netQuality?.grade) {
+        val (netIconRes, netIconColor) = if (battery.powerConnected) {
+            Pair(R.drawable.ic_stat_battery, 0xFF38BDF8.toInt())
+        } else when (netQuality?.grade) {
             com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.TOP_QUALITY ->
                 Pair(R.drawable.ic_stat_net_green, 0xFF00E676.toInt()) // Very Good Quality = Green
             com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY ->
@@ -160,7 +159,7 @@ object ChargeNotifier {
             .setSmallIcon(netIconRes)
             .setColor(netIconColor)
             .setContentTitle(title)
-            .setContentText(details)
+            .setContentText(if (battery.powerConnected) "Battery-side charging power" else details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -183,11 +182,6 @@ object ChargeNotifier {
             Intent(context, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val dataUsage = try {
-            DataUsageTracker.getUsageInfo(context)
-        } catch (e: Exception) {
-            null
-        }
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_data)
             .setContentTitle("CleanSweep Monitoring")
@@ -203,7 +197,7 @@ object ChargeNotifier {
     /** Shows (or refreshes) the card. Silently does nothing when notifications are off. */
     fun post(context: Context) {
         val battery = read(context) ?: return
-        if (!battery.charging) {
+        if (!battery.powerConnected && !ChargeMonitorService.persistentEnabled(context)) {
             clear(context)
             return
         }
@@ -228,65 +222,49 @@ object ChargeNotifier {
         StatusPill.remove()
     }
 
-    /** The status bar pill: shows today's mobile data or charging watts in the status bar. */
-    fun updatePill(context: Context, battery: BatteryReading) {
+    /** Charger connected = watts only; unplugged = restore the configured data + D/U view. */
+    fun updatePill(context: Context, battery: BatteryReading, stillCurrent: () -> Boolean = { true }) {
         val wanted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(ChargeMonitorService.PILL_KEY, false)
+        if (!stillCurrent()) return
         if (!wanted || !StatusPill.canDraw(context)) {
             StatusPill.remove()
             return
         }
-        val dataUsage = try {
-            DataUsageTracker.getUsageInfo(context)
-        } catch (e: Exception) {
-            null
+        if (battery.powerConnected) {
+            val content = StatusPillContent.resolve(true, battery.powerW)
+            StatusPill.update(context, content.text, showNetworkMeter = false)
+            // Keep accounting alive even though its text is hidden. Do this AFTER the
+            // immediate mode switch, so a slow stats query cannot leave the old wide pill up.
+            runCatching { DataUsageTracker.getUsageInfo(context) }
+            return
         }
+        val dataUsage = runCatching { DataUsageTracker.getUsageInfo(context) }.getOrNull()
         val isUnlimited = dataUsage?.isUnlimited5g == true
-        val text = when {
-            isUnlimited && battery.charging && battery.powerW != null ->
-                "5G • ⚡ %.1f W".format(battery.powerW)
-            isUnlimited ->
-                "5G Unlimited"
-            dataUsage != null && battery.charging && battery.powerW != null ->
-                "${dataUsage.formattedToday} • ⚡ %.1f W".format(battery.powerW)
-            dataUsage != null ->
-                dataUsage.formattedToday
-            battery.charging && battery.powerW != null ->
-                "⚡ %.1f W".format(battery.powerW)
-            battery.charging && battery.currentA != null ->
-                "⚡ %.2f A".format(battery.currentA)
-            else ->
-                "${battery.percent}%"
-        }
-
         val packPercent = if (dataUsage != null && dataUsage.packLimitBytes > 0 && !isUnlimited) {
-            val consumed = (dataUsage.packTotalMobileBytes.toDouble() / dataUsage.packLimitBytes.toDouble()) * 100.0
-            consumed.coerceIn(0.0, 100.0).toInt()
-        } else {
-            null
-        }
-
-        val netQuality = try {
-            com.universalrp.cleansweep.data.LiveNetworkQuality.measure(context)
-        } catch (e: Exception) {
-            null
-        }
-
-        val hideDataOnWifi = StatusPill.isHideDataOnWifi(context)
-        val isOnWifiOrUnlimited = (netQuality?.isWifi == true) || isUnlimited
-        val displayText = if (hideDataOnWifi && isOnWifiOrUnlimited && !battery.charging) {
-            "" // cleanly hide data count, only show active LED activity lights
-        } else {
-            text
-        }
-
+            ((dataUsage.packTotalMobileBytes.toDouble() / dataUsage.packLimitBytes) * 100.0)
+                .coerceIn(0.0, 100.0).toInt()
+        } else null
+        val netQuality = runCatching { LiveNetworkQuality.measure(context) }.getOrNull()
+        if (!stillCurrent()) return // A plug/unplug arrived while the stats/ping query ran.
+        val content = StatusPillContent.resolve(
+            powerConnected = false,
+            powerW = null,
+            mobileData = dataUsage?.formattedToday,
+            unlimited5g = isUnlimited,
+            batteryPercent = battery.percent,
+            packPercent = packPercent,
+            hideDataOnWifiOrUnlimited = StatusPill.isHideDataOnWifi(context) &&
+                (netQuality?.isWifi == true || isUnlimited),
+        )
         StatusPill.update(
             context,
-            displayText,
-            packPercent,
+            content.text,
+            content.packPercent,
             netQuality?.grade,
             netQuality?.rxSpeedBytesPerSec ?: 0L,
-            netQuality?.txSpeedBytesPerSec ?: 0L
+            netQuality?.txSpeedBytesPerSec ?: 0L,
+            showNetworkMeter = content.showNetworkMeter,
         )
     }
 
@@ -309,6 +287,7 @@ object ChargeNotifier {
             return
         }
         val battery = read(app) ?: return
+        if (!battery.powerConnected) return
 
         // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
         val tempC = battery.temperatureC

@@ -53,11 +53,11 @@ object AiReport {
         storage: StorageInfo?,
     ): String {
         val out = StringBuilder()
-        out.appendLine("PHONE HEALTH REPORT (generated on the phone by CleanSweep)")
+        out.appendLine("PHONE HEALTH REPORT (generated on the phone by Live Guard / CleanSweep)")
         out.appendLine()
 
         health?.let { h ->
-            out.appendLine("== Device ==")
+            out.appendLine("== Device (read at ${h.capturedAtMs} milliseconds since Unix epoch) ==")
             out.appendLine("${h.device.manufacturer} ${h.device.model} (device ${h.device.device}), SoC ${h.device.soc}")
             out.appendLine("Android ${h.device.androidVersion} (API ${h.device.sdk}), security patch ${h.device.securityPatch}")
             out.appendLine("CPU: ${h.device.cores} cores, ABI ${h.device.abi}")
@@ -68,13 +68,13 @@ object AiReport {
             out.appendLine()
 
             out.appendLine("== Battery ==")
-            out.appendLine("Charge ${h.battery.percent}% — ${h.battery.statusLabel} (${h.battery.pluggedLabel})")
+            out.appendLine("Charge ${h.battery.percent}% — ${h.battery.statusLabel} (${h.battery.pluggedLabel}); external power connected: ${h.battery.powerConnected}")
             out.appendLine("Battery health reported by Android: ${h.battery.healthLabel}")
             out.appendLine("Temperature: ${h.battery.temperatureC?.let { "%.1f C".format(it) } ?: "not reported"}")
             out.appendLine("Voltage: ${h.battery.voltageV?.let { "%.2f V".format(it) } ?: "not reported"}")
             out.appendLine("Current: ${h.battery.currentA?.let { "%.2f A".format(it) } ?: "not reported"}" +
                 " (average ${h.battery.averageCurrentA?.let { "%.2f A".format(it) } ?: "n/a"})")
-            out.appendLine("Power: ${h.battery.powerW?.let { "%.2f W".format(it) } ?: "not reported"}")
+            out.appendLine("Battery-side charging power (not charger adapter rating): ${h.battery.powerW?.let { "%.2f W".format(it) } ?: "not reported"}")
             out.appendLine("Charge counter: ${h.battery.chargeCounterMah?.let { "%.0f mAh".format(it) } ?: "not reported"}")
             out.appendLine("Battery technology: ${h.battery.technology}")
             out.appendLine()
@@ -123,23 +123,40 @@ object AiReport {
             out.appendLine()
         }
 
-        security?.let { s ->
-            out.appendLine("== Security check (on-phone findings) ==")
-            out.appendLine("CleanSweep score: ${s.score}/100 (${s.verdict}) over ${s.appsChecked} apps")
-            s.findings.forEach { f ->
-                out.appendLine(
-                    "- [${f.severity}] ${f.title}: ${f.detail}" +
-                        (if (f.samples.isNotEmpty()) " Examples: ${f.samples.joinToString(", ")}" else "") +
-                        (f.fixHint?.let { " Fix: $it" } ?: "")
-                )
+        if (security == null) {
+            out.appendLine("== Security check ==")
+            out.appendLine("A current security report is unavailable; do not infer zero findings or a clean phone.")
+            out.appendLine()
+        } else {
+            out.appendLine("== Security check (all on-phone findings) ==")
+            out.appendLine("Checked at ${security.scannedAtMs} milliseconds since Unix epoch. Live Guard score: ${security.score}/100 (${security.verdict}) over ${security.appsChecked} apps.")
+            security.findings.forEach { f ->
+                out.appendLine("- [${f.severity}] [${f.id}] ${f.title}: ${f.detail} (affected count: ${f.count})")
+                if (config.includeAppNames) {
+                    if (f.affectedApps.isNotEmpty()) {
+                        f.affectedApps.forEach { app ->
+                            out.appendLine("  Affected app: ${app.label} | ${app.packageName}" +
+                                (app.componentName?.let { " | service $it" } ?: ""))
+                        }
+                    } else if (f.samples.isNotEmpty()) {
+                        out.appendLine("  Examples: ${f.samples.joinToString(", ")}")
+                    }
+                } else if (f.samples.isNotEmpty() || f.affectedApps.isNotEmpty()) {
+                    out.appendLine("  App names, packages and service components withheld by the user.")
+                }
+                f.fixHint?.let { out.appendLine("  Manual fix/review: $it") }
             }
-            out.appendLine("This is a permissions and settings review, not a virus scan.")
+            out.appendLine("This score is a permissions/settings review, not a virus scan or proof of safety.")
             out.appendLine()
         }
+        if (health == null) out.appendLine("Current battery/hardware readings are unavailable; do not invent them.")
+        if (apps == null) out.appendLine("Current app inventory is unavailable; installed-app checks may be incomplete.")
+        if (storage == null) out.appendLine("Current storage readings are unavailable.")
+        if (config.includeNetwork && network == null) out.appendLine("No completed local-network scan is available; do not infer zero devices.")
 
         if (config.includeNetwork && network != null) {
             val w = network.wifi
-            out.appendLine("== Network ==")
+            out.appendLine("== Network (last scan at ${network.scannedAtMs} milliseconds since Unix epoch; may be older than this request) ==")
             out.appendLine(
                 "Transport: ${w.transport}" +
                     (w.ssid?.let { ", Wi-Fi \"$it\"" } ?: ", Wi-Fi name hidden (permission not granted)") +
@@ -167,7 +184,24 @@ object AiReport {
             )
         }
 
-        return out.toString()
+        val text = out.toString()
+        if (config.includeAppNames) return text
+        val identifiers = apps?.rows.orEmpty().flatMap { listOf(it.label, it.pkg) } +
+            security?.findings.orEmpty().flatMap { finding ->
+                finding.samples + finding.affectedApps.flatMap { app ->
+                    listOfNotNull(app.label, app.packageName, app.componentName)
+                }
+            }
+        return redactAppIdentifiers(text, identifiers)
+    }
+
+    /** Also scrub names embedded in a scanner/provider description, not just its sample list. */
+    internal fun redactAppIdentifiers(text: String, identifiers: List<String>): String {
+        var redacted = text
+        identifiers.filter { it.isNotBlank() }.distinct().sortedByDescending { it.length }.forEach { name ->
+            redacted = redacted.replace(name, "[app withheld]", ignoreCase = true)
+        }
+        return redacted
     }
 
     private fun appLines(apps: AppInventoryReport): List<String> {

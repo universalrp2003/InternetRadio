@@ -10,35 +10,6 @@ import android.provider.Settings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-enum class Severity { HIGH, MEDIUM, LOW, INFO }
-
-data class Finding(
-    val id: String,
-    val title: String,
-    val detail: String,
-    val severity: Severity,
-    val count: Int = 0,
-    val samples: List<String> = emptyList(),
-    val fixHint: String? = null,
-)
-
-data class SecurityReport(
-    val findings: List<Finding>,
-    val score: Int,
-    val appsChecked: Int,
-    val scannedAtMs: Long,
-) {
-    val highCount: Int get() = findings.count { it.severity == Severity.HIGH }
-    val mediumCount: Int get() = findings.count { it.severity == Severity.MEDIUM }
-    val verdict: String
-        get() = when {
-            score >= 90 -> "Looking good"
-            score >= 75 -> "A few things to check"
-            score >= 55 -> "Needs attention"
-            else -> "Act on the red items"
-        }
-}
-
 /**
  * On-phone security review.
  *
@@ -116,7 +87,8 @@ object SecurityScanner {
                         "malware loves this permission more than any other.",
                     severity = Severity.HIGH,
                     count = accessibility.size,
-                    samples = accessibility.map { it.substringAfterLast('/') },
+                    samples = accessibility.map { serviceApp(context, it)?.label ?: it },
+                    affectedApps = accessibility.mapNotNull { serviceApp(context, it) },
                     fixHint = "Settings → Accessibility → turn off anything you did not install on purpose.",
                 )
             )
@@ -134,7 +106,8 @@ object SecurityScanner {
                         "banking and OTP messages.",
                     severity = Severity.HIGH,
                     count = listeners.size,
-                    samples = listeners.map { it.substringAfterLast('/') },
+                    samples = listeners.map { serviceApp(context, it)?.label ?: it },
+                    affectedApps = listeners.mapNotNull { serviceApp(context, it) },
                     fixHint = "Settings → Notifications → Notification access.",
                 )
             )
@@ -142,7 +115,7 @@ object SecurityScanner {
 
         // com.google.android.gms is Find My Device — a device admin on every GMS phone by
         // design, not something the user did wrong. Only anything *else* is worth flagging.
-        val admins = activeAdmins(context).filter { it != "com.google.android.gms" }
+        val admins = activeAdmins(context).filter { it.packageName != "com.google.android.gms" }
         if (admins.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -152,7 +125,10 @@ object SecurityScanner {
                         "uninstalling themselves.",
                     severity = Severity.MEDIUM,
                     count = admins.size,
-                    samples = admins.map { labelFor(context, it) ?: it },
+                    samples = admins.map { labelFor(context, it.packageName) ?: it.packageName },
+                    affectedApps = admins.map {
+                        FindingApp(labelFor(context, it.packageName) ?: it.packageName, it.packageName, it.flattenToString())
+                    },
                     fixHint = "Settings → Security → Device admin apps.",
                 )
             )
@@ -168,11 +144,11 @@ object SecurityScanner {
                 Finding(
                     id = "install_other_apps",
                     title = "Apps allowed to install other apps",
-                    detail = "With \"install unknown apps\" allowed, an app can silently drop new " +
-                        "APKs on your phone. Your app stores are never listed here.",
+                    detail = "Install unknown apps access lets an app request installation of APKs. Android normally still asks you to confirm. Review sources you no longer need.",
                     severity = Severity.HIGH,
                     count = installers.size,
                     samples = installers.map { it.label },
+                    affectedApps = installers.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Install unknown apps.",
                 )
             )
@@ -196,6 +172,7 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = usageApps.size,
                     samples = usageApps.map { it.label },
+                    affectedApps = usageApps.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Usage access.",
                 )
             )
@@ -223,6 +200,7 @@ object SecurityScanner {
                     severity = if (overlay.size > 6) Severity.MEDIUM else Severity.LOW,
                     count = overlay.size,
                     samples = overlay.map { it.label },
+                    affectedApps = overlay.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Display over other apps.",
                 )
             )
@@ -241,6 +219,7 @@ object SecurityScanner {
                     severity = Severity.MEDIUM,
                     count = sideloaded.size,
                     samples = sideloaded.map { it.label },
+                    affectedApps = sideloaded.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Open each one below and uninstall anything you do not recognise.",
                 )
             )
@@ -264,8 +243,7 @@ object SecurityScanner {
         }
 
         if (unexpectedSmsApps.isNotEmpty()) {
-            val defaultSmsName = defaultSmsPkg?.let { labelFor(context, it) }
-            val defaultNote = if (defaultSmsName != null) " Your default SMS app ($defaultSmsName) is not listed." else ""
+            val defaultNote = if (defaultSmsPkg != null) " Your default SMS app is not listed." else ""
             findings.add(
                 Finding(
                     id = "sms_readers",
@@ -275,6 +253,7 @@ object SecurityScanner {
                     severity = Severity.HIGH,
                     count = unexpectedSmsApps.size,
                     samples = unexpectedSmsApps.map { it.label },
+                    affectedApps = unexpectedSmsApps.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Revoke SMS permission for anything that is not your SMS app.",
                 )
             )
@@ -290,7 +269,8 @@ object SecurityScanner {
                     severity = Severity.INFO,
                     count = bankingSmsApps.size,
                     samples = bankingSmsApps.map { it.label },
-                    fixHint = "Safe for verified banking apps (PhonePe, GPay, Bank apps). Revoke if unused.",
+                    affectedApps = bankingSmsApps.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Verify that this is the official banking/payment app. Keep SMS only if needed for verification or OTPs; revoke if unused.",
                 )
             )
         }
@@ -306,6 +286,7 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = stubs.size,
                     samples = stubs.map { it.label },
+                    affectedApps = stubs.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Disable them from their app page (they cannot be uninstalled on most ROMs).",
                 )
             )
@@ -328,6 +309,8 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = suspiciousInstallers.size,
                     samples = suspiciousInstallers.map { "${it.label} ← ${it.installer}" },
+                    affectedApps = suspiciousInstallers.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Open the listed app’s information page and verify its installation source.",
                 )
             )
         }
@@ -387,6 +370,8 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = rootTools.size,
                     samples = rootTools.map { it.label },
+                    affectedApps = rootTools.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Review the listed app. A root-related name alone does not prove that the phone is rooted.",
                 )
             )
         }
@@ -395,9 +380,9 @@ object SecurityScanner {
             Finding(
                 id = "no_hash_lookup",
                 title = "Malware hash check is on this screen",
-                detail = "The “Malware hash check” card above compares each installed app's file " +
-                    "hash against MalwareBazaar automatically — hashes only, your files are never " +
-                    "uploaded — and against VirusTotal when you add a free key there.",
+                detail = "Use the “Malware hash check” card above to check installed app hashes " +
+                    "against MalwareBazaar, and optionally VirusTotal with your key. Only hashes, " +
+                    "never app files, are sent. Unchecked or unknown hashes do not prove an app is safe.",
                 severity = Severity.INFO,
             )
         )
@@ -432,12 +417,21 @@ object SecurityScanner {
         emptyList()
     }
 
-    private fun activeAdmins(context: Context): List<String> = try {
+    private fun activeAdmins(context: Context): List<ComponentName> = try {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
         @Suppress("DEPRECATION")
-        dpm?.activeAdmins?.map { (it as ComponentName).packageName }?.distinct().orEmpty()
+        dpm?.activeAdmins?.distinct().orEmpty()
     } catch (e: Exception) {
         emptyList()
+    }
+
+    private fun serviceApp(context: Context, rawComponent: String): FindingApp? {
+        val component = ComponentName.unflattenFromString(rawComponent) ?: return null
+        return FindingApp(
+            label = labelFor(context, component.packageName) ?: component.packageName,
+            packageName = component.packageName,
+            componentName = component.flattenToString(),
+        )
     }
 
     /** The package the user chose as their messaging app (Settings → Apps → Default apps). */

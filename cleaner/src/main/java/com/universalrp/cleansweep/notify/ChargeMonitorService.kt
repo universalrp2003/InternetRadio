@@ -16,13 +16,16 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
  * The status-bar charging card the user asked for: while the charger is connected, an
  * ongoing notification shows the real numbers — watts, current, temperature, percentage and
- * an estimated time to full — and it goes away on its own when the plug comes out.
+ * an estimated time to full in the expanded card. The compact pill shows watts only.
+ * On unplug it restores data/D/U monitoring if the user enabled persistent monitoring;
+ * otherwise the charging-only service stops.
  *
  * v2.6 note: this service is now only *one* of the two ways CleanSweep watches a charger.
  * Android 12+ refuses to let the plug-in broadcast start a foreground service, so the
@@ -35,21 +38,13 @@ class ChargeMonitorService : Service() {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private var ticker: Job? = null
+    private var refreshJob: Job? = null
 
     private val batteryReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
-            val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
-            val charging = plugged != 0 ||
-                status == BatteryManager.BATTERY_STATUS_CHARGING ||
-                status == BatteryManager.BATTERY_STATUS_FULL
-            val persistent = persistentEnabled(this@ChargeMonitorService)
-            if (!charging && !persistent) {
-                // Unplugged and persistent monitoring not opted into: stop.
-                stopSelf()
-            } else {
-                update()
-            }
+            // Re-read the physical plug state in the worker. FULL does not mean connected,
+            // and a connected charger can be paused or report DISCHARGING.
+            update()
         }
     }
 
@@ -57,12 +52,13 @@ class ChargeMonitorService : Service() {
         super.onCreate()
         alive = true
         ChargeNotifier.channel(this)
+        startForeground(ChargeNotifier.NOTIFICATION_ID, initialNotification())
         try {
             registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         } catch (e: Exception) {
             // Already registered, or the platform refused: the ticker still updates the card.
         }
-        startForeground(ChargeNotifier.NOTIFICATION_ID, initialNotification())
+        update()
         ticker = scope.launch {
             while (isActive) {
                 delay(5_000)
@@ -89,25 +85,34 @@ class ChargeMonitorService : Service() {
      * notification within seconds, so this can never be allowed to return nothing.
      */
     private fun initialNotification(): android.app.Notification = try {
-        ChargeNotifier.build(this, BatteryReader.read(this))
+        val battery = BatteryReader.read(this)
+        if (battery.powerConnected) ChargeNotifier.build(this, battery) else ChargeNotifier.buildFallback(this)
     } catch (e: Exception) {
         ChargeNotifier.buildFallback(this)
     }
 
+    @Synchronized
     private fun update() {
-        val battery = ChargeNotifier.read(this) ?: return
-        val persistent = persistentEnabled(this)
-        if (!battery.charging && !persistent) {
-            stopSelf()
-            return
+        // Stats and live ping can block. Never do them on the service/broadcast main thread,
+        // and never let an older refresh reintroduce a wide network pill after plug-in.
+        refreshJob?.cancel()
+        refreshJob = scope.launch {
+            val battery = ChargeNotifier.read(this@ChargeMonitorService) ?: return@launch
+            if (!battery.powerConnected && !persistentEnabled(this@ChargeMonitorService)) {
+                stopSelf()
+                return@launch
+            }
+            ChargeNotifier.updatePill(this@ChargeMonitorService, battery, stillCurrent = { isActive })
+            coroutineContext.ensureActive()
+            val notification = ChargeNotifier.build(this@ChargeMonitorService, battery)
+            coroutineContext.ensureActive()
+            val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            try {
+                manager.notify(ChargeNotifier.NOTIFICATION_ID, notification)
+            } catch (e: Exception) {
+                // If notifications were switched off, there is nothing to show.
+            }
         }
-        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        try {
-            manager.notify(ChargeNotifier.NOTIFICATION_ID, ChargeNotifier.build(this, battery))
-        } catch (e: Exception) {
-            // If notifications were switched off, there is nothing to show.
-        }
-        ChargeNotifier.updatePill(this, battery)
     }
 
     override fun onDestroy() {
@@ -165,7 +170,7 @@ class ChargeMonitorService : Service() {
             val persistent = persistentEnabled(context)
             if (!cardEnabled(context) && !persistent) return false
             val battery = ChargeNotifier.read(context) ?: return false
-            if (!battery.charging && !persistent) {
+            if (!battery.powerConnected && !persistent) {
                 context.stopService(Intent(context, ChargeMonitorService::class.java))
                 return false
             }
@@ -186,7 +191,7 @@ class ChargeMonitorService : Service() {
 
         /** Starts or stops the monitor to match the current charger state. */
         fun sync(context: Context, enabled: Boolean) {
-            if (!enabled) {
+            if (!enabled && !persistentEnabled(context)) {
                 context.stopService(Intent(context, ChargeMonitorService::class.java))
                 return
             }

@@ -58,6 +58,12 @@ fun StatusPillHomeControls(state: UiState, vm: MainViewModel) {
             }
 
             if (state.statusPill) {
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    tr("Charger connected: watts only. Unplugged: data and D/U lights return with background monitoring. — W means the phone did not report power."),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
                 Spacer(Modifier.height(10.dp))
                 // Option 1: Hide mobile data on Wi-Fi / 5G
                 Row(

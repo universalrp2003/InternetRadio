@@ -158,9 +158,7 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
             Text(
                 when {
                     state.statusPill && state.statusPillAllowed ->
-                        "On. The reading appears in the empty space at the top (beside the front " +
-                            "camera) only while the charger is connected. It cannot be tapped and " +
-                            "shows nothing but watts."
+                        tr("Charger connected: watts only. Unplugged: data and D/U lights return with background monitoring. — W means the phone did not report power.")
                     state.statusPill ->
                         "Switched on, but Android still needs “Display over other apps” before " +
                             "anything can be drawn there."
@@ -207,7 +205,7 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
                 ReadingMovePad(
                     onMove = { dx, dy -> vm.moveStatusPill(dx, dy) },
                     onReset = { vm.resetStatusPill() },
-                    note = tr("The position is remembered, and the reading still only appears while charging."),
+                    note = tr("The position is remembered in both charging and normal monitor views."),
                     dragging = state.pillDragging,
                     onToggleDrag = { vm.togglePillDrag() },
                 )

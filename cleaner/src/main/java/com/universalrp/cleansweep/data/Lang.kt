@@ -539,6 +539,25 @@ object Lang {
             "உங்கள் போன் அங்கே VoLTE, VPN, ஆபரேட்டர் பெயர், பேட்டரி % எழுதும் — " +
             "காலியாக இருக்கும் இடத்திற்கு நகர்த்துங்கள்.",
         "Mobile data is ON." to "மொபைல் டேட்டா ஆன்.",
+        // ---------------------------------------------------------------- v2.34 bug fixes
+        "Status-bar data and watts" to "நிலைப் பட்டை டேட்டா மற்றும் வாட்ஸ்",
+        "Watts only while connected; data and D/U lights return with background monitoring" to
+            "சார்ஜர் இணைந்தால் வாட்ஸ் மட்டும்; பின்னணி கண்காணிப்பில் அகற்றியதும் டேட்டா மற்றும் D/U விளக்குகள் திரும்பும்",
+        "Charger connected: watts only. Unplugged: data and D/U lights return with background monitoring. — W means the phone did not report power." to
+            "சார்ஜர் இணைந்தால் வாட்ஸ் மட்டும். அகற்றியதும் பின்னணி கண்காணிப்பில் டேட்டா மற்றும் D/U விளக்குகள் திரும்பும். — W என்றால் மின்சக்தி அளவை போன் தெரிவிக்கவில்லை.",
+        "Ready. Watts only while connected; normal data and D/U lights return after unplugging when background monitoring is enabled. Touch-through except while positioning it." to
+            "தயார். சார்ஜர் இணைந்தால் வாட்ஸ் மட்டும்; அகற்றியதும் பின்னணி கண்காணிப்பில் வழக்கமான டேட்டா மற்றும் D/U விளக்குகள் திரும்பும். இடத்தை மாற்றும் நேரம் தவிர தொடுதல்களை மறிக்காது.",
+        "The position is remembered in both charging and normal monitor views." to
+            "சார்ஜ் மற்றும் வழக்கமான கண்காணிப்பு காட்சிகள் இரண்டிலும் இடம் நினைவில் இருக்கும்.",
+        "Phone-specific security guide" to "இந்த போனுக்கான பாதுகாப்பு வழிகாட்டி",
+        "Ask AI about all current issues" to "தற்போதைய அனைத்து சிக்கல்களையும் AI-யிடம் கேள்",
+        "Choose the app to manage" to "நிர்வகிக்க வேண்டிய செயலியைத் தேர்ந்தெடு",
+        "Manage" to "நிர்வகி",
+        "Fix / review" to "சரி செய் / ஆய்வு செய்",
+        "Return here after changing the setting; the security check refreshes automatically." to
+            "அமைப்பை மாற்றிய பிறகு இங்கே திரும்புங்கள்; பாதுகாப்பு சோதனை தானாக புதுப்பிக்கும்.",
+        "AI reviews a fresh security scan plus battery, storage and available scan results. Sharing follows your AI settings; no files, SMS or contacts are sent." to
+            "புதிய பாதுகாப்பு சோதனை, பேட்டரி, சேமிப்பு மற்றும் கிடைக்கும் சோதனை முடிவுகளை AI ஆய்வு செய்கிறது. பகிர்வு AI அமைப்புகளைப் பின்பற்றும்; கோப்புகள், SMS அல்லது தொடர்புகள் அனுப்பப்படாது.",
         // ---------------------------------------------------------------- v2.7 additions
         "Mute voice replies" to "குரல் பதில்களை நிறுத்து",
         "Voice replies on" to "குரல் பதில் இயக்கத்தில்",

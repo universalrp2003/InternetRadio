@@ -38,6 +38,8 @@ data class BatteryReading(
     /** Rough pack capacity learned from charge-counter ÷ state-of-charge. */
     val estimatedCapacityMah: Float?,
     val currentSignNote: String,
+    /** Physical charger connection, including full/paused/not-charging states. */
+    val powerConnected: Boolean = charging,
 )
 
 data class DeviceDetails(
@@ -122,9 +124,8 @@ object BatteryReader {
         val chargeCounter = property(bm, BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             ?.let { it / 1000f } // µAh -> mAh
 
-        val charging = (status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL ||
-            plugged != 0) && status != BatteryManager.BATTERY_STATUS_DISCHARGING
+        val powerConnected = plugged != 0
+        val charging = powerConnected && status != BatteryManager.BATTERY_STATUS_DISCHARGING
 
         // Power is ONLY charging power when actively plugged into an external power source.
         // During discharging, battery power drain is not charging power and must not be
@@ -168,6 +169,7 @@ object BatteryReader {
             chargeCounterMah = chargeCounter,
             estimatedCapacityMah = capacity,
             currentSignNote = signNote,
+            powerConnected = powerConnected,
         )
     }
 
