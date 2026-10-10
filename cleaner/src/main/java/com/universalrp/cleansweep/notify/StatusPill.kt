@@ -11,6 +11,9 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
 import android.util.TypedValue
 import android.view.Gravity
 import android.view.MotionEvent
@@ -193,64 +196,118 @@ object StatusPill {
         params = null
     }
 
-    private fun applyStyle(pill: TextView, context: Context, packPercent: Int?) {
+    private fun applyStyle(
+        pill: TextView,
+        context: Context,
+        rawText: String,
+        packPercent: Int?,
+        qualityGrade: LiveNetworkQuality.QualityGrade?
+    ) {
         val gd = GradientDrawable().apply {
             cornerRadius = dp(context, 7).toFloat()
             setColor(Color.parseColor("#E0000000"))
         }
 
+        // 1. Arrow indicator color based on network quality
+        val arrowStr = "↑↓ "
+        val arrowColor = when (qualityGrade) {
+            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> {
+                // Gold / Amber Gold flashing
+                if (blinkState) Color.parseColor("#FFD700") else Color.parseColor("#FFA500")
+            }
+            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> {
+                // Emerald Green
+                Color.parseColor("#00E676")
+            }
+            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> {
+                // Bad quality Red blink
+                if (blinkState) Color.parseColor("#FF3B30") else Color.parseColor("#88FF3B30")
+            }
+            null -> Color.parseColor("#38BDF8")
+        }
+
+        // 2. Data text color and pill border
+        val textColor: Int
         if (packPercent == null) {
-            pill.setTextColor(Color.parseColor("#E8FBFF"))
+            textColor = Color.parseColor("#E8FBFF")
             gd.setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
         } else {
             val isFlashingStep = (packPercent >= 75)
             when {
                 packPercent >= 90 -> {
                     if (isFlashingStep && blinkState) {
-                        pill.setTextColor(Color.parseColor("#FFFFFF"))
+                        textColor = Color.parseColor("#FFFFFF")
                         gd.setColor(Color.parseColor("#E6CC0000"))
                         gd.setStroke(dp(context, 1), Color.parseColor("#FFFF3B30"))
                     } else {
-                        pill.setTextColor(Color.parseColor("#FF5252"))
+                        textColor = Color.parseColor("#FF5252")
                         gd.setColor(Color.parseColor("#E0000000"))
                         gd.setStroke(dp(context, 1), Color.parseColor("#FF3B30"))
                     }
                 }
                 packPercent >= 75 -> {
                     if (isFlashingStep && blinkState) {
-                        pill.setTextColor(Color.parseColor("#FFFFFF"))
+                        textColor = Color.parseColor("#FFFFFF")
                         gd.setColor(Color.parseColor("#E6B87800"))
                         gd.setStroke(dp(context, 1), Color.parseColor("#FFFFD700"))
                     } else {
-                        pill.setTextColor(Color.parseColor("#FFB74D"))
+                        textColor = Color.parseColor("#FFB74D")
                         gd.setColor(Color.parseColor("#E0000000"))
                         gd.setStroke(dp(context, 1), Color.parseColor("#FFA726"))
                     }
                 }
                 else -> {
-                    pill.setTextColor(Color.parseColor("#E8FBFF"))
+                    textColor = Color.parseColor("#E8FBFF")
                     gd.setStroke(dp(context, 1), Color.parseColor("#4438BDF8"))
                 }
             }
         }
+
+        val sb = SpannableStringBuilder()
+        sb.append(arrowStr)
+        sb.setSpan(
+            ForegroundColorSpan(arrowColor),
+            0,
+            arrowStr.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+        val textStart = sb.length
+        sb.append(rawText)
+        sb.setSpan(
+            ForegroundColorSpan(textColor),
+            textStart,
+            sb.length,
+            Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        )
+
+        pill.text = sb
         pill.background = gd
     }
 
-    fun update(context: Context, text: String?, packPercent: Int? = null) {
+    fun update(
+        context: Context,
+        text: String?,
+        packPercent: Int? = null,
+        qualityGrade: LiveNetworkQuality.QualityGrade? = null
+    ) {
         if (text.isNullOrBlank() || !canDraw(context)) {
             remove()
             return
         }
         val app = context.applicationContext
-        main.post { show(app, text, packPercent) }
+        main.post { show(app, text, packPercent, qualityGrade) }
     }
 
-    private fun show(context: Context, text: String, packPercent: Int? = null) {
+    private fun show(
+        context: Context,
+        text: String,
+        packPercent: Int? = null,
+        qualityGrade: LiveNetworkQuality.QualityGrade? = null
+    ) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val pill = view ?: createPill(context, manager) ?: return
-        if (pill.text != text) pill.text = text
         blinkState = !blinkState
-        applyStyle(pill, context, packPercent)
+        applyStyle(pill, context, text, packPercent, qualityGrade)
         position(context, manager, pill)
         pill.post { position(context, manager, pill) }
     }

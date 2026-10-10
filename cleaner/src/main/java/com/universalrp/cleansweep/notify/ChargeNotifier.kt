@@ -266,7 +266,13 @@ object ChargeNotifier {
             null
         }
 
-        StatusPill.update(context, text, packPercent)
+        val netQuality = try {
+            com.universalrp.cleansweep.data.LiveNetworkQuality.measure(context)
+        } catch (e: Exception) {
+            null
+        }
+
+        StatusPill.update(context, text, packPercent, netQuality?.grade)
     }
 
     /**
