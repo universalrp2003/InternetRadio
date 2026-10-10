@@ -65,9 +65,9 @@ class NetworkLedMeterView(context: Context) : View(context) {
         val segW = (barW - totalGaps) / numSegments
 
         val baseColor = when (qualityGrade) {
-            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> Color.parseColor("#FFD700")
-            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> Color.parseColor("#00E676")
-            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> Color.parseColor("#FF3B30")
+            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> Color.parseColor("#00E676")    // Very Good = Green
+            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> Color.parseColor("#FFD600") // Medium = Yellow
+            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> Color.parseColor("#FF3B30")    // Bad = Red
             null -> Color.parseColor("#38BDF8")
         }
 

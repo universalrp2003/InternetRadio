@@ -110,9 +110,9 @@ object LiveNetworkQuality {
         }
 
         val (lblTa, lblEn) = when (grade) {
-            QualityGrade.TOP_QUALITY -> "அதிவேகம் / சிறந்த தரம்" to "Top Quality"
-            QualityGrade.MEDIUM_QUALITY -> "மிதமான / நல்ல தரம்" to "Good Quality"
-            QualityGrade.BAD_QUALITY -> "மந்தமான / பலவீனமான தரம்" to "Poor / High Latency"
+            QualityGrade.TOP_QUALITY -> "அதிவேகம் / மிகச்சிறந்த தரம்" to "Very Good Quality"
+            QualityGrade.MEDIUM_QUALITY -> "மிதமான தரம்" to "Medium Quality"
+            QualityGrade.BAD_QUALITY -> "மந்தமான / பலவீனமான தரம்" to "Bad / High Latency"
         }
 
         return QualitySnapshot(

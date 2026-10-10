@@ -3,8 +3,8 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
-    <!-- Live Guard Shield with active network guard pulse core - Gold -->
+    <!-- Live Guard Shield with active network guard pulse core - Yellow/Medium -->
     <path
-        android:fillColor="#FFFFD700"
+        android:fillColor="#FFFFD600"
         android:pathData="M12,2L4,5v6.09c0,5.05 3.41,9.76 8,10.91c4.59,-1.15 8,-5.86 8,-10.91V5L12,2zM12,4.15l6,2.25v4.69c0,4.02 -2.57,7.74 -6,8.77c-3.43,-1.03 -6,-4.75 -6,-8.77V6.4L12,4.15zM12,7c-2.76,0 -5,2.24 -5,5c0,1.4 0.58,2.67 1.51,3.57l1.42,-1.42C9.37,13.62 9,12.85 9,12c0,-1.66 1.34,-3 3,-3s3,1.34 3,3c0,0.85 -0.37,1.62 -0.93,2.15l1.42,1.42C16.42,14.67 17,13.4 17,12C17,9.24 14.76,7 12,7zM12,10.5a1.5,1.5 0 1,0 0.001,3.001A1.5,1.5 0 0,0 12,10.5z" />
 </vector>

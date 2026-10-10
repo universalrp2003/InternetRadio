@@ -119,9 +119,9 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
                 )
                 // 4. Live Internet Quality
                 val gradeColor = when (netQuality?.grade) {
-                    LiveNetworkQuality.QualityGrade.TOP_QUALITY -> Color(0xFFFFD700)
-                    LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> GoodGreen
-                    LiveNetworkQuality.QualityGrade.BAD_QUALITY -> DangerRed
+                    LiveNetworkQuality.QualityGrade.TOP_QUALITY -> GoodGreen // Very Good = Green
+                    LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> WarnAmber // Medium = Yellow
+                    LiveNetworkQuality.QualityGrade.BAD_QUALITY -> DangerRed // Bad = Red
                     null -> AccentCyan
                 }
                 MetricPillarCard(

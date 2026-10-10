@@ -147,11 +147,11 @@ object ChargeNotifier {
 
         val (netIconRes, netIconColor) = when (netQuality?.grade) {
             com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.TOP_QUALITY ->
-                Pair(R.drawable.ic_stat_net_gold, 0xFFFFD700.toInt())
+                Pair(R.drawable.ic_stat_net_green, 0xFF00E676.toInt()) // Very Good Quality = Green
             com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY ->
-                Pair(R.drawable.ic_stat_net_green, 0xFF00E676.toInt())
+                Pair(R.drawable.ic_stat_net_gold, 0xFFFFD600.toInt())  // Medium Quality = Yellow
             com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.BAD_QUALITY ->
-                Pair(R.drawable.ic_stat_net_red, 0xFFFF3B30.toInt())
+                Pair(R.drawable.ic_stat_net_red, 0xFFFF3B30.toInt())   // Bad Quality = Red
             else ->
                 Pair(R.drawable.ic_stat_data, 0xFF38BDF8.toInt())
         }
