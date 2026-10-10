@@ -62,6 +62,8 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
+**2.35 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38069097825) for source `51d6d7f`: both CleanSweep unit-test variants, all 113 required cases per variant, all-module builds and release APK/feature/version/API-26/signing gates. This is not a physical-device test pass.
+
 See [full release notes](releases/v2026.10.10-9.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).

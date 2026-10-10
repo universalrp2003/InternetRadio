@@ -149,3 +149,12 @@ and existing Radio tests; enforces 113 required CleanSweep cases per variant,
 APK feature/manifest checks, version/minSDK and unchanged release-signing checks.
 Synthetic parser/test-gate fixtures and these pure policy tests are **not** an
 Android UI, emulator, real charging, carrier billing or all-manufacturer test pass.
+
+## Recorded automated result
+
+The [2.35 publication run](https://github.com/universalrp2003/InternetRadio/actions/runs/38069097825) completed successfully on 10 October 2026
+for source `51d6d7f7e2e5ed23a931a9551a8368a51dcc2990`: both CleanSweep variants with all 113 required cases
+each, all-module builds, release APK/AAB generation and enforced feature/manifest/
+version/API-26/signing gates. Tag `v2026.10.10-9` points to that exact source.
+The six maintained-app assets are published; previous 2.34 assets remain unchanged.
+This adds **no** physical/OEM/carrier validation to the manual checklist above.

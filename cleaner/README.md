@@ -64,7 +64,9 @@ All six approved improvements are reachable from **Home → History & tools**:
 
 CI enforces **113 required cases for each CleanSweep debug/release unit-test variant**
 (27 retained + 86 new), existing Radio tests, all-module compilation and release
-APK/version/minSDK/signing/feature checks before publication. No phone/emulator is
+APK/version/minSDK/signing/feature checks before publication. [The final publication
+run passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38069097825) on source `51d6d7f`; the immutable release uses that source,
+not later documentation commits. No phone/emulator is
 available in the coding environment. **2.35 still needs real-device/OEM checks** in
 [the new test plan](../docs/live-guard-2.35-device-test-plan.md).
 
