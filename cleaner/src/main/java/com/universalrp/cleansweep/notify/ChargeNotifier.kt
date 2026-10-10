@@ -96,7 +96,20 @@ object ChargeNotifier {
             null
         } ?: "Battery: ${battery.percent}%"
 
+        val netQuality = try {
+            com.universalrp.cleansweep.data.LiveNetworkQuality.measure(context)
+        } catch (e: Exception) {
+            null
+        }
+
         val details = buildString {
+            if (netQuality != null && (netQuality.isWifi || netQuality.isMobile)) {
+                val netType = if (netQuality.isWifi) "Wi-Fi" else "Mobile Data"
+                val pingInfo = netQuality.pingMs?.let { "Ping: ${it}ms" } ?: ""
+                val jitterInfo = netQuality.jitterMs?.let { " • Jitter: ${it}ms" } ?: ""
+                append("[$netType] Quality: ${netQuality.labelEnglish} ($pingInfo$jitterInfo)\n")
+                append("Live: ↓ ${netQuality.formattedRxSpeed} • ↑ ${netQuality.formattedTxSpeed}\n")
+            }
             if (dataUsage != null && !isUnlimited) {
                 append("Pack Used: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} • Left: ${dataUsage.formattedRemaining}\n")
             } else if (isUnlimited) {
@@ -217,15 +230,30 @@ object ChargeNotifier {
             null
         }
         val isUnlimited = dataUsage?.isUnlimited5g == true
+        val netQuality = try {
+            com.universalrp.cleansweep.data.LiveNetworkQuality.measure(context)
+        } catch (e: Exception) {
+            null
+        }
+
+        val netPrefix = when {
+            netQuality != null && (netQuality.isWifi || netQuality.isMobile) -> {
+                val upDown = "↑${netQuality.formattedTxSpeed} ↓${netQuality.formattedRxSpeed}"
+                val pingStr = netQuality.pingMs?.let { " • ${it}ms" } ?: ""
+                "$upDown$pingStr"
+            }
+            else -> null
+        }
+
         val text = when {
             isUnlimited && battery.charging && battery.powerW != null ->
-                "⚡ %.1f W".format(battery.powerW)
+                "${netPrefix ?: "5G"} • ⚡ %.1f W".format(battery.powerW)
             isUnlimited ->
-                "5G Unlimited"
+                netPrefix ?: "5G Unlimited"
             dataUsage != null && battery.charging && battery.powerW != null ->
                 "${dataUsage.formattedToday} • ⚡ %.1f W".format(battery.powerW)
             dataUsage != null ->
-                dataUsage.formattedToday
+                if (netPrefix != null) "${dataUsage.formattedToday} • $netPrefix" else dataUsage.formattedToday
             battery.charging && battery.powerW != null ->
                 "⚡ %.1f W".format(battery.powerW)
             battery.charging && battery.currentA != null ->
@@ -233,7 +261,7 @@ object ChargeNotifier {
             else ->
                 "${battery.percent}%"
         }
-        StatusPill.update(context, text)
+        StatusPill.update(context, text, netQuality?.grade)
     }
 
     /**
@@ -243,8 +271,8 @@ object ChargeNotifier {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        // Deduplicate plug-ins within 15 seconds
-        if (System.currentTimeMillis() - last < 15_000L) return
+        // Deduplicate plug-ins within 4 seconds
+        if (System.currentTimeMillis() - last < 4_000L) return
         prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
 
         // Give a short pause for the hardware connection to establish

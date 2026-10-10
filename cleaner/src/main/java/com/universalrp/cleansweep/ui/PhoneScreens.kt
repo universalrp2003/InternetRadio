@@ -934,49 +934,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 enabled = !state.networkBusy,
                                 modifier = Modifier.fillMaxWidth(),
                             )
-                            Spacer(Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    tr("Auto-scan when app opens"),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Switch(
-                                    checked = state.autoWifiScanOnOpen,
-                                    onCheckedChange = { vm.setAutoWifiScanOnOpen(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color(0xFF03202B),
-                                        checkedTrackColor = AccentCyan,
-                                    ),
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(Modifier.weight(1f)) {
-                                    Text(
-                                        tr("Background 15-min intruder scan"),
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                    Text(
-                                        tr("Alerts if unknown device connects in background"),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = TextSecondary,
-                                    )
-                                }
-                                Switch(
-                                    checked = state.bgWifiScanEnabled,
-                                    onCheckedChange = { vm.setBgWifiScanEnabled(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color(0xFF03202B),
-                                        checkedTrackColor = AccentCyan,
-                                    ),
-                                )
-                            }
+
                             state.networkProgress?.let { (done, total) ->
                                 Spacer(Modifier.height(8.dp))
                                 Text(

@@ -188,40 +188,20 @@ object AiClient {
             )
         }
 
-        val configured = normalizeModelId(config.resolvedModel)
         val (models, listError) = listModels(config)
-        val normalizedModels = models.map { normalizeModelId(it) }
-
-        if (normalizedModels.isNotEmpty()) {
-            val modelOk = configured in normalizedModels ||
-                normalizedModels.any { it.equals(configured, ignoreCase = true) }
-            if (modelOk) {
-                return@withContext Result(
-                    ok = true,
-                    text = "",
-                    providerLabel = config.provider.label,
-                    error = null,
-                    model = config.resolvedModel,
-                )
-            }
-            // Do not assume a model is unusable solely because it is absent from the listing!
-            // Providers (like Gemini / NVIDIA) often support newer or alias models
-            // (e.g. gemini-3.8-flash) before or without listing them in GET /models.
-            // Fall back to testing the configured model directly with a tiny probe.
-            val probe = test(config)
-            if (probe.ok) {
-                return@withContext probe.copy(
-                    ok = true,
-                    error = null,
-                    model = config.resolvedModel,
-                )
-            }
+        if (models.isNotEmpty()) {
+            val modelOk = config.resolvedModel in models ||
+                models.any { it.equals(config.resolvedModel, ignoreCase = true) }
             return@withContext Result(
-                ok = false,
+                ok = modelOk,
                 text = "",
                 providerLabel = config.provider.label,
-                error = "\"${config.resolvedModel}\" did not respond (${probe.error ?: "model unavailable"}). " +
-                    "Tap Load models and pick a current one.",
+                error = if (modelOk) {
+                    null
+                } else {
+                    "\"${config.resolvedModel}\" is not among the ${models.size} models this key " +
+                        "can use. Tap Load models and pick a current one."
+                },
                 model = config.resolvedModel,
             )
         }
@@ -230,9 +210,6 @@ object AiClient {
         val probe = test(config)
         if (probe.ok) probe.copy(error = null) else probe.copy(error = listError ?: probe.error)
     }
-
-    fun normalizeModelId(raw: String): String =
-        raw.trim().removePrefix("models/").removePrefix("google/")
 
     /**
      * Asks the provider which models this key can use (GET /models, the OpenAI-standard

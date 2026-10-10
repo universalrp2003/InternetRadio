@@ -34,7 +34,7 @@ object TamilInfoStripRepo {
     private const val KEY_LAST_FETCH = "last_fetch_ms"
     private const val KEY_ITEMS_JSON = "cached_items"
     private const val KEY_SHOWN_HASHES = "shown_title_hashes"
-    private const val CACHE_VALIDITY_MS = 20 * 60 * 1000L // 20 minutes periodic refresh
+    private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L // 20 minutes periodic refresh
 
     // Curated Tamil Nadu, India, International and Cyber Safety fallback updates
     private val DEFAULT_ITEMS = listOf(
@@ -110,7 +110,10 @@ object TamilInfoStripRepo {
         // Also inject on-device app security risk alerts into the feed!
         val appSecurityAlerts = checkAppSecurityAlerts(context)
 
-        if (!forceRefresh && (now - lastFetch) < CACHE_VALIDITY_MS) {
+        if (forceRefresh) {
+            // Completely flush old news and shown hashes on manual refresh!
+            prefs.edit().remove(KEY_ITEMS_JSON).remove(KEY_SHOWN_HASHES).apply()
+        } else if ((now - lastFetch) < CACHE_VALIDITY_MS) {
             val cached = loadCached(prefs)
             if (cached.isNotEmpty()) return@withContext rotateAndPrioritize(prefs, appSecurityAlerts + cached)
         }

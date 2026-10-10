@@ -91,7 +91,7 @@ enum class AiProvider(
         get() = when (this) {
             FREE -> listOf("kilo-auto/free", "openai", "gpt-oss-120b")
             GEMINI -> listOf(
-                "gemini-3.8-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-flash-latest",
+                "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro", "gemini-flash-latest",
             )
             NVIDIA -> listOf(
                 "meta/llama-3.3-70b-instruct",

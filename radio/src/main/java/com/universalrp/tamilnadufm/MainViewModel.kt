@@ -59,8 +59,6 @@ data class UiState(
     val eqEngine: String = "",
     // sleep timer
     val sleepMinutesLeft: Int = 0,
-    // data usage
-    val todayDataUsageMb: Double = 0.0,
     // misc
     val message: String? = null,
     val busy: Boolean = false,
@@ -120,18 +118,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(eq = AudioFx.settings, eqEngine = AudioFx.engineName) }
         loadStations()
         ctx.getSharedPreferences("music_folder", Context.MODE_PRIVATE).getString("uri", null)?.let { loadMusicFolder(Uri.parse(it), false) }
-        refreshTodayDataUsage()
         viewModelScope.launch {
-            // Keep the EQ screen honest about the engine, sleep timer ticking, and data usage updated.
-            var tick = 0
+            // Keep the EQ screen honest about the engine and the sleep timer ticking.
             while (true) {
                 delay(1000)
-                tick++
                 val engine = AudioFx.engineName
                 val sleep = _state.value.sleepMinutesLeft
-                if (tick % 5 == 0) {
-                    refreshTodayDataUsage()
-                }
                 mutate {
                     it.copy(
                         eqEngine = engine,
@@ -141,32 +133,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-    }
-
-    private fun refreshTodayDataUsage() {
-        val calendar = java.util.Calendar.getInstance()
-        val todayKey = "data_${calendar.get(java.util.Calendar.YEAR)}_${calendar.get(java.util.Calendar.DAY_OF_YEAR)}"
-        val prefs = ctx.getSharedPreferences("radio_traffic", Context.MODE_PRIVATE)
-
-        // Read through TrafficStats for current process session plus daily persisted baseline
-        val rx = android.net.TrafficStats.getUidRxBytes(android.os.Process.myUid())
-        val tx = android.net.TrafficStats.getUidTxBytes(android.os.Process.myUid())
-        val currentTraffic = if (rx > 0 && tx > 0) (rx + tx) else 0L
-
-        val lastDay = prefs.getString("last_recorded_day", "")
-        var dayBaseline = prefs.getLong("baseline_$todayKey", -1L)
-        if (lastDay != todayKey || dayBaseline < 0L) {
-            // New day or first run today - set baseline to current traffic
-            dayBaseline = currentTraffic
-            prefs.edit()
-                .putString("last_recorded_day", todayKey)
-                .putLong("baseline_$todayKey", dayBaseline)
-                .apply()
-        }
-
-        val bytesUsedToday = if (currentTraffic >= dayBaseline) (currentTraffic - dayBaseline) else currentTraffic
-        val mbUsed = bytesUsedToday / (1024.0 * 1024.0)
-        mutate { it.copy(todayDataUsageMb = mbUsed) }
     }
 
     // ------------------------------------------------------------- controller
@@ -301,11 +267,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Category.CUSTOM -> station.isCustom
                 Category.RECENT -> repo.recent().contains(station.url.lowercase())
                 Category.TOWNS -> Category.isTamilTown(station)
-                Category.TAMIL_ILAYARAJA -> Category.isIlayaraja(station)
-                Category.TAMIL_MSV -> Category.isMsv(station)
-                Category.TAMIL_AR_RAHMAN -> Category.isArRahman(station)
-                Category.TAMIL_80S_90S -> Category.is80s90s(station)
-                Category.TAMIL_DEVOTIONAL -> Category.isDevotional(station)
                 Category.TAMIL -> station.language.lowercase().contains("tamil") ||
                     station.category == Category.TAMIL ||
                     station.category == Category.TAMIL_FM ||
@@ -315,6 +276,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Category.WORLD_NEWS -> station.category == Category.WORLD_NEWS
                 Category.INDIA_NEWS -> station.category == Category.INDIA_NEWS
                 Category.TAMIL_FM -> station.category == Category.TAMIL_FM
+                Category.TAMIL_DEVOTIONAL -> station.category == Category.TAMIL_DEVOTIONAL
                 Category.ENGLISH -> station.category == Category.ENGLISH ||
                     station.language.lowercase().contains("english")
                 else -> station.category == s.category

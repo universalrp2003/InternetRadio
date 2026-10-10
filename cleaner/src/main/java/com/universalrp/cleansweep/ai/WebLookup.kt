@@ -58,21 +58,6 @@ object WebLookup {
         "ஸ்கோர்", "வேலை", "தங்கம்", "பெட்ரோல்",
     )
 
-    private val GREETING_WORDS = setOf(
-        "hi", "hello", "hey", "hola", "howdy", "sup", "yo",
-        "good morning", "good afternoon", "good evening", "good night",
-        "வணக்கம்", "காலை வணக்கம்", "மாலை வணக்கம்", "இரவு வணக்கம்",
-        "how are you", "who are you", "what can you do", "help",
-        "நலமா", "எப்படி இருக்கீங்க", "நீ யார்", "உன்னால் என்ன செய்ய முடியும்",
-    )
-
-    fun isGreetingOrSmallTalk(question: String): Boolean {
-        val cleaned = question.trim().lowercase().trimEnd('?', '.', '!', ';', ',').trim()
-        if (cleaned in GREETING_WORDS) return true
-        if (cleaned.length <= 4 && (cleaned == "hi" || cleaned == "hey" || cleaned == "வணக்கம்")) return true
-        return false
-    }
-
     fun looksTimeSensitive(question: String): Boolean {
         val lower = question.lowercase()
         return FRESH_WORDS.any { lower.contains(it) }
@@ -90,8 +75,8 @@ object WebLookup {
      */
     suspend fun lookup(query: String): Lookup = coroutineScope {
         val q = query.trim().take(300)
-        if (q.isEmpty() || isGreetingOrSmallTalk(q)) return@coroutineScope Lookup(emptyList())
         if (NewsLookup.applies(q)) return@coroutineScope Lookup(NewsLookup.fetch(q))
+        if (q.isEmpty()) return@coroutineScope Lookup(emptyList())
         // v2.11: chit-chat ("hi you know who is...") makes a terrible search query — it
         // once surfaced "List of megaprojects in India" for a CM question. Search the
         // shaped query; the office parser and the model still get the raw question.

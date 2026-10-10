@@ -127,23 +127,7 @@ class WifiScanWorker(
         private const val NOTIFICATION_ID = 7109
 
         fun schedule(context: Context) {
-            try {
-                val constraints = Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.UNMETERED)
-                    .build()
-
-                val request = PeriodicWorkRequestBuilder<WifiScanWorker>(15, TimeUnit.MINUTES)
-                    .setConstraints(constraints)
-                    .build()
-
-                WorkManager.getInstance(context.applicationContext).enqueueUniquePeriodicWork(
-                    UNIQUE_NAME,
-                    ExistingPeriodicWorkPolicy.KEEP,
-                    request,
-                )
-            } catch (e: Exception) {
-                // WorkManager might not be available
-            }
+            cancel(context)
         }
 
         fun cancel(context: Context) {

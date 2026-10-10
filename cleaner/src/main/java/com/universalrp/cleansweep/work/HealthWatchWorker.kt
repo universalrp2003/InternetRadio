@@ -86,7 +86,7 @@ class HealthWatchWorker(
 
     // ------------------------------------------------------------------ warnings
 
-    private suspend fun warnings(ctx: Context) {
+    private fun warnings(ctx: Context) {
         // Wi-Fi ⇄ mobile data changed — first, so a bad battery read cannot skip it.
         networkTransportChanged(ctx)
         val battery = try {
@@ -107,9 +107,10 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_LOW, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_LOW, now).apply()
-                Announcer.speakTamil(
+                Announcer.speak(
                     ctx,
-                    "பேட்டரி குறைவு: ${battery.percent} சதவீதம். சார்ஜ் செய்யவும்.",
+                    "Battery low. ${battery.percent} percent left. Plug in the charger soon.",
+                    "பேட்டரி குறைவு. ${battery.percent} சதவீதம் மட்டுமே உள்ளது. விரைவில் சார்ஜரை இணைக்கவும்.",
                     Announcer.Event.BATTERY_LOW,
                 )
             }
@@ -120,9 +121,10 @@ class HealthWatchWorker(
             val last = prefs.getLong(Announcer.KEY_LAST_FULL, 0L)
             if (now - last > 6 * 60 * 60 * 1000L) {
                 prefs.edit().putLong(Announcer.KEY_LAST_FULL, now).apply()
-                Announcer.speakTamil(
+                Announcer.speak(
                     ctx,
-                    "பேட்டரி முழுமை அடைந்தது. சார்ஜரை அகற்றவும்.",
+                    "Battery full. You can unplug the charger.",
+                    "பேட்டரி முழுவதும் சார்ஜ் ஆகிவிட்டது. சார்ஜரை கழற்றலாம்.",
                     Announcer.Event.BATTERY_FULL,
                 )
             }
@@ -180,37 +182,16 @@ class HealthWatchWorker(
                 prefs.edit().putLong(Announcer.KEY_LAST_HOT, now).apply()
                 val batteryText = battery.temperatureC?.let { "%.0f".format(it) } ?: "?"
                 val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
+                val which = if (batteryHot && cpuHot) "battery and processor" else if (batteryHot) "battery" else "processor"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
-                val plugWarning = if (battery.charging) " வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும்." else ""
-                Announcer.speakTamil(
+                Announcer.speak(
                     ctx,
-                    "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.$plugWarning",
+                    "Your phone is running hot — the $which is at ${if (batteryHot) batteryText else cpuText} degrees. " +
+                        "Close heavy apps and take it off the charger.",
+                    "உங்கள் போன் சூடாகிறது — $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரியில் உள்ளது. " +
+                        "கனமான ஆப்களை மூடி, சார்ஜரை கழற்றவும்.",
                     Announcer.Event.OVERHEAT,
                 )
-            }
-        }
-
-        // Weekly high security risks check (remind once a week)
-        val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
-        if (now - lastSecReminder > 7 * 24 * 60 * 60 * 1000L) {
-            val highRisks = try {
-                val apps = AppInventoryLoader.load(ctx, includeSystem = false).rows
-                val report = SecurityScanner.scan(ctx, apps)
-                report.findings.filter { it.severity == Severity.HIGH }
-            } catch (e: Exception) {
-                emptyList()
-            }
-            if (highRisks.isNotEmpty()) {
-                prefs.edit().putLong("last_sec_reminder_ms", now).apply()
-                val riskCount = highRisks.size
-                prefs.edit().putString("widget_security_alert", "$riskCount critical security alert${if (riskCount > 1) "s" else ""}").apply()
-                Announcer.speakTamil(
-                    ctx,
-                    "பாதுகாப்பு நினைவூட்டல்: $riskCount முக்கிய பாதுகாப்பு அமைப்புகளை சரிபார்க்கவும்.",
-                    Announcer.Event.TEST,
-                )
-            } else {
-                prefs.edit().remove("widget_security_alert").apply()
             }
         }
     }
@@ -310,29 +291,36 @@ class HealthWatchWorker(
         }
 
         val high = security?.findings?.count { it.severity == Severity.HIGH } ?: 0
-        val medium = security?.findings?.count { it.severity == Severity.MEDIUM } ?: 0
         val batteryTemp = battery?.temperatureC?.let { "%.0f".format(it) } ?: "?"
         val cpuTemp = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
         val freeGb = storage?.free?.let { "%.1f".format(it / 1024.0 / 1024.0 / 1024.0) } ?: "?"
         val freeRam = health?.device?.availableRamBytes?.let { (it / 1024.0 / 1024.0).toInt().toString() } ?: "?"
         val timeToFull = battery?.let { batteryTimeLabelOrNull(it) }
 
-        // ---- the one line that is spoken (Strictly High/Medium security risk warnings)
-        val spoken: Pair<String, String>? = when {
-            high > 0 -> ("Important: $high high-risk security issue${if (high == 1) "" else "s"} need attention. " +
+        // ---- the one line that is spoken
+        val spoken: Pair<String, String> = when {
+            high > 0 -> ("Important: $high security setting${if (high == 1) "" else "s"} need attention. " +
                 "Open CleanSweep to see them.") to
-                ("முக்கிய எச்சரிக்கை: $high அதிக ஆபத்துள்ள பாதுகாப்பு அமைப்புகளில் கவனம் தேவை. " +
+                ("முக்கியம்: $high பாதுகாப்பு அமைப்புகளில் கவனம் தேவை. " +
                     "விவரங்களுக்கு CleanSweep-ஐத் திறக்கவும்.")
-            medium > 0 -> ("Attention: $medium moderate security warning${if (medium == 1) "" else "s"} detected. " +
-                "Open CleanSweep to review.") to
-                ("கவனம்: $medium மிதமான பாதுகாப்பு எச்சரிக்கைகள் உள்ளன. " +
-                    "விவரங்களுக்கு CleanSweep-ஐத் திறக்கவும்.")
-            else -> null // Safe / clean — remain silent as configured
+            (battery?.percent ?: 100) < Announcer.LOW_PERCENT && battery?.charging != true ->
+                ("Daily brief. Battery is low at ${battery?.percent ?: 0} percent, and " +
+                    "${junk?.totalBytes?.formatBytes() ?: "0 B"} of junk is waiting.") to
+                    ("தினசரி சுருக்கம். பேட்டரி ${battery?.percent ?: 0} சதவீதம் மட்டுமே உள்ளது; " +
+                        "${junk?.totalBytes?.formatBytes() ?: "0 B"} குப்பை காத்திருக்கிறது.")
+            (junk?.totalBytes ?: 0L) > 1024L * 1024L * 1024L ->
+                ("Daily brief. Your phone is fine, but ${junk?.totalBytes?.formatBytes()} of junk is ready to clean.") to
+                    ("தினசரி சுருக்கம். போன் நன்றாக உள்ளது; ஆனால் ${junk?.totalBytes?.formatBytes()} குப்பை சுத்தம் செய்யத் தயார்.")
+            else -> ("Daily brief. Battery ${battery?.percent ?: 0} percent, storage ${freeGb} gigabytes free, " +
+                "nothing urgent.") to
+                ("தினசரி சுருக்கம். பேட்டரி ${battery?.percent ?: 0} சதவீதம், சேமிப்பு ${freeGb} ஜிகாபைட் காலி, " +
+                    "அவசரம் எதுவும் இல்லை.")
         }
 
         // ---- the full text (notification body + the app's "last brief" card)
         val full = buildString {
             appendLine(if (tamil) "தினசரி அறிக்கை" else "Daily brief")
+            appendLine()
             appendLine((if (tamil) "பேட்டரி" else "Battery") + ": ${battery?.percent ?: "?"}% — " +
                 (battery?.statusLabel ?: "?") + ", $batteryTemp°C" +
                 (timeToFull?.let { " ($it)" } ?: ""))
@@ -352,28 +340,30 @@ class HealthWatchWorker(
             )
         }.trim()
 
-        // Spoken daily brief is always in Tamil as requested (Strictly for high & medium security warnings)
-        var spokenFinal: String? = spoken?.second
+        // ---- ask the AI for a friendlier short version, and keep the honest text if it fails
+        var spokenFinal = if (tamil) spoken.second else spoken.first
         val config = try {
             AiSettings.autoComplete(AiSettings.load(ctx))
         } catch (e: Exception) {
             null
         }
-        if (spokenFinal != null && config != null && config.ready) {
+        if (config != null && config.ready) {
             val prompt = buildString {
-                appendLine("Security warning for this Android phone right now:")
+                appendLine("Facts about this Android phone right now:")
                 appendLine(full)
                 appendLine()
                 appendLine(
-                    "Write a concise Tamil security voice warning in 1-2 short sentences, under 35 words. " +
-                        "Warn about the high/medium security issues directly."
+                    "Write the daily brief in 2 short sentences, under 40 words, plain " +
+                        "language, no bullet points, no markdown. Say the single most useful " +
+                        "thing first. " +
+                        if (tamil) "Write it in Tamil." else "Write it in English."
                 )
             }
             val result = try {
                 AiClient.ask(
                     config,
                     "You are CleanSweep, a phone-health assistant. Be brief, concrete and calm. " +
-                        "Focus strictly on high and medium security warnings.",
+                        "Never invent a number that is not in the facts.",
                     prompt,
                 )
             } catch (e: Exception) {
@@ -386,16 +376,13 @@ class HealthWatchWorker(
 
         // A hand-run brief keeps the day free, so the evening brief still arrives.
         Announcer.saveBrief(ctx, today, full, markDay = !forced)
-        val notifSummary = spokenFinal ?: if (tamil) "பாதுகாப்பு நிலை சீராக உள்ளது" else "All security checks passed"
-        notify(ctx, full, notifSummary)
-        if (spokenFinal != null) {
-            Announcer.speak(
-                ctx,
-                spokenFinal,
-                spokenFinal,
-                Announcer.Event.DAILY,
-            )
-        }
+        notify(ctx, full, spokenFinal)
+        Announcer.speak(
+            ctx,
+            spokenFinal,
+            spokenFinal,
+            Announcer.Event.DAILY,
+        )
     }
 
     /**

@@ -262,26 +262,6 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
 
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
-                    Text(tr("Works on every Android phone"),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = AccentViolet,
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
-                            "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
-                            "CleanSweep never touches your personal files unless you select them, and the only " +
-                            "thing that ever uses the internet is the AI analysis and Tamil info feeds you start yourself. " +
-                            "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextSecondary,
-                    )
-                }
-            }
-
-            PanelCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(16.dp)) {
                     Text(tr("Installing & updating (Play Protect)"),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,

@@ -200,7 +200,7 @@ data class NetworkReport(
  */
 object NetworkScanner {
 
-    private val PROBE_PORTS = listOf(80, 443, 22, 53, 445, 554, 3389, 5000, 62078, 8080, 9100)
+    private val PROBE_PORTS = listOf(80, 443, 8080, 53, 8008, 8009, 5000, 7000, 554, 9100, 445, 22, 62078)
 
     /** A small MAC-prefix table: enough to tell phones, computers and routers apart. */
     private val OUI: Map<String, String> = mapOf(
@@ -669,19 +669,20 @@ object NetworkScanner {
             if (!reachable) {
                 val pingOk = try {
                     val pStart = System.currentTimeMillis()
-                    val ok = address.isReachable(250)
-                    if (ok) latency = System.currentTimeMillis() - pStart
-                    ok
+                    val ok = address.isReachable(350)
+                    if (ok) {
+                        latency = System.currentTimeMillis() - pStart
+                        true
+                    } else false
                 } catch (e: Exception) {
                     false
                 }
-                // Avoid ghost IPs where isReachable returns false positive without MAC or hostname
-                if (pingOk && (mac != null || hostname != null)) {
+                if (pingOk) {
                     reachable = true
                 }
             }
 
-            // If neither ports, nor ARP, nor hostname gave proof of life, do not include ghost IP
+            // A device is valid if ports answered, or ICMP reachable answered, or ARP mac exists, or hostname resolved
             if (!reachable && mac == null && hostname == null) {
                 return null
             }

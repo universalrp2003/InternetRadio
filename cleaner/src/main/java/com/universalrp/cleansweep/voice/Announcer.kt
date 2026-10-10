@@ -452,12 +452,26 @@ object Announcer {
             val wanted = locale.language
             val candidates = voices.filter { it.locale.language.equals(wanted, ignoreCase = true) }
             if (candidates.isEmpty()) return
+
+            // Sort prioritizing neural/Wavenet/Journey high-fidelity natural Tamil voices
             val best = candidates.sortedWith(
-                compareByDescending<Voice> { it.isNetworkConnectionRequired }
-                    .thenByDescending { it.quality }
-                    .thenBy { it.name }
+                compareByDescending<Voice> {
+                    val n = it.name.lowercase()
+                    when {
+                        n.contains("wavenet") || n.contains("neural") || n.contains("journey") -> 3
+                        it.isNetworkConnectionRequired -> 2
+                        n.contains("premium") || n.contains("high") -> 1
+                        else -> 0
+                    }
+                }
+                .thenByDescending { it.quality }
+                .thenBy { it.name }
             ).firstOrNull() ?: return
+
             engine.voice = best
+            // Tune pitch and speech rate for most natural, human-like, pleasing Tamil pronunciation
+            engine.setPitch(1.02f)
+            engine.setSpeechRate(0.96f)
             usingNetworkVoice = best.isNetworkConnectionRequired
         } catch (e: Exception) {
             // Any trouble here just means the default voice is used.

@@ -341,14 +341,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     checked = state.voiceNetworkChange,
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NETWORK_CHANGE, it) },
                 )
-                VoiceSwitch(
-                    title = tr("New device joined my Wi-Fi"),
-                    subtitle = tr("Uses the network scan; spoken only when it is on and you run a scan."),
-                    icon = Icons.Outlined.Devices,
-                    tint = AccentCyan,
-                    checked = state.voiceNewDevice,
-                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NEW_DEVICE, it) },
-                )
+
                 VoiceSwitch(
                     title = tr("Read AI answers aloud"),
                     subtitle = tr("Speak the answer when you ask the assistant something."),

@@ -398,9 +398,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Mobile readings are cheap: read them once at start so the card is never empty.
         loadMobile()
         loadTamilInfoStrip()
-        if (autoWifiScan && NetworkScanner.wifiPermissionGranted(ctx)) {
-            scanNetwork()
-        }
+
     }
 
     private var widgetTick = 0

@@ -1,6 +1,0 @@
-CleanSweep v2.19:
-- Seamless Local VPN Permission Flow: Uses VpnService.prepare with rememberLauncherForActivityResult to ask user permission and starts non-blocking packet inspection without crashes.
-- Massive 50-100 News Stream & Security Alert Injection: Expanded feeds across Tamil Nadu, India, International, and dynamically injected app risk alerts with danger highlights.
-- Home Screen AI Input Bar: Removed the redundant AI ready box and embedded a direct interactive question field into the Assistant card.
-- Unified Single AI Analysis: Removed redundant "Analyse with AI" buttons across phone health and security tabs; kept a single comprehensive analysis entry on the Home screen.
-- Widget Refinement: Replaced redundant "Read brief" button on the widget with a full-width Clean action and updated Voice settings labels to reflect risk-only warnings.

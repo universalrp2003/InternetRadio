@@ -1,5 +1,0 @@
-CleanSweep v2.22:
-- Status Bar & Notification Icon Update: Replaced battery indicator icon with dedicated mobile data icon displaying real-time data status and battery percentage.
-- Mobile Data Pack Counter (6GB / 12GB): Added cumulative data tracking with a one-tap Reset button, keeping count across sessions until manually reset.
-- Home Screen Widget Data Display: Widget showcases today's mobile data usage (auto-resetting daily at midnight) and overall recharge pack usage.
-- Clearer connection inspection: Connection card attributes network destinations and app traffic without confusing socket ports.

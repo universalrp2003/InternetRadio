@@ -16,6 +16,7 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.widget.TextView
+import com.universalrp.cleansweep.data.LiveNetworkQuality
 
 /**
  * The little "⚡ 3.9 W" reading that sits in the empty part of the status bar, next to the
@@ -145,13 +146,44 @@ object StatusPill {
      * Shows [text] (or hides the pill when it is null/blank). Safe to call from any thread
      * and from a service: the work is posted to the main looper.
      */
-    fun update(context: Context, text: String?) {
+    private var blinkState = false
+
+    private fun getPillBackground(context: Context, grade: LiveNetworkQuality.QualityGrade?): GradientDrawable {
+        val gd = GradientDrawable().apply {
+            cornerRadius = dp(context, 7).toFloat()
+            setColor(Color.parseColor("#CC000000"))
+        }
+        when (grade) {
+            LiveNetworkQuality.QualityGrade.TOP_QUALITY -> {
+                // Gold flashing top quality
+                val strokeColor = if (blinkState) Color.parseColor("#FFD700") else Color.parseColor("#FFA500")
+                gd.setStroke(dp(context, 1), strokeColor)
+            }
+            LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY -> {
+                // Medium quality: Green fill with Gold outline
+                gd.setColor(Color.parseColor("#B8083818"))
+                gd.setStroke(dp(context, 1), Color.parseColor("#FFD700"))
+            }
+            LiveNetworkQuality.QualityGrade.BAD_QUALITY -> {
+                // Bad quality: Red color blinking
+                val strokeColor = if (blinkState) Color.parseColor("#FF3B30") else Color.parseColor("#88FF3B30")
+                gd.setStroke(dp(context, 1), strokeColor)
+                if (blinkState) gd.setColor(Color.parseColor("#B8420000"))
+            }
+            null -> {
+                gd.setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
+            }
+        }
+        return gd
+    }
+
+    fun update(context: Context, text: String?, grade: LiveNetworkQuality.QualityGrade? = null) {
         if (text.isNullOrBlank() || !canDraw(context)) {
             remove()
             return
         }
         val app = context.applicationContext
-        main.post { show(app, text) }
+        main.post { show(app, text, grade) }
     }
 
     fun remove() {
@@ -170,10 +202,12 @@ object StatusPill {
         params = null
     }
 
-    private fun show(context: Context, text: String) {
+    private fun show(context: Context, text: String, grade: LiveNetworkQuality.QualityGrade? = null) {
         val manager = context.getSystemService(Context.WINDOW_SERVICE) as? WindowManager ?: return
         val pill = view ?: createPill(context, manager) ?: return
         if (pill.text != text) pill.text = text
+        blinkState = !blinkState
+        pill.background = getPillBackground(context, grade)
         position(context, manager, pill)
         // And once more after the text has been measured, so it lands in the right place.
         pill.post { position(context, manager, pill) }
@@ -187,11 +221,7 @@ object StatusPill {
             typeface = Typeface.DEFAULT_BOLD
             includeFontPadding = false
             setPadding(dp(context, 6), dp(context, 1), dp(context, 6), dp(context, 1))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(context, 7).toFloat()
-                setColor(Color.parseColor("#B8000000"))
-                setStroke(dp(context, 1), Color.parseColor("#6638BDF8"))
-            }
+            background = getPillBackground(context, null)
         }
         val layout = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,

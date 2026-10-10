@@ -1,7 +1,0 @@
-CleanSweep v2.15:
-- Enhanced News & Security Information strip: Multiline text display to avoid truncation, added TTS voice reading button, and 30-minute auto-refresh.
-- Estimated Phone Age: Intelligently calculates and displays estimated device age below the storage gauge.
-- Intelligent Banking App SMS Detection: Recognizes banking and UPI payment apps to avoid false high-risk security warnings and throttles reminders weekly.
-- Charging Voice & Overheat Protection: Reliable remaining charging time calculations and immediate overheat voice warnings upon plugging in.
-- 12-Hour AM/PM Time Format: Updated all widget, screen, and notification timestamps to user-friendly AM/PM format.
-- UI Layout & Spacing Polish: Streamlined Tamil layouts and removed unnecessary blank lines in reports.

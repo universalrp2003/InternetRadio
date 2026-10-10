@@ -1,4 +1,0 @@
-Ramesh Radio v1.8:
-- Curated Tamil Categories: Added dedicated Tamil filter chips for Ilayaraja Hits (இளையராஜா), MSV (எம்.எஸ். விஸ்வநாதன்), AR Rahman (ஏ.ஆர். ரஹ்மான்), 80's & 90's Melodies (80's & 90's ஹிட்ஸ்), Devotional (பக்தி பாடல்கள்), and Local Towns (நகரங்கள் & FM).
-- Purged accidental non-Tamil radio directory entries (Mexican/Greek/Pakistani stations).
-- Live Today Mobile Data Tracker: Integrated daily data consumption monitor in the top header with automatic midnight reset.

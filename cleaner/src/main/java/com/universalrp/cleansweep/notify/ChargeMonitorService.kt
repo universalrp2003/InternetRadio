@@ -43,9 +43,8 @@ class ChargeMonitorService : Service() {
             val charging = plugged != 0 ||
                 status == BatteryManager.BATTERY_STATUS_CHARGING ||
                 status == BatteryManager.BATTERY_STATUS_FULL
-            val persistent = persistentEnabled(this@ChargeMonitorService)
-            if (!charging && !persistent) {
-                // Unplugged and persistent monitoring not opted into: stop.
+            if (!charging) {
+                // Unplugged: the notification has done its job.
                 stopSelf()
             } else {
                 update()
@@ -72,10 +71,6 @@ class ChargeMonitorService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP_SERVICE) {
-            stopSelf()
-            return START_NOT_STICKY
-        }
         update()
         // The spoken line is shared with the fallback job and de-duplicated in prefs, so a
         // plug-in can never be announced twice. On its own thread: sleeping here would block
@@ -96,8 +91,7 @@ class ChargeMonitorService : Service() {
 
     private fun update() {
         val battery = ChargeNotifier.read(this) ?: return
-        val persistent = persistentEnabled(this)
-        if (!battery.charging && !persistent) {
+        if (!battery.charging) {
             stopSelf()
             return
         }
@@ -139,18 +133,11 @@ class ChargeMonitorService : Service() {
         const val PILL_PREFS = "cleansweep_state"
         const val PILL_KEY = "status_pill"
         const val CARD_KEY = "charge_monitor"
-        const val PERSISTENT_KEY = "persistent_monitor"
-        const val ACTION_STOP_SERVICE = "com.universalrp.cleansweep.ACTION_STOP_MONITOR"
 
         /** True while the foreground service is actually running, in this process. */
         @Volatile
         var alive: Boolean = false
             private set
-
-        /** Is persistent background monitoring explicitly enabled by the user? (Defaults to false). */
-        fun persistentEnabled(context: Context): Boolean =
-            context.getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(PERSISTENT_KEY, false)
 
         /** Is the charging card wanted at all? (The user's switch in Settings.) */
         fun cardEnabled(context: Context): Boolean =
@@ -162,10 +149,9 @@ class ChargeMonitorService : Service() {
          * only when Android actually let it run — the caller then knows the card is covered.
          */
         fun start(context: Context): Boolean {
-            val persistent = persistentEnabled(context)
-            if (!cardEnabled(context) && !persistent) return false
+            if (!cardEnabled(context)) return false
             val battery = ChargeNotifier.read(context) ?: return false
-            if (!battery.charging && !persistent) {
+            if (!battery.charging) {
                 context.stopService(Intent(context, ChargeMonitorService::class.java))
                 return false
             }
