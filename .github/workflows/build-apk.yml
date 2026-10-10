@@ -326,9 +326,19 @@ jobs:
             "$AAPT" dump badging "$CLEANER_REL" > "$WORK/cleaner-release-badging.txt"
             EXPECTED_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
             EXPECTED_NAME=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
-            grep -Fq "versionCode='$EXPECTED_CODE'" "$WORK/cleaner-release-badging.txt"
-            grep -Fq "versionName='$EXPECTED_NAME'" "$WORK/cleaner-release-badging.txt"
-            grep -q "^sdkVersion:'26'$" "$WORK/cleaner-release-badging.txt"
+            cat "$WORK/cleaner-release-badging.txt"
+            echo "Expected CleanSweep: versionCode=$EXPECTED_CODE versionName=$EXPECTED_NAME minSdk=26"
+            if ! grep -Fq "versionCode='$EXPECTED_CODE'" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release versionCode differs from source"; exit 1
+            fi
+            if ! grep -Fq "versionName='$EXPECTED_NAME'" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release versionName differs from source"; exit 1
+            fi
+            # SDK releases use sdkVersion or minSdkVersion, with optional whitespace.
+            # Match the MINIMUM SDK field, not targetSdkVersion or a bare '26' elsewhere.
+            if ! grep -Eiq "(^|[[:space:]])(sdkVersion|minSdkVersion)[[:space:]]*[:=][[:space:]]*['\"]?26(['\"]|[[:space:]]|$)" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release must declare minimum SDK 26"; exit 1
+            fi
             echo "OK: CleanSweep release version matches source and still supports API 26"
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
