@@ -1,6 +1,6 @@
 # Privacy policy — CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ
 
-**Last updated: 11 October 2026** (2.40 core candidate: notification reader removed)
+**Last updated: 11 October 2026** (2.40 published: notification reader removed)
 **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
 ## The short version
@@ -16,9 +16,9 @@ uploaded to the developer, and the developer cannot see anything on your phone.
 usage statistics. There is no backend to receive them; the developer has no way to collect
 them.
 
-## Pending source changes (next APK build/publication on hold)
+## Shipped after 2.37 (now in the published 2.40)
 
-These changes are being prepared, not shipped in the verified2.37 APK:
+These changes were prepared after 2.37 and are included in the published 2.38–2.40 APKs:
 
 - A single app-private last permission-review aggregate stores the real completed
   scan time, counts and an incomplete flag. No app/package/finding identities or
@@ -44,7 +44,8 @@ These changes are being prepared, not shipped in the verified2.37 APK:
   No silent chosen-provider-to-Free cross-provider question/report transmission
   is added. A different provider is an explicit user choice.
 
-See `docs/live-guard-next-update-review.md` for the uncompiled source/test limitations.
+See `docs/live-guard-next-update-review.md` for the source/test limitations recorded for
+this batch before it shipped.
 
 ## Live Guard 2.37: news, automatic speech and launcher widget
 
@@ -228,14 +229,19 @@ These apps check GitHub published releases at most once a day on launch, with an
 
 CleanSweep headline queries use Google News RSS when web lookup is enabled. Google receives the query and connection metadata; fetched headline links open their corresponding news pages.
 
-## Live Guard 2.40 (candidate) — notification/message reading removed
+## Live Guard 2.40 (published) — notification/message reading removed
 
-Prepared, **not published and not device-tested**. Why: Google Play Protect blocked
-installation of the published APK on the owner's phone, and the leading suspect is the
+**Published 11 October 2026** (tag `v2026.10.11-4`) after the owner's recorded device
+test: with Play Protect **on**, the exact recorded APK digest installed and opened on one
+Redmi 13 5G (Play Protect: "This app looks safe - You can continue to install it";
+installer completed; About shows v2.40), following the Play Protect block of the published
+2.39 APK. One phone, one build — not Google's approval, not all-device certification and
+not proof of the 2.39 block's cause. Why the release exists: the leading suspect is the
 2.38/2.39 notification-reader capability declared in the package
 (`BIND_NOTIFICATION_LISTENER_SERVICE`, the `NotificationListenerService` intent filter).
 Removing one capability is not a proven fix. See
-[`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
+[`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md)
+and [`docs/live-guard-2.40-device-evidence.md`](docs/live-guard-2.40-device-evidence.md).
 
 - **No notification or message access exists in core Live Guard.** The reader service,
   its listener permission, its intent filter, its screen/route/links and its

@@ -1,13 +1,23 @@
 # Changelog — maintained Android apps
 
-## Live Guard 2.40/code45 — PREPARED CANDIDATE: notification/message reading removed
+## Live Guard 2.40/code45 — verified/published 11 October 2026: notification/message reading removed
 
-**Not published and not device-tested.** After Google Play Protect blocked installation of
-the published Live Guard APK ("App blocked to protect your device"), the owner chose to
-prepare the main app **without notification/message reading**. The screenshot shows no
-hash and Google gave no hash-linked verdict, so the blocked artifact is unconfirmed and the
-2.38/2.39 reader is the leading suspect, not a proven cause; removing it is not a
-guaranteed clearance.
+**Published** as stable/latest `v2026.10.11-4` after Google Play Protect blocked
+installation of the published Live Guard APK ("App blocked to protect your device") and
+the owner chose to ship the main app **without notification/message reading**. The
+screenshot shows no hash and Google gave no hash-linked verdict, so the blocked artifact
+is unconfirmed and the 2.38/2.39 reader is the leading suspect, not a proven cause; its
+removal is not a guaranteed clearance. The published APK is the exact device-tested
+build: `CleanSweep-v2.40.apk`, **13,558,548 bytes**, SHA-256
+`9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`, built in CI run
+38149080790 (job 114498516971, source `92ffd31b4cf8a4141769ca5dd1d141354807eefa`).
+With Play Protect **on**, on one Redmi 13 5G (Xiaomi HyperOS
+3.0.303.0, Android 16, build BP2A.250605.031.A3) Play Protect showed "This app looks
+safe - You can continue to install it" and Android's installer completed; About shows
+CleanSweep v2.40. The same
+phone had blocked the 2.39 APK. This is one phone, one build — not Google's approval, not
+all-device certification and not proof of the cause. Record:
+`docs/live-guard-2.40-device-evidence.md`.
 
 - Removed completely (not switched off, not hidden): `MessageReaderService`, the
   `BIND_NOTIFICATION_LISTENER_SERVICE` permission, the `NotificationListenerService`
@@ -36,14 +46,16 @@ guaranteed clearance.
   features, the verified updater with mandatory Android installer confirmation, package,
   stable certificate, API 26 support and all supported ABIs. Both languages now state the
   no-notification-reading position (931 EN/TA keys audited).
-- Gates before publication: **301 cases in each** Cleaner debug/release variant
+- Gates run before publication: **301 cases in each** Cleaner debug/release variant
   (**33 suites**), `:radio:testDebugUnitTest`, all-module APK/AAB and
   package/version/API26/non-debuggable/stable-signature/packaged-feature checks, the
   retired-capability/DEX gate and measured APK size (128MiB cap plus the existing 2.39
-  client's 50MiB bound). Publication additionally requires the owner's recorded Play
-  Protect + installer outcome for the exact APK SHA-256 in
-  `docs/live-guard-2.40-device-evidence.md`; the workflow refuses a newer CleanSweep
-  version without it. Previous release assets and CI records are never overwritten or erased.
+  client's 50MiB bound) — all green in run 38149080790. Publication additionally
+  required the owner's recorded Play Protect + installer outcome for the exact APK
+  SHA-256 in `docs/live-guard-2.40-device-evidence.md`; the workflow refuses a newer
+  CleanSweep version without it and publishes the tested bytes (a rebuild with a
+  different digest falls back to run 38149080790's `cleansweep-apk` artifact after
+  digest verification). Previous release assets and CI records are never overwritten or erased.
 
 ## Live Guard2.39/code44 — verified/published11 October2026
 

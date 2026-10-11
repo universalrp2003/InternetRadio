@@ -16,42 +16,52 @@ legacy projects, but are not part of this release or the current development foc
 
 ## ⚠️ Installation-block advisory — read before installing Live Guard
 
-Google Play Protect blocked installation of the published Live Guard APK on the owner's
-phone with **"App blocked to protect your device — App: Live Guard"**. The screenshot does
-not show which APK hash was blocked, and Google has not given a hash-linked verdict, so the
-exact blocked artifact is **unconfirmed**. The leading suspect is the opt-in
-notification-reader capability shipped in 2.38/2.39: `BIND_NOTIFICATION_LISTENER_SERVICE`
-and the `NotificationListenerService` intent filter are declared inside the package, so
-runtime OFF does not remove them.
+Google Play Protect blocked installation of the published Live Guard **2.39** APK on the
+owner's phone with **"App blocked to protect your device — App: Live Guard"**. The
+screenshot does not show which APK hash was blocked, and Google has not given a
+hash-linked verdict, so the exact blocked artifact is **unconfirmed**. The leading
+suspect is the opt-in notification-reader capability shipped in 2.38/2.39:
+`BIND_NOTIFICATION_LISTENER_SERVICE` and the `NotificationListenerService` intent filter
+are declared inside the package, so runtime OFF does not remove them.
 
-- **A 2.40 candidate with that capability completely removed exists in this repository but
-  is not published or device-tested yet.** Do not treat it as a fix: removing one
-  capability is not a guaranteed Play Protect clearance.
+- **Live Guard 2.40 with that capability completely removed is now published** (tag
+  `v2026.10.11-4`). With Play Protect **on**, the exact recorded APK digest installed and
+  opened on one Redmi 13 5G: Play Protect showed "This app looks safe - You can continue
+  to install it" and the installer completed ([device evidence](docs/live-guard-2.40-device-evidence.md)).
+  That is one phone, one build — **not** Google's approval, **not** all-device
+  certification and **not** proof that the removed reader caused the 2.39 block. Removing
+  one capability is still not a guaranteed Play Protect clearance.
 - **Do not** disable or bypass Play Protect, hide the download source, rename the package
   or change the signing identity. Those are concealment tactics, not fixes.
 - Ramesh Radio and PulseEQ are unaffected and keep their previously verified assets.
+- The published 2.39 APK stays online unchanged as history; installing it on the affected
+  phone can still be blocked — see the advisory.
 
 Full advisory, official Google references and the next steps:
 [`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
 
 ## Download — release APKs
 
-**2.39 remains the last published Live Guard release** (11 October 2026, unchanged
+**2.40 is the current published Live Guard release** (11 October 2026, unchanged
 package/signing key, minimumAPI26) — install it over your existing app rather than
-uninstalling, and see the advisory above for the known installation block. Install over
-your existing app—do not uninstall and lose settings.
-[Previous2.38](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-2)
+uninstalling, and see the advisory above. The published APK is the exact device-tested
+build (13,558,548 bytes, SHA-256 `9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`):
+on one Redmi 13 5G with Play Protect **on**, Play Protect showed "This app looks safe -
+You can continue to install it" and the installer completed
+([device evidence](docs/live-guard-2.40-device-evidence.md)) — one phone, one build, not
+Google's approval or all-device certification. Install over your existing app — do not
+uninstall and lose settings. [Previous 2.39](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-3)
+(installation may be blocked — see advisory), [2.38](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-2)
 and [2.37](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-1)
-assets remain immutable.2.39 supersedes2.38's updater-size limit; the universal
-APK is now44.6MB and fits its older client's50MiB cap.
+assets remain immutable.
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.39 *(installation may be blocked — see advisory)* | [CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.40 | [CleanSweep-v2.40.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/CleanSweep-v2.40.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-3)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-4)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -61,8 +71,8 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
-- **Live Guard 2.40 / code45 — CANDIDATE, NOT PUBLISHED.** Core Live Guard prepares the
-  complete removal of notification/message reading: the reader service, its
+- **Live Guard 2.40 / code45 — verified/published** (tag `v2026.10.11-4`). Core Live Guard
+  removes notification/message reading completely: the reader service, its
   `BIND_NOTIFICATION_LISTENER_SERVICE` permission, its `NotificationListenerService`
   intent filter, its screen/route/links, its ML Kit translation dependencies and its
   service-label resources are gone; the 2.39 sources are archived
@@ -71,15 +81,21 @@ CI artifacts are temporary build downloads, not the public release channel.
   Guard alerts, general speech, voice previews, A/B answer voices, widgets, health/
   cleanup/security/data features and the verified updater are kept. CI rejects the
   retired classes in **both** debug and release APK DEX and validates the source **and**
-  merged manifests; publishing requires the owner's recorded Play Protect + installer
-  result for the exact APK digest. [Preparation notes](docs/live-guard-2.40-core-preparation.md)
+  merged manifests. The published APK is the exact device-tested bytes — **13,558,548
+  bytes**, SHA-256 `9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`
+  (run 38149080790, source `92ffd31b…`) — and with Play Protect **on** on one Redmi 13 5G
+  Play Protect showed "This app looks safe - You can continue to install it" and the
+  installer completed ([device evidence](docs/live-guard-2.40-device-evidence.md)); that one
+  result is not Google's approval, not all-device certification and not proof of the
+  2.39 block's cause. [Release notes](releases/v2026.10.11-4.md) ·
+  [Preparation notes](docs/live-guard-2.40-core-preparation.md)
   · [Permission audit](docs/live-guard-2.40-permission-audit.md)
   · [Install-block advisory](docs/live-guard-play-protect-install-block.md).
 
 - **Live Guard2.39/code44**: reviewed feature setup with saved-OFF respect;
   Home verified in-app APK download/Android confirmation; opt-in selected app/
   sender reading, sender-only default, consented local EN/TA translation and
-  non-network speech (**that reader is removed again in the 2.40 candidate above**);
+  non-network speech (**that reader is removed in the 2.40 release above**);
   nearby official key/voice guides; exact/datable LM Arena
   source card (the December2025 feed is **not current or IQ**). Three compact
   Battery/Data/Phone widgets with genuine observed-unplug details supersede the
@@ -146,6 +162,23 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
+**Verified/published2.40/code45:** the exact device-tested `CleanSweep-v2.40.apk`
+(**13,558,548 bytes**, SHA-256
+`9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`) was built in
+[CI 38149080790](https://github.com/universalrp2003/InternetRadio/actions/runs/38149080790)
+/job114498516971 from source `92ffd31b4cf8a4141769ca5dd1d141354807eefa` with all
+required gates green (301 required cases EACH Cleaner variant, 33 suites, Radio tests,
+all-module APK/AAB, package/version/API26/non-debuggable/stable-certificate/DEX/manifest
+and both updater-size gates). Those bytes were installed on the owner's Redmi 13 5G
+(Xiaomi HyperOS 3.0.303.0, Android 16, build BP2A.250605.031.A3) with Play Protect
+**on** — Play Protect said "This app looks safe - You can continue to install it", the
+installer completed and About shows v2.40 — and they are what the device-evidence
+publication gate publishes (a rebuild with a different digest is never substituted; the
+gate falls back to run 38149080790's `cleansweep-apk` artifact bytes). Stable/latest
+**v2026.10.11-4**. That install result is one phone, one build: not Google's approval,
+not all-device certification and not proof of the 2.39 block's cause. Full record:
+[device evidence](docs/live-guard-2.40-device-evidence.md).
+
 **Verified/published2.39/code44:** [CI 38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)
 /job114482383017 succeeded in **6m00s**, immutable compiled source/tag `6790a96b591b5a3215f5f28193726f0cd607c04f`.
 Both Cleaner variants executed all **295 required cases EACH** (177 retained+118 new,
@@ -155,7 +188,7 @@ and actual updater-size gates passed. Published **2026-10-11T13:38:57Z**, stable
 **v2026.10.11-3**, with all six assets checked independently through GitHub API.
 
 This 2.39 record is kept as published history: its CI results are not erased, and its
-asset bytes are never replaced. Its notification reader is not part of the 2.40 candidate,
+asset bytes are never replaced. Its notification reader is not part of 2.40,
 and installation of 2.39 can currently be blocked by Play Protect — see the advisory above.
 
 Universal APK: **44,610,589 bytes (44.6MB /42.5MiB)**, GitHub SHA256
