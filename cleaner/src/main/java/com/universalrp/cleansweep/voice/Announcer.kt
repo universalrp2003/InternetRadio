@@ -319,7 +319,7 @@ object Announcer {
         try {
             val locale = if (request.language == AppLang.TA) TAMIL else Locale.US
             var languageResult = engine.setLanguage(locale)
-            if (languageResult < 0 && request.language == AppLang.TA) languageResult = engine.setLanguage(Locale("ta"))
+            if (languageResult < 0) languageResult = engine.setLanguage(if (request.language == AppLang.TA) Locale("ta") else Locale.ENGLISH)
             if (!VoiceDeliveryPolicy.validStatus(languageResult)) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
             val available = voices(engine, request.language)
             val network = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager

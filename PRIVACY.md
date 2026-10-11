@@ -1,6 +1,6 @@
 # Privacy policy — CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ
 
-**Last updated: 10 October 2026**
+**Last updated: 11 October 2026**
 **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
 ## The short version
@@ -15,6 +15,48 @@ uploaded to the developer, and the developer cannot see anything on your phone.
 **Nothing.** No personal data, no device identifiers, no location, no contacts, no files, no
 usage statistics. There is no backend to receive them; the developer has no way to collect
 them.
+
+## Live Guard 2.37: news, automatic speech and launcher widget
+
+The Home news strip requests public Tamil RSS/Atom feeds (publisher endpoints,
+BBC, Oneindia and Google News). Those hosts receive normal connection metadata
+such as IP address and app User-Agent, not app inventory, prompts or personal files.
+Cached headline/category/source/link/publication-time metadata is bounded to80
+items. Up to160 normalized seen-title keys are stored for the current local-day/
+timezone scope to prevent automatic repetition; an expired scope is cleared on
+next access. No saved security reminder is used as a news filler. Opening an
+article or reading it aloud is explicit. The news text is not independently verified.
+
+Assistant identity/configuration questions are answered locally from public
+provider/model labels, without a web/API request; these labels do not prove a
+particular model ran. Other online chat/web-lookup disclosures below still apply.
+
+Automatic voice diagnostics keep **one last event type, stage and timestamp** in
+app-private preferences, even when optional histories are off. Runtime status can
+show language availability and current media volume, but does not append these
+values, utterance text, audio, prompts, keys, network identifiers or engine-private
+IDs to the saved diagnostic. This is not an opt-in historical event log or an
+allowlisted diagnostic export. Engine callbacks cannot establish audible output.
+The already-saved daily brief remains separate; its save time is now recorded for
+a dated secondary widget display.
+
+Speech uses the phone's installed TTS engine. An online voice can send the text
+being spoken (including enabled alert wording) to that engine's provider under its
+privacy policy; there is no developer audio recording. Offline retry requires an
+installed voice in the same language; availability is not guaranteed. “Louder”
+changes utterance amplitude, not phone media-volume/DND settings. No new recording,
+voice upload to the developer, system-policy override or microphone permission is added.
+
+A launcher widget stores a small per-widget display-mode preference and displays
+available battery/storage/mobile measurements and their snapshot time. Queries
+are off-main and use existing permissions; widget refresh does not enable a new
+permanent monitor. Short power-event jobs respect enabled voice categories/quiet
+hours and do not enable the existing opt-in persistent service. Live listeners
+are owned by the visible activity or the already-running monitor; Android/OEM and
+force-stop restrictions still apply. Extra percentage digits require actual
+reported level/scale resolution, not estimated-capacity interpolation. Histories,
+phone-age privacy, all-current-issues report controls and app-name/network sharing
+choices are unchanged.
 
 ## Live Guard 2.36: local phone-age estimate
 
@@ -83,7 +125,8 @@ background monitoring, daily briefs, news feeds and release checks:
 | **Ramesh Radio** | To stream the radio station you chose, and to search the public Radio-Browser station directory when you tap search | The station's stream URL, and the search words you type |
 | **Internet Radio** | To stream the station you chose | The station's stream URL |
 | **Live Guard / CleanSweep — optional AI reports** | When you tap **Analyse / Ask AI about all current issues**, or enable a configured AI daily brief; your own provider/key or the selected Free option | Phone readings and findings, optional app names/packages/service IDs, available dated malware/junk results (counts and sizes, not paths), and network details only when network sharing is enabled. “See exactly what was sent” shows the full analysis text. Requests go directly to the selected AI provider or a disclosed keyless fallback, never to the developer |
-| **CleanSweep — assistant** | Online Ask or optional live web lookup | The question, phone-care context and web-search query. Do not type secrets. General chat is separate from the security report; security-report findings are not sent to web search |
+| **CleanSweep — assistant** | Online Ask or optional live web lookup; identity/settings replies are local | The question, phone-care context and web-search query. Do not type secrets. General chat is separate from the security report; security-report findings are not sent to web search |
+| **CleanSweep — Home news / TTS** | Visible Home news refreshes; explicit or enabled speech | Public feed requests and normal connection metadata to the selected feed hosts; an online TTS engine may send spoken text to its own provider. Local identity answers do not search or call AI |
 | **CleanSweep — malware hash lookup** | When you start the hash scan or check an app | APK SHA-256 hashes to MalwareBazaar and optionally VirusTotal with your key, never APK files. An AI security report may include the dated result and names only when app-name sharing is enabled |
 | **CleanSweep — speed test** | Only when you tap the speed test | Nothing but the test traffic itself |
 | **CleanSweep — public IP / ping / live quality** | Mobile & data tools, the visible Home readings panel, or enabled live status monitoring | Requests/probes to check services (Cloudflare, ipinfo.io, ipapi.co or ipify). Those services see your connection/IP metadata; no app inventory or files are sent |

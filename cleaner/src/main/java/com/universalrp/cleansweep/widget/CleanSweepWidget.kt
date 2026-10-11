@@ -75,8 +75,9 @@ class CleanSweepWidget : AppWidgetProvider() {
                 catch (e: Exception) { /* An unavailable launcher/widget must not break monitoring. */ }
                 finally {
                     // Clear ownership atomically before completion, so a tap in the final-frame race is not lost.
+                    val running = currentCoroutineContext()[Job]
                     val followUp = synchronized(CleanSweepWidget.Companion) {
-                        if (refreshJob == currentCoroutineContext()[Job]) {
+                        if (refreshJob == running) {
                             refreshJob = null; anotherFrame
                         } else false
                     }

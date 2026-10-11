@@ -16,13 +16,16 @@ legacy projects, but are not part of this release or the current development foc
 
 ## Download — release APKs
 
+2.37 links activate only after the cloud publication gates pass; verification is pending
+at this source commit. The [previous verified 2.36 release](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11) remains available.
+
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.36 | [CleanSweep-v2.36.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/CleanSweep-v2.36.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.37 | [CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-1)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -32,6 +35,17 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
+- **Live Guard / CleanSweep 2.37 candidate:** automatic voice delivery now checks
+  initialization, actual callbacks and failures, with awaited power jobs and a real-gated
+  automatic test/diagnostics. Today's dated Tamil headlines only, finite unseen rotation,
+  no publisher ribbon or old/safety-tip fallback. API/model identity is answered locally
+  without irrelevant duplicated web evidence. Larger resizable launcher widget defaults
+  to **battery% + battery-side W**, with per-widget view cycling and truthful precision;
+  current-unit guessing is removed. The Home phone-age badge, all six tools and separate
+  floating pill are retained. **177 required cases per variant** must pass cloud gates
+  before publication; this is not a physical-device/audibility/feed-availability pass.
+  [Release notes](releases/v2026.10.11-1.md) ·
+  [2.37 device plan](docs/live-guard-2.37-device-test-plan.md) · [Changelog](CHANGELOG.md).
 - **Live Guard / CleanSweep 2.36:** the **Estimated phone age**
   badge is back on the active Home dashboard, with wrapping English/Tamil text and
   a tap-to-explain basis. It is a coarse model/initial-Android-generation estimate,
@@ -75,7 +89,7 @@ not independently verified reporting.
 
 **2.36 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) for source `041f2ba`: both CleanSweep unit-test variants, all 125 required cases per variant, existing Radio tests, all-module builds and release APK/feature/version/API-26/signing gates. All six maintained-app APK/AAB assets are published; existing 2.35/2.34 assets are unchanged. This is not a physical-device test pass.
 
-See [full release notes](releases/v2026.10.11.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.11.md), [changelog](CHANGELOG.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

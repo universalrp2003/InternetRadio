@@ -103,7 +103,7 @@ class HealthWatchWorker(
         val prefs = Announcer.prefs(ctx)
 
         // Battery low — only while it is actually running on the battery.
-        if (!battery.powerConnected && battery.percent in 1 until Announcer.LOW_PERCENT) {
+        if (!battery.powerConnected && battery.percent in 0 until Announcer.LOW_PERCENT) {
             val last = prefs.getLong(Announcer.KEY_LAST_LOW, 0L)
             if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 6 * 60 * 60 * 1000L)) {
                 Announcer.speakAndWait(

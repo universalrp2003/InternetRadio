@@ -85,7 +85,7 @@ object AutomaticAlerts {
                 if (VoiceDeliveryPolicy.cooldownReady(now, prefs.getLong(key, 0), interval))
                     Announcer.speak(context, english, tamil, event, onStarted = { prefs.edit().putLong(key, System.currentTimeMillis()).apply() })
             }
-            if (!battery.powerConnected && battery.percent in 1 until Announcer.LOW_PERCENT)
+            if (!battery.powerConnected && battery.percent in 0 until Announcer.LOW_PERCENT)
                 alert(Announcer.KEY_LAST_LOW, 6 * 60 * 60 * 1000L, Announcer.Event.BATTERY_LOW,
                     "Battery low: ${battery.percent} percent. Please recharge.", "பேட்டரி குறைவு: ${battery.percent} சதவீதம். சார்ஜ் செய்யவும்.")
             if (battery.powerConnected && battery.percent >= 100)

@@ -6,7 +6,53 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.36 — current release: phone-age estimate restored
+## v2.37 — candidate: automatic speech, publication-today news and launcher widget
+
+[Install CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk)
+(launcher **Live Guard**, unchanged package/key). This link activates after cloud
+publication gates pass; verification is pending at source preparation.2.36 below
+remains the previous verified download.
+The owner's confirmed redesign is the **home-screen launcher widget**, not the floating
+pill: battery% and watts together, larger percentage, per-widget view cycling.
+
+- Main-thread TTS initialization, bounded per-request language queue, checked callbacks/
+  return values, one installed same-language offline retry, awaited short power jobs and
+  start-based cooldowns. Voice-only power jobs do not depend on card/pill switches or
+  silently enable permanent monitoring. Master/event switches, quiet hours and the
+  below90%/earliest-hour early-unplug conditions remain. Live network/battery listeners
+  require visible app or the existing enabled monitor; hourly fallback/OEM jobs are not
+  instant-delivery guarantees. Diagnostics and **Test automatic charging voice** show
+  actual queued/blocked/failed/engine states, not assumed audibility. TTS settings are guarded.
+- Real Tamil RSS/Atom publication-today items in the phone's current local timezone;
+  canonical title/URL dedup, bounded day-scoped seen state and caught-up end to rotation.
+  No publisher ribbon, old/date-missing/future/update-only news or safety-tip/synthetic
+  fallback. Metadata/links remain internal with manual review/read/open actions. Cached
+  items must still be today; failures/empty/offline states are explicit. Live feeds are unverified.
+- Local provider/model identity answers do not call AI/web search or assert that a selected
+  model ran. Other fetched evidence is relevant/canonical-deduplicated, collapsible and
+  not independently verified. AI answer-language preference stays separate from Home UI.
+- Larger resizable4×4-target home widget, % + battery-side W default, %/W/both cycle,
+  snapshot time and useful available sensor/data/storage rows. Narrow fine-scale readings
+  stack; small heights hide secondary rows. Dated saved daily brief stays a secondary review
+  item, not current safety proof. Clean/Details/Refresh intents are distinct and IO refreshes
+  coalesced; no new always-running widget refresh service.
+- Five percent decimals only if the actual battery broadcast has that resolution. Normal
+  scale100 shows integer%. Watts use two formatting decimals, not adapter accuracy. Current
+  uses Android's specifiedµA units rather than a low-value magnitude guess. Unknown/full/
+  paused/unplugged watts are unavailable, not fabricated zero. A fractional20.x/80.x sample
+  is not rounded into a falsely exact observed20→80 history interval.
+- Estimated phone age on active Home, all six2.35 improvements and history/privacy controls,
+  targeted settings, all-current-issues Ask AI and compact floating pill rules are retained.
+
+**Required verification:**177 cases per debug/release variant (all125 previous +52 new),
+existing Radio tests, all-module compilation/APK/AAB generation, packaged features,
+version2.37/code42, API26 minimum, non-debuggable releases and stable signing key.
+No local phone/emulator/toolchain, audible/OEM/launcher/feed/provider result is claimed.
+See [2.37 release notes](../releases/v2026.10.11-1.md),
+[device plan](../docs/live-guard-2.37-device-test-plan.md), [changelog](../CHANGELOG.md)
+and [privacy](../PRIVACY.md).
+
+## v2.36 — previous verified release: phone-age estimate restored
 
 [Install CleanSweep-v2.36.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/CleanSweep-v2.36.apk)
 (the launcher is **Live Guard**; package/signing key unchanged).
@@ -152,7 +198,7 @@ models and the full feature matrix remain unverified. See the
   consume the day, so the evening brief still arrives.
 - **The voice screen is readable** — `PanelCard` is a plain surface, not a column, so the six
   new cards' rows were painting on top of each other. Every card now stacks its own content.
-- **The charger works in the background** — Android 12+ refuses a foreground-service start
+- **Background charger fallback** — Android 12+ can refuse a foreground-service start
   from a broadcast receiver, which is why plugging in was silent. The plug-in broadcast now
   schedules an expedited job; the job starts the charging service when the system allows it
   and, when it does not, shows the same card (watts, current, voltage, °C, time to full) and
@@ -163,8 +209,9 @@ models and the full feature matrix remain unverified. See the
   a question, and if you cannot look something up, say so and answer anyway. The plain
   OpenAI-style request remains the fallback.
 - **A more natural voice** — the phone's own cloud voice is preferred over the robotic
-  offline one, with the offline voice as the automatic fallback if the network is out. No API
-  key, no account, and only the sentence being spoken leaves the phone.
+  offline one when supported. Offline use/retry requires installed same-language data;
+  it is not guaranteed. The engine/provider can receive the spoken text; no developer
+  recording or API key is added.
 - **Smaller fixes the phone asked for** — **jitter is now labelled next to ping**, the
   **Wi-Fi network name is never shown and never sent** to the AI, and the built APK is named
   **`CleanSweep-v2.6.apk`** instead of `cleaner-debug.apk`.
