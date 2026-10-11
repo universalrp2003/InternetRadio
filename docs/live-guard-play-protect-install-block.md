@@ -1,8 +1,16 @@
 # Live Guard — Play Protect installation block (accurate advisory)
 
-**Status: unresolved on the affected phone.** This advisory applies to the published
-Live Guard / CleanSweep **2.39 (versionCode 44)** APK and, until it is tested, to the
-unpublished 2.40 candidate.
+**Status: the 2.39 block stands; 2.40 was published after a recorded one-phone install
+result.** This advisory continues to apply to the published Live Guard / CleanSweep
+**2.39 (versionCode 44)** APK: installing it on the affected phone can still be blocked.
+Core **2.40 (versionCode 45)** removed the leading suspect completely and was published
+on 11 October 2026 as `v2026.10.11-4` from the exact device-tested bytes: with Play
+Protect **on**, the recorded APK digest showed Play Protect "This app looks safe - You
+can continue to install it" and Android's installer completed on one Redmi 13 5G
+(record: `docs/live-guard-2.40-device-evidence.md`). That is one phone, one build —
+**not** Google's approval, **not** all-device certification and **not** proof that the
+removed reader caused the 2.39 block. Everything in this advisory about honest limits,
+non-workarounds and unproven causes still applies.
 
 ## What was actually observed
 
@@ -55,8 +63,8 @@ suspect and the removal as a necessary, *not sufficient*, step.
 
 ## What 2.40 changes
 
-Core Live Guard 2.40 (versionCode 45, **candidate, not published**) removes the capability
-completely rather than switching it off:
+Core Live Guard 2.40 (versionCode 45, **published 11 October 2026**, tag `v2026.10.11-4`)
+removes the capability completely rather than switching it off:
 
 - the reader service, its permission attribute, its intent filter and its screen are gone;
 - the reader-only ML Kit translation/language-ID dependencies are gone;
@@ -89,14 +97,30 @@ Preserving the existing package and the stable signing certificate
 (`9e30f4ea…5d55`) is a deliberate choice: changing either one would be a concealment tactic
 and would also break updates for people who already installed the app.
 
+## What was observed with 2.40 (11 October 2026)
+
+Steps 1–3 below were carried out on the owner's Redmi 13 5G (Xiaomi HyperOS 3.0.303.0,
+Android 16, build BP2A.250605.031.A3), Play Protect **on**, installing the exact
+device-tested `CleanSweep-v2.40.apk` (13,558,548 bytes, SHA-256
+`9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`, run 38149080790):
+
+- Play Protect showed: **"This app looks safe - You can continue to install it"**.
+- Android's installer completed; the app opened; About shows **CleanSweep v2.40**.
+- The same phone had blocked the published 2.39 APK.
+
+Full record: `docs/live-guard-2.40-device-evidence.md`. This does **not** prove the
+reader was the cause of the 2.39 block, does not clear any other device or future build,
+and is not Google's approval. If a later build is blocked, treat it as a new case.
+
 ## What the owner should do next
 
 1. Install the **exact candidate 2.40 APK** (same bytes, recorded SHA-256) from the normal
-   download route with Play Protect **on**.
+   download route with Play Protect **on**. — *done 2026-10-11, see above.*
 2. Record what actually happens: Play Protect result, installer result, error text and
-   whether the app installs and opens.
+   whether the app installs and opens. — *done 2026-10-11, see above.*
 3. If it installs: continue the normal verification, then publish those exact bytes (the
    publication gate in `.github/workflows/build-apk.yml` refuses a different digest).
+   — *done 2026-10-11: published as `v2026.10.11-4` from those exact bytes.*
 4. If it is still blocked: **stop publication.** Do a policy/privacy review of what is
    still declared, and use Google's official channels — Play Protect feedback /
    reconsideration through the Play Console and the support routes described in Google's

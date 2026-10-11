@@ -14,12 +14,18 @@ The leading suspect is the 2.38/2.39 opt-in notification reader: its
 `BIND_NOTIFICATION_LISTENER_SERVICE` permission and `NotificationListenerService` intent
 filter are declared in the package, and runtime OFF does not remove them.
 
-- **v2.40 / code45 — CANDIDATE, NOT PUBLISHED, NOT DEVICE-TESTED.** It removes that
+- **v2.40 / code45 — verified/published** (tag `v2026.10.11-4`). It removes that
   capability completely (service, permission, intent filter, screen, route, links, ML Kit
   translation dependencies, label resources), archives the 2.39 sources as reference only,
   and retires the removed reader's private leftovers in a one-time scoped cleanup. Ordinary
   Live Guard alerts, voice previews, A/B answer voices and the verified updater stay.
-  Removing one capability is **not** a guaranteed clearance.
+  The published APK is the exact device-tested bytes (13,558,548 bytes, SHA-256
+  `9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`): on one Redmi 13 5G
+  with Play Protect **on**, Play Protect showed "This app looks safe - You can continue to
+  install it" and the installer completed
+  ([device evidence](../docs/live-guard-2.40-device-evidence.md)). One phone, one build —
+  **not** Google's approval, **not** all-device certification, **not** proof of the 2.39
+  block's cause. Removing one capability is **not** a guaranteed clearance.
 - CI rejects the retired classes in both debug and release APK DEX and validates the source
   and merged manifests; the publication step refuses a CleanSweep version newer than 2.39
   unless the owner's recorded Play Protect **and** installer result names the exact APK
@@ -31,13 +37,30 @@ filter are declared in the package, and runtime OFF does not remove them.
 · [2.40 preparation](../docs/live-guard-2.40-core-preparation.md)
 · [Retained-permission audit](../docs/live-guard-2.40-permission-audit.md)
 
-## v2.39 — last verified release (publication history, unchanged bytes)
+## v2.40 — verified/published (current release)
+
+[Install CleanSweep-v2.40.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/CleanSweep-v2.40.apk)
+(**Live Guard**, same package/key; Android 8+/API 26). This is the exact device-tested
+build: **13,558,548 bytes** (12.9MiB), SHA-256
+`9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`, built in CI run
+38149080790 (job 114498516971, source `92ffd31b4cf8a4141769ca5dd1d141354807eefa`).
+Notification/message reading is removed completely (see the advisory above). On the
+owner's Redmi 13 5G (Xiaomi HyperOS 3.0.303.0, Android 16, build BP2A.250605.031.A3)
+with Play Protect **on**, Play Protect showed "This app looks safe - You can continue to
+install it", the installer completed and About shows CleanSweep v2.40 — one phone, one
+build, not Google's approval, not all-device certification and not proof that removing
+the reader caused the different outcome ([device evidence](../docs/live-guard-2.40-device-evidence.md)).
+Install as an update over your existing app, not an uninstall. The publication gate only
+publishes these tested bytes (it falls back to run 38149080790's `cleansweep-apk`
+artifact if a rebuild's digest differs). [2.40 notes](../releases/v2026.10.11-4.md).
+
+## v2.39 — previous published release (publication history, unchanged bytes)
 
 [Install CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk)
 (**Live Guard**, same package/key; Android8+/API26). Updated44.6MB universal APK,
 allABIs retained, fits the2.38 client's50MiB limit as well as the new128MiB cap.
 Old2.38/2.37 assets are not overwritten; install as an update, not an uninstall.
-Its notification reader is gone in the 2.40 candidate, and installation of this published
+Its notification reader is removed in the published 2.40, and installation of this published
 APK can be blocked by Play Protect — see the advisory above.
 
 - Reviewed setup/optional quiet reminders respect savedOFF and Android consent.
@@ -46,7 +69,7 @@ APK can be blocked by Play Protect — see the advisory above.
   version/signer checks and mandatory Android installer confirmation. No forced
   or bypassed Play Protect/scanning claim. Companions reuse unchanged verified bytes.
 - Opt-in multi-app/sender notification reading (2.39 history — **removed in the 2.40
-  candidate above**): sender-only default, separate full-message choice, local languageID/
+  release above**): sender-only default, separate full-message choice, local languageID/
   consented EN/TA models and non-network installed voice; no message upload/history/AI-
   report/online speech fallback. Unknown translation meant sender only.
 - Official key/help text/voice guides, exact/datable LM Arena card (December2025
