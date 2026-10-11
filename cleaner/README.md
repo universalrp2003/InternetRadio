@@ -6,12 +6,12 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.37 — candidate: automatic speech, publication-today news and launcher widget
+## v2.37 — current verified release: automatic speech, publication-today news and launcher widget
 
 [Install CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk)
-(launcher **Live Guard**, unchanged package/key). This link activates after cloud
-publication gates pass; verification is pending at source preparation.2.36 below
-remains the previous verified download.
+(launcher **Live Guard**, unchanged package/key). Published stable 11 October 2026;
+2.36 below remains the previous verified download. Resize/re-add an existing launcher
+widget if its previous small dimensions clip the larger layout.
 The owner's confirmed redesign is the **home-screen launcher widget**, not the floating
 pill: battery% and watts together, larger percentage, per-widget view cycling.
 
@@ -43,13 +43,19 @@ pill: battery% and watts together, larger percentage, per-widget view cycling.
   uses Android's specifiedµA units rather than a low-value magnitude guess. Unknown/full/
   paused/unplugged watts are unavailable, not fabricated zero. A fractional20.x/80.x sample
   is not rounded into a falsely exact observed20→80 history interval.
-- Estimated phone age on active Home, all six2.35 improvements and history/privacy controls,
+- Estimated phone age on active Home, all six 2.35 improvements and history/privacy controls,
   targeted settings, all-current-issues Ask AI and compact floating pill rules are retained.
 
-**Required verification:**177 cases per debug/release variant (all125 previous +52 new),
-existing Radio tests, all-module compilation/APK/AAB generation, packaged features,
-version2.37/code42, API26 minimum, non-debuggable releases and stable signing key.
-No local phone/emulator/toolchain, audible/OEM/launcher/feed/provider result is claimed.
+**Verification passed:** [CI 38127107781](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) / job 114433649992 completed in **3m46s** for
+immutable source `325576df99dc3d56ad635e5a2d229a0e468dd7da`: **177 required cases each** Cleaner variant
+(all 125 previous + 52 new), existing Radio tests, all-module compilation/APK/AAB generation,
+packaged features, version 2.37/code 42, API26 minimum, non-debuggable releases and the
+unchanged signing certificate. Six stable assets/tag/latest/source/digests were checked;
+previous 2.36/2.35 notes/source/assets remain unchanged. Later docs commits do not change
+this compiled source. A local APK download is blocked by this sandbox's CDN access;
+signing/version/package evidence comes from successful CI inspection, and asset digests
+from GitHub's release API, not a local device test.
+No phone/emulator or new audible/OEM/launcher/feed/provider result is claimed.
 See [2.37 release notes](../releases/v2026.10.11-1.md),
 [device plan](../docs/live-guard-2.37-device-test-plan.md), [changelog](../CHANGELOG.md)
 and [privacy](../PRIVACY.md).

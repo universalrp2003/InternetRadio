@@ -16,8 +16,8 @@ legacy projects, but are not part of this release or the current development foc
 
 ## Download — release APKs
 
-2.37 links activate only after the cloud publication gates pass; verification is pending
-at this source commit. The [previous verified 2.36 release](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11) remains available.
+**2.37 verified and published** on 11 October 2026, with the unchanged project signing key.
+The [previous verified 2.36 release](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11) remains available.
 
 | App | Version | Installable APK |
 |---|---|---|
@@ -35,7 +35,7 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
-- **Live Guard / CleanSweep 2.37 candidate:** automatic voice delivery now checks
+- **Live Guard / CleanSweep 2.37:** automatic voice delivery now checks
   initialization, actual callbacks and failures, with awaited power jobs and a real-gated
   automatic test/diagnostics and owner-scoped runtime power/network/battery listeners.
   Manifest-only cold-background power delivery is not guaranteed. Today's dated Tamil headlines only, finite unseen rotation,
@@ -43,8 +43,9 @@ CI artifacts are temporary build downloads, not the public release channel.
   without irrelevant duplicated web evidence. Larger resizable launcher widget defaults
   to **battery% + battery-side W**, with per-widget view cycling and truthful precision;
   current-unit guessing is removed. The Home phone-age badge, all six tools and separate
-  floating pill are retained. **177 required cases per variant** must pass cloud gates
-  before publication; this is not a physical-device/audibility/feed-availability pass.
+  floating pill are retained. **177 required cases per variant passed** the cloud
+  build/feature/version/API26/signing gates; this is not a physical-device/audibility/
+  feed-availability pass.
   [Release notes](releases/v2026.10.11-1.md) ·
   [2.37 device plan](docs/live-guard-2.37-device-test-plan.md) · [Changelog](CHANGELOG.md).
 - **Live Guard / CleanSweep 2.36:** the **Estimated phone age**
@@ -88,9 +89,19 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
+**2.37 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) in **3m46s** for
+immutable source `325576df99dc3d56ad635e5a2d229a0e468dd7da`. Both Cleaner variants ran all 177 required cases
+(125 retained + 52 new), with existing Radio tests, all-module builds and packaged-feature/
+version/API26/non-debuggable/signing gates. All six maintained-app APK/AAB assets and
+GitHub digests were verified against the stable tag/latest/source. Previous 2.36 and 2.35
+notes, sources and all six asset IDs/sizes/timestamps/digests are unchanged. Certificate:
+`9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55`.
+No new Redmi audible/background/launcher/feed test pass is claimed; an enabled/queued or
+engine-finished voice status cannot prove sound was heard. See the device plan above.
+
 **2.36 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) for source `041f2ba`: both CleanSweep unit-test variants, all 125 required cases per variant, existing Radio tests, all-module builds and release APK/feature/version/API-26/signing gates. All six maintained-app APK/AAB assets are published; existing 2.35/2.34 assets are unchanged. This is not a physical-device test pass.
 
-See [full release notes](releases/v2026.10.11.md), [changelog](CHANGELOG.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.11-1.md), [changelog](CHANGELOG.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

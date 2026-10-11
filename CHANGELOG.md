@@ -3,10 +3,12 @@
 Detailed historical notes remain in [`releases/`](releases/). This summary does not
 claim app-store publication or physical-device certification.
 
-## CleanSweep / Live Guard 2.37 (code42) — 11 October 2026
+## CleanSweep / Live Guard 2.37 (code 42) — 11 October 2026
 
-Verification/publication pending at source preparation; see
-[release notes](releases/v2026.10.11-1.md) for the eventual exact source/run/assets.
+**Verified/published** as `v2026.10.11-1` at2026-10-11T09:08:41Z, immutable source
+`325576df99dc3d56ad635e5a2d229a0e468dd7da`. [CI 38127107781](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) passed 177 required cases
+in each Cleaner variant plus build/feature/version/API26/signing gates; six assets checked.
+See [release notes](releases/v2026.10.11-1.md) for details and physical-device limits.
 
 - Automatic TTS main-thread initialization, bounded per-language queue, callbacks,
   checked return values, awaited background events, one same-language offline retry,
@@ -24,8 +26,8 @@ Verification/publication pending at source preparation; see
   Only genuinely reported fine percent resolution; two W decimals do not certify accuracy.
 - Correct microamp API conversion without a magnitude multiplier; fractional SOC does
   not falsely certify exact20→80 charging-history boundaries.
-- Retain active Home phone-age estimate, all six2.35 tools/privacy controls, targeted
-  settings and floating pill behaviour. Add52 required cases, retaining all125 prior.
+- Retain active Home phone-age estimate, all six 2.35 tools/privacy controls, targeted
+  settings and floating pill behaviour. Add52 required cases, retaining all 125 prior.
 - Ramesh Radio1.8/PulseEQ1.2 and the two legacy modules unchanged in source.
 
 ## CleanSweep / Live Guard 2.36 (code41)

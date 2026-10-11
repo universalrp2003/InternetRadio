@@ -6,14 +6,16 @@ Android16/API36 screenshots, exact MIUI/HyperOS/custom ROM unspecified; manual s
 is audible, automatic alerts reportedly are not. Do not infer new success from old
 2.34 charging/display confirmation or a screenshot of the retained age badge.
 
-Cloud gate: **177 required cases per Cleaner variant** (125 retained + 52 new),
+Cloud verification: [run 38127107781](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) succeeded for immutable source
+`325576df99dc3d56ad635e5a2d229a0e468dd7da` in3m46s; release `v2026.10.11-1` is stable with six assets.
+The successful gate ran **177 required cases per Cleaner variant** (125 retained + 52 new),
 existing Radio tests, all-module compilation, signed APK/AAB generation, packaged
-features, version2.37/code42, minSDK26 and non-debuggable/stable-certificate checks.
+features, version 2.37/code 42, minSDK26 and non-debuggable/stable-certificate checks.
 Cloud execution is not a launcher, audible speech or OEM/background test.
 
 ## 1. Upgrade and retained features
 
-- Install the release APK over 2.36 without uninstalling; verify version2.37/code42,
+- Install the release APK over 2.36 without uninstalling; verify version 2.37/code 42,
   settings, package/signature and previously saved history/review controls remain.
 - Keep Estimated phone age on **active Home**: English/Tamil, wrapping at narrow
   widths/large fonts and tap-to-explain estimate; unsupported evidence must not gain
