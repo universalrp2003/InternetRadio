@@ -18,8 +18,8 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 43
-        versionName = "2.38"
+        versionCode = 44
+        versionName = "2.39"
     }
 
     signingConfigs {
@@ -42,6 +42,12 @@ android {
         debug {
             if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
         }
+    }
+
+    // Keep every supported ABI. Compress/extract JNI libraries instead of putting
+    // all ABI native payloads uncompressed into the universal download (82 MB in2.38).
+    packaging {
+        jniLibs { useLegacyPackaging = true }
     }
 
     buildFeatures {

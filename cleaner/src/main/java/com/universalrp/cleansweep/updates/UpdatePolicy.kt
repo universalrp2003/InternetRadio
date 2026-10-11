@@ -5,7 +5,7 @@ import java.net.URI
 object UpdatePolicy {
     const val PACKAGE = "com.universalrp.cleansweep"
     const val SIGNER_SHA256 = "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55"
-    const val MAX_APK_BYTES = 50L * 1024 * 1024
+    const val MAX_APK_BYTES = 128L * 1024 * 1024
     fun newer(candidate: String, installed: String): Boolean {
         fun parts(value: String): List<Int>? {
             if (!value.matches(Regex("[0-9]+(?:\\.[0-9]+){1,3}"))) return null

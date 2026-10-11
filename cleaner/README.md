@@ -6,9 +6,9 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.38 — authorized release candidate, verification pending
+## v2.39 — authorized release candidate, verification pending
 
-Candidate2.38/code43, `v2026.10.11-2`: owner approved build/publication on11 October2026.
+Final candidate2.39/code44, `v2026.10.11-3`: owner approved build/publication on11 October2026.
 Prepared changes: reviewed setup; private in-app APK verification/download;
 selected app/sender notification reading with local EN/TA translation and offline
 speech; key/voice guides; exact/datable LM Arena card; compact Battery/Data/Phone
@@ -20,8 +20,12 @@ large2.37 launcher widget, not the floating pill.
 EACH variant, all-module compilation and package/signing/API26/release gates must
 pass. Physical sound, OEM survival, notification privacy/redaction, local model
 quality, widget sizes and Android installation still need testing.
-[Candidate notes](../releases/v2026.10.11-2.md) ·
-[2.38 device plan](../docs/live-guard-2.38-device-test-plan.md).
+[Candidate notes](../releases/v2026.10.11-3.md) ·
+[2.38 device plan](../docs/live-guard-2.39-device-test-plan.md).
+
+2.38 was verified/published, then its82MB universal APK revealed an updater
+size limit;2.39 increases the guarded cap, compresses JNI without dropping ABIs,
+and checks actual APK size before release. Neither2.38 nor earlier assets are replaced.
 
 ## v2.37 — current verified release: automatic speech, publication-today news and launcher widget
 

@@ -37,7 +37,7 @@
   when no owner runs. Do not silently enable a persistent service to mask this limitation.
 
 - Owner explicitly lifted the source-only hold on 11 October 2026: **build the next
-  version and publish after verification**. Prepare Live Guard2.38/code43; execute
+  version and publish after verification**. Prepare Live Guard2.39/code44; execute
   all required tests/build/package/signing gates before publication. Never claim a
   failed or untested candidate is a verified released APK.
 - Use correct corresponding Tamil/English throughout Live Guard, its launcher
@@ -74,7 +74,14 @@ Until the checks succeed this remains a candidate. Browser background
 or screen-off is not a guarantee of an active Arena turn surviving suspension;
 saved files persist independently.
 
-- Current authorization: build/release **2.38 / code43**, tag **v2026.10.11-2**.
+- Current authorization: build/release **2.39 / code44**, tag **v2026.10.11-3**.
   Release only after all295 required cases EACH variant and all-module APK/AAB,
   stable signing/API26/non-debuggable/packaged-feature checks pass. Preserve the
   immutable2.37 and older assets. Device limitations must remain visible.
+
+-2.38 compiled/published successfully, then its82,630,093-byte universal APK
+  exposed the updater's50MiB cap. Do NOT replace its assets. Final2.39/code44
+  supersedes it:128MiB guarded cap, compressed/extracted JNI with allABIs retained,
+  and CI checks actual APK fits the update cap before publication. Unchanged
+  Radio/EQ companions are carried byte-for-byte from verified2.37 rather than
+  changing binaries under their unchanged versions.

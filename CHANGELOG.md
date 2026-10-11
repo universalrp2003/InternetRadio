@@ -1,10 +1,24 @@
 # Changelog — maintained Android apps
 
-## Live Guard2.38/code43 — authorized release candidate
+## Live Guard2.39/code44 — final verified-publication candidate
+
+Follow-up to the passed/published2.38: its universal APK is82,630,093 bytes,
+above the updater's50MiB limit.2.39 uses a128MiB bounded cap, compresses/extracts
+native libraries without dropping supported ABIs, and gates publication on the
+actual APK fitting the updater. Same package/certificate/API26. No changed file
+is uploaded under the existing2.38 version. Unchanged Radio/EQ assets are carried
+byte-for-byte from verified2.37; rebuilt changed-hash companions are not reused.
+All2.38 functional changes below retained; all295 required cases EACH variant,
+all-module/signature and new size gates must pass again. Device tests still pending.
+
+## Live Guard2.38/code43 — verified/published; superseded by2.39 size correction
 
 Owner now authorizes the next build and verified publication on11 October2026.
 Candidate **2.38/code43**, tag `v2026.10.11-2`; do not publish failed builds or
-replace the existing **2.37/code42** assets. Actual verification follows CI.
+replace the existing **2.37/code42** assets. CI38142967677 succeeded (5m57s); all295 required cases each variant,
+all-module builds and APK/API26/signature gates passed. Published11October2026
+13:28:59Z from `f04467580a6e6a2b98984634d6d56cc53c58f5cb`.
+Its assets stay immutable; the discovered updater-size issue is fixed in2.39.
 
 - Reviewed feature setup with saved-OFF respect, explicit access/voice/background
   choices and optional quiet aggregate reminders. No blanket permission grant.

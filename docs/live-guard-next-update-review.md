@@ -1,8 +1,10 @@
-# Live Guard2.38 — authorized release candidate review
+# Live Guard2.39 — final authorized release candidate review
 
 Owner explicitly authorized **build the next version and publish** on 11 October
-2026 after the source-only preparation. Candidate is now **2.38/code43**,
-`v2026.10.11-2`. Publish only after successful exact-source CI and release gates.
+2026 after the source-only preparation. Final candidate is **2.39/code44**,
+`v2026.10.11-3`.2.38 passed and published from `f044675…`, but its universal
+APK size exceeded the original updater cap. That published version/assets remain
+immutable;2.39 fixes the cap/packaging and adds an actual-size publication gate. Publish only after successful exact-source CI and release gates.
 Until actual success/publication are recorded, verified published2.37 remains
 `v2026.10.11-1`, compiled source `325576df99dc3d56ad635e5a2d229a0e468dd7da`.
 The source-only checkpoints below are historical preparation evidence, not a
@@ -80,7 +82,7 @@ claim that this candidate has passed compilation or physical-phone tests.
 
 ## Mandatory next authorized validation
 
-1. Authorization is now explicit. Candidate2.38/code43 uses a new release tag;
+1. Authorization is now explicit. Final candidate2.39/code44 uses a new release tag;
    never overwrite existing2.37 assets or publish a failed candidate.
 2. Compile/type-check/resource-link/lint and execute all295 required cases in **both** variants; verify existing tests/signing/API26/package and Radio/PulseEQ compatibility. Fix any newly discovered errors before publication.
 3. Redmi13 5G / Android16 actual ROM: both UI languages/font scales, today news/date boundaries, exact-product evidence/no-price state, provider timeout/cancel/model retirement/permission changes and source metadata. Manual vs automatic audible tests with two saved installed voices; callbacks/registration are not proof of heard speech or OEM survival.

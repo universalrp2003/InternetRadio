@@ -57,7 +57,7 @@ def main():
     require('CURRENT_WINDOW_MS' in source('ai/ArenaRatingPolicy.kt') and '.singleOrNull()' in source('ai/ArenaRatingPolicy.kt'), 'Rating exact/freshness policy missing')
     require('rating_q025' in source('ai/ArenaRatings.kt') and 'git/blobs' in source('ai/ArenaRatings.kt'), 'Verified official rating schema missing')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
-    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 43', 'versionName = "2.38"'):
+    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 44', 'versionName = "2.39"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
     expected = runpy.run_path(str(ROOT/'tools/verify_cleaner_regressions.py'))['EXPECTED']
     require(sum(expected.values()) == 295 and len(expected) == 32, 'Future required regression gate count differs')
@@ -67,7 +67,7 @@ def main():
     for xml in (ROOT/'cleaner/src/main').rglob('*.xml'):
         ET.parse(xml)
     print('PASS: Static manifest, private access/translation/update/rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 32 required suites / 295 prepared declarations; tests NOT executed. Release candidate2.38/code43/API26 matches.')
+    print('PASS: 32 required suites / 295 prepared declarations; tests NOT executed. Release candidate2.39/code44/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

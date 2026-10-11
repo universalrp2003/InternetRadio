@@ -352,6 +352,20 @@ jobs:
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
 
+          # Actual delivered universal APK must fit the in-app updater, not just a fake test size.
+          UPDATE_CAP_MB=$(sed -nE 's/.*MAX_APK_BYTES = ([0-9]+)L \* 1024 \* 1024.*/\1/p' cleaner/src/main/java/com/universalrp/cleansweep/updates/UpdatePolicy.kt)
+          test -n "$UPDATE_CAP_MB"
+          ACTUAL_BYTES=$(stat -c '%s' "$CLEANER_REL")
+          if [ "$ACTUAL_BYTES" -gt "$((UPDATE_CAP_MB * 1024 * 1024))" ]; then
+            echo "FAIL: release APK exceeds the in-app updater limit"; exit 1
+          fi
+          echo "OK: actual CleanSweep APK $ACTUAL_BYTES bytes fits updater cap ${UPDATE_CAP_MB}MiB"
+          # The immediate successor must also be downloadable by existing2.38 clients.
+          if [ "$ACTUAL_BYTES" -gt "$((50 * 1024 * 1024))" ]; then
+            echo "FAIL:2.39 delivery must fit2.38's50MiB updater cap"; exit 1
+          fi
+          echo "OK: actual2.39 APK also fits the previous2.38 client's50MiB cap"
+
           # The manifests are read from Gradle's plain-text merged manifests —
           # parsing the binary manifest out of the APK with `strings` is not
           # reliable. aapt2 output is used as a cross-check when available.
@@ -728,7 +742,26 @@ jobs:
           fi
           NOTES="releases/$TAG.md"
           test -f "$NOTES"
-          FILES=(cleaner/build/outputs/apk/release/*.apk radio/build/outputs/apk/release/*.apk equalizer/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab radio/build/outputs/bundle/release/*.aab equalizer/build/outputs/bundle/release/*.aab)
+          # Companions have no source change: reuse exact previous verified assets.
+          # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.
+          git fetch --depth=1 origin refs/tags/v2026.10.11-1
+          if ! git diff --quiet FETCH_HEAD "$GITHUB_SHA" -- radio equalizer shared build.gradle.kts gradle.properties settings.gradle.kts; then
+            echo "Companion sources changed: bump their versions and review publication first."; exit 1
+          fi
+          COMPANIONS="$RUNNER_TEMP/unchanged-companions"
+          mkdir -p "$COMPANIONS"
+          gh release download v2026.10.11-1 --dir "$COMPANIONS" \
+            --pattern 'Ramesh-Radio-v1.8.apk' --pattern 'Ramesh-Radio-v1.8.aab' \
+            --pattern 'PulseEQ-v1.2.apk' --pattern 'PulseEQ-v1.2.aab'
+          (
+            cd "$COMPANIONS"
+            printf '%s\n' \
+              'b1514b0c2ef9de1a947a05487ab38759e5bae051a09385590b4e77c7ea3e3cda  Ramesh-Radio-v1.8.apk' \
+              '74268c9c78b34da35283db8d476e379f56e4d51927527ec1c2af4ef46604b273  Ramesh-Radio-v1.8.aab' \
+              '3e2f5bafcb99af97e3f276621f24324743bedeb783d5d7f5210638ad65aeff30  PulseEQ-v1.2.apk' \
+              '46f7f191a3bb63646856a2a5217e7d6f34f4fc09105db7aa1d107208df1c4b20  PulseEQ-v1.2.aab' | sha256sum --check --strict
+          )
+          FILES=(cleaner/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab "$COMPANIONS"/*.apk "$COMPANIONS"/*.aab)
           for file in "${FILES[@]}"; do test -f "$file"; done
           # Draft until every asset is uploaded. Never clobber an existing published release.
           if gh release view "$TAG" >/dev/null 2>&1; then

@@ -14,16 +14,17 @@ and the device; not every model has been tested.
 AppForge (`builder`) and the original Internet Radio (`app`) are preserved as
 legacy projects, but are not part of this release or the current development focus.
 
-## Authorized next release candidate — Live Guard2.38
+## Authorized final release candidate — Live Guard2.39
 
-The owner approved build/publication on11 October2026. Candidate **2.38/code43**,
-`v2026.10.11-2`, must pass all295 required cases EACH Cleaner variant, all-module
+The owner approved build/publication on11 October2026. Final candidate **2.39/code44**,
+`v2026.10.11-3`, must pass all295 required cases EACH Cleaner variant, all-module
 compilation and APK/AAB/package/signature checks. Reviewed setup, compact widgets,
 opt-in local notification translation/offline speech and browser-free verified
-updates are prepared; actual phone delivery is not certified. Until CI/publication
-succeeds, **2.37 below is the last verified release**.
-[Candidate notes](releases/v2026.10.11-2.md) ·
-[2.38 device plan](docs/live-guard-2.38-device-test-plan.md).
+updates are prepared; actual phone delivery is not certified. 2.38 passed/published but its universal APK exceeded the updater cap;2.39
+corrects packaging/cap and adds a size gate without replacing2.38 assets.
+Until final verification,2.37 remains the previous recommended download below.
+[Candidate notes](releases/v2026.10.11-3.md) ·
+[2.38 device plan](docs/live-guard-2.39-device-test-plan.md).
 
 ## Download — release APKs
 
