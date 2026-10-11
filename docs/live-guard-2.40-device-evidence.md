@@ -13,7 +13,9 @@ lines and publishes those bytes instead of rebuilding.
 - APK file name: `CleanSweep-v2.40.apk`
 - Compiled source commit: `92ffd31b4cf8a4141769ca5dd1d141354807eefa`
 - Download route used: the normal public artifact route — the `cleansweep-apk` artifact
-  of CI run 38149080790 (digests recorded in `docs/candidate-build-digests.md`)
+  of CI run 38149080790 (that run's digest table is in its run summary and in the
+  `docs/candidate-build-digests.md` record preserved at commit `cfeec088fc23`; each later
+  CI run refreshes that file with its own build digests)
 
 TESTED-APK-SHA256: 9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869
 TESTED-RUN-ID: 38149080790
