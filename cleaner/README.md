@@ -6,7 +6,10 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.36 — phone-age restoration candidate
+## v2.36 — current release: phone-age estimate restored
+
+[Install CleanSweep-v2.36.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/CleanSweep-v2.36.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
 
 The owner's **Estimated phone age** badge is restored beside the active Home
 readings heading, not only in an unused storage card. The title/badge wrap on narrow
@@ -26,11 +29,13 @@ for its local evidence basis and limitations.
   targeted settings, fresh complete AI reports and privacy choices remain intact.
 - The owner's request to retain this Home feature is recorded in `AGENTS.md`.
 
-**Validation pending:** the new build must pass **125 required regression cases
-per CleanSweep debug/release variant** (113 retained + 12 age cases), existing Radio
+**Publication verified:** [the cloud run passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) with **125 required regression
+cases per CleanSweep debug/release variant** (113 retained + 12 age), existing Radio
 checks, all-module builds and feature/version/API-26/non-debuggable/signing gates.
-The new release will use 2.36 / code 41; 2.35/2.34 assets must not be overwritten.
-UI rendering/OEM behaviour remains a real-device check, not a JVM-test result. See
+Published **2.36 / code 41** uses immutable source `041f2ba9e84909af0ab53691f31be3810882a939`; all six maintained-app
+APK/AAB assets are uploaded, and 2.35/2.34 sources/assets were verified unchanged.
+Later documentation commits do not change that release source. UI rendering/OEM
+behaviour remains a real-device check, not a JVM-test result. See
 [the 2.36 device test plan](../docs/live-guard-2.36-device-test-plan.md).
 
 ## v2.35 — six retained improvements
@@ -97,7 +102,7 @@ not later documentation commits. No phone/emulator is
 available in the coding environment. **2.35 still needs real-device/OEM checks** in
 [the new test plan](../docs/live-guard-2.35-device-test-plan.md).
 
-## v2.34 fixes retained in 2.35
+## v2.34 fixes retained in 2.35/2.36
 
 [Previous CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk)
 (the launcher is **Live Guard**; package/signing key unchanged).

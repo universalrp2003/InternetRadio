@@ -18,11 +18,11 @@ legacy projects, but are not part of this release or the current development foc
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.35 | [CleanSweep-v2.35.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/CleanSweep-v2.35.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.36 | [CleanSweep-v2.36.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/CleanSweep-v2.36.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.10-9)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -32,18 +32,18 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
-- **Live Guard / CleanSweep 2.36 restoration candidate:** the **Estimated phone age**
+- **Live Guard / CleanSweep 2.36:** the **Estimated phone age**
   badge is back on the active Home dashboard, with wrapping English/Tamil text and
   a tap-to-explain basis. It is a coarse model/initial-Android-generation estimate,
   not this handset's manufacture, purchase or first-use date. Unsupported evidence
   stays unavailable; current Android updates, security patches and a guessed 2022
   date no longer masquerade as age. Calculation is off the UI thread and cached daily.
   All six 2.35 improvements and earlier charging/settings/AI behaviour are retained.
-  The new build requires **125 regression cases per variant** (113 retained + 12 age)
-  before publication. **New CI/release validation is pending**; the download table
-  still lists the last verified release until it passes. See the
+  The published build passed **125 required regression cases per variant**
+  (113 retained + 12 age) plus compilation/feature/version/API26/signing gates.
+  The owner's request to retain this badge is recorded with regression guards. See the
   [2.36 device test plan](docs/live-guard-2.36-device-test-plan.md).
-- **Live Guard / CleanSweep 2.35:** all six improvements: honest dated dashboard,
+- **Shipped in 2.35 and retained in 2.36:** all six improvements: honest dated dashboard,
   phone compatibility self-test with previewable safe diagnostics, opt-in local
   security changes and charging history/charts, expiry-aware data budgeting/history,
   and grounded AI-linked Do first / Optional / Leave alone review steps.
@@ -73,9 +73,9 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
-**2.35 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38069097825) for source `51d6d7f`: both CleanSweep unit-test variants, all 113 required cases per variant, all-module builds and release APK/feature/version/API-26/signing gates. This is not a physical-device test pass.
+**2.36 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) for source `041f2ba`: both CleanSweep unit-test variants, all 125 required cases per variant, existing Radio tests, all-module builds and release APK/feature/version/API-26/signing gates. All six maintained-app APK/AAB assets are published; existing 2.35/2.34 assets are unchanged. This is not a physical-device test pass.
 
-See [full release notes](releases/v2026.10.10-9.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.11.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

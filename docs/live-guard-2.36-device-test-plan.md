@@ -68,3 +68,10 @@ API26 and project-certificate gates also apply. An active-Home source check plus
 packaged badge/estimator checks guard the known removal; they do NOT prove pixels,
 accessibility, OEM rendering or exact physical handset age. Record the actual CI
 run/source only after success; do not describe these manual checks as completed.
+
+**Automated publication evidence:** [GitHub Actions 38097130627](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627)
+passed in **5m1s** on source `041f2ba9e84909af0ab53691f31be3810882a939`, including
+all 125 required cases in each Cleaner variant, existing Radio tests, all-module
+builds/APKs/AABs and feature/version/API26/non-debuggable/project-signature checks.
+Stable `v2026.10.11` (2.36/code41) has all six maintained-app assets; 2.35/2.34
+sources/assets remain unchanged. This does not mark any manual check above as passed.
