@@ -6,7 +6,7 @@ import com.google.mlkit.common.model.RemoteModelManager
 import com.google.mlkit.nl.translate.TranslateLanguage
 import com.google.mlkit.nl.translate.TranslateRemoteModel
 import com.google.mlkit.nl.languageid.LanguageIdentification
-import com.google.mlkit.nl.languageid.LanguageIdentifierOptions
+import com.google.mlkit.nl.languageid.LanguageIdentificationOptions
 import com.google.mlkit.nl.translate.Translation
 import com.google.mlkit.nl.translate.TranslatorOptions
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -34,7 +34,7 @@ object LocalMessageTranslator {
     } ?: false
     suspend fun translate(text: String, target: String): String? {
         if (text.none { it.isLetter() }) return text
-        val identifier = LanguageIdentification.getClient(LanguageIdentifierOptions.Builder().setConfidenceThreshold(0.7f).build())
+        val identifier = LanguageIdentification.getClient(LanguageIdentificationOptions.Builder().setConfidenceThreshold(0.7f).build())
         val source = try { withTimeoutOrNull(3_000) { await(identifier.identifyLanguage(text)) } } finally { identifier.close() }
         if (source !in setOf("en", "ta")) return null // Unknown/other languages do not get a guessed English reading.
         if (source == target) return text

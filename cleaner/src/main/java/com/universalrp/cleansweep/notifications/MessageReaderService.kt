@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.NotificationCompat
 import com.universalrp.cleansweep.data.AppLang
 import com.universalrp.cleansweep.data.Lang
 import com.universalrp.cleansweep.voice.Announcer
@@ -74,11 +75,10 @@ class MessageReaderService : NotificationListenerService() {
         if (notification.flags and excluded != 0 || notification.category in setOf(Notification.CATEGORY_CALL, Notification.CATEGORY_TRANSPORT,
                 Notification.CATEGORY_SERVICE, Notification.CATEGORY_PROGRESS)) return
         if (!allowed(config)) return
-        val style = Notification.MessagingStyle.extractMessagingStyleFromNotification(notification)
+        val style = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification)
         val message = style?.messages?.lastOrNull()
         if (message != null && !NotificationReadingPolicy.fresh(message.timestamp, System.currentTimeMillis())) return
-        val sender = NotificationReadingPolicy.name(if (android.os.Build.VERSION.SDK_INT >= 28) message?.senderPerson?.name?.toString()
-            else @Suppress("DEPRECATION") message?.sender?.toString()) ?: NotificationReadingPolicy.name(notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()) ?: return
+        val sender = NotificationReadingPolicy.name(message?.person?.name?.toString()) ?: NotificationReadingPolicy.name(notification.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()) ?: return
         if (NotificationReadingPolicy.aggregateTitle(sender)) return
         val appLabel = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(sbn.packageName, 0)).toString() }.getOrNull()
         if (sender.equals(appLabel, true) && message == null) return
