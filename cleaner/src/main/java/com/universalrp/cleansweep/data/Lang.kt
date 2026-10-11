@@ -707,6 +707,13 @@ object Lang {
         "Could not copy; the preview remains available." to "நகலெடுக்க முடியவில்லை; முன்பார்வையில் அறிக்கையைப் படிக்கலாம்.",
         "No share activity available; use Copy or read the preview." to "பகிரும் ஆப் கிடைக்கவில்லை; நகலெடுக்கவும் அல்லது முன்பார்வையைப் படிக்கவும்.",
         "Recording began while connected; the earlier plug time and percentage are unknown." to "சார்ஜர் இணைந்திருக்கும்போதே பதிவு தொடங்கியது; அதற்கு முந்தைய இணைப்பு நேரம் மற்றும் சதவீதம் தெரியாது.",
+        "Estimated phone age" to "போன் வயது மதிப்பீடு",
+        "Calculating age estimate…" to "வயதை மதிப்பிடுகிறது…",
+        "This is a coarse model/initial-Android-generation estimate. The reference months are approximate, not verified launch dates." to "இது போன் மாடல்/தொடக்க ஆண்ட்ராய்டு தலைமுறையின் தோராய மதிப்பீடு. மாதங்கள் தோராயமானவை; உறுதி செய்த வெளியீட்டுத் தேதிகள் அல்ல.",
+        "Android does not reveal this handset's exact manufacture, purchase or first-use date. An Android upgrade, security patch or uptime does not prove phone age." to "இந்த போனின் சரியான தயாரிப்பு, வாங்கிய அல்லது முதலில் பயன்படுத்திய தேதியை ஆண்ட்ராய்டு காட்டாது. புதிய ஆண்ட்ராய்டு பதிப்பு, பாதுகாப்பு அப்டேட் அல்லது இயங்கிய நேரம் போனின் வயதுக்குச் சான்றல்ல.",
+        "Estimate basis: model-family heuristic" to "மதிப்பீட்டின் அடிப்படை: மாடல் குடும்பம்",
+        "Estimate basis: factory Android generation" to "மதிப்பீட்டின் அடிப்படை: தொழிற்சாலையின் ஆண்ட்ராய்டு தலைமுறை",
+        "Not enough model/factory information to estimate age." to "வயதை மதிப்பிட போதுமான மாடல்/தொழிற்சாலைத் தகவல் இல்லை.",
     )
 }
 

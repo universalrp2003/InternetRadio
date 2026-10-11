@@ -12,3 +12,7 @@
 - Include an honest validation summary and identify required real-device tests.
 - Never upload selected audio for karaoke without explicit approval; online and
   offline AI separation are still unfinished (see docs/radio-karaoke-investigation.md).
+- Preserve the owner's phone-age estimate on the Home dashboard. On 2026-10-11
+  the owner explicitly requested its restoration and asked that future redesigns
+  not silently remove it. Keep it labelled as an estimate, not an exact manufacture/
+  purchase date; unsupported model/factory evidence must remain unavailable.

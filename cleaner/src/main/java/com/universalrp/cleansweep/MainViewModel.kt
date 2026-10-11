@@ -132,6 +132,7 @@ data class UiState(
     val assistantTyping: Boolean = false,
     // Phone health (battery, thermals, CPU, memory)
     val health: HealthSnapshot? = null,
+    val phoneAge: PhoneAgeEstimator.PhoneAge? = null,
     // Installed apps
     val appInventory: AppInventoryReport? = null,
     val appInventoryBusy: Boolean = false,
@@ -297,6 +298,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var speedJob: Job? = null
     private var malwareJob: Job? = null
     private var homeReadingJob: Job? = null
+    private var phoneAgeCalculatedOn: String? = null
     private var healthReadingJob: Job? = null
     private var currentSettings = ScanSettings()
     /** Screens the user actually visited, so the back button can walk them again. */
@@ -456,6 +458,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun refreshDashboardReadings() {
         if (homeReadingJob?.isActive == true) return
         homeReadingJob = viewModelScope.launch {
+            val today = java.time.LocalDate.now().toString()
+            val age = if (_state.value.phoneAge == null || phoneAgeCalculatedOn != today) {
+                withContext(Dispatchers.IO) {
+                    runCatching { PhoneAgeEstimator.estimateAge() }.getOrElse { PhoneAgeEstimator.unavailable() }
+                }.also { phoneAgeCalculatedOn = today }
+            } else _state.value.phoneAge
             val values = withContext(Dispatchers.IO) {
                 val health = runCatching { DeviceHealthReader.read(ctx) }.getOrNull()
                 health?.battery?.let { runCatching { ChargeHistoryRepo.record(ctx, it) } }
@@ -464,7 +472,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 Triple(health, network, pack)
             }
             mutate { it.copy(health = values.first ?: it.health, storage = values.first?.storage ?: it.storage,
-                liveNetworkQuality = values.second ?: it.liveNetworkQuality, dataPackInfo = values.third ?: it.dataPackInfo) }
+                liveNetworkQuality = values.second ?: it.liveNetworkQuality, dataPackInfo = values.third ?: it.dataPackInfo,
+                phoneAge = age ?: it.phoneAge) }
             rebuildChecklist()
         }
     }

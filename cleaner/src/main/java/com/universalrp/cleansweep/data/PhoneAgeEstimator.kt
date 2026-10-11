@@ -2,168 +2,154 @@ package com.universalrp.cleansweep.data
 
 import android.os.Build
 import java.util.Calendar
+import java.util.Locale
 
 /**
- * Estimates the true release/manufacture age of the phone based on device model,
- * factory first shipping API level (`ro.product.first_api_level`), SoC, and fallback build heuristics.
+ * Local, coarse model/initial-Android-generation age estimate, NOT the manufacture,
+ * purchase or first-use date of this particular handset. Firmware updates/uptime
+ * cannot establish physical phone age. Unsupported evidence remains unavailable.
  */
 object PhoneAgeEstimator {
+    enum class Basis { MODEL_FAMILY, FACTORY_ANDROID_GENERATION, UNAVAILABLE }
 
     data class PhoneAge(
         val years: Int,
         val months: Int,
-        val releaseYear: Int,
+        val releaseYear: Int, // Approximate reference year, not this unit's manufacture date.
         val isEstimated: Boolean = true,
+        val basis: Basis = Basis.MODEL_FAMILY,
     ) {
+        val available: Boolean get() = releaseYear > 0 && years >= 0 && months in 0..11 && basis != Basis.UNAVAILABLE
+
         fun displayString(isTamil: Boolean): String {
+            if (!available) return if (isTamil) "மதிப்பிடத் தகவல் இல்லை" else "Not enough information"
             return if (isTamil) {
                 when {
                     years > 0 && months > 0 -> "சுமார் $years வருடம் $months மாதம் ($releaseYear)"
                     years > 0 -> "சுமார் $years வருடம் ($releaseYear)"
                     months > 0 -> "சுமார் $months மாதம் ($releaseYear)"
-                    else -> "புதிய சாதனம் ($releaseYear)"
+                    else -> "சுமார் 0 மாதம் ($releaseYear)"
                 }
             } else {
                 when {
                     years > 0 && months > 0 -> "About $years yr $months mo ($releaseYear)"
                     years > 0 -> "About $years yr ($releaseYear)"
                     months > 0 -> "About $months mo ($releaseYear)"
-                    else -> "New device ($releaseYear)"
+                    else -> "About 0 mo ($releaseYear)"
                 }
             }
         }
     }
+
+    fun unavailable() = PhoneAge(0, 0, 0, basis = Basis.UNAVAILABLE)
 
     private fun getSystemProperty(key: String): String? = try {
         val clazz = Class.forName("android.os.SystemProperties")
         val method = clazz.getMethod("get", String::class.java)
         val value = method.invoke(null, key) as? String
-        if (value.isNullOrBlank()) null else value.trim()
-    } catch (e: Exception) {
-        null
-    }
+        value?.trim()?.takeIf { it.isNotEmpty() }
+    } catch (e: Exception) { null }
 
-    /**
-     * Determines device release year using model name lookup, factory first API level,
-     * and hardware architecture.
-     */
+    /** Best-effort local evidence only; hidden property access may be unavailable on a ROM. */
     fun estimateAge(): PhoneAge {
         val now = Calendar.getInstance()
-        val currentYear = now.get(Calendar.YEAR)
-        val currentMonth = now.get(Calendar.MONTH) + 1
+        val firstApi = getSystemProperty("ro.product.first_api_level")?.toIntOrNull()?.takeIf { it > 0 }
+            ?: getSystemProperty("ro.board.first_api_level")?.toIntOrNull()?.takeIf { it > 0 }
+        return estimateFromEvidence(
+            "${Build.MODEL} ${Build.DEVICE} ${Build.PRODUCT}", firstApi,
+            now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1,
+        )
+    }
 
+    /** Pure calculation for repeatable tests; never substitutes the CURRENT Android SDK/patch. */
+    fun estimateFromEvidence(modelText: String, firstApi: Int?, currentYear: Int, currentMonth: Int): PhoneAge {
+        if (currentYear < 2015 || currentMonth !in 1..12) return unavailable()
+        val model = modelText.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), " ").trim()
         var deviceYear = 0
-        var deviceMonth = 3 // default spring release
+        var deviceMonth = 3 // Coarse representative month, not an official launch/manufacture date.
+        var basis = Basis.MODEL_FAMILY
 
-        val model = (Build.MODEL + " " + Build.DEVICE + " " + Build.PRODUCT).lowercase()
-
-        // 1. Model keyword database
+        // Existing model-family heuristics, not a verified official launch-date database.
         when {
-            // 2026 releases
-            model.contains("s26") || model.contains("x300") || model.contains("find x9") || model.contains("poco x8") -> {
+            // 2026 approximate family reference group
+            matchesFamily(model, "s26") || matchesFamily(model, "x300") || matchesFamily(model, "find x9") || matchesFamily(model, "poco x8") -> {
                 deviceYear = 2026; deviceMonth = 2
             }
-            // 2025 releases
-            model.contains("s25") || model.contains("x200") || model.contains("find x8") || model.contains("xiaomi 15") ||
-                model.contains("redmi note 14") || model.contains("poco x7") -> {
+            // 2025 approximate family reference group
+            matchesFamily(model, "s25") || matchesFamily(model, "x200") || matchesFamily(model, "find x8") || matchesFamily(model, "xiaomi 15") ||
+                matchesFamily(model, "redmi note 14") || matchesFamily(model, "poco x7") -> {
                 deviceYear = 2025; deviceMonth = 1
             }
-            // 2024 releases
-            model.contains("s24") || model.contains("pixel 9") || model.contains("pixel 8a") || model.contains("xiaomi 14") ||
-                model.contains("redmi note 13") || model.contains("poco f6") || model.contains("poco x6") ||
-                model.contains("redmi 13") || model.contains("nord 4") || model.contains("nord ce 4") -> {
+            // 2024 approximate family reference group
+            matchesFamily(model, "s24") || matchesFamily(model, "pixel 9") || matchesFamily(model, "pixel 8a") || matchesFamily(model, "xiaomi 14") ||
+                matchesFamily(model, "redmi note 13") || matchesFamily(model, "poco f6") || matchesFamily(model, "poco x6") ||
+                matchesFamily(model, "redmi 13") || matchesFamily(model, "nord 4") || matchesFamily(model, "nord ce 4") -> {
                 deviceYear = 2024; deviceMonth = 3
             }
-            // 2023 releases
-            model.contains("s23") || model.contains("pixel 8") || model.contains("pixel 7a") || model.contains("xiaomi 13") ||
-                model.contains("redmi note 12") || model.contains("redmi 12") || model.contains("poco f5") ||
-                model.contains("poco x5") || model.contains("nord 3") || model.contains("nord ce 3") -> {
+            // 2023 approximate family reference group
+            matchesFamily(model, "s23") || matchesFamily(model, "pixel 8") || matchesFamily(model, "pixel 7a") || matchesFamily(model, "xiaomi 13") ||
+                matchesFamily(model, "redmi note 12") || matchesFamily(model, "redmi 12") || matchesFamily(model, "poco f5") ||
+                matchesFamily(model, "poco x5") || matchesFamily(model, "nord 3") || matchesFamily(model, "nord ce 3") -> {
                 deviceYear = 2023; deviceMonth = 3
             }
-            // 2022 releases
-            model.contains("s22") || model.contains("pixel 7") || model.contains("pixel 6a") || model.contains("xiaomi 12") ||
-                model.contains("redmi note 11") || model.contains("redmi 10") || model.contains("poco f4") ||
-                model.contains("poco x4") || model.contains("nord 2t") || model.contains("nord ce 2") -> {
+            // 2022 approximate family reference group
+            matchesFamily(model, "s22") || matchesFamily(model, "pixel 7") || matchesFamily(model, "pixel 6a") || matchesFamily(model, "xiaomi 12") ||
+                matchesFamily(model, "redmi note 11") || matchesFamily(model, "redmi 10") || matchesFamily(model, "poco f4") ||
+                matchesFamily(model, "poco x4") || matchesFamily(model, "nord 2t") || matchesFamily(model, "nord ce 2") -> {
                 deviceYear = 2022; deviceMonth = 3
             }
-            // 2021 releases
-            model.contains("s21") || model.contains("pixel 6") || model.contains("pixel 5a") || model.contains("xiaomi 11") ||
-                model.contains("redmi note 10") || model.contains("redmi 9") || model.contains("poco f3") ||
-                model.contains("poco x3 pro") || model.contains("nord 2") -> {
+            // 2021 approximate family reference group
+            matchesFamily(model, "s21") || matchesFamily(model, "pixel 6") || matchesFamily(model, "pixel 5a") || matchesFamily(model, "xiaomi 11") ||
+                matchesFamily(model, "redmi note 10") || matchesFamily(model, "redmi 9") || matchesFamily(model, "poco f3") ||
+                matchesFamily(model, "poco x3 pro") || matchesFamily(model, "nord 2") -> {
                 deviceYear = 2021; deviceMonth = 3
             }
-            // 2020 releases
-            model.contains("s20") || model.contains("note 20") || model.contains("pixel 5") || model.contains("pixel 4a") ||
-                model.contains("redmi note 9") || model.contains("poco x3") || model.contains("nord") -> {
+            // 2020 approximate family reference group
+            matchesFamily(model, "s20") || matchesFamily(model, "note 20") || matchesFamily(model, "pixel 5") || matchesFamily(model, "pixel 4a") ||
+                matchesFamily(model, "redmi note 9") || matchesFamily(model, "poco x3") || matchesFamily(model, "nord") -> {
                 deviceYear = 2020; deviceMonth = 4
             }
-            // 2019 releases
-            model.contains("s10") || model.contains("note 10") || model.contains("pixel 4") || model.contains("pixel 3a") ||
-                model.contains("redmi note 8") || model.contains("redmi note 7") || model.contains("oppo a3s") ||
-                model.contains("realme 3") || model.contains("realme 5") || model.contains("galaxy m30") -> {
+            // 2019 approximate family reference group
+            matchesFamily(model, "s10") || matchesFamily(model, "note 10") || matchesFamily(model, "pixel 4") || matchesFamily(model, "pixel 3a") ||
+                matchesFamily(model, "redmi note 8") || matchesFamily(model, "redmi note 7") || matchesFamily(model, "oppo a3s") ||
+                matchesFamily(model, "realme 3") || matchesFamily(model, "realme 5") || matchesFamily(model, "galaxy m30") -> {
                 deviceYear = 2019; deviceMonth = 3
             }
             // 2018 or older
-            model.contains("s9") || model.contains("note 9") || model.contains("pixel 3") || model.contains("redmi note 5") ||
-                model.contains("redmi note 6") || model.contains("pocophone f1") || model.contains("realme 1") ||
-                model.contains("realme 2") -> {
+            matchesFamily(model, "s9") || matchesFamily(model, "note 9") || matchesFamily(model, "pixel 3") || matchesFamily(model, "redmi note 5") ||
+                matchesFamily(model, "redmi note 6") || matchesFamily(model, "pocophone f1") || matchesFamily(model, "realme 1") ||
+                matchesFamily(model, "realme 2") -> {
                 deviceYear = 2018; deviceMonth = 4
             }
         }
 
-        // 2. Factory First API Level (`ro.product.first_api_level` or `ro.board.first_api_level`)
-        // This is set once in factory firmware and NEVER increases when the phone updates Android!
+        // Factory first API identifies an Android generation, NOT the handset's exact launch date.
+        // June is the existing coarse mid-year reference for this heuristic; months are approximate.
         if (deviceYear == 0) {
-            val firstApi = getSystemProperty("ro.product.first_api_level")?.toIntOrNull()
-                ?: getSystemProperty("ro.board.first_api_level")?.toIntOrNull()
-                ?: getSystemProperty("ro.vendor.build.version.sdk")?.toIntOrNull()
-
-            if (firstApi != null && firstApi > 0) {
-                deviceYear = when {
-                    firstApi >= 35 -> 2024 // Android 15 launch
-                    firstApi == 34 -> 2023 // Android 14 launch
-                    firstApi == 33 -> 2022 // Android 13 launch
-                    firstApi == 31 || firstApi == 32 -> 2021 // Android 12 / 12L
-                    firstApi == 30 -> 2020 // Android 11 launch
-                    firstApi == 29 -> 2019 // Android 10 launch
-                    firstApi == 28 -> 2018 // Android 9 launch
-                    firstApi == 26 || firstApi == 27 -> 2017 // Android 8
-                    firstApi <= 25 -> 2016
-                    else -> 2022
-                }
-                deviceMonth = 6
+            deviceYear = when (firstApi) {
+                36 -> 2025
+                35 -> 2024
+                34 -> 2023
+                33 -> 2022
+                31, 32 -> 2021
+                30 -> 2020
+                29 -> 2019
+                28 -> 2018
+                26, 27 -> 2017
+                24, 25 -> 2016
+                23 -> 2015
+                else -> 0
             }
+            deviceMonth = 6
+            basis = Basis.FACTORY_ANDROID_GENERATION
         }
-
-        // 3. Fallback: Security Patch Level or build timestamp
-        if (deviceYear == 0) {
-            val patch = try { Build.VERSION.SECURITY_PATCH } catch (e: Exception) { null }
-            if (!patch.isNullOrBlank()) {
-                val parts = patch.split("-")
-                if (parts.size >= 2) {
-                    val y = parts[0].toIntOrNull()
-                    val m = parts[1].toIntOrNull()
-                    if (y != null && y in 2015..currentYear) {
-                        deviceYear = y
-                        deviceMonth = m ?: 6
-                    }
-                }
-            }
-        }
-
-        if (deviceYear == 0) {
-            deviceYear = 2022
-            deviceMonth = 1
-        }
-
-        val totalMonths = ((currentYear - deviceYear) * 12 + (currentMonth - deviceMonth)).coerceAtLeast(0)
-        val years = totalMonths / 12
-        val months = totalMonths % 12
-
-        return PhoneAge(
-            years = years,
-            months = months,
-            releaseYear = deviceYear,
-        )
+        // Do not invent a default 2022 phone or derive age from an updated vendor SDK/security patch.
+        if (deviceYear == 0) return unavailable()
+        val totalMonths = (currentYear - deviceYear) * 12 + currentMonth - deviceMonth
+        if (totalMonths < 0) return unavailable()
+        return PhoneAge(totalMonths / 12, totalMonths % 12, deviceYear, basis = basis)
     }
+
+    private fun matchesFamily(model: String, family: String): Boolean =
+        Regex("(?:^| )" + Regex.escape(family) + "(?:$| )").containsMatchIn(model)
 }

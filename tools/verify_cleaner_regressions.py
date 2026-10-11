@@ -10,6 +10,7 @@ EXPECTED = {
     "com.universalrp.cleansweep.data.SecuritySettingsRoutesTest": 12,
     "com.universalrp.cleansweep.ai.SecurityAiPromptTest": 9,
     "com.universalrp.cleansweep.data.ReadingPolicyTest": 10,
+    "com.universalrp.cleansweep.data.PhoneAgeEstimatorTest": 12,
     "com.universalrp.cleansweep.data.CompatibilityReportTest": 4,
     "com.universalrp.cleansweep.data.SecurityHistoryPolicyTest": 12,
     "com.universalrp.cleansweep.data.ChargeHistoryPolicyTest": 14,

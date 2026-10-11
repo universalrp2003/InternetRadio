@@ -32,6 +32,17 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
 
+- **Live Guard / CleanSweep 2.36 restoration candidate:** the **Estimated phone age**
+  badge is back on the active Home dashboard, with wrapping English/Tamil text and
+  a tap-to-explain basis. It is a coarse model/initial-Android-generation estimate,
+  not this handset's manufacture, purchase or first-use date. Unsupported evidence
+  stays unavailable; current Android updates, security patches and a guessed 2022
+  date no longer masquerade as age. Calculation is off the UI thread and cached daily.
+  All six 2.35 improvements and earlier charging/settings/AI behaviour are retained.
+  The new build requires **125 regression cases per variant** (113 retained + 12 age)
+  before publication. **New CI/release validation is pending**; the download table
+  still lists the last verified release until it passes. See the
+  [2.36 device test plan](docs/live-guard-2.36-device-test-plan.md).
 - **Live Guard / CleanSweep 2.35:** all six improvements: honest dated dashboard,
   phone compatibility self-test with previewable safe diagnostics, opt-in local
   security changes and charging history/charts, expiry-aware data budgeting/history,

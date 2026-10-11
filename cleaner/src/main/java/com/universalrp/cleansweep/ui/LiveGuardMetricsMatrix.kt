@@ -2,12 +2,18 @@ package com.universalrp.cleansweep.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,6 +31,7 @@ import java.util.Date
 import java.util.Locale
 
 /** No socket/binder reads during composition; each card displays dated observed values only. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
     val storage = state.storage?.takeIf { it.total > 0 && it.free in 0..it.total }
@@ -34,7 +41,12 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
     val report = state.securityReport
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(tr("Live Guard readings"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            // Keep the owner's phone-age feature visible; wrap instead of crowding the title on small/large-font screens.
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(tr("Live Guard readings"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
+                    modifier = Modifier.align(Alignment.CenterVertically))
+                PhoneAgeBadge(state.phoneAge, state.lang == AppLang.TA)
+            }
             Text(device?.let { "Android ${it.androidVersion} / API ${it.sdk}" } ?: tr("Device not read yet"),
                 style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -66,6 +78,39 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
             }
             Text(tr("Quality uses a small active latency probe, not a speed test. Missing ping/jitter stays unknown."),
                 style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        }
+    }
+}
+
+/** Clearly separate a coarse age estimate from the measured storage/RAM/network readings. */
+@Composable
+private fun PhoneAgeBadge(age: PhoneAgeEstimator.PhoneAge?, isTamil: Boolean) {
+    var showDetails by remember { mutableStateOf(false) }
+    if (showDetails) AlertDialog(
+        onDismissRequest = { showDetails = false },
+        title = { Text(tr("Estimated phone age")) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(tr("This is a coarse model/initial-Android-generation estimate. The reference months are approximate, not verified launch dates."))
+                Text(tr("Android does not reveal this handset's exact manufacture, purchase or first-use date. An Android upgrade, security patch or uptime does not prove phone age."))
+                val basis = when (age?.basis) {
+                    PhoneAgeEstimator.Basis.MODEL_FAMILY -> "Estimate basis: model-family heuristic"
+                    PhoneAgeEstimator.Basis.FACTORY_ANDROID_GENERATION -> "Estimate basis: factory Android generation"
+                    else -> "Not enough model/factory information to estimate age."
+                }
+                Text(tr(basis), color = TextSecondary)
+            }
+        },
+        confirmButton = { TextButton(onClick = { showDetails = false }) { Text(tr("Close")) } },
+    )
+    Surface(
+        modifier = Modifier.widthIn(max = 220.dp).clickable { showDetails = true },
+        shape = RoundedCornerShape(12.dp), color = AccentCyan.copy(alpha = 0.12f),
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(tr("Estimated phone age"), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Text(age?.displayString(isTamil) ?: tr("Calculating age estimate…"),
+                style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = AccentCyan)
         }
     }
 }

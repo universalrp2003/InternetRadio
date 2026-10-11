@@ -367,15 +367,21 @@ jobs:
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
           unzip -l "$RADIO" > "$WORK/radio-entries.txt"
 
+          # The estimate must be on the ACTIVE Home layout, not only an unused storage card.
+          grep -Fq 'LiveGuardMetricsMatrix(' cleaner/src/main/java/com/universalrp/cleansweep/ui/HomeScreen.kt
+          grep -Fq 'PhoneAgeBadge(state.phoneAge' cleaner/src/main/java/com/universalrp/cleansweep/ui/LiveGuardMetricsMatrix.kt
+          grep -Fq 'tr("Estimated phone age")' cleaner/src/main/java/com/universalrp/cleansweep/ui/LiveGuardMetricsMatrix.kt
+          echo "OK: active Home matrix retains the labelled phone-age estimate"
+
           echo "=== CleanSweep v1.3 checks ==="
           if [ -n "$MERGED_CLEANER" ] && grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE" "$MERGED_CLEANER"; then
             echo "FAIL: CleanSweep still declares an Accessibility service"
             exit 1
           fi
           echo "OK: no Accessibility service in CleanSweep's manifest"
-          for symbol in ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
+          for symbol in PhoneAgeEstimator PhoneAgeBadge ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then echo "OK: $symbol is in the APK"
-            else echo "FAIL: approved history/tools feature $symbol missing from APK"; exit 1; fi
+            else echo "FAIL: approved dashboard/history/tools feature $symbol missing from APK"; exit 1; fi
           done
 
           if grep -aq "CacheCleanerService" "$WORK/cleaner.dex"; then

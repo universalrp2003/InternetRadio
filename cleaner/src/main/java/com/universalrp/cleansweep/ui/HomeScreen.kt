@@ -629,9 +629,9 @@ private fun StorageCard(state: UiState) {
                 )
                 Spacer(Modifier.height(6.dp))
                 val isTa = state.lang == AppLang.TA
-                val phoneAge = remember { com.universalrp.cleansweep.data.PhoneAgeEstimator.estimateAge() }
+                val phoneAge = state.phoneAge
                 Text(
-                    (if (isTa) "போன் வயது: " else "Est. phone age: ") + phoneAge.displayString(isTa),
+                    (if (isTa) "போன் வயது: " else "Est. phone age: ") + (phoneAge?.displayString(isTa) ?: tr("Calculating age estimate…")),
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentCyan,
                     fontWeight = FontWeight.Medium,

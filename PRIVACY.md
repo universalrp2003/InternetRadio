@@ -16,6 +16,18 @@ uploaded to the developer, and the developer cannot see anything on your phone.
 usage statistics. There is no backend to receive them; the developer has no way to collect
 them.
 
+## Live Guard 2.36: local phone-age estimate
+
+The Home badge calculates a coarse model/initial-Android-generation estimate from
+local Android model/product facts and best-effort factory API properties. The result
+is cached only in memory per local calendar day. This badge does not add a permission,
+network request, upload, saved history or monitoring service. Restoration does not
+append age results, factory API or raw device/product properties to the optional AI
+or diagnostic export; the existing diagnostic's allowlisted model/OS facts are
+unchanged. The estimate does not reveal this handset's actual manufacture, purchase
+or first-use date; unsupported evidence is unavailable, not substituted from an
+updated OS/security patch or default year.
+
 ## Live Guard 2.35: local history, diagnostics and review choices
 
 The optional **security timeline**, **charging history** and **daily mobile history**
