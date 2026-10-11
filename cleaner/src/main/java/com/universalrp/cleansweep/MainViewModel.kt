@@ -95,7 +95,7 @@ import android.os.Environment
 
 enum class Screen {
     HOME, SCANNING, RESULTS, APP_CACHE, ASSISTANT, SETTINGS, ABOUT,
-    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT, VOICE, INSIGHTS, FEATURE_SETUP, NOTIFICATION_READER
+    HEALTH, APPS, SECURITY, NETWORK, MOBILE, AI_SETTINGS, AI_REPORT, VOICE, INSIGHTS, FEATURE_SETUP
 }
 
 enum class InsightsTab { COMPATIBILITY, SECURITY_HISTORY, CHARGING_HISTORY, DATA_BUDGET, ACTION_CHECKLIST }
@@ -351,6 +351,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE)
 
     init {
+        // v2.40 core cleanup: the removed notification reader left a few private leftovers.
+        // Retire exactly those, on IO, without touching any other saved choice; the marker
+        // is written only after the cleanup completes, so an incomplete run is retried.
+        viewModelScope.launch(Dispatchers.IO) { CorePrivacyMigration.run(ctx) }
         mutate { it.copy(includeSystemApps = prefs.getBoolean("cache_include_system", true),
             securityIncludeSystemApps = prefs.getBoolean("security_include_system", true)) }
         viewModelScope.launch {
@@ -2395,7 +2399,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** English or Tamil. Applied at once: every screen re-reads the table on recomposition. */
     fun setLanguage(lang: AppLang) {
         cancelAiReport(showMessage = false); cancelDeviceIdentification(showMessage = false)
-        Announcer.cancelNotifications()
         Lang.set(lang)
         prefs.edit().putString(Lang.KEY, lang.id).apply()
         mutate { it.copy(lang = lang, message = if (lang == AppLang.TA) "மொழி: தமிழ் — ஆப் பெயர் “லைவ் கார்டு”" else "Language: English") }

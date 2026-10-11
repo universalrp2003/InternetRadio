@@ -103,7 +103,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     TextButton(onClick = { vm.navigate(Screen.FEATURE_SETUP) }) { Text(tr("Review feature setup")) }
-                    TextButton(onClick = { vm.navigate(Screen.NOTIFICATION_READER) }) { Text(tr("Selected notification reading")) }
+                    Text(tr("Core Live Guard does not read other apps' notifications or messages. It declares no notification-listener, SMS, Contacts, call-log, Accessibility or device-admin capability. Ordinary Live Guard alerts (battery, charging, storage, daily brief) remain."), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
             }
             // ------------------------------------------------------- voice (v2.4)

@@ -7,7 +7,16 @@ features. Verify Android 8+ compatibility and report limits of device testing.
 
 The Build APK workflow publishes only after unit tests, compilation and APK checks
 pass. A session-branch push whose final commit message contains `[publish]` explicitly
-requests publication; ordinary pushes remain test builds. Manual dispatch also accepts
+requests publication; ordinary pushes remain test builds.
+
+**Device-evidence gate (since the 2026-10-11 Play Protect install block).** For any
+CleanSweep version newer than 2.39/code44, publication is additionally refused unless
+`docs/live-guard-2.40-device-evidence.md` exists, records the real **Play Protect** result
+and the **installer outcome**, and contains the **exact SHA-256** of the APK being
+published. This exists so a rebuilt APK can never inherit an earlier device test. Do not
+delete or weaken that gate to publish; the advisory and next steps live in
+`docs/live-guard-play-protect-install-block.md`, and the test checklist in
+`docs/live-guard-2.40-device-test-plan.md`. Manual dispatch also accepts
 `release_tag` when the GitHub connection has Actions-write permission. Published
 assets are release APKs/AABs for the three maintained apps, never debug or legacy APKs.
 A new release is assembled as a draft, then published after uploading all assets.

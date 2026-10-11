@@ -1,6 +1,6 @@
 # Privacy policy — CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ
 
-**Last updated: 11 October 2026**
+**Last updated: 11 October 2026** (2.40 core candidate: notification reader removed)
 **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
 ## The short version
@@ -183,7 +183,10 @@ privacy policies, because the request goes from your phone directly to them.
 | Internet | CleanSweep, Ramesh Radio, Internet Radio | See the table above. |
 
 CleanSweep does **not** use an Accessibility service: it cannot read your screen and cannot tap
-inside other apps. Microphone input exists only in the assistant's voice button, which uses
+inside other apps. From **2.40** it also declares no notification-listener service, no SMS, Contacts
+or call-log access and no device-admin capability — core Live Guard cannot read other apps'
+notifications or messages. Its own alerts keep the ordinary Notifications permission above.
+Microphone input exists only in the assistant's voice button, which uses
 Android's own speech recogniser — no audio is recorded or stored, and there is no `RECORD_AUDIO`
 permission. Wi-Fi details can be displayed after the relevant permission is granted.
 In AI reports, the network-sharing switch controls sending the available SSID, local
@@ -195,8 +198,9 @@ contents, file paths, messages, contacts, credentials or GPS coordinates.
 ## Children
 
 These apps are general-purpose tools, not directed at children. Optional local features process the information
-explicitly described in this policy; private messages are not submitted to an AI
-by the notification-reading feature.
+explicitly described in this policy. Live Guard **2.40 removes notification/message reading entirely**
+(2.39 shipped it opt-in); no message content is read, stored, translated or submitted to an AI by
+the current app.
 
 ## Data retention and deletion
 
@@ -224,7 +228,36 @@ These apps check GitHub published releases at most once a day on launch, with an
 
 CleanSweep headline queries use Google News RSS when web lookup is enabled. Google receives the query and connection metadata; fetched headline links open their corresponding news pages.
 
-## Live Guard2.39 — reviewed setup, local notification reading and in-app updates
+## Live Guard 2.40 (candidate) — notification/message reading removed
+
+Prepared, **not published and not device-tested**. Why: Google Play Protect blocked
+installation of the published APK on the owner's phone, and the leading suspect is the
+2.38/2.39 notification-reader capability declared in the package
+(`BIND_NOTIFICATION_LISTENER_SERVICE`, the `NotificationListenerService` intent filter).
+Removing one capability is not a proven fix. See
+[`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
+
+- **No notification or message access exists in core Live Guard.** The reader service,
+  its listener permission, its intent filter, its screen/route/links and its
+  translation-model dependencies are removed. The app declares no notification-listener,
+  SMS, Contacts, call-log, Accessibility or device-admin capability.
+- **One-time scoped cleanup.** On an upgrade from a phone that used the reader, Live Guard
+  retires only: the reader's own preferences file (`liveguard_notification_reader`), the
+  `voice_messages` key, the reader's stale voice diagnostics **only** when their last
+  event was the reader's, and the obsolete `reader` setup-reminder id. An idempotent
+  completion marker is written only after every step succeeds, so an interrupted cleanup
+  is retried on a later start. Nothing private is logged, uploaded or reported.
+  **Not** reset: API keys, app language, A/B voice selections, voice/monitor switches
+  (including saved OFF), the data plan, charging/security histories, genuine
+  permission-review records, or any other app's data. Previously downloaded public
+  translation model files may remain unused in private app storage.
+- **Kept and unchanged:** Live Guard's own notifications (battery, charging, thermal,
+  storage, daily brief, reviewed setup reminders), general speech/voice previews and the
+  two selected answer voices, cleanup/health/security/data features, widgets and the
+  verified in-app updater. The 2.39 reader-history section below is retained only to
+  describe what that published version did; it is not current behaviour.
+
+## Live Guard 2.39 history — reviewed setup, local notification reading and in-app updates (superseded)
 
 The owner authorized build/publication. These features are now in the verified
 2.39/code44 release. Cloud tests/build/signature gates passed; this is **not a

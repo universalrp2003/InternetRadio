@@ -170,6 +170,11 @@ jobs:
       - name: Check Cleaner source contracts and localization
         run: |
           python3 tools/verify_cleaner_localization.py
+          # v2.40 core: the retired notification reader must not exist in the manifest,
+          # the production tree or the build scripts. Historical 2.39 sources stay in
+          # docs/archived-notification-reader-2.39 and are never compiled.
+          python3 tools/verify_cleaner_core_manifest.py
+          python3 -m unittest discover -s tools/tests -p 'test_verify_cleaner_core_manifest.py' -v
           python3 tools/verify_cleaner_next_update_source.py
 
       - name: Build the APKs
@@ -360,11 +365,11 @@ jobs:
             echo "FAIL: release APK exceeds the in-app updater limit"; exit 1
           fi
           echo "OK: actual CleanSweep APK $ACTUAL_BYTES bytes fits updater cap ${UPDATE_CAP_MB}MiB"
-          # The immediate successor must also be downloadable by existing2.38 clients.
+          # The immediate successor must also be downloadable by existing2.39 clients.
           if [ "$ACTUAL_BYTES" -gt "$((50 * 1024 * 1024))" ]; then
-            echo "FAIL:2.39 delivery must fit2.38's50MiB updater cap"; exit 1
+            echo "FAIL:2.40 delivery must fit2.39's50MiB updater cap"; exit 1
           fi
-          echo "OK: actual2.39 APK also fits the previous2.38 client's50MiB cap"
+          echo "OK: actual2.40 APK also fits the previous2.39 client's50MiB cap"
 
           # The manifests are read from Gradle's plain-text merged manifests —
           # parsing the binary manifest out of the APK with `strings` is not
@@ -384,6 +389,9 @@ jobs:
           # Dex checks: extract once, then grep the files (no huge pipes, so no
           # spurious SIGPIPE failures).
           unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
+          # v2.40: the release variant gets its own DEX blob so the retired reader classes
+          # are rejected in BOTH shipped variants, not only in debug.
+          unzip -p "$CLEANER_REL" "classes*.dex" > "$WORK/cleaner-release.dex"
           unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
@@ -511,8 +519,8 @@ jobs:
                         setOnlineVoice openScanner CrashLog StatusPillContent showNetworkMeter \
                         SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected \
                         AiRequestPolicy RequestBudget BoundedHttp ProductEvidencePolicy PermissionReviewStore DisplayTime \
-                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen NotificationReaderScreen MessageReaderService \
-                        LocalMessageTranslator NotificationReaderPrefs LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
+                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen CorePrivacyMigrationPolicy \
+                        CorePrivacyMigration LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
                         LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
                         ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
@@ -522,6 +530,26 @@ jobs:
               exit 1
             fi
           done
+
+          echo "=== v2.40 retired notification-reader gate (debug AND release) ==="
+          # Removing a manifest line is not enough: neither shipped variant may contain
+          # the retired reader classes, and the archive/test-only copies must never
+          # leak into production.
+          for retired in MessageReaderService LocalMessageTranslator NotificationReaderPrefs \
+                         NotificationReaderScreen NotificationReadingPolicy NotificationReaderConfig; do
+            if grep -aq "$retired" "$WORK/cleaner.dex"; then
+              echo "FAIL: retired reader class $retired is compiled into the DEBUG APK"
+              exit 1
+            fi
+            if grep -aq "$retired" "$WORK/cleaner-release.dex"; then
+              echo "FAIL: retired reader class $retired is compiled into the RELEASE APK"
+              exit 1
+            fi
+            echo "OK: $retired is absent from both shipped APK variants"
+          done
+          python3 tools/verify_cleaner_core_manifest.py --manifest "$MERGED_CLEANER" --skip-source \
+            --dex "$WORK/cleaner.dex" --dex "$WORK/cleaner-release.dex" || exit 1
+          echo "OK: merged CleanSweep manifest and both DEX blobs declare no retired capability"
 
           echo "=== AppForge checks ==="
           if grep -aq "AppForge" "$WORK/builder.dex"; then
@@ -742,6 +770,43 @@ jobs:
           fi
           NOTES="releases/$TAG.md"
           test -f "$NOTES"
+
+          # ---------------------------------------------------------------------------
+          # v2.40 device-evidence gate. DELIBERATE: do not delete this block to bypass it.
+          #
+          # A CleanSweep candidate newer than the published 2.39/code44 may only be
+          # published from the SAME APK bytes that were actually installed on the owner's
+          # phone with Play Protect ON. GitHub publication is not Play Protect approval and
+          # not all-device certification, and a rebuild produces a different digest that no
+          # device test covered. The evidence file must quote this exact APK SHA-256 plus the
+          # observed Play Protect and installer result. Without it, publication stops here.
+          # ---------------------------------------------------------------------------
+          CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk | head -1)
+          CLEANER_VERSION=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          CLEANER_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
+          if [ "${CLEANER_CODE:-0}" -gt 44 ]; then
+            EVIDENCE="docs/live-guard-${CLEANER_VERSION}-device-evidence.md"
+            if [ ! -f "$EVIDENCE" ]; then
+              echo "FAIL: CleanSweep $CLEANER_VERSION (code $CLEANER_CODE) has no recorded physical-device evidence."
+              echo "       Expected: $EVIDENCE"
+              echo "       Install the exact candidate APK from the normal download route with Play Protect ON,"
+              echo "       record the real outcome, and commit that record before publishing. Nothing was published."
+              exit 1
+            fi
+            CANDIDATE_SHA=$(sha256sum "$CLEANER_REL" | awk '{print $1}')
+            if ! grep -Fq "$CANDIDATE_SHA" "$EVIDENCE"; then
+              echo "FAIL: $EVIDENCE does not cover this exact APK digest."
+              echo "       candidate APK: $CLEANER_REL"
+              echo "       candidate SHA-256: $CANDIDATE_SHA"
+              echo "       A rebuilt APK has different bytes; the evidence must name this digest. Nothing was published."
+              exit 1
+            fi
+            if ! grep -Eqi "play protect" "$EVIDENCE" || ! grep -Eqi "installer|installation outcome" "$EVIDENCE"; then
+              echo "FAIL: $EVIDENCE must record both the actual Play Protect result and the installer outcome."
+              exit 1
+            fi
+            echo "OK: device evidence in $EVIDENCE covers this exact CleanSweep $CLEANER_VERSION APK ($CANDIDATE_SHA)"
+          fi
           # Companions have no source change: reuse exact previous verified assets.
           # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.
           git fetch --depth=1 origin refs/tags/v2026.10.11-1

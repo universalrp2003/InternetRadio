@@ -6,22 +6,49 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.39 — current verified release
+## ⚠️ Play Protect blocked installation of the published APK
+
+**"App blocked to protect your device — App: Live Guard."** The screenshot shows no hash,
+so the blocked artifact is unconfirmed, and Google has not given a hash-linked verdict.
+The leading suspect is the 2.38/2.39 opt-in notification reader: its
+`BIND_NOTIFICATION_LISTENER_SERVICE` permission and `NotificationListenerService` intent
+filter are declared in the package, and runtime OFF does not remove them.
+
+- **v2.40 / code45 — CANDIDATE, NOT PUBLISHED, NOT DEVICE-TESTED.** It removes that
+  capability completely (service, permission, intent filter, screen, route, links, ML Kit
+  translation dependencies, label resources), archives the 2.39 sources as reference only,
+  and retires the removed reader's private leftovers in a one-time scoped cleanup. Ordinary
+  Live Guard alerts, voice previews, A/B answer voices and the verified updater stay.
+  Removing one capability is **not** a guaranteed clearance.
+- CI rejects the retired classes in both debug and release APK DEX and validates the source
+  and merged manifests; the publication step refuses a CleanSweep version newer than 2.39
+  unless the owner's recorded Play Protect **and** installer result names the exact APK
+  SHA-256 (`docs/live-guard-2.40-device-evidence.md`).
+- **Never** disable Play Protect, conceal the source, rename the package or change the
+  signing identity to get around a block.
+
+[Install-block advisory and official Google references](../docs/live-guard-play-protect-install-block.md)
+· [2.40 preparation](../docs/live-guard-2.40-core-preparation.md)
+· [Retained-permission audit](../docs/live-guard-2.40-permission-audit.md)
+
+## v2.39 — last verified release (publication history, unchanged bytes)
 
 [Install CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk)
 (**Live Guard**, same package/key; Android8+/API26). Updated44.6MB universal APK,
 allABIs retained, fits the2.38 client's50MiB limit as well as the new128MiB cap.
 Old2.38/2.37 assets are not overwritten; install as an update, not an uninstall.
+Its notification reader is gone in the 2.40 candidate, and installation of this published
+APK can be blocked by Play Protect — see the advisory above.
 
 - Reviewed setup/optional quiet reminders respect savedOFF and Android consent.
   No silent permanent monitor, private-message access or permission enablement.
 - Home verified browser-free APK download with progress/cancel, SHA/package/
   version/signer checks and mandatory Android installer confirmation. No forced
   or bypassed Play Protect/scanning claim. Companions reuse unchanged verified bytes.
-- Opt-in multi-app/sender notification reading: sender-only default, separate
-  full-message choice, local languageID/consented EN/TA models and non-network
-  installed voice; no message upload/history/AI-report/online speech fallback.
-  Unknown translation means sender only. Lock/DND/volume/OEM/redaction gates remain.
+- Opt-in multi-app/sender notification reading (2.39 history — **removed in the 2.40
+  candidate above**): sender-only default, separate full-message choice, local languageID/
+  consented EN/TA models and non-network installed voice; no message upload/history/AI-
+  report/online speech fallback. Unknown translation meant sender only.
 - Official key/help text/voice guides, exact/datable LM Arena card (December2025
   feed is not a current score, IQ or execution proof), three compact2×2-target
   Battery/Data/Phone widgets with genuine observed-unplug time/% and metered or

@@ -144,11 +144,14 @@
           is connected but delivering nothing. Each one is behind its own switch and behind
           quiet hours; the user can turn every one of them off.
         -->
-        <!-- Opt-in selective reading. Android alone can grant broad notification access. -->
-        <service android:name=".notifications.MessageReaderService" android:exported="true"
-            android:label="@string/notification_reader_label" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
-            <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
-        </service>
+        <!--
+            v2.40: no NotificationListenerService. Live Guard's core does not read other
+            apps' notifications or messages and declares no
+            BIND_NOTIFICATION_LISTENER_SERVICE capability, no SMS/Contacts/Call-log
+            permission, no Accessibility service and no device-admin binding. The retired
+            2.39 reader sources are archived under docs/archived-notification-reader-2.39
+            and are NOT part of any Android source set.
+        -->
         <provider android:name="androidx.core.content.FileProvider" android:authorities="${applicationId}.updates.files"
             android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/liveguard_update_paths" />

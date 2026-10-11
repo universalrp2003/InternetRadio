@@ -54,7 +54,6 @@ object Announcer {
     const val KEY_CHARGE = "voice_charging"
     const val KEY_DAILY = "voice_daily"
     const val KEY_ANSWERS = "voice_answers"
-    const val KEY_MESSAGES = "voice_messages"
     const val KEY_STORAGE = "voice_storage"
     const val KEY_UNPLUGGED = "voice_unplugged"
     const val KEY_UNPLUGGED_START = "voice_unplug_start"
@@ -107,7 +106,6 @@ object Announcer {
         CHARGING(KEY_CHARGE),
         DAILY(KEY_DAILY),
         ANSWER(KEY_ANSWERS),
-        MESSAGES(KEY_MESSAGES),
         STORAGE_LOW(KEY_STORAGE),
         UNPLUGGED_EARLY(KEY_UNPLUGGED),
         NETWORK_CHANGE(KEY_NET_CHANGE),
@@ -130,7 +128,7 @@ object Announcer {
     private val automaticAnswerIds = linkedSetOf<String>()
     private data class Request(val english: String?, val tamil: String?, val wanted: AppLang?, val event: Event,
         val manual: Boolean, val done: kotlinx.coroutines.CompletableDeferred<Boolean>? = null, val onStarted: (() -> Unit)? = null,
-        val requestKey: String? = null, val preferredVoice: String? = null, val forceOffline: Boolean = false, val startGuard: (() -> Boolean)? = null) {
+        val requestKey: String? = null, val preferredVoice: String? = null) {
         val id = java.util.UUID.randomUUID().toString()
         val key = requestKey ?: (event.name + ":" + (tamil ?: english).orEmpty())
         var language = wanted ?: AppLang.TA
@@ -173,10 +171,10 @@ object Announcer {
         if (!on) stop()
     }
 
-    /** Per-event switch. Everything defaults to on except nothing — quiet hours do the rest. */
+    /** Per-event switch. Everything defaults to on; quiet hours do the rest. */
     fun allows(context: Context, event: Event): Boolean {
         val key = event.key ?: return true
-        return prefs(context).getBoolean(key, event != Event.MESSAGES)
+        return prefs(context).getBoolean(key, true)
     }
 
     fun setAllows(context: Context, event: Event, on: Boolean) {
@@ -254,16 +252,6 @@ object Announcer {
         return submit(context, Request(if (wanted == AppLang.EN) text else null,
             if (wanted == AppLang.TA) text else null, wanted, Event.TEST, true))
     }
-
-    /** Private notification text always uses a reported non-network voice in the selected app language. */
-    fun speakNotification(context: Context, text: String, language: AppLang, key: String, startGuard: () -> Boolean): Boolean =
-        submit(context, Request(if (language == AppLang.EN) shorten(text) else null, if (language == AppLang.TA) shorten(text) else null,
-            language, Event.MESSAGES, false, requestKey = key, forceOffline = true, startGuard = startGuard))
-
-    fun cancelNotifications() { main.post {
-        pending.filter { it.event == Event.MESSAGES }.forEach { pending.remove(it); it.done?.complete(false) }
-        if (active?.event == Event.MESSAGES) { runCatching { tts?.stop() }; finish(VoiceDeliveryPolicy.Stage.CANCELLED, false) }
-    } }
 
     /** One selected voice per answer. Automatic duplicates and cross-voice retries are forbidden. */
     fun speakAnswer(context: Context, text: String, language: AppLang, slot: Int, answerId: String, manual: Boolean): Boolean {
@@ -387,7 +375,7 @@ object Announcer {
         request.language = request.wanted ?: if (tamilVoice && request.tamil.orEmpty().any { it.code in 0x0B80..0x0BFF }) AppLang.TA else AppLang.EN
         request.text = if (request.language == AppLang.TA) request.tamil.orEmpty() else request.english.orEmpty()
         if (request.text.isBlank()) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
-        startUtterance(context, request, offline = request.forceOffline)
+        startUtterance(context, request, offline = false)
     }
 
     private fun voices(engine: TextToSpeech, language: AppLang): List<Voice> = runCatching {
@@ -396,9 +384,6 @@ object Announcer {
     }.getOrDefault(emptyList())
 
     private fun startUtterance(context: Context, request: Request, offline: Boolean) {
-        if (request.startGuard != null && !runCatching { request.startGuard.invoke() }.getOrDefault(false)) {
-            finish(VoiceDeliveryPolicy.Stage.CANCELLED, false); return
-        }
         val engine = tts ?: run { finish(VoiceDeliveryPolicy.Stage.NO_ENGINE, false); return }
         try {
             val locale = if (request.language == AppLang.TA) TAMIL else Locale.US

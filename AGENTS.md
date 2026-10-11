@@ -40,6 +40,20 @@
   version and publish after verification**. Prepare Live Guard2.39/code44; execute
   all required tests/build/package/signing gates before publication. Never claim a
   failed or untested candidate is a verified released APK.
+- **2026-10-11 owner decision (option 1, already answered — do not re-ask):** after
+  Play Protect blocked installation, prepare the main Live Guard app **without
+  notification/message reading**. Remove the capability from production completely —
+  never merely switch it off, hide the screen, disable a component or leave a hidden
+  activation path. Keep every other feature. The 2.39 reader sources are archived in
+  `docs/archived-notification-reader-2.39/` as reference only: not a Gradle source
+  set, not a flavor/module, never distributed as a workaround. Any future redesign
+  needs a fresh owner decision plus policy and device review.
+- Do **not** disable or bypass Play Protect, conceal the installation source, rename
+  the package or change the signing identity, and do not call the removal of one
+  capability a guaranteed fix. The blocked APK hash is unconfirmed from the
+  screenshot. Update the public installation advisory
+  (`docs/live-guard-play-protect-install-block.md`) before recommending any APK, and
+  never erase historical CI results or replace older published asset bytes.
 - Use correct corresponding Tamil/English throughout Live Guard, its launcher
   widget and notification text; notifications follow the selected app language.
   Human-visible clock times use **12-hour AM/PM**; preserve machine/feed parsing formats.
@@ -65,8 +79,9 @@ Only real observed unplug events may create its timestamp/level. System app
 inclusion is review/scope, never automatic selection or deletion.
 
 New source-only helpers/screens/services and dependency declarations are NOT
-compiled/verified APK behavior. Future gate: **295 required cases EACH variant,
-32 suites**; declaration counts are not executed tests. See
+compiled/verified APK behavior. Current gate: **301 required cases EACH variant,
+33 suites** (the retired reader's 12 historical cases now run from test sources,
+plus 6 core-cleanup cases); declaration counts are not executed tests. See
 `docs/live-guard-next-update-review.md` and run the static contracts with
 `python3 tools/verify_cleaner_next_update_source.py` before any authorized build.
 Owner has now explicitly authorized commit/push/CI/build and verified publication.
@@ -74,10 +89,19 @@ Until the checks succeed this remains a candidate. Browser background
 or screen-off is not a guarantee of an active Arena turn surviving suspension;
 saved files persist independently.
 
-- Current authorization: build/release **2.39 / code44**, tag **v2026.10.11-3**.
-  Release only after all295 required cases EACH variant and all-module APK/AAB,
-  stable signing/API26/non-debuggable/packaged-feature checks pass. Preserve the
-  immutable2.37 and older assets. Device limitations must remain visible.
+- Current authorization: build the **2.40 / code45 core candidate** (notification
+  reader removed) and run every gate — but **publishing 2.40+ is gated**: the tag
+  release step refuses a CleanSweep version newer than 2.39 unless
+  `docs/live-guard-2.40-device-evidence.md` records the owner's real Play Protect
+  and installer outcome **and quotes the exact candidate APK SHA-256**. Do not
+  delete that gate, and never publish a rebuilt digest as if the device test covered
+  it. Required gate: **301 cases EACH Cleaner debug/release variant, 33 suites**,
+  `:radio:testDebugUnitTest`, all-module APK/AAB, package/version/API26/
+  non-debuggable/stable-certificate/packaged-feature/actual-size checks and the
+  retired-capability source+merged-manifest+debug/release-DEX rejection. The last
+  published release stays **2.39 / code44, tag v2026.10.11-3**; its assets and CI
+  records are immutable. Preserve the2.37 and older assets too. Device limitations
+  must remain visible.
 
 -2.38 compiled/published successfully, then its82,630,093-byte universal APK
   exposed the updater's50MiB cap. Do NOT replace its assets. Final2.39/code44

@@ -45,7 +45,17 @@ are historical, not a substitute for actual device validation.
 - FileProvider exposes only the private verified-update cache directory. Unknown-apps access is explained and user-controlled. Android installer confirmation/signature verification and Play Protect/scanning decisions belong to Android; cannot be silently bypassed or forced.
 - Official release notes remain identified publisher text, not claimed translated/verified instructions. Metadata eligibility is not a claim that an APK has already downloaded/passed its checks.
 
-### Selective notification reader
+### Selective notification reader — REMOVED in the 2.40 core candidate
+
+> **Status change (2026-10-11).** Play Protect blocked installation of the published APK
+> and the owner chose option 1: prepare the main app **without** notification/message
+> reading. Everything below describes the 2.38/2.39 behaviour and the review that produced
+> it; it is history, not current capability. The 2.40 candidate removes the service,
+> binding permission, intent filter, screen/route/links, ML Kit dependencies and
+> service-label resources, and archives the sources under
+> `docs/archived-notification-reader-2.39/` (reference only). Do not restore any part of it
+> without a fresh owner decision plus policy and device review — see
+> [`live-guard-play-protect-install-block.md`](live-guard-play-protect-install-block.md).
 
 - New Android notification listener and explicit app/sender multi-selection. Per-app sender-only default and full-message switch; app-scoped sender-name filter can select multiple names, including manually entered names. Empty sender selection reads nobody.
 - Names supplied by notifications are **not verified contact identities**. No Contacts permission or notification/message history. Selected sender choices persist privately; candidate names/fingerprints remain bounded session memory. Discards unselected apps before examining their content.
