@@ -14,5 +14,4 @@
     <string name="widget_phone_label">லைவ் கார்டு • போன்</string>
     <string name="widget_data_description">சிறிய பேட்டரி மற்றும் மொபைல் பயன்பாடு; வைஃபை அல்லது பயனர் தேர்ந்தெடுத்த வரம்பற்ற 5G-இல் போன் விவரங்கள்</string>
     <string name="widget_phone_description">சிறிய பேட்டரி, வெப்பம், காலி சேமிப்பு மற்றும் கவனித்த கடைசி சார்ஜர் நீக்கம்</string>
-    <string name="notification_reader_label">லைவ் கார்டு • தேர்ந்தெடுத்த அறிவிப்பு வாசிப்பு</string>
 </resources>

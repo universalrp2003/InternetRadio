@@ -170,6 +170,11 @@ jobs:
       - name: Check Cleaner source contracts and localization
         run: |
           python3 tools/verify_cleaner_localization.py
+          # v2.40 core: the retired notification reader must not exist in the manifest,
+          # the production tree or the build scripts. Historical 2.39 sources stay in
+          # docs/archived-notification-reader-2.39 and are never compiled.
+          python3 tools/verify_cleaner_core_manifest.py
+          python3 -m unittest discover -s tools/tests -p 'test_verify_cleaner_core_manifest.py' -v
           python3 tools/verify_cleaner_next_update_source.py
 
       - name: Build the APKs
@@ -360,11 +365,11 @@ jobs:
             echo "FAIL: release APK exceeds the in-app updater limit"; exit 1
           fi
           echo "OK: actual CleanSweep APK $ACTUAL_BYTES bytes fits updater cap ${UPDATE_CAP_MB}MiB"
-          # The immediate successor must also be downloadable by existing2.38 clients.
+          # The immediate successor must also be downloadable by existing2.39 clients.
           if [ "$ACTUAL_BYTES" -gt "$((50 * 1024 * 1024))" ]; then
-            echo "FAIL:2.39 delivery must fit2.38's50MiB updater cap"; exit 1
+            echo "FAIL:2.40 delivery must fit2.39's50MiB updater cap"; exit 1
           fi
-          echo "OK: actual2.39 APK also fits the previous2.38 client's50MiB cap"
+          echo "OK: actual2.40 APK also fits the previous2.39 client's50MiB cap"
 
           # The manifests are read from Gradle's plain-text merged manifests —
           # parsing the binary manifest out of the APK with `strings` is not
@@ -384,6 +389,9 @@ jobs:
           # Dex checks: extract once, then grep the files (no huge pipes, so no
           # spurious SIGPIPE failures).
           unzip -p "$CLEANER" "classes*.dex" > "$WORK/cleaner.dex"
+          # v2.40: the release variant gets its own DEX blob so the retired reader classes
+          # are rejected in BOTH shipped variants, not only in debug.
+          unzip -p "$CLEANER_REL" "classes*.dex" > "$WORK/cleaner-release.dex"
           unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
@@ -511,8 +519,8 @@ jobs:
                         setOnlineVoice openScanner CrashLog StatusPillContent showNetworkMeter \
                         SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected \
                         AiRequestPolicy RequestBudget BoundedHttp ProductEvidencePolicy PermissionReviewStore DisplayTime \
-                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen NotificationReaderScreen MessageReaderService \
-                        LocalMessageTranslator NotificationReaderPrefs LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
+                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen CorePrivacyMigrationPolicy \
+                        CorePrivacyMigration LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
                         LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
                         ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
@@ -522,6 +530,26 @@ jobs:
               exit 1
             fi
           done
+
+          echo "=== v2.40 retired notification-reader gate (debug AND release) ==="
+          # Removing a manifest line is not enough: neither shipped variant may contain
+          # the retired reader classes, and the archive/test-only copies must never
+          # leak into production.
+          for retired in MessageReaderService LocalMessageTranslator NotificationReaderPrefs \
+                         NotificationReaderScreen NotificationReadingPolicy NotificationReaderConfig; do
+            if grep -aq "$retired" "$WORK/cleaner.dex"; then
+              echo "FAIL: retired reader class $retired is compiled into the DEBUG APK"
+              exit 1
+            fi
+            if grep -aq "$retired" "$WORK/cleaner-release.dex"; then
+              echo "FAIL: retired reader class $retired is compiled into the RELEASE APK"
+              exit 1
+            fi
+            echo "OK: $retired is absent from both shipped APK variants"
+          done
+          python3 tools/verify_cleaner_core_manifest.py --manifest "$MERGED_CLEANER" --skip-source \
+            --dex "$WORK/cleaner.dex" --dex "$WORK/cleaner-release.dex" || exit 1
+          echo "OK: merged CleanSweep manifest and both DEX blobs declare no retired capability"
 
           echo "=== AppForge checks ==="
           if grep -aq "AppForge" "$WORK/builder.dex"; then
@@ -717,6 +745,61 @@ jobs:
           echo "=== APK file names ==="
           ls -la */build/outputs/apk/*/*.apk
 
+      # Candidate evidence: the exact bytes this run produced, so a device test can be tied to
+      # one APK digest instead of "roughly this version". The record is committed only on
+      # candidate branches; a published release carries GitHub's own asset digests.
+      - name: Record candidate APK digests
+        run: |
+          set -e
+          RECORD=docs/candidate-build-digests.md
+          {
+            echo "# Candidate build digests"
+            echo ""
+            echo "- Workflow run: ${{ github.run_id }}"
+            echo "- Source commit: $GITHUB_SHA"
+            echo "- Ref: $GITHUB_REF"
+            echo "- Built (UTC): $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "- Note: candidate build output only. GitHub publication is not Play Protect approval."
+            echo ""
+            echo "| File | Bytes | SHA-256 |"
+            echo "| --- | --- | --- |"
+          } > "$RECORD"
+          {
+            echo "## Candidate APK digests (run ${{ github.run_id }})"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          for f in */build/outputs/apk/*/*.apk */build/outputs/bundle/release/*.aab; do
+            [ -f "$f" ] || continue
+            size=$(stat -c '%s' "$f")
+            sha=$(sha256sum "$f" | awk '{print $1}')
+            printf '| `%s` | %s | `%s` |\n' "$f" "$size" "$sha" >> "$RECORD"
+            echo "SHA-256 $sha  $f"
+            sha256sum "$f" > "$f.sha256"
+          done
+          sed -n '1,20p' "$RECORD"
+          { echo '```'; cat "$RECORD"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
+            git config user.name "ci-bot"
+            git config user.email "ci-bot@users.noreply.github.com"
+            git add -f "$RECORD"
+            if git diff --cached --quiet; then
+              echo "Digest record unchanged."
+            else
+              git commit -q -m "CI: record candidate build digests (run ${{ github.run_id }})"
+              for attempt in 1 2 3 4 5; do
+                git pull --rebase --autostash origin "${GITHUB_REF_NAME}" >/dev/null 2>&1 || true
+                if git push origin "HEAD:${GITHUB_REF_NAME}"; then
+                  echo "Digest record pushed."
+                  break
+                fi
+                echo "push attempt $attempt failed; retrying..."
+                sleep 6
+              done
+            fi
+          else
+            echo "Not a candidate branch; digest record stays local to this run."
+          fi
+
       # Publishing: when a version tag is pushed, the very APKs verified above are attached
       # to a GitHub Release. That is what makes an install link that does not expire (Actions
       # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
@@ -742,6 +825,110 @@ jobs:
           fi
           NOTES="releases/$TAG.md"
           test -f "$NOTES"
+
+          # ---------------------------------------------------------------------------
+          # v2.40 device-evidence gate. DELIBERATE: do not delete this block to bypass it.
+          #
+          # A CleanSweep candidate newer than the published 2.39/code44 may only be
+          # published from the SAME APK bytes that were actually installed on the owner's
+          # phone with Play Protect ON. GitHub publication is not Play Protect approval and
+          # not all-device certification, and a rebuild produces a different digest that no
+          # device test covered. The evidence file must quote this exact APK SHA-256 plus the
+          # observed Play Protect and installer result. Without it, publication stops here.
+          # ---------------------------------------------------------------------------
+          CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk | head -1)
+          CLEANER_VERSION=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+          CLEANER_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
+          # This is a separate step from "Verify built APKs", so its tools are not inherited.
+          AAPT2=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
+          if [ "${CLEANER_CODE:-0}" -gt 44 ]; then
+            EVIDENCE="docs/live-guard-${CLEANER_VERSION}-device-evidence.md"
+            if [ ! -f "$EVIDENCE" ]; then
+              echo "FAIL: CleanSweep $CLEANER_VERSION (code $CLEANER_CODE) has no recorded physical-device evidence."
+              echo "       Expected: $EVIDENCE"
+              echo "       Install the exact candidate APK from the normal download route with Play Protect ON,"
+              echo "       record the real outcome, and commit that record before publishing. Nothing was published."
+              exit 1
+            fi
+            if ! grep -Eqi "play protect" "$EVIDENCE" || ! grep -Eqi "installer|installation outcome" "$EVIDENCE"; then
+              echo "FAIL: $EVIDENCE must record both the actual Play Protect result and the installer outcome."
+              exit 1
+            fi
+            TESTED_SHA=$(sed -nE 's/^TESTED-APK-SHA256:[[:space:]]*([0-9a-fA-F]{64}).*/\1/p' "$EVIDENCE" | head -1 | tr 'A-F' 'a-f')
+            TESTED_RUN=$(sed -nE 's/^TESTED-RUN-ID:[[:space:]]*([0-9]+).*/\1/p' "$EVIDENCE" | head -1)
+            if [ -z "$TESTED_SHA" ]; then
+              echo "FAIL: $EVIDENCE has no machine-readable 'TESTED-APK-SHA256:' line, so the tested bytes cannot be identified."
+              echo "       Fill the evidence template's TESTED-APK-SHA256 / TESTED-RUN-ID lines. Nothing was published."
+              exit 1
+            fi
+            CANDIDATE_SHA=$(sha256sum "$CLEANER_REL" | awk '{print $1}')
+            if [ "$CANDIDATE_SHA" = "$TESTED_SHA" ]; then
+              echo "OK: this build reproduces the device-tested APK digest exactly ($TESTED_SHA); nothing to promote."
+            else
+              # A rebuild does not reproduce those bytes. Promote the artifact from the run that
+              # the owner actually tested instead of publishing untested bytes.
+              if [ -z "$TESTED_RUN" ]; then
+                echo "FAIL: this build's digest differs from the device-tested digest and no TESTED-RUN-ID is recorded."
+                echo "       built:  $CANDIDATE_SHA"
+                echo "       tested: $TESTED_SHA"
+                echo "       Record the run id whose artifact was installed, or the tested bytes cannot be published. Nothing was published."
+                exit 1
+              fi
+              PROMOTE="$RUNNER_TEMP/promoted-cleansweep"
+              mkdir -p "$PROMOTE"
+              if ! gh run download "$TESTED_RUN" -n cleansweep-apk -D "$PROMOTE"; then
+                echo "FAIL: could not download the tested run's cleansweep-apk artifact (run $TESTED_RUN)."
+                echo "       Expired/deleted artifacts cannot be re-published; rebuild, re-test on the phone and record the new run. Nothing was published."
+                exit 1
+              fi
+              PROMOTED_APK=$(find "$PROMOTE" -type f -path '*/release/*.apk' | head -1)
+              if [ -z "$PROMOTED_APK" ]; then
+                echo "FAIL: the tested run's artifact has no release APK to promote."
+                exit 1
+              fi
+              PROMOTED_SHA=$(sha256sum "$PROMOTED_APK" | awk '{print $1}')
+              if [ "$PROMOTED_SHA" != "$TESTED_SHA" ]; then
+                echo "FAIL: the promoted artifact digest does not match the recorded device-test digest."
+                echo "       artifact: $PROMOTED_SHA"
+                echo "       evidence: $TESTED_SHA"
+                exit 1
+              fi
+              # Same version/package expectations, checked on the promoted bytes themselves.
+              if [ -z "$AAPT2" ]; then
+                echo "FAIL: aapt2 is required to verify the promoted APK's version; cannot promote safely."
+                exit 1
+              fi
+              if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionCode='$CLEANER_CODE'"; then
+                echo "FAIL: the promoted APK's versionCode does not match the source version code."
+                exit 1
+              fi
+              if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionName='$CLEANER_VERSION'"; then
+                echo "FAIL: the promoted APK's versionName does not match the source version name."
+                exit 1
+              fi
+              cp "$PROMOTED_APK" "$CLEANER_REL"
+              echo "OK: promoted the device-tested artifact from run $TESTED_RUN ($PROMOTED_SHA) as the publication APK"
+              # The store bundle travels with the same tested build.
+              PROMOTE_BUNDLE="$RUNNER_TEMP/promoted-bundles"
+              mkdir -p "$PROMOTE_BUNDLE"
+              if gh run download "$TESTED_RUN" -n store-bundles -D "$PROMOTE_BUNDLE"; then
+                PROMOTED_AAB=$(find "$PROMOTE_BUNDLE" -type f -path '*/cleaner/*.aab' | head -1)
+                if [ -n "$PROMOTED_AAB" ]; then
+                  cp "$PROMOTED_AAB" cleaner/build/outputs/bundle/release/
+                  echo "OK: promoted the matching CleanSweep bundle from run $TESTED_RUN"
+                else
+                  echo "WARN: the tested run's bundle artifact has no CleanSweep .aab; the freshly built bundle is published"
+                fi
+              else
+                echo "WARN: could not download the tested run's store-bundles artifact; the freshly built bundle is published"
+              fi
+            fi
+            if ! grep -Fq "$TESTED_SHA" "$EVIDENCE"; then
+              echo "FAIL: $EVIDENCE no longer contains the tested digest; refusing to publish."
+              exit 1
+            fi
+            echo "OK: device evidence in $EVIDENCE covers the published CleanSweep $CLEANER_VERSION APK ($TESTED_SHA)"
+          fi
           # Companions have no source change: reuse exact previous verified assets.
           # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.
           git fetch --depth=1 origin refs/tags/v2026.10.11-1
@@ -885,7 +1072,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: cleansweep-apk
-          path: cleaner/build/outputs/apk/*/*.apk
+          path: |
+            cleaner/build/outputs/apk/*/*.apk
+            cleaner/build/outputs/apk/*/*.apk.sha256
 
       - name: Upload AppForge APK
         uses: actions/upload-artifact@v4

@@ -38,7 +38,6 @@ fun FeatureSetupHomeCard(state: UiState, vm: MainViewModel) {
             if (pending > 0) Text(tr("%d features need setup or Android access", pending), style = MaterialTheme.typography.labelSmall)
             Row {
                 TextButton(onClick = { vm.navigate(Screen.FEATURE_SETUP) }) { Text(tr("Review feature setup")) }
-                TextButton(onClick = { vm.navigate(Screen.NOTIFICATION_READER) }) { Text(tr("Notification reader")) }
             }
         }
     }
@@ -68,7 +67,7 @@ fun FeatureSetupScreen(state: UiState, vm: MainViewModel) {
         LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 PanelCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(tr("Safe local readings and refresh defaults do not grant access, delete data or silently enable private-message reading. Existing OFF choices remain OFF unless you change them here."))
+                    Text(tr("Setup reviews only Live Guard's own functions: safe local readings and refresh defaults do not grant access or delete data. Core Live Guard does not read other apps' notifications or messages, so there is no private-message switch here. Existing OFF choices remain OFF unless you change them here."))
                     Text(tr("This checklist describes configuration, not proof of background delivery, audible speech or a successful AI response."), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     SetupChoice("Persistent background monitoring", if (backgroundEdited) backgroundChoice else state.persistentMonitor) { backgroundChoice = it; backgroundEdited = true }
                     SetupChoice("Voice alerts and answers", if (voiceEdited) voiceChoice else state.voiceOn) { voiceChoice = it; voiceEdited = true }
@@ -118,7 +117,6 @@ fun FeatureSetupScreen(state: UiState, vm: MainViewModel) {
                             "cache" -> vm.navigate(Screen.APP_CACHE)
                             "daily", "voice" -> vm.navigate(Screen.VOICE)
                             "background", "pill" -> vm.navigate(Screen.SETTINGS)
-                            "reader" -> vm.navigate(Screen.NOTIFICATION_READER)
                             "ai" -> vm.navigate(Screen.AI_SETTINGS)
                             "data" -> vm.openInsights(InsightsTab.DATA_BUDGET)
                             "update" -> vm.navigate(Screen.ABOUT)

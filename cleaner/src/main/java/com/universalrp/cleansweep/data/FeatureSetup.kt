@@ -3,8 +3,6 @@ package com.universalrp.cleansweep.data
 import android.content.Context
 import androidx.core.app.NotificationManagerCompat
 import com.universalrp.cleansweep.UiState
-import com.universalrp.cleansweep.notifications.MessageReaderService
-import com.universalrp.cleansweep.notifications.NotificationReaderPrefs
 import com.universalrp.cleansweep.updates.LiveGuardUpdates
 import com.universalrp.cleansweep.voice.Announcer
 import kotlinx.coroutines.flow.first
@@ -31,7 +29,6 @@ object FeatureDirectory {
     fun notificationPermission(context: Context) = NotificationManagerCompat.from(context).areNotificationsEnabled()
     fun list(context: Context, state: UiState): List<FeatureSetupPolicy.Feature> {
         val notifications = notificationPermission(context)
-        val reader = NotificationReaderPrefs.load(context)
         val features = listOf(
             FeatureSetupPolicy.Feature("health", "Phone health", FeatureSetupPolicy.Status.READY, "Local battery and phone readings need no special access. Missing sensor values remain unavailable."),
             FeatureSetupPolicy.Feature("security", "Security check", FeatureSetupPolicy.Status.READY, "System apps are included by default for inspection only. No permission is granted or app removed automatically."),
@@ -41,7 +38,6 @@ object FeatureDirectory {
             FeatureSetupPolicy.Feature("background", "Persistent monitoring", FeatureSetupPolicy.status(state.persistentMonitor, access = notifications), "Optional background service uses an ongoing notification and Stop control. Android force-stop and OEM restrictions still apply."),
             FeatureSetupPolicy.Feature("voice", "Voice alerts and answer voices", FeatureSetupPolicy.status(state.voiceOn), "Enable voice explicitly and preview actual installed language voices. Quiet hours and media volume can suppress speech; callbacks do not prove you heard it."),
             FeatureSetupPolicy.Feature("pill", "Floating status pill", FeatureSetupPolicy.status(state.statusPill, access = state.statusPillAllowed), "Optional overlay access is required. The floating pill keeps its existing charging-watts behavior."),
-            FeatureSetupPolicy.Feature("reader", "Selected notification reading", FeatureSetupPolicy.status(reader.enabled, configured = reader.rules.isNotEmpty(), access = MessageReaderService.accessGranted(context)), "Opt-in selected apps and sender names. Sender-only default, local translation and non-network speech; broad Android notification access needs your review."),
             FeatureSetupPolicy.Feature("ai", "Online assistant", FeatureSetupPolicy.status(state.assistantOnline, configured = state.aiConfig.ready), "Optional provider setup sends only your approved questions and allowed report facts. An API key or model name is not proof a model ran."),
             FeatureSetupPolicy.Feature("data", "Data plan and compact widgets", FeatureSetupPolicy.status(true, configured = state.dataPackInfo?.isUnlimited5g == true || onWifi(context) || DataUsageTracker.hasConfiguredPlan(context)), "Choose battery, data or phone widgets. Metered plans show available usage; Wi-Fi or user-set unlimited 5G shows useful phone details instead."),
             FeatureSetupPolicy.Feature("update", "In-app APK updates", FeatureSetupPolicy.status(true, access = LiveGuardUpdates.state.value.release == null || LiveGuardUpdates.canInstall(context)), "Checks only official published releases. Download verification and Android installer confirmation are mandatory; Play Protect cannot be forced or bypassed."),

@@ -1,5 +1,50 @@
 # Changelog — maintained Android apps
 
+## Live Guard 2.40/code45 — PREPARED CANDIDATE: notification/message reading removed
+
+**Not published and not device-tested.** After Google Play Protect blocked installation of
+the published Live Guard APK ("App blocked to protect your device"), the owner chose to
+prepare the main app **without notification/message reading**. The screenshot shows no
+hash and Google gave no hash-linked verdict, so the blocked artifact is unconfirmed and the
+2.38/2.39 reader is the leading suspect, not a proven cause; removing it is not a
+guaranteed clearance.
+
+- Removed completely (not switched off, not hidden): `MessageReaderService`, the
+  `BIND_NOTIFICATION_LISTENER_SERVICE` permission, the `NotificationListenerService`
+  intent filter, the reader screen/route/links/setup row, `SetupGuides.NOTIFICATIONS`, the
+  reader-only ML Kit translate/language-id dependencies, the reader service-label
+  resources, and the private-message speech plumbing
+  (`Announcer.KEY_MESSAGES`/`Event.MESSAGES`/`speakNotification`/`cancelNotifications`).
+  The 2.39 sources are archived byte-for-byte in
+  `docs/archived-notification-reader-2.39/` (reference only; never compiled, no hidden
+  flavor/module, never distributed as a workaround). Re-adding any notification/message
+  access needs a separate owner decision plus policy and device review.
+- The retired pure `NotificationReadingPolicy` now lives in the **test** source set so its
+  12 historical cases still run. CI rejects the retired class names in **both** debug and
+  release APK DEX, and `tools/verify_cleaner_core_manifest.py` (+8 unit tests) checks the
+  source manifest, the merged manifest, the production tree, the archive discipline and
+  removed dependencies.
+- One-time scoped cleanup (`CorePrivacyMigration`, 6 prepared cases) retires only the
+  reader's preferences file, the `voice_messages` key, the reader's stale voice diagnostics
+  (only when `voice_last_event == "MESSAGES"`) and the obsolete `reader` setup-reminder id.
+  A completion marker is written only when every step succeeds, so an interrupted cleanup
+  retries on a later start; nothing private is logged. API keys, language, A/B voice
+  selections, switches (including saved OFF), data plan, histories, genuine
+  permission-review records and other apps' data are untouched.
+- Kept: `POST_NOTIFICATIONS` and every ordinary Live Guard alert, general speech, installed
+  voice previews, the two selected A/B answer voices, widgets, health/cleanup/security/data
+  features, the verified updater with mandatory Android installer confirmation, package,
+  stable certificate, API 26 support and all supported ABIs. Both languages now state the
+  no-notification-reading position (931 EN/TA keys audited).
+- Gates before publication: **301 cases in each** Cleaner debug/release variant
+  (**33 suites**), `:radio:testDebugUnitTest`, all-module APK/AAB and
+  package/version/API26/non-debuggable/stable-signature/packaged-feature checks, the
+  retired-capability/DEX gate and measured APK size (128MiB cap plus the existing 2.39
+  client's 50MiB bound). Publication additionally requires the owner's recorded Play
+  Protect + installer outcome for the exact APK SHA-256 in
+  `docs/live-guard-2.40-device-evidence.md`; the workflow refuses a newer CleanSweep
+  version without it. Previous release assets and CI records are never overwritten or erased.
+
 ## Live Guard2.39/code44 — verified/published11 October2026
 
 Follow-up to the passed/published2.38: its universal APK is82,630,093 bytes,

@@ -11,5 +11,4 @@
     <string name="widget_phone_label">Live Guard • Phone</string>
     <string name="widget_data_description">Compact battery and mobile usage; Wi-Fi or user-set unlimited 5G uses phone details</string>
     <string name="widget_phone_description">Compact battery, temperature, free storage and observed last unplug</string>
-    <string name="notification_reader_label">Live Guard • Selected notification reading</string>
 </resources>

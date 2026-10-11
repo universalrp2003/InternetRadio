@@ -1004,7 +1004,7 @@ object Lang {
         "Online provider selected: %s. A connection check is not proof a model answered. Replies show the responding service, requested model and elapsed time; a requested ID does not prove the underlying execution model." to "தேர்ந்தெடுத்த ஆன்லைன் சேவை: %s. இணைப்புச் சோதனை மட்டும் மாடல் பதிலளித்ததற்குச் சான்றல்ல. பதில் தந்த சேவை, கோரிய மாடல் மற்றும் எடுத்த நேரம் காட்டப்படும்; கோரிய அடையாளம் மட்டும் உண்மையில் இயங்கிய மாடலுக்குச் சான்றல்ல.",
         "Free endpoints use configured model IDs. Replies name the endpoint that returned an answer and its requested model; the underlying routed model may not be reported." to "இலவச இணைப்புகள் அமைத்த மாடல் அடையாளங்களைப் பயன்படுத்தும். பதிலளித்த சேவை முகவரியும் கோரிய மாடலும் காட்டப்படும்; உண்மையில் வழிமாற்றி பயன்படுத்திய மாடல் தெரியாமல் இருக்கலாம்.",
 
-        // Reviewed setup, verified updates, local notification reader and dated official model ratings.
+        // Reviewed setup, verified updates, core no-notification-reading notice and dated official model ratings.
         "LM Arena model rating" to "LM Arena மாடல் மதிப்பீடு",
         "Unknown routed model" to "வழிமாற்றப்பட்ட மாடல் தெரியவில்லை",
         "Category: overall text (full), crowd preference. Not an IQ, universal intelligence score, Tamil guarantee or proof that this model ran." to "பிரிவு: ஒட்டுமொத்த உரை (full), பயனர்களின் விருப்பம். இது IQ, பொதுவான அறிவுத்திறன் அளவு, தமிழ் தர உத்தரவாதம் அல்லது இந்த மாடல் இயங்கியதற்கான சான்று அல்ல.",
@@ -1027,6 +1027,9 @@ object Lang {
         "Reviewed feature setup" to "வசதிகளைப் பரிசீலித்து அமைத்தல்",
         "%d features need setup or Android access" to "%d வசதிகளுக்கு அமைப்பு அல்லது Android அணுகல் தேவை",
         "Review feature setup" to "வசதி அமைப்பைப் பரிசீலி",
+        // v2.40 core: the removed notification reader, stated plainly in both languages.
+        "Core Live Guard does not read other apps' notifications or messages. It declares no notification-listener, SMS, Contacts, call-log, Accessibility or device-admin capability. Ordinary Live Guard alerts (battery, charging, storage, daily brief) remain." to "லைவ் கார்டின் மையப் பயன்பாடு மற்ற ஆப்களின் அறிவிப்புகளையோ செய்திகளையோ வாசிக்காது. அறிவிப்பு-கேட்பான் சேவை, SMS, தொடர்புகள், அழைப்புப் பதிவு, அணுகல் திறன் அல்லது சாதன நிர்வாக அனுமதி எதையும் இந்த ஆப் அறிவிக்காது. லைவ் கார்டின் சாதாரண எச்சரிக்கைகள் (பேட்டரி, சார்ஜிங், சேமிப்பு, தினசரி அறிக்கை) தொடர்ந்து இயங்கும்.",
+        "Setup reviews only Live Guard's own functions: safe local readings and refresh defaults do not grant access or delete data. Core Live Guard does not read other apps' notifications or messages, so there is no private-message switch here. Existing OFF choices remain OFF unless you change them here." to "இந்த அமைப்பு லைவ் கார்டின் சொந்த வசதிகளை மட்டுமே பரிசீலிக்கிறது: பாதுகாப்பான உள்ளூர் அளவீடுகளும் புதுப்பிப்பு அமைப்புகளும் அனுமதி வழங்கவோ தரவை நீக்கவோ செய்யாது. லைவ் கார்டின் மையப் பயன்பாடு மற்ற ஆப்களின் அறிவிப்புகளையோ செய்திகளையோ வாசிக்காது; எனவே தனிப்பட்ட செய்திக்கான தேர்வு இங்கு இல்லை. நீங்கள் மாற்றாவிட்டால் ஏற்கனவே முடக்கிய தேர்வுகள் முடங்கியே இருக்கும்.",
         "Notification reader" to "அறிவிப்பு வாசிப்பு",
         "Review optional functions before enabling them. Saved OFF choices are respected." to "விருப்ப வசதிகளை இயக்கும் முன் பரிசீலிக்கவும். சேமித்த முடக்கத் தேர்வுகள் மதிக்கப்படும்.",
         "Your reviewed choices are saved. Optional OFF functions are not failures." to "நீங்கள் பரிசீலித்த தேர்வுகள் சேமிக்கப்பட்டன. விருப்ப வசதிகள் முடங்கியிருப்பது பிழை அல்ல.",
