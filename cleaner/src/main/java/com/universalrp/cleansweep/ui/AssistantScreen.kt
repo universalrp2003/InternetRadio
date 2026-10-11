@@ -425,22 +425,17 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                 AiText(msg.text)
                 // v2.8: the same live evidence the model saw, so the answer can be
                 // checked instead of trusted.
-                msg.sources.takeIf { it.isNotEmpty() }?.let { sources ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        tr("What the AI read just now:"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AccentCyan,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    sources.take(3).forEach { line ->
-                        Text(
-                            line,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                        )
-                        Spacer(Modifier.height(2.dp))
+                msg.sources.distinct().takeIf { it.isNotEmpty() }?.let { sources ->
+                    var expanded by remember(msg.atMs) { mutableStateOf(false) }
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(tr("Web excerpts (%s)", sources.size), style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                    }
+                    if (expanded) {
+                        Text(tr("Retrieved excerpts, not independent verification."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        sources.take(3).forEach { line ->
+                            Text(line, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Spacer(Modifier.height(2.dp))
+                        }
                     }
                 }
                 msg.meta?.let { meta ->

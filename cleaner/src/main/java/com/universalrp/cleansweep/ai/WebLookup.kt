@@ -90,7 +90,7 @@ object WebLookup {
      */
     suspend fun lookup(query: String): Lookup = coroutineScope {
         val q = query.trim().take(300)
-        if (q.isEmpty() || isGreetingOrSmallTalk(q)) return@coroutineScope Lookup(emptyList())
+        if (q.isEmpty() || isGreetingOrSmallTalk(q) || AssistantEvidencePolicy.asksAboutThisAssistant(q)) return@coroutineScope Lookup(emptyList())
         if (NewsLookup.applies(q)) return@coroutineScope Lookup(NewsLookup.fetch(q))
         // v2.11: chit-chat ("hi you know who is...") makes a terrible search query — it
         // once surfaced "List of megaprojects in India" for a CM question. Search the
@@ -115,7 +115,8 @@ object WebLookup {
         // office fetch can return an article the plain search also found.
         val officeSnippet = office.await()
         val all = (listOfNotNull(officeSnippet) + summaries + ddgSnippets + wikiSnippets)
-            .distinctBy { it.source to it.text.take(60) }
+            .filter { it == officeSnippet || AssistantEvidencePolicy.relevant(it.source + " " + it.text.take(200), sq) }
+            .distinctBy { AssistantEvidencePolicy.evidenceKey(it.url, it.text) }
         Lookup(all.take(8), officeSnippet)
     }
 
@@ -193,10 +194,9 @@ object WebLookup {
                 }
             }
             // v2.11: drop hits with zero lexical overlap with the question ("List of
-            // megaprojects in India" for a CM question) — with a one-hit fallback so
-            // a strict filter can never silence the evidence entirely.
+            // megaprojects in India" for a CM question) — no fallback to an unrelated first hit.
             val pairs = out.zip(titles).filter { titleOverlaps(it.second, query) }
-            val kept = if (pairs.isNotEmpty()) pairs else out.zip(titles).take(1)
+            val kept = pairs // No unrelated one-result fallback.
             kept.map { it.first } to kept.map { it.second }
         } catch (e: Exception) {
             none
@@ -274,24 +274,9 @@ object WebLookup {
     /**
      * Whether a search-hit title shares at least one significant word (either way
      * round, so "tamilnadu" still matches "Tamil Nadu") with the question. Empty
-     * after stopword removal means a non-Latin query — kept, never filtered.
+     * after stopword removal has no evidence of relevance and is not filled with arbitrary hits.
      */
-    private fun titleOverlaps(title: String, query: String): Boolean {
-        fun words(s: String) = s.lowercase().split(Regex("[^a-z0-9]+"))
-            .filter { it.length >= 2 && it !in TITLE_STOPWORDS }
-        // "pm of india" must still match "Prime Minister of India".
-        val qw = words(query).flatMap {
-            when (it) {
-                "cm" -> listOf("cm", "chief", "minister")
-                "pm" -> listOf("pm", "prime", "minister")
-                else -> listOf(it)
-            }
-        }.toSet()
-        if (qw.isEmpty()) return true
-        return words(title).any { t ->
-            t.length >= 3 && qw.any { q -> t.contains(q) || q.contains(t) }
-        }
-    }
+    private fun titleOverlaps(title: String, query: String): Boolean = AssistantEvidencePolicy.relevant(title, query)
 
     /**
      * Moves the sentence that settles a "who holds it now" question ("The incumbent

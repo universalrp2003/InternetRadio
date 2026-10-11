@@ -69,7 +69,7 @@ class WifiScanWorker(
             }
 
             notifyIntruder(ctx, engMsg, tamilMsg)
-            Announcer.speakTamil(ctx, tamilMsg, Announcer.Event.NEW_DEVICE)
+            Announcer.speakAndWait(ctx, engMsg, tamilMsg, Announcer.Event.NEW_DEVICE)
         }
 
         // Update seen macs

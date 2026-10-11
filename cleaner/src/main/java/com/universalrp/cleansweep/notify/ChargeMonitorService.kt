@@ -51,6 +51,7 @@ class ChargeMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         alive = true
+        AutomaticAlerts.start(applicationContext, "monitor")
         ChargeNotifier.channel(this)
         startForeground(ChargeNotifier.NOTIFICATION_ID, initialNotification())
         try {
@@ -102,6 +103,7 @@ class ChargeMonitorService : Service() {
         refreshJob?.cancel()
         refreshJob = scope.launch {
             val battery = ChargeNotifier.read(this@ChargeMonitorService) ?: return@launch
+            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(applicationContext)
             if (!battery.powerConnected && !persistentEnabled(this@ChargeMonitorService)) {
                 stopSelf()
                 return@launch
@@ -121,6 +123,7 @@ class ChargeMonitorService : Service() {
 
     override fun onDestroy() {
         alive = false
+        AutomaticAlerts.stop("monitor")
         // Unplugged or switched off: the status-bar reading goes with it.
         StatusPill.remove()
         try {

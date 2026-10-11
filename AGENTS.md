@@ -16,3 +16,17 @@
   the owner explicitly requested its restoration and asked that future redesigns
   not silently remove it. Keep it labelled as an estimate, not an exact manufacture/
   purchase date; unsupported model/factory evidence must remain unavailable.
+
+- Following the owner's 2026-10-11 voice/news/widget choices: redesign the **launcher
+  home-screen widget**, not the floating pill; default to larger battery % plus
+  battery-side watts together, with a per-widget view selector. Keep floating
+  watts-only charging/unplug behaviour intact. Never invent five-decimal battery
+  precision or turn display decimal places into an accuracy claim.
+- Home news must be **today only in the phone's local timezone**, real publication
+  timestamps required, deduplicated and not automatically repeating read headlines.
+  No publisher ribbon/static safety tips/synthetic "today" fallback in the banner.
+  Retain article links/source metadata internally; keep security review separate.
+- The owner reports manual speech works but automatic alerts are silent on Redmi
+  13 5G (Android16/API36 screenshots, exact ROM unknown). Diagnose delivery gates,
+  callbacks/background paths honestly; never claim enabled switches or TTS engine
+  completion certify audible speech/OEM background survival.

@@ -38,6 +38,9 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +68,10 @@ import com.universalrp.cleansweep.voice.Announcer
  */
 @Composable
 fun VoiceScreen(state: UiState, vm: MainViewModel) {
+    val delivery by Announcer.runtime.collectAsState()
+    val automatic by Announcer.automatic.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { Announcer.refreshDiagnostics(context) }
     Column(
         Modifier
             .fillMaxSize()
@@ -137,6 +144,28 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
               }
             }
 
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Voice delivery diagnostics"), style = MaterialTheme.typography.titleMedium)
+                    Text(tr("Last request: %s", voiceStageLabel(delivery.stage)), style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Last automatic event: %s", automatic.event.ifEmpty { tr("Not observed yet") }), style = MaterialTheme.typography.bodySmall)
+                    Text(voiceStageLabel(automatic.stage), style = MaterialTheme.typography.bodySmall, color = AccentCyan)
+                    if (automatic.atMs > 0) Text(java.text.SimpleDateFormat("d MMM HH:mm:ss", java.util.Locale.getDefault())
+                        .format(java.util.Date(automatic.atMs)), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    delivery.tamilAvailable?.let { Text(tr(if (it) "Tamil language reported available" else "Tamil language not available; install voice data"),
+                        style = MaterialTheme.typography.labelSmall, color = if (it) TextSecondary else WarnAmber) }
+                    delivery.mediaVolume?.let { Text(tr("Media volume step: %s", it), style = MaterialTheme.typography.labelSmall, color = if (it == 0) WarnAmber else TextSecondary) }
+                    Text(tr("An enabled switch or queued request is not proof of sound. Engine completion cannot verify that you heard it; check media volume, Bluetooth route and Do Not Disturb."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    TextButton(onClick = { vm.testAutomaticVoice() }) { Text(tr("Test automatic charging voice")) }
+                    TextButton(onClick = { vm.openTtsSettings() }) { Text(tr("Text-to-speech settings")) }
+                    Text(tr("The automatic test uses the real master/event/quiet-hour gates. It is not a charger connection. Actual early-unplug alerts only apply below 90% after your chosen hour."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(tr("Live battery/network alerts run while the app is visible or its existing monitor is active. Background power jobs and hourly checks may be delayed by Android/OEM restrictions; force-stop prevents delivery. No new persistent monitor is enabled."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+            }
+
             // ------------------------------------------------------------ voice quality (v2.6)
             // The phone's own engine is the fallback and always works offline; the online voice
             // is opt-in because it sends the sentence (never files, never the key) to the
@@ -156,17 +185,17 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                 VoiceSwitch(
                     title = tr("Louder voice alerts"),
                     subtitle = tr(
-                        "Temporarily maximizes speech volume during voice warnings so charging and " +
-                            "critical alerts are clearly audible, without permanently changing phone media volume."
+                        "Uses full speech amplitude, but does not change Android media volume, override " +
+                            "Do Not Disturb or force audio away from Bluetooth. A muted media stream stays muted."
                     ),
                     checked = state.voiceLouder,
                     onCheckedChange = { vm.setLouderVoice(it) },
                 )
                 Text(
                     tr(
-                        "Works in Tamil and English. If the phone has no cloud voice installed, or the " +
-                            "network is out, the offline voice reads the same line instead — " +
-                            "announcements never go silent. No API key is used for this."
+                        "Uses an installed Tamil/English voice. If a network voice fails, an installed " +
+                            "offline voice in the same language is tried once. Missing voice data or engine " +
+                            "errors are shown in diagnostics; offline speech is not guaranteed. No API key is used."
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
@@ -319,7 +348,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                 )
                 VoiceSwitch(
                     title = tr("Charger connected but not charging"),
-                    subtitle = tr("A worn cable or weak charger shows as plugged in and delivers nothing."),
+                    subtitle = tr("A connected-but-paused reading can be normal adaptive charging; it does not prove a cable fault."),
                     icon = Icons.Outlined.ElectricalServices,
                     tint = WarnAmber,
                     checked = state.voiceChargerIdle,
@@ -335,7 +364,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                 )
                 VoiceSwitch(
                     title = tr("Wi-Fi ⇄ mobile data switches"),
-                    subtitle = tr("Off by default: a phone that hops networks would otherwise talk all day."),
+                    subtitle = tr("Announces observed Wi-Fi/mobile switches while the app or existing monitor is active; hourly checks are a delayed fallback."),
                     icon = Icons.Outlined.SwapHoriz,
                     tint = AccentCyan,
                     checked = state.voiceNetworkChange,
@@ -508,3 +537,24 @@ private fun ModeChipExtra(label: String, selected: Boolean, onClick: () -> Unit)
         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
     )
 }
+
+private fun voiceStageLabel(stage: com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage): String = tr(when (stage) {
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.NOT_REQUESTED -> "No request observed in this process"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.DISABLED -> "Blocked: master voice switch is off"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.EVENT_OFF -> "Blocked: this event's voice switch is off"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.QUIET_HOURS -> "Blocked: quiet hours"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.QUEUED -> "Queued, not yet confirmed playing"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INITIALIZING -> "Speech engine starting"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.NO_ENGINE -> "Speech engine could not be created"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INIT_FAILED -> "Speech engine initialization failed"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INIT_TIMEOUT -> "Speech engine initialization timed out"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING -> "Required language/offline voice data missing"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_REJECTED -> "Speech engine rejected the request"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.PLAYING -> "Speech engine reported playback started"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_FINISHED -> "Speech engine reported completion; audibility unverified"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_ERROR -> "Speech engine reported an error"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.TIMED_OUT -> "Speech delivery timed out"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.CANCELLED -> "Speech request cancelled/interrupted"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.DUPLICATE -> "Duplicate request skipped"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.STALE_EVENT -> "Delayed/stale power event skipped"
+})

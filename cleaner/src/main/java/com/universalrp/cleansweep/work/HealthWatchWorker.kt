@@ -103,27 +103,27 @@ class HealthWatchWorker(
         val prefs = Announcer.prefs(ctx)
 
         // Battery low — only while it is actually running on the battery.
-        if (!battery.charging && battery.percent in 1 until Announcer.LOW_PERCENT) {
+        if (!battery.powerConnected && battery.percent in 1 until Announcer.LOW_PERCENT) {
             val last = prefs.getLong(Announcer.KEY_LAST_LOW, 0L)
-            if (now - last > 6 * 60 * 60 * 1000L) {
-                prefs.edit().putLong(Announcer.KEY_LAST_LOW, now).apply()
-                Announcer.speakTamil(
-                    ctx,
+            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 6 * 60 * 60 * 1000L)) {
+                Announcer.speakAndWait(
+                    ctx, "",
                     "பேட்டரி குறைவு: ${battery.percent} சதவீதம். சார்ஜ் செய்யவும்.",
                     Announcer.Event.BATTERY_LOW,
+                    onStarted = { prefs.edit().putLong(Announcer.KEY_LAST_LOW, System.currentTimeMillis()).apply() },
                 )
             }
         }
 
         // Battery full — worth a word only while it is still on the cable.
-        if (battery.charging && battery.percent >= 100) {
+        if (battery.powerConnected && battery.percent >= 100) {
             val last = prefs.getLong(Announcer.KEY_LAST_FULL, 0L)
-            if (now - last > 6 * 60 * 60 * 1000L) {
-                prefs.edit().putLong(Announcer.KEY_LAST_FULL, now).apply()
-                Announcer.speakTamil(
-                    ctx,
+            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 6 * 60 * 60 * 1000L)) {
+                Announcer.speakAndWait(
+                    ctx, "",
                     "பேட்டரி முழுமை அடைந்தது. சார்ஜரை அகற்றவும்.",
                     Announcer.Event.BATTERY_FULL,
+                    onStarted = { prefs.edit().putLong(Announcer.KEY_LAST_FULL, System.currentTimeMillis()).apply() },
                 )
             }
         }
@@ -132,15 +132,15 @@ class HealthWatchWorker(
         val storage = health?.storage
         if (storage != null && storage.free in 1 until Announcer.LOW_STORAGE_BYTES) {
             val last = prefs.getLong(Announcer.KEY_LAST_STORAGE, 0L)
-            if (now - last > 12 * 60 * 60 * 1000L) {
-                prefs.edit().putLong(Announcer.KEY_LAST_STORAGE, now).apply()
+            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 12 * 60 * 60 * 1000L)) {
                 val freeGb = "%.1f".format(storage.free / 1024.0 / 1024.0 / 1024.0)
-                Announcer.speak(
+                Announcer.speakAndWait(
                     ctx,
                     "Storage is nearly full — only $freeGb gigabytes free. Open CleanSweep and clean some junk.",
                     "சேமிப்பு கிட்டத்தட்ட நிரம்பிவிட்டது — $freeGb ஜிகாபைட் மட்டுமே காலி. " +
                         "சுத்தம் செய்பவரைத் திறந்து குப்பையை அகற்றவும்.",
                     Announcer.Event.STORAGE_LOW,
+                    onStarted = { prefs.edit().putLong(Announcer.KEY_LAST_STORAGE, System.currentTimeMillis()).apply() },
                 )
             }
         }
@@ -158,15 +158,15 @@ class HealthWatchWorker(
         }
         if (healthPercent != null && healthPercent in 1..84) {
             val last = prefs.getLong(Announcer.KEY_LAST_HEALTH, 0L)
-            if (now - last > 7 * 24 * 60 * 60 * 1000L) {
-                prefs.edit().putLong(Announcer.KEY_LAST_HEALTH, now).apply()
-                Announcer.speak(
+            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 7 * 24 * 60 * 60 * 1000L)) {
+                Announcer.speakAndWait(
                     ctx,
                     "Battery health notice: your battery now holds about $healthPercent percent of its " +
                         "original capacity, so it drains faster than when it was new.",
                     "பேட்டரி ஆரோக்கியம்: உங்கள் பேட்டரி புதியதாக இருந்ததில் சுமார் $healthPercent " +
                         "சதவீதம் மட்டுமே தேக்க முடிகிறது, எனவே விரைவாகக் குறையும்.",
                     Announcer.Event.BATTERY_HEALTH,
+                    onStarted = { prefs.edit().putLong(Announcer.KEY_LAST_HEALTH, System.currentTimeMillis()).apply() },
                 )
             }
         }
@@ -176,36 +176,36 @@ class HealthWatchWorker(
         val cpuHot = (health?.cpuTempC ?: 0f) >= Announcer.HOT_CPU_C
         if (batteryHot || cpuHot) {
             val last = prefs.getLong(Announcer.KEY_LAST_HOT, 0L)
-            if (now - last > 3 * 60 * 60 * 1000L) {
-                prefs.edit().putLong(Announcer.KEY_LAST_HOT, now).apply()
+            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 3 * 60 * 60 * 1000L)) {
                 val batteryText = battery.temperatureC?.let { "%.0f".format(it) } ?: "?"
                 val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
                 val plugWarning = if (battery.charging) " வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும்." else ""
-                Announcer.speakTamil(
-                    ctx,
+                Announcer.speakAndWait(
+                    ctx, "",
                     "போன் அதிக வெப்பமாக உள்ளது: $whichTa ${if (batteryHot) batteryText else cpuText} டிகிரி.$plugWarning",
                     Announcer.Event.OVERHEAT,
+                    onStarted = { prefs.edit().putLong(Announcer.KEY_LAST_HOT, System.currentTimeMillis()).apply() },
                 )
             }
         }
 
         // Weekly high security risks check (remind once a week)
         val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
-        if (now - lastSecReminder > 7 * 24 * 60 * 60 * 1000L) {
+        if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, lastSecReminder, 7 * 24 * 60 * 60 * 1000L)) {
             val weeklyReport = try {
                 val apps = AppInventoryLoader.load(ctx, includeSystem = true).rows
                 SecurityScanner.scan(ctx, apps)
             } catch (e: Exception) { null }
             val highRisks = weeklyReport?.findings?.filter { it.severity == Severity.HIGH }.orEmpty()
             if (highRisks.isNotEmpty()) {
-                prefs.edit().putLong("last_sec_reminder_ms", now).apply()
                 val riskCount = highRisks.size
                 prefs.edit().putString("widget_security_alert", "$riskCount critical security alert${if (riskCount > 1) "s" else ""}").apply()
-                Announcer.speakTamil(
-                    ctx,
+                Announcer.speakAndWait(
+                    ctx, "Security reminder: review $riskCount important security settings.",
                     "பாதுகாப்பு நினைவூட்டல்: $riskCount முக்கிய பாதுகாப்பு அமைப்புகளை சரிபார்க்கவும்.",
-                    Announcer.Event.TEST,
+                    Announcer.Event.DAILY,
+                    onStarted = { prefs.edit().putLong("last_sec_reminder_ms", System.currentTimeMillis()).apply() },
                 )
             } else if (weeklyReport != null && weeklyReport.unavailableChecks.isEmpty()) {
                 prefs.edit().remove("widget_security_alert").apply()
@@ -222,7 +222,7 @@ class HealthWatchWorker(
      * transport itself instead: late by minutes, but alive on every Android version.
      * Off by default: the switch lives in the voice screen.
      */
-    private fun networkTransportChanged(ctx: Context) {
+    private suspend fun networkTransportChanged(ctx: Context) {
         if (!Announcer.allows(ctx, Announcer.Event.NETWORK_CHANGE)) return
         val connectivity = ctx.getSystemService(Context.CONNECTIVITY_SERVICE)
             as? ConnectivityManager ?: return
@@ -246,13 +246,13 @@ class HealthWatchWorker(
         // Nothing to say the first time we ever look, or while going offline.
         if (before.isNullOrBlank() || now == "none") return
         when (now) {
-            "mobile" -> Announcer.speak(
+            "mobile" -> Announcer.speakAndWait(
                 ctx,
                 "You are now on mobile data. This uses your data plan.",
                 "இப்போது மொபைல் டேட்டாவில் உள்ளீர்கள். இது உங்கள் தரவுத் திட்டத்தைப் பயன்படுத்தும்.",
                 Announcer.Event.NETWORK_CHANGE,
             )
-            "wifi" -> Announcer.speak(
+            "wifi" -> Announcer.speakAndWait(
                 ctx,
                 "You are back on Wi-Fi.",
                 "நீங்கள் மீண்டும் Wi-Fi-ல் உள்ளீர்கள்.",
@@ -393,7 +393,7 @@ class HealthWatchWorker(
         }
         notify(ctx, full, notifSummary)
         if (spokenFinal != null) {
-            Announcer.speak(
+            Announcer.speakAndWait(
                 ctx,
                 spokenFinal,
                 spokenFinal,
@@ -484,8 +484,8 @@ class HealthWatchWorker(
 
         /**
          * One hourly wake-up. WorkManager keeps it across reboots and respects Doze, and an
-         * hourly period cannot be missed by more than a little — which is all a daily brief
-         * and a battery warning need.
+         * execution can still be delayed by quotas, Doze or OEM restrictions. It is not an
+         * instant-event delivery guarantee.
          */
         fun schedule(context: Context) {
             try {

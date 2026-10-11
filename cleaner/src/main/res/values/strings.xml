@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">Live Guard</string>
     <!-- Home-screen widget (v2.4). -->
-    <string name="widget_description">Battery, storage and the daily brief, one tap away</string>
+    <string name="widget_description">Large battery level, battery-side watts, sensor details and mobile usage</string>
     <string name="widget_clean">Clean</string>
     <string name="widget_speak">Read brief</string>
     <!-- v1.3: no accessibility service description needed; CleanSweep declares no accessibility service. -->

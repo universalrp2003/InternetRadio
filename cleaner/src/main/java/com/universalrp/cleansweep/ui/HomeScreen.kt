@@ -1,6 +1,8 @@
 package com.universalrp.cleansweep.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -46,6 +48,8 @@ import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -115,7 +119,13 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            while (isActive) { vm.refreshDashboardReadings(); delay(15_000) }
+            var newsTick = 0
+            while (isActive) {
+                vm.refreshDashboardReadings()
+                vm.expireNewsForLocalDay()
+                if (newsTick++ % 4 == 0) vm.loadTamilInfoStrip()
+                delay(15_000)
+            }
         }
     }
     Column(
@@ -204,9 +214,13 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
 
         LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
 
-        if (state.tamilInfoVisible && state.tamilInfoItems.isNotEmpty()) {
+        if (state.tamilInfoVisible) {
             TamilInfoStrip(
                 items = state.tamilInfoItems,
+                shown = state.newsShown,
+                loading = state.newsLoading,
+                outcome = state.newsOutcome,
+                onShown = { vm.markNewsShown(it) },
                 isPaused = state.tamilInfoPaused,
                 onTogglePause = { vm.toggleTamilInfoPause() },
                 onHide = { vm.toggleTamilInfoVisibility() },
@@ -693,80 +707,74 @@ private fun SurfaceHighCard(modifier: Modifier = Modifier, content: @Composable 
 
 @Composable
 fun TamilInfoStrip(
-    items: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item>,
-    isPaused: Boolean,
-    onTogglePause: () -> Unit,
-    onHide: () -> Unit,
-    onRefresh: () -> Unit,
-    onSpeak: (String) -> Unit,
+    items: List<com.universalrp.cleansweep.data.NewsHeadline>,
+    shown: Set<String>, loading: Boolean,
+    outcome: com.universalrp.cleansweep.data.TamilInfoStripRepo.Outcome,
+    onShown: (String) -> Unit,
+    isPaused: Boolean, onTogglePause: () -> Unit, onHide: () -> Unit,
+    onRefresh: () -> Unit, onSpeak: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (items.isEmpty()) return
-    var currentIndex by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(0) }
-
-    androidx.compose.runtime.LaunchedEffect(isPaused, items) {
-        while (!isPaused) {
-            kotlinx.coroutines.delay(6_000)
-            currentIndex = (currentIndex + 1) % items.size
+    var currentKey by remember { mutableStateOf<String?>(null) }
+    var showHeadlines by remember { mutableStateOf(false) }
+    val latestShown by androidx.compose.runtime.rememberUpdatedState(shown)
+    val uri = androidx.compose.ui.platform.LocalUriHandler.current
+    androidx.compose.runtime.LaunchedEffect(items) {
+        if (currentKey == null || items.none { it.key == currentKey })
+            currentKey = com.universalrp.cleansweep.data.NewsPolicy.nextUnseen(items, latestShown)?.key
+    }
+    androidx.compose.runtime.LaunchedEffect(currentKey) { currentKey?.let(onShown) }
+    androidx.compose.runtime.LaunchedEffect(currentKey, isPaused) {
+        if (currentKey != null && !isPaused) {
+            delay(12_000)
+            currentKey = com.universalrp.cleansweep.data.NewsPolicy.nextUnseen(items, latestShown)?.key
         }
     }
-
-    val item = items[currentIndex.coerceIn(0, items.size - 1)]
-    val isAlert = item.isSecurityAlert
-
-    androidx.compose.material3.Surface(
-        modifier = modifier
-            .clickable { onSpeak(item.title) }
-            .semantics { contentDescription = "Updates: ${item.title}" },
-        shape = RoundedCornerShape(10.dp),
-        color = if (isAlert) DangerRed.copy(alpha = 0.12f) else SurfaceHigh,
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            if (isAlert) DangerRed.copy(alpha = 0.6f) else OutlineC
-        ),
-    ) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isAlert) {
-                Icon(
-                    Icons.Outlined.Warning,
-                    contentDescription = null,
-                    tint = DangerRed,
-                    modifier = Modifier.size(20.dp),
-                )
-                Spacer(Modifier.width(8.dp))
+    val headline = items.firstOrNull { it.key == currentKey }
+    val empty = when {
+        loading && items.isEmpty() -> "Fetching today's headlines…"
+        items.isNotEmpty() -> "You're caught up with today's headlines. Tap to review."
+        outcome == com.universalrp.cleansweep.data.TamilInfoStripRepo.Outcome.OFFLINE -> "Offline: no dated headlines from today are available."
+        outcome == com.universalrp.cleansweep.data.TamilInfoStripRepo.Outcome.FEEDS_UNAVAILABLE -> "News feeds unavailable. No old news substituted."
+        else -> "No dated headlines published today are available yet."
+    }
+    if (showHeadlines) AlertDialog(
+        onDismissRequest = { showHeadlines = false },
+        title = { Text(tr("Today's headlines")) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (items.isEmpty()) Text(tr(empty))
+                items.take(com.universalrp.cleansweep.data.NewsPolicy.MAX_ITEMS).forEach { item ->
+                    Text(item.title, style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.clickable { currentKey = item.key; showHeadlines = false })
+                    Text(java.time.Instant.ofEpochMilli(item.publishedAtMs).atZone(java.time.ZoneId.systemDefault())
+                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), color = TextSecondary,
+                        style = MaterialTheme.typography.labelSmall)
+                    Row {
+                        TextButton(onClick = { onSpeak(item.title) }) { Text(tr("Read aloud")) }
+                        TextButton(onClick = { runCatching { uri.openUri(item.link) } }) { Text(tr("Open article")) }
+                    }
+                    HorizontalDivider(color = OutlineC)
+                }
             }
-            Column(Modifier.weight(1f)) {
-                Text(
-                    item.title,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 3,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                    color = if (isAlert) DangerRed else TextPrimary,
-                    fontWeight = if (isAlert) FontWeight.SemiBold else FontWeight.Normal,
-                )
-                Text(
-                    "${item.source} • ${item.date} • ${item.category} • tap to listen",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (isAlert) DangerRed.copy(alpha = 0.8f) else TextSecondary,
-                    maxLines = 1,
-                )
+        },
+        confirmButton = { TextButton(onClick = { showHeadlines = false }) { Text(tr("Close")) } },
+        dismissButton = { TextButton(onClick = { showHeadlines = false; onHide() }) { Text(tr("Hide news strip")) } },
+    )
+    Surface(modifier = modifier.clickable { showHeadlines = true }, shape = RoundedCornerShape(12.dp), color = SurfaceHigh,
+        border = androidx.compose.foundation.BorderStroke(1.dp, OutlineC)) {
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Owner requested headlines only: no publisher/category ribbon and no static security-tip filler.
+            Text(headline?.title ?: tr(empty), style = MaterialTheme.typography.bodySmall, color = TextPrimary,
+                maxLines = 3, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            IconButton(onClick = onTogglePause) {
+                Icon(if (isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                    contentDescription = tr(if (isPaused) "Resume headlines" else "Pause headlines"), tint = TextSecondary,
+                    modifier = Modifier.size(18.dp))
             }
-            Spacer(Modifier.width(6.dp))
-            IconButton(
-                onClick = onRefresh,
-                modifier = Modifier.size(32.dp),
-            ) {
-                Icon(
-                    Icons.Outlined.Refresh,
-                    contentDescription = "New News",
-                    tint = AccentCyan,
-                    modifier = Modifier.size(18.dp),
-                )
+            IconButton(onClick = onRefresh, enabled = !loading) {
+                if (loading) CircularProgressIndicator(Modifier.size(18.dp), color = AccentCyan, strokeWidth = 2.dp)
+                else Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh today's headlines"), tint = AccentCyan, modifier = Modifier.size(18.dp))
             }
         }
     }

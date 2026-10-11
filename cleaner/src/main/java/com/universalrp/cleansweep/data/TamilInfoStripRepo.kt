@@ -1,90 +1,40 @@
 package com.universalrp.cleansweep.data
 
+import android.content.SharedPreferences
 import android.content.Context
-import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.util.Xml
+import com.universalrp.cleansweep.BuildConfig
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import org.xmlpull.v1.XmlPullParser
+import org.json.JSONArray
+import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
-import java.util.Locale
+import java.time.ZoneId
 
-/**
- * Dated, attributed Tamil headlines, Indian & International news, and on-device cybersecurity / digital safety alerts.
- * Covers international news, India news, Tamil Nadu local news, and app risk warnings.
- * Maintains a large cache (up to 100 items), rotates cyclic headlines, and supports manual refresh.
- */
+/** Today's real Tamil headlines only; no synthetic "today" news, app warnings or rotating safety-tip filler. */
 object TamilInfoStripRepo {
-
-    data class Item(
-        val category: String, // e.g. "பாதுகாப்பு எச்சரிக்கை", "தமிழ்நாடு", "இந்தியா", "சர்வதேசம்"
-        val title: String,
-        val source: String,
-        val date: String,
-        val link: String,
-        val isSecurityAlert: Boolean = false,
-    )
-
+    enum class Outcome { READY, NO_TODAY_NEWS, OFFLINE, FEEDS_UNAVAILABLE }
+    data class Snapshot(val items: List<NewsHeadline>, val shown: Set<String>, val outcome: Outcome, val checkedAtMs: Long?)
     private const val PREFS = "cleansweep_info_strip"
-    private const val KEY_LAST_FETCH = "last_fetch_ms"
-    private const val KEY_ITEMS_JSON = "cached_items"
-    private const val KEY_SHOWN_HASHES = "shown_title_hashes"
-    private const val CACHE_VALIDITY_MS = 30 * 60 * 1000L // 20 minutes periodic refresh
+    private const val ITEMS = "dated_headlines_v2"
+    private const val LAST_ATTEMPT = "today_fetch_attempt"
+    private const val FETCH_DAY = "today_fetch_day"
+    private const val SHOWN = "today_shown_titles"
+    private const val SHOWN_DAY = "shown_local_day"
+    private const val LAST_OUTCOME = "today_outcome"
+    private const val CACHE_MS = 15 * 60 * 1000L
+    private const val RETRY_MS = 2 * 60 * 1000L
 
-    // Curated Tamil Nadu, India, International and Cyber Safety fallback updates
-    private val DEFAULT_ITEMS = listOf(
-        Item(
-            category = "பாதுகாப்பு எச்சரிக்கை",
-            title = "தெரியாத எண்களில் இருந்து வரும் APK கோப்புகளை அல்லது செயலிகளை ஒருபோதும் நிறுவ வேண்டாம் — சைபர் பாதுகாப்பு எச்சரிக்கை.",
-            source = "சைபர் கிரைம் பிரிவு",
-            date = "இன்று",
-            link = "https://www.cert-in.org.in",
-            isSecurityAlert = true,
-        ),
-        Item(
-            category = "பாதுகாப்பு எச்சரிக்கை",
-            title = "வங்கி கணக்கு விவரங்கள், கிரெடிட் கார்டு CVV அல்லது OTP-ஐ யாரிடமும் தொலைபேசியில் பகிராதீர்கள்.",
-            source = "இந்திய சைபர் பாதுகாப்பு",
-            date = "இன்று",
-            link = "https://cybercrime.gov.in",
-            isSecurityAlert = true,
-        ),
-        Item(
-            category = "தமிழ்நாடு",
-            title = "தமிழ்நாடு அரசு மின்சார வாகன பயன்பாட்டை ஊக்குவிக்க புதிய சார்ஜிங் நிலையங்களை விரிவாக்கம் செய்கிறது.",
-            source = "தினத்தந்தி தமிழ்நாடு",
-            date = "இன்று",
-            link = "https://www.dailythanthi.com",
-        ),
-        Item(
-            category = "இந்தியா",
-            title = "இந்திய ரயில்வே புதிய அதிவிரைவு வந்தே பாரத் ரயில் வழித்தடங்களை அறிமுகப்படுத்தியுள்ளது.",
-            source = "தினமணி இந்தியா",
-            date = "இன்று",
-            link = "https://www.dinamani.com",
-        ),
-        Item(
-            category = "சர்வதேசம்",
-            title = "சர்வதேச அளவில் விண்வெளி ஆராய்ச்சி மற்றும் பசுமை ஆற்றல் திட்டங்களில் புதிய முன்னேற்றங்கள் அறிவிப்பு.",
-            source = "BBC Tamil",
-            date = "இன்று",
-            link = "https://feeds.bbci.co.uk/tamil/rss.xml",
-        ),
-        Item(
-            category = "தமிழ்நாடு",
-            title = "சென்னை மற்றும் முக்கிய மாவட்டங்களில் உள்கட்டமைப்பு மற்றும் குடிநீர் பாதுகாப்பு திட்டங்கள் துரிதம்.",
-            source = "News18 Tamil",
-            date = "இன்று",
-            link = "https://tamil.news18.com",
-        ),
-    )
-
-    // Multi-source providers covering Tamil Nadu, India, International & Cyber safety
     private val RSS_FEEDS = listOf(
         // Tamil Nadu News
         Triple("தமிழ்நாடு", "தினத்தந்தி தமிழ்நாடு", "https://www.dailythanthi.com/rss/tamilnadu"),
@@ -102,283 +52,111 @@ object TamilInfoStripRepo {
         Triple("செய்திகள்", "Google News Tamil", "https://news.google.com/rss?hl=ta&gl=IN&ceid=IN:ta"),
     )
 
-    suspend fun getItems(context: Context, forceRefresh: Boolean = false): List<Item> = withContext(Dispatchers.IO) {
-        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val lastFetch = prefs.getLong(KEY_LAST_FETCH, 0L)
-        val now = System.currentTimeMillis()
+    private fun localScope(now: Long, zone: ZoneId) = zone.id + "|" + java.time.Instant.ofEpochMilli(now).atZone(zone).toLocalDate()
 
-        // Also inject on-device app security risk alerts into the feed!
-        val appSecurityAlerts = checkAppSecurityAlerts(context)
-
-        if (forceRefresh) {
-            // Completely flush old news and shown hashes on manual refresh!
-            prefs.edit().remove(KEY_ITEMS_JSON).remove(KEY_SHOWN_HASHES).apply()
-        } else if ((now - lastFetch) < CACHE_VALIDITY_MS) {
-            val cached = loadCached(prefs)
-            if (cached.isNotEmpty()) return@withContext rotateAndPrioritize(prefs, appSecurityAlerts + cached)
-        }
-
-        // Fetch fresh items from multiple providers if network allows
-        val fresh = fetchFromFeeds(context)
-        if (fresh.isNotEmpty()) {
-            saveCache(prefs, fresh, now)
-            return@withContext rotateAndPrioritize(prefs, appSecurityAlerts + fresh)
-        }
-
-        val cached = loadCached(prefs)
-        val itemsToUse = if (cached.isNotEmpty()) cached else DEFAULT_ITEMS
-        rotateAndPrioritize(prefs, appSecurityAlerts + itemsToUse)
+    @Synchronized fun shownToday(context: Context): Set<String> {
+        val p = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return shownFor(p, localScope(System.currentTimeMillis(), ZoneId.systemDefault()))
     }
 
-    /**
-     * Checks installed apps on device for High / Medium security risk permissions
-     * and turns them into high-priority security alert items in the news feed!
-     */
-    private fun checkAppSecurityAlerts(context: Context): List<Item> {
-        val list = mutableListOf<Item>()
-        try {
-            val pm = context.packageManager
-            val defaultSms = try {
-                android.provider.Telephony.Sms.getDefaultSmsPackage(context)
-            } catch (e: Exception) {
-                null
-            }
-            val installed = pm.getInstalledApplications(0)
-            for (app in installed) {
-                val pkg = app.packageName
-                val isSystemFlag = (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                // Strictly exclude Android OS, system vendors, OEMs, Google services, default SMS app, and our own apps
-                if (isSystemFlag ||
-                    SecurityScanner.isSystemPackage(pkg) ||
-                    pkg.startsWith("com.qualcomm.") ||
-                    pkg.startsWith("com.qti.") ||
-                    pkg.startsWith("com.xiaomi.") ||
-                    pkg.startsWith("com.miui.") ||
-                    pkg.startsWith("com.google.android.") ||
-                    pkg.startsWith("com.android.") ||
-                    pkg.contains("cleaner") ||
-                    pkg.contains("cleansweep") ||
-                    pkg.contains("radio") ||
-                    pkg.contains("launcher") ||
-                    pkg == defaultSms
-                ) {
-                    continue
-                }
-
-                val label = try { pm.getApplicationLabel(app).toString() } catch (e: Exception) { pkg }
-                if (label.isBlank() || label.startsWith("com.")) continue
-
-                // Check SMS permission (High risk for unknown 3rd-party non-banking apps)
-                val hasSms = pm.checkPermission(android.Manifest.permission.READ_SMS, pkg) == PackageManager.PERMISSION_GRANTED
-                if (hasSms && !SecurityScanner.isBankingOrPaymentApp(pkg, label)) {
-                    list.add(
-                        Item(
-                            category = "பாதுகாப்பு எச்சரிக்கை (High Risk)",
-                            title = "எச்சரிக்கை: '$label' செயலி தனிப்பட்ட SMS செய்திகளைப் படிக்கும் அனுமதி பெற்றுள்ளது. தேவை இல்லையெனில் அனுமதியை நீக்கவும்.",
-                            source = "பாதுகாப்பு ஆய்வு",
-                            date = "உடனடி நடவடிக்கை",
-                            link = "",
-                            isSecurityAlert = true,
-                        )
-                    )
-                }
-
-                // Check overlay permission (draw over other apps)
-                val hasOverlay = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                    val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as? android.app.AppOpsManager
-                    appOps?.checkOpNoThrow(android.app.AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, app.uid, pkg) == android.app.AppOpsManager.MODE_ALLOWED
-                } else false
-
-                if (hasOverlay) {
-                    list.add(
-                        Item(
-                            category = "பாதுகாப்பு எச்சரிக்கை (Medium Risk)",
-                            title = "கவனம்: '$label' செயலி மற்ற திரைகளின் மேல் தோன்றும் அனுமதி (Overlay) பெற்றுள்ளது.",
-                            source = "பாதுகாப்பு ஆய்வு",
-                            date = "சரிபார்க்கவும்",
-                            link = "",
-                            isSecurityAlert = true,
-                        )
-                    )
-                }
-                if (list.size >= 4) break
-            }
-        } catch (e: Exception) {
-            // Ignore
-        }
-        return list
+    @Synchronized private fun shownFor(p: SharedPreferences, scope: String): Set<String> {
+        if (p.getString(SHOWN_DAY, null) != scope) { p.edit().putString(SHOWN_DAY, scope).remove(SHOWN).apply(); return emptySet() }
+        return p.getStringSet(SHOWN, emptySet()).orEmpty().toSet()
     }
 
-    /**
-     * Reorders news items so users see fresh, unseen headlines first instead of repeating BBC headlines.
-     */
-    private fun rotateAndPrioritize(
-        prefs: android.content.SharedPreferences,
-        items: List<Item>,
-    ): List<Item> {
-        val shownSet = prefs.getStringSet(KEY_SHOWN_HASHES, emptySet())?.toMutableSet() ?: mutableSetOf()
-        if (shownSet.size >= items.size && items.isNotEmpty()) {
-            shownSet.clear()
+    suspend fun getItems(context: Context, forceRefresh: Boolean = false): Snapshot = withContext(Dispatchers.IO) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis(); val zone = ZoneId.systemDefault(); val day = localScope(now, zone)
+        // Old caches had no machine-readable publication year/time and could contain static/fake headlines.
+        prefs.edit().remove("cached_items").remove("shown_title_hashes").remove("last_fetch_ms").apply()
+        val allCached = loadCache(prefs.getString(ITEMS, null))
+        val cached = NewsPolicy.today(allCached, now, zone)
+        val attempted = prefs.getLong(LAST_ATTEMPT, 0L)
+        val lastOutcome = runCatching { Outcome.valueOf(prefs.getString(LAST_OUTCOME, "NO_TODAY_NEWS")!!) }.getOrDefault(Outcome.NO_TODAY_NEWS)
+        val interval = if (lastOutcome in setOf(Outcome.OFFLINE, Outcome.FEEDS_UNAVAILABLE)) RETRY_MS else CACHE_MS
+        if (!forceRefresh && prefs.getString(FETCH_DAY, null) == day && now >= attempted && now - attempted < interval) {
+            return@withContext Snapshot(cached, shownFor(prefs, day), if (cached.isNotEmpty()) Outcome.READY else lastOutcome, attempted.takeIf { it > 0 })
         }
-
-        // Security alerts are always prioritized
-        val securityAlerts = items.filter { it.isSecurityAlert }
-        val normalNews = items.filter { !it.isSecurityAlert }
-
-        val unseen = normalNews.filter { it.title.hashCode().toString() !in shownSet }
-        val seen = normalNews.filter { it.title.hashCode().toString() in shownSet }
-
-        unseen.take(5).forEach {
-            shownSet.add(it.title.hashCode().toString())
+        val connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val caps = runCatching { connectivity?.activeNetwork?.let { connectivity.getNetworkCapabilities(it) } }.getOrNull()
+        val internet = caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        val fetched = if (internet) fetchFeeds() else emptyList()
+        currentCoroutineContext().ensureActive()
+        // Re-evaluate date AND timezone after networking, including midnight/time-zone changes during a fetch.
+        val finished = System.currentTimeMillis(); val finishedZone = ZoneId.systemDefault(); val finishedDay = localScope(finished, finishedZone)
+        val items = NewsPolicy.today(fetched.flatMap { it.items } + allCached, finished, finishedZone)
+        val outcome = when {
+            items.isNotEmpty() -> Outcome.READY
+            !internet -> Outcome.OFFLINE
+            fetched.none { it.success } -> Outcome.FEEDS_UNAVAILABLE
+            else -> Outcome.NO_TODAY_NEWS
         }
-        prefs.edit().putStringSet(KEY_SHOWN_HASHES, shownSet).apply()
-
-        // Combine: Interleave Security alerts at the top and throughout the stream
-        val combined = mutableListOf<Item>()
-        combined.addAll(securityAlerts)
-        combined.addAll(unseen)
-        combined.addAll(seen)
-
-        return combined.distinctBy { it.title }
+        prefs.edit().putString(ITEMS, encode(items)).putLong(LAST_ATTEMPT, finished).putString(FETCH_DAY, finishedDay)
+            .putString(LAST_OUTCOME, outcome.name).apply()
+        // Do not overwrite headlines marked while the network refresh was in progress with a stale shown snapshot.
+        Snapshot(items, shownFor(prefs, finishedDay), outcome, finished)
     }
 
-    private fun fetchFromFeeds(context: Context): List<Item> {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
-        val net = cm?.activeNetwork
-        val caps = cm?.getNetworkCapabilities(net)
-        if (caps == null || !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-            return emptyList()
-        }
+    @Synchronized fun markShown(context: Context, key: String) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val day = localScope(System.currentTimeMillis(), ZoneId.systemDefault())
+        val before = shownFor(prefs, day)
+        val keys = (before.toList() + key.take(500)).distinct().takeLast(NewsPolicy.MAX_ITEMS * 2).toSet()
+        prefs.edit().putString(SHOWN_DAY, day).putStringSet(SHOWN, keys).apply()
+    }
 
-        val results = mutableListOf<Item>()
-
-        // Fetch up to 12 items from each provider to build an extensive pool of 50-100 items
-        for ((cat, srcLabel, feedUrl) in RSS_FEEDS) {
-            if (results.size >= 100) break
-            var conn: HttpURLConnection? = null
-            try {
-                conn = (URL(feedUrl).openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 7_000
-                    readTimeout = 7_000
-                    setRequestProperty("User-Agent", "CleanSweep Android NewsReader/2.18")
-                }
-                if (conn.responseCode != 200) continue
-                conn.inputStream.use { stream ->
-                    val parser = Xml.newPullParser()
-                    parser.setInput(stream, "UTF-8")
-                    var inItem = false
-                    var title = ""; var link = ""; var pubDate = ""
-                    var itemsFromThisFeed = 0
-                    while (parser.eventType != XmlPullParser.END_DOCUMENT && itemsFromThisFeed < 12) {
-                        when (parser.eventType) {
-                            XmlPullParser.START_TAG -> {
-                                when (parser.name) {
-                                    "item" -> { inItem = true; title = ""; link = ""; pubDate = "" }
-                                    "title" -> if (inItem) title = parser.nextText()
-                                    "link" -> if (inItem) link = parser.nextText()
-                                    "pubDate" -> if (inItem) pubDate = parser.nextText()
-                                }
-                            }
-                            XmlPullParser.END_TAG -> {
-                                if (parser.name == "item" && inItem) {
-                                    val cleanedTitle = cleanTitle(title)
-                                    val formattedDate = formatDate(pubDate)
-                                    if (cleanedTitle.isNotBlank() && isTamil(cleanedTitle)) {
-                                        results.add(
-                                            Item(
-                                                category = cat,
-                                                title = cleanedTitle,
-                                                source = srcLabel,
-                                                date = formattedDate,
-                                                link = link,
-                                            )
-                                        )
-                                        itemsFromThisFeed++
-                                    }
-                                    inItem = false
-                                }
-                            }
-                        }
-                        parser.next()
+    private data class FeedResult(val success: Boolean, val items: List<NewsHeadline>)
+    private suspend fun fetchFeeds(): List<FeedResult> = coroutineScope {
+        val limit = Semaphore(3)
+        val deadline = System.nanoTime() + 10_000_000_000L // shared budget, not ten independent long waits.
+        RSS_FEEDS.map { (category, publisher, url) -> async(Dispatchers.IO) {
+            limit.withPermit {
+                currentCoroutineContext().ensureActive()
+                fun remainingMs() = ((deadline - System.nanoTime()) / 1_000_000).coerceAtMost(3_000).toInt()
+                if (remainingMs() <= 0) return@withPermit FeedResult(false, emptyList())
+                var connection: HttpURLConnection? = null
+                try {
+                    val conn = (URL(url).openConnection() as HttpURLConnection).apply {
+                        connectTimeout = remainingMs().coerceAtLeast(1); readTimeout = remainingMs().coerceAtLeast(1)
+                        setRequestProperty("User-Agent", "LiveGuard/${BuildConfig.VERSION_NAME} TamilHeadlines")
+                        setRequestProperty("Accept", "application/rss+xml, application/atom+xml, application/xml, text/xml")
                     }
-                }
-            } catch (e: Exception) {
-                // Individual feed failure shouldn't block others
-            } finally {
-                conn?.disconnect()
+                    connection = conn
+                    if (conn.responseCode != 200 || remainingMs() <= 0) return@withPermit FeedResult(false, emptyList())
+                    val raw = conn.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                        val chars = CharArray(NewsPolicy.MAX_FEED_CHARS + 1); var count = 0
+                        while (count < chars.size) {
+                            currentCoroutineContext().ensureActive()
+                            if (remainingMs() <= 0) return@withPermit FeedResult(false, emptyList())
+                            conn.readTimeout = remainingMs().coerceAtLeast(1)
+                            val n = reader.read(chars, count, chars.size - count)
+                            if (n < 0) break
+                            count += n
+                        }
+                        String(chars, 0, count)
+                    }
+                    currentCoroutineContext().ensureActive()
+                    FeedResult(true, NewsPolicy.parseFeed(raw, category, publisher))
+                } catch (e: CancellationException) { throw e }
+                catch (e: Exception) { FeedResult(false, emptyList()) }
+                finally { connection?.disconnect() }
             }
+        } }.awaitAll()
+    }
+
+    private fun loadCache(raw: String?): List<NewsHeadline> = runCatching {
+        val array = JSONArray(raw ?: "[]")
+        (0 until minOf(array.length(), NewsPolicy.MAX_ITEMS)).mapNotNull { index ->
+            val item = array.optJSONObject(index) ?: return@mapNotNull null
+            val time = item.optLong("published", 0L)
+            if (time <= 0) null else NewsHeadline(item.optString("cat"), item.optString("title"), item.optString("src"), time, item.optString("link"))
         }
+    }.getOrDefault(emptyList())
 
-        // Add curated security / cyber warnings to the stream
-        results.addAll(DEFAULT_ITEMS.filter { it.category.startsWith("பாதுகாப்பு") })
-
-        return results.distinctBy { it.title }
-    }
-
-    private fun cleanTitle(raw: String): String {
-        return raw.replace(Regex("<.*?>"), "")
-            .replace(Regex(" - [^-]+$"), "") // Remove trailing " - BBC News தமிழ்"
-            .trim()
-    }
-
-    private fun formatDate(raw: String): String {
-        if (raw.isBlank()) return "இன்று"
-        return try {
-            val zdt = ZonedDateTime.parse(raw, DateTimeFormatter.RFC_1123_DATE_TIME)
-            val d = zdt.dayOfMonth
-            val m = zdt.monthValue
-            "$d/$m"
-        } catch (e: Exception) {
-            "சமீபத்தியது"
-        }
-    }
-
-    private fun isTamil(s: String): Boolean =
-        s.any { it.code in 0x0B80..0x0BFF }
-
-    private fun loadCached(prefs: android.content.SharedPreferences): List<Item> {
-        val json = prefs.getString(KEY_ITEMS_JSON, null) ?: return emptyList()
-        return try {
-            val arr = org.json.JSONArray(json)
-            val list = mutableListOf<Item>()
-            for (i in 0 until arr.length()) {
-                val o = arr.getJSONObject(i)
-                list.add(
-                    Item(
-                        category = o.getString("cat"),
-                        title = o.getString("title"),
-                        source = o.getString("src"),
-                        date = o.getString("date"),
-                        link = o.getString("link"),
-                        isSecurityAlert = o.optBoolean("is_sec", false),
-                    )
-                )
-            }
-            list
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
-
-    private fun saveCache(prefs: android.content.SharedPreferences, items: List<Item>, now: Long) {
-        try {
-            val arr = org.json.JSONArray()
-            for (item in items) {
-                val o = org.json.JSONObject()
-                o.put("cat", item.category)
-                o.put("title", item.title)
-                o.put("src", item.source)
-                o.put("date", item.date)
-                o.put("link", item.link)
-                o.put("is_sec", item.isSecurityAlert)
-                arr.put(o)
-            }
-            prefs.edit()
-                .putString(KEY_ITEMS_JSON, arr.toString())
-                .putLong(KEY_LAST_FETCH, now)
-                .apply()
-        } catch (e: Exception) {
-            // Ignored
-        }
-    }
+    private fun encode(items: List<NewsHeadline>): String = JSONArray().apply {
+        items.take(NewsPolicy.MAX_ITEMS).forEach { item -> put(JSONObject().apply {
+            put("cat", item.category); put("title", item.title); put("src", item.source)
+            put("published", item.publishedAtMs); put("link", item.link)
+        }) }
+    }.toString()
 }

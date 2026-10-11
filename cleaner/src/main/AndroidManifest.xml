@@ -71,6 +71,8 @@
       stored by CleanSweep: the recogniser returns text, which is exactly like typing it.
     -->
     <queries>
+        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <intent><action android:name="com.android.settings.TTS_SETTINGS" /></intent>
         <intent>
             <action android:name="android.speech.RecognitionService" />
         </intent>
@@ -147,6 +149,7 @@
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.universalrp.cleansweep.WIDGET_SPEAK" />
                 <action android:name="com.universalrp.cleansweep.WIDGET_REFRESH" />
+                <action android:name="com.universalrp.cleansweep.WIDGET_MODE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

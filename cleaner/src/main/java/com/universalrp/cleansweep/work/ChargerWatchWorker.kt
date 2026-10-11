@@ -13,21 +13,9 @@ import com.universalrp.cleansweep.notify.ChargeNotifier
 import kotlinx.coroutines.delay
 
 /**
- * Charger plug-in, the way that works on every Android version.
- *
- * The plug-in broadcast cannot start a foreground service on Android 12 and newer, and
- * starting one anyway is how "the charger was never announced" happened: the call was
- * refused, the exception was swallowed, and the phone stayed silent. A broadcast *can*
- * schedule a job, and a running job is allowed to do the real work — so that is what happens:
- *
- *  1. the job tries the normal charging service (the live card with watts, current and
- *     temperature, refreshed every five seconds);
- *  2. if the system still refuses, the job shows the same card itself, keeps refreshing it
- *     while the charger is in, and asks to be run again when its time is up, so the reading
- *     does not disappear while the phone is still plugged in.
- *
- * The one line about the charger is spoken from [ChargeNotifier], which de-duplicates it, so
- * a plug-in is never announced twice even when both paths run.
+ * Existing user-enabled card/pill/monitor fallback. Android/OEM rules can refuse or delay
+ * service starts and jobs; this is not guaranteed on every device. Voice-only power alerts
+ * are independent short PowerVoiceWorker jobs, with shared connection de-duplication.
  */
 class ChargerWatchWorker(
     context: Context,
@@ -37,8 +25,10 @@ class ChargerWatchWorker(
     override suspend fun doWork(): Result {
         val ctx = applicationContext
         val persistent = ChargeMonitorService.persistentEnabled(ctx)
-        if (!ChargeMonitorService.cardEnabled(ctx) && !persistent) {
-            // The user switched the charging card off: nothing to show, nothing to say.
+        val pill = ctx.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(ChargeMonitorService.PILL_KEY, false)
+        if (!ChargeMonitorService.cardEnabled(ctx) && !pill && !persistent) {
+            // No visual monitoring requested. Voice-only events have their own short worker.
             ChargeNotifier.clear(ctx)
             return Result.success()
         }
@@ -73,6 +63,7 @@ class ChargerWatchWorker(
                 return Result.success()
             }
             ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
+            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
             // The piggy-backed charge of the last few percent can be watched, but there is no
             // point shouting about it — the card simply stays until the plug comes out.
             if (now.percent >= 100) break

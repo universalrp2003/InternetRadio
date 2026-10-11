@@ -256,7 +256,10 @@ data class UiState(
     val malwareReport: MalwareReport? = null,
     val malwareIncludeSystem: Boolean = false,
     val vtKeySaved: Boolean = false,
-    val tamilInfoItems: List<com.universalrp.cleansweep.data.TamilInfoStripRepo.Item> = emptyList(),
+    val tamilInfoItems: List<NewsHeadline> = emptyList(),
+    val newsShown: Set<String> = emptySet(),
+    val newsLoading: Boolean = false,
+    val newsOutcome: TamilInfoStripRepo.Outcome = TamilInfoStripRepo.Outcome.NO_TODAY_NEWS,
     val tamilInfoVisible: Boolean = true,
     val tamilInfoPaused: Boolean = false,
     val autoWifiScanOnOpen: Boolean = true,
@@ -297,6 +300,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var scanJob: Job? = null
     private var speedJob: Job? = null
     private var malwareJob: Job? = null
+    private var newsJob: Job? = null
     private var homeReadingJob: Job? = null
     private var phoneAgeCalculatedOn: String? = null
     private var healthReadingJob: Job? = null
@@ -1009,6 +1013,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         mutate { it.copy(assistantMessages = it.assistantMessages + userMsg, assistantTyping = true) }
         viewModelScope.launch {
             val state = _state.value
+            if (com.universalrp.cleansweep.ai.AssistantEvidencePolicy.asksAboutThisAssistant(q)) {
+                val config = state.aiConfig
+                val reply = AssistantMessage(fromUser = false,
+                    text = com.universalrp.cleansweep.ai.AssistantEvidencePolicy.identity(config.provider.label,
+                        config.resolvedModel, state.assistantOnline && config.ready,
+                        state.aiAnswerLanguage == "ta" || (state.aiAnswerLanguage == "auto" && isTamilText(q)),
+                        config.provider == AiProvider.FREE), meta = "On-device settings answer · no API/search request")
+                mutate { it.copy(assistantMessages = it.assistantMessages + reply, assistantTyping = false) }
+                speakAnswer(reply.text)
+                return@launch
+            }
             if (state.aiConfig.ready && (forceAi || state.assistantOnline)) {
                 // Online mode: your provider answers, with the same on-device numbers as
                 // context so it cannot drift away from reality.
@@ -1250,20 +1265,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             "when your phone is running hot, and I will read out the daily brief."
         val tamilText = "வணக்கம். இது சுத்தம் செய்பவர். பேட்டரி குறையும்போது, முழுவதும் சார்ஜ் ஆகும்போது, " +
             "போன் சூடாகும்போது நான் சொல்வேன்; தினசரி அறிக்கையையும் படித்துக் காட்டுவேன்."
-        val text = if (tamil && Announcer.canSpeak(ctx)) tamilText else english
-        val spoke = Announcer.speakNow(ctx, text)
+        val text = if (tamil) tamilText else english
+        val spoke = Announcer.speakNow(ctx, text, if (tamil) AppLang.TA else AppLang.EN)
         mutate {
             it.copy(
                 message = if (spoke) {
-                    tr("Speaking… if you hear nothing, check that a text-to-speech engine is installed.")
+                    tr("Voice request queued. Check delivery diagnostics for playback or a blocking reason.")
                 } else {
-                    tr("No text-to-speech engine is available on this phone.")
+                    tr("Voice request was blocked. Check the master switch and delivery diagnostics.")
                 },
             )
         }
     }
 
     /** The switch for the natural (network) voice: see Announcer.setOnlineVoice. */
+    fun testAutomaticVoice() {
+        viewModelScope.launch {
+            Announcer.speakAndWait(ctx, "This is a test of enabled automatic charging speech, not a charger connection event.",
+                "இது தானியங்கி சார்ஜ் குரலின் சோதனை மட்டும்; சார்ஜர் இணைப்பு நிகழ்வு அல்ல.", Announcer.Event.CHARGING)
+        }
+    }
+
+    fun openTtsSettings() {
+        val intent = android.content.Intent("com.android.settings.TTS_SETTINGS").addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        val opened = runCatching {
+            if (intent.resolveActivity(ctx.packageManager) == null) false else { ctx.startActivity(intent); true }
+        }.getOrDefault(false)
+        if (!opened) mutate { it.copy(message = tr("Search Android Settings for Text-to-speech output and installed Tamil voice data.")) }
+    }
+
     fun setOnlineVoice(on: Boolean) {
         Announcer.setOnlineVoice(ctx, on)
         mutate { it.copy(onlineVoice = on) }
@@ -2657,10 +2687,35 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     // -------------------------------------------------------- Tamil info strip
 
     fun loadTamilInfoStrip(force: Boolean = false) {
-        viewModelScope.launch {
-            val items = com.universalrp.cleansweep.data.TamilInfoStripRepo.getItems(ctx, force)
-            mutate { it.copy(tamilInfoItems = items) }
+        if (newsJob?.isActive == true) return
+        newsJob = viewModelScope.launch {
+            mutate { it.copy(newsLoading = true) }
+            try {
+                val result = TamilInfoStripRepo.getItems(ctx, force)
+                val valid = com.universalrp.cleansweep.data.NewsPolicy.today(result.items, System.currentTimeMillis(), java.time.ZoneId.systemDefault())
+                val shown = TamilInfoStripRepo.shownToday(ctx)
+                mutate { it.copy(tamilInfoItems = valid, newsShown = shown,
+                    newsOutcome = if (valid.isEmpty() && result.items.isNotEmpty()) TamilInfoStripRepo.Outcome.NO_TODAY_NEWS else result.outcome,
+                    newsLoading = false) }
+            } finally { mutate { it.copy(newsLoading = false) } }
         }
+    }
+
+    /** A resumed/visible Home must not retain yesterday's headline after midnight or a timezone change. */
+    fun expireNewsForLocalDay() {
+        val now = System.currentTimeMillis(); val zone = java.time.ZoneId.systemDefault()
+        val valid = com.universalrp.cleansweep.data.NewsPolicy.today(_state.value.tamilInfoItems, now, zone)
+        val shown = TamilInfoStripRepo.shownToday(ctx)
+        if (valid != _state.value.tamilInfoItems || shown != _state.value.newsShown)
+            mutate { it.copy(tamilInfoItems = valid, newsShown = shown) }
+    }
+
+    fun markNewsShown(key: String) {
+        val item = _state.value.tamilInfoItems.firstOrNull { it.key == key } ?: return
+        if (!com.universalrp.cleansweep.data.NewsPolicy.isToday(item.publishedAtMs, System.currentTimeMillis(), java.time.ZoneId.systemDefault())) return
+        if (key in _state.value.newsShown) return
+        TamilInfoStripRepo.markShown(ctx, key)
+        mutate { it.copy(newsShown = it.newsShown + key) }
     }
 
     fun toggleTamilInfoPause() {

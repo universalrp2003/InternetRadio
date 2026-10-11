@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
 
     /** True once the widget's "Clean" tap has been turned into a scan for this activity. */
     private var widgetActionHandled = false
+    private val alertOwner = "activity:" + java.util.UUID.randomUUID().toString()
 
     /** Android 13+: the charging card needs this, or nothing shows in the status bar. */
     private val notificationPermission =
@@ -58,6 +59,9 @@ class MainActivity : ComponentActivity() {
                     ) {
                         widgetActionHandled = true
                         vm.openScanner()
+                    } else if (!widgetActionHandled && intent?.action == com.universalrp.cleansweep.widget.CleanSweepWidget.ACTION_DETAILS) {
+                        widgetActionHandled = true
+                        vm.navigate(Screen.HEALTH)
                     }
                     onDispose { }
                 }
@@ -76,6 +80,16 @@ class MainActivity : ComponentActivity() {
                 AppRoot(vm)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        com.universalrp.cleansweep.notify.AutomaticAlerts.start(applicationContext, alertOwner)
+    }
+
+    override fun onStop() {
+        com.universalrp.cleansweep.notify.AutomaticAlerts.stop(alertOwner)
+        super.onStop()
     }
 
     private fun requestNotificationsIfNeeded() {

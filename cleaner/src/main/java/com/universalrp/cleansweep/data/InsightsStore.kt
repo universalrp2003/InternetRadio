@@ -71,7 +71,7 @@ object ChargeHistoryRepo {
         val elapsed = SystemClock.elapsedRealtime()
         val before = load(context)
         val sample = ChargeSample(System.currentTimeMillis(), elapsed,
-            plugEvent || (!unplugEvent && battery.powerConnected), battery.percent.takeIf { it >= 0 },
+            plugEvent || (!unplugEvent && battery.powerConnected), BatteryValuePolicy.exactWholePercent(battery.percent, battery.reportedLevel, battery.reportedScale),
             battery.powerW?.toDouble(), battery.temperatureC?.toDouble(), plugEvent, unplugEvent,
             runCatching { android.provider.Settings.Global.getInt(context.contentResolver, "boot_count") }.getOrNull())
         cache = ChargeHistoryPolicy.observe(before, sample)

@@ -277,21 +277,15 @@ object ChargeNotifier {
     /**
      * Says what the charger is doing, once per plug-in.
      */
-    fun announcePluggedIn(context: Context, delayMs: Long = 800) {
+    suspend fun announcePluggedIn(context: Context, delayMs: Long = 800) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        // Deduplicate plug-ins within 4 seconds
-        if (System.currentTimeMillis() - last < 4_000L) return
-        prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
-
-        // Give a short pause for the hardware connection to establish
-        try {
-            if (delayMs > 0) Thread.sleep(delayMs)
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
-            return
+        // Wait without blocking a thread, then de-duplicate by physical connection, not a four-second window.
+        if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
+        val token = prefs.getString("voice_connection_token", "").orEmpty().ifBlank {
+            java.util.UUID.randomUUID().toString().also { prefs.edit().putString("voice_connection_token", it).apply() }
         }
+        if (prefs.getString("voice_last_spoken_connection", "") == token) return
         val battery = read(app) ?: return
         if (!battery.powerConnected) return
 
@@ -300,11 +294,13 @@ object ChargeNotifier {
         if (tempC != null && tempC >= 42.0f) {
             val tempRound = tempC.toInt()
             val warnTamil = "எச்சரிக்கை! போன் மிக அதிக வெப்பமாக உள்ளது ($tempRound டிகிரி). வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும் அல்லது சார்ஜரை அகற்றவும்."
-            Announcer.speakTamil(app, warnTamil, Announcer.Event.OVERHEAT)
+            Announcer.speakAndWait(app, "The battery is unusually warm at plug-in. Please review charging conditions.", warnTamil,
+                Announcer.Event.OVERHEAT, onStarted = { prefs.edit().putString("voice_last_spoken_connection", token).apply() },
+                requestKey = "plug:$token")
             return
         }
 
-        val percent = battery.percent.coerceAtLeast(0)
+        val percent = battery.percent
         val watts = battery.powerW
         // Remaining time estimate: only announce when charging is stable and verified
         val currentA = battery.currentA
@@ -324,12 +320,15 @@ object ChargeNotifier {
             if (watts != null && watts < 4.0f && percent < 90) {
                 append("மெதுவான சார்ஜிங்: $percent சதவீதம்.")
             } else {
-                append("சார்ஜர் இணைக்கப்பட்டது: $percent சதவீதம்.")
+                append(if (percent in 0..100) "சார்ஜர் இணைக்கப்பட்டது: $percent சதவீதம்." else "சார்ஜர் இணைக்கப்பட்டது. பேட்டரி அளவு தெரியவில்லை.")
             }
             if (timeEstimate != null) {
                 append(" நிறைவடைய $timeEstimate.")
             }
         }
-        Announcer.speakTamil(app, tamil, Announcer.Event.CHARGING)
+        Announcer.speakAndWait(app, "Charger connected" + (if (battery.percent in 0..100) ": ${battery.percent} percent." else ". Battery level not reported."),
+            tamil, Announcer.Event.CHARGING, onStarted = {
+                prefs.edit().putString("voice_last_spoken_connection", token).putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
+            }, requestKey = "plug:$token")
     }
 }
