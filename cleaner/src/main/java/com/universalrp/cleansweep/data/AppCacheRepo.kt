@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Process
 import android.provider.Settings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 data class AppCacheInfo(
@@ -15,7 +16,7 @@ data class AppCacheInfo(
     val label: String,
     val cacheBytes: Long,
     val isSystem: Boolean,
-    val selected: Boolean = true,
+    val selected: Boolean = false,
 )
 
 /** Reads per-app cache sizes via StorageStatsManager (needs Usage Access). */
@@ -67,6 +68,7 @@ object AppCacheRepo {
 
         val result = mutableListOf<AppCacheInfo>()
         for (ai in apps) {
+            kotlinx.coroutines.currentCoroutineContext().ensureActive()
             if (ai.packageName == context.packageName) continue
             val isSystem = (ai.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             if (isSystem && !includeSystem) continue

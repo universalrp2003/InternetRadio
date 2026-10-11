@@ -151,7 +151,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 android.speech.RecognizerIntent.EXTRA_LANGUAGE_MODEL,
                 android.speech.RecognizerIntent.LANGUAGE_MODEL_FREE_FORM,
             )
-            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, tr("Ask CleanSweep…"))
+            putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, tr("Ask Live Guard…"))
             putExtra(
                 android.speech.RecognizerIntent.EXTRA_LANGUAGE,
                 if (state.lang == com.universalrp.cleansweep.data.AppLang.TA) "ta-IN" else "en-IN",
@@ -181,7 +181,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Box(
                 Modifier
@@ -203,18 +203,18 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(tr("CleanSweep Assistant"),
+                Text(tr("Live Guard assistant"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                 )
                 Text(
                     when {
                         state.assistantOnline && state.aiConfig.ready ->
-                            "Online AI • ${state.aiConfig.engineLabel}"
+                            tr("Online AI · %s", state.aiConfig.engineLabel)
                         state.assistantOnline ->
-                            "Online AI is unavailable — answers use the on-device engine"
+                            tr("Online mode selected · provider setup needed")
                         else ->
-                            "On-device engine • answers stay on this phone"
+                            tr("Local assistant mode · no AI/search request")
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = AccentCyan,
@@ -234,10 +234,10 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 )
             }
             IconButton(onClick = { vm.openAiSettings() }) {
-                Icon(Icons.Outlined.Settings, contentDescription = "Which AI answers", tint = TextSecondary)
+                Icon(Icons.Outlined.Settings, contentDescription = tr("Which AI answers"), tint = TextSecondary)
             }
             IconButton(onClick = { vm.clearAssistant() }) {
-                Icon(Icons.Outlined.DeleteSweep, contentDescription = "Clear chat", tint = TextSecondary)
+                Icon(Icons.Outlined.DeleteSweep, contentDescription = tr("Clear chat"), tint = TextSecondary)
             }
         }
 
@@ -274,16 +274,10 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
                 val ready = state.aiConfig.ready
                 Text(
                     when {
-                        state.assistantOnline && ready && state.aiStatusOk ->
-                            "Online AI answers through ${state.aiEngineLabel}. Each reply shows the " +
-                                "provider, the model and how long it took."
-                        state.assistantOnline && ready ->
-                            "Online AI is on, but the provider did not answer the last check" +
-                                (state.aiStatusText?.let { ": $it" } ?: ".") +
-                                " Replies fall back to the on-device engine until it does."
-                        else ->
-                            "On-device engine — a small rule engine that runs on your phone and " +
-                                "reads only the numbers shown in this app. No internet needed."
+                        state.aiStatusChecking -> tr("Checking the provider connection…")
+                        state.assistantOnline && ready -> tr("Online provider selected: %s. A connection check is not proof a model answered. Replies show the responding service, requested model and elapsed time; a requested ID does not prove the underlying execution model.", state.aiEngineLabel)
+                        state.assistantOnline -> tr("Online mode needs provider setup. Local help is still available.")
+                        else -> tr("The local assistant uses built-in rules and available phone readings. Online AI and web lookup require your choice.")
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = if (state.assistantOnline && ready && !state.aiStatusOk) WarnAmber
@@ -318,7 +312,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             }
 
             if (state.assistantTyping) {
-                item { TypingBubble(state) }
+                item { TypingBubble(state, vm) }
             }
 
             if (showChips) {
@@ -425,22 +419,17 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                 AiText(msg.text)
                 // v2.8: the same live evidence the model saw, so the answer can be
                 // checked instead of trusted.
-                msg.sources.takeIf { it.isNotEmpty() }?.let { sources ->
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        tr("What the AI read just now:"),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = AccentCyan,
-                        fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(2.dp))
-                    sources.take(3).forEach { line ->
-                        Text(
-                            line,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary,
-                        )
-                        Spacer(Modifier.height(2.dp))
+                msg.sources.distinct().takeIf { it.isNotEmpty() }?.let { sources ->
+                    var expanded by remember(msg.atMs) { mutableStateOf(false) }
+                    TextButton(onClick = { expanded = !expanded }) {
+                        Text(tr("Web excerpts (%s)", sources.size), style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                    }
+                    if (expanded) {
+                        Text(tr("Retrieved excerpts, not independent verification."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        sources.take(3).forEach { line ->
+                            Text(line, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Spacer(Modifier.height(2.dp))
+                        }
                     }
                 }
                 msg.meta?.let { meta ->
@@ -472,7 +461,7 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
                     // because the user asked for it just now, and even when automatic voice
                     // replies are muted.
                     TextButton(
-                        onClick = { vm.speakAnswer(msg.text, forced = true) },
+                        onClick = { vm.speakAnswer(msg, forced = true) },
                         contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
                     ) {
                         Icon(
@@ -495,39 +484,31 @@ private fun AssistantBubble(msg: AssistantMessage, vm: MainViewModel) {
 }
 
 @Composable
-private fun TypingBubble(state: UiState) {
-    // v2.7: the old bubble always said "Thinking on this device…" — even while an online
-    // provider was answering. Now it names who is actually working.
-    val online = state.assistantOnline && state.aiConfig.ready
-    val label = if (online) {
-        "Asking ${state.aiEngineLabel.ifBlank { "the online AI" }}…"
-    } else {
-        tr("Thinking on this device…")
+private fun TypingBubble(state: UiState, vm: MainViewModel) {
+    var elapsed by remember(state.assistantRequestStartedMs) { mutableStateOf(0L) }
+    LaunchedEffect(state.assistantRequestStartedMs) {
+        while (state.assistantRequestStartedMs > 0) {
+            elapsed = ((android.os.SystemClock.elapsedRealtime() - state.assistantRequestStartedMs).coerceAtLeast(0) / 1_000)
+            kotlinx.coroutines.delay(1_000)
+        }
     }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .background(SurfaceC, shape = RoundedCornerShape(18.dp))
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(16.dp),
-            color = AccentCyan,
-            strokeWidth = 2.dp,
-        )
+    Row(Modifier.fillMaxWidth().background(SurfaceC, RoundedCornerShape(18.dp)).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        CircularProgressIndicator(Modifier.size(16.dp), color = AccentCyan, strokeWidth = 2.dp)
         Spacer(Modifier.width(12.dp))
-        Text(label,
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary,
-        )
+        Column(Modifier.weight(1f)) {
+            Text(state.assistantPhase ?: tr("Preparing answer…"), style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Text(tr("Elapsed: %s s · maximum: %s s", elapsed, com.universalrp.cleansweep.ai.AiRequestPolicy.Use.CHAT.budgetMs / 1_000),
+                style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+        }
+        TextButton(onClick = { vm.cancelAssistant() }) { Text(tr("Cancel")) }
     }
 }
 
 @Composable
 private fun SuggestionChip(text: String, onClick: () -> Unit) {
     Text(
-        text,
+        tr(text),
         style = MaterialTheme.typography.labelMedium,
         color = AccentCyan,
         modifier = Modifier

@@ -24,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.VolumeOff
 import androidx.compose.material.icons.outlined.VolumeUp
@@ -39,6 +40,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,6 +100,12 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    TextButton(onClick = { vm.navigate(Screen.FEATURE_SETUP) }) { Text(tr("Review feature setup")) }
+                    TextButton(onClick = { vm.navigate(Screen.NOTIFICATION_READER) }) { Text(tr("Selected notification reading")) }
+                }
+            }
             // ------------------------------------------------------- voice (v2.4)
             PanelCard(Modifier.fillMaxWidth()) {
                 Row(
@@ -259,13 +267,63 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            // Autostart permission helper for Xiaomi, Oppo, Vivo, Samsung phones
             PanelCard(Modifier.fillMaxWidth()) {
-                SettingSwitch(
-                    title = tr("Charging status in the status bar"),
-                    subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
-                    checked = state.chargeMonitor,
-                    onCheckedChange = { vm.setChargeMonitor(it) },
-                )
+                Column(Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = AccentCyan,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Auto-start after phone restart"),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                tr("Some Xiaomi, Oppo and Vivo ROMs expose an Autostart setting. Availability varies; it may help after reboot but cannot guarantee background delivery or survive a force-stop."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(10.dp))
+                    Button(
+                        onClick = { vm.openAutoStartSettings() },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentCyan.copy(alpha = 0.2f),
+                            contentColor = AccentCyan,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(tr("Open Autostart Settings"), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column {
+                    SettingSwitch(
+                        title = tr("Charging status in the status bar"),
+                        subtitle = tr("Ongoing notification with charging watts, battery % and time to full"),
+                        checked = state.chargeMonitor,
+                        onCheckedChange = { vm.setChargeMonitor(it) },
+                    )
+                    SettingSwitch(
+                        title = tr("Background battery & health monitor"),
+                        subtitle = tr(
+                            "Keeps low-priority background monitoring active with a persistent notification " +
+                                "and an instant Stop button. Note: OEM power savers may restrict background execution, " +
+                                "and no app survives an Android force-stop."
+                        ),
+                        checked = state.persistentMonitor,
+                        onCheckedChange = { vm.setPersistentMonitor(it) },
+                    )
+                }
             }
 
             // The little watt reading the user asked to see next to the clock. Android has
@@ -274,8 +332,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column {
                     SettingSwitch(
-                        title = tr("Watt reading beside the clock"),
-                        subtitle = tr("Tiny “⚡ 3.9 W” pill in the empty part of the status bar while charging"),
+                        title = tr("Status-bar data and watts"),
+                        subtitle = tr("Watts only while connected; data and D/U lights return with background monitoring"),
                         checked = state.statusPill,
                         onCheckedChange = { vm.setStatusPill(it) },
                     )
@@ -303,8 +361,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     if (state.statusPill && state.statusPillAllowed) {
                         Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
                             Text(
-                                "Ready. It appears only while the charger is connected, cannot be " +
-                                    "tapped, and disappears when you switch this off.",
+                                tr("Ready. Watts only while connected; normal data and D/U lights return after unplugging when background monitoring is enabled. Touch-through except while positioning it."),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )
@@ -465,6 +522,8 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     )
                 }
             }
+
+            PermissionHubCard(vm)
 
             PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(

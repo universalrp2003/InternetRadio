@@ -1,0 +1,4 @@
+CleanSweep v2.21:
+- Wi-Fi Device Names & Ping Latency: Formatted clean friendly device titles (removing raw .hgu_lan suffixes) with live ping response latency (ms) for all active LAN devices.
+- Malware Scanner 401 Fix: Gracefully handles external API authentication changes and integrates VirusTotal second-opinion checks so lookups never fail with raw 401 errors.
+- Enhanced stability and UI clarity.

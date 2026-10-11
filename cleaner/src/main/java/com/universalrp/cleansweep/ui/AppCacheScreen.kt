@@ -65,6 +65,7 @@ import com.universalrp.cleansweep.ui.theme.WarnAmber
 
 @Composable
 fun AppCacheScreen(state: UiState, vm: MainViewModel) {
+    androidx.compose.runtime.LaunchedEffect(Unit) { vm.loadAppCaches() }
     var showHowItWorks by remember { mutableStateOf(false) }
 
     Column(

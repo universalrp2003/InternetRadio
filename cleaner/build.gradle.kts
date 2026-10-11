@@ -18,8 +18,8 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 18
-        versionName = "2.13"
+        versionCode = 44
+        versionName = "2.39"
     }
 
     signingConfigs {
@@ -44,8 +44,15 @@ android {
         }
     }
 
+    // Keep every supported ABI. Compress/extract JNI libraries instead of putting
+    // all ABI native payloads uncompressed into the universal download (82 MB in2.38).
+    packaging {
+        jniLibs { useLegacyPackaging = true }
+    }
+
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     compileOptions {
@@ -74,6 +81,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+    // Explicit model download, local Tamil/English notification translation; no online message translation.
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
 
     // The hourly health watch (battery low/full, overheating, the daily brief). WorkManager
     // survives reboots and is the only scheduler Google allows for this kind of background work.

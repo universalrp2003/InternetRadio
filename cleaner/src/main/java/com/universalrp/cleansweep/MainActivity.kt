@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
 
     /** True once the widget's "Clean" tap has been turned into a scan for this activity. */
     private var widgetActionHandled = false
+    private val alertOwner = "activity:" + java.util.UUID.randomUUID().toString()
 
     /** Android 13+: the charging card needs this, or nothing shows in the status bar. */
     private val notificationPermission =
@@ -40,11 +41,10 @@ class MainActivity : ComponentActivity() {
         // v2.6: remember a crash on the phone itself, so the next bug report can say what
         // actually happened instead of "MIUI said it stopped".
         CrashLog.install(this)
-        requestLegacyStorageIfNeeded()
-        requestNotificationsIfNeeded()
+        // Sensitive permissions are explained and requested from reviewed setup, not silently on launch.
+        com.universalrp.cleansweep.updates.LiveGuardUpdates.checkOnLaunch(this)
         setContent {
             CleanSweepTheme {
-                com.universalrp.updates.AppUpdates.Control("CleanSweep", automatic = true)
                 val vm: MainViewModel = viewModel()
 
                 // The widget's "Clean" button opens the app on the scanner (Android does not
@@ -58,7 +58,11 @@ class MainActivity : ComponentActivity() {
                     ) {
                         widgetActionHandled = true
                         vm.openScanner()
+                    } else if (!widgetActionHandled && intent?.action == com.universalrp.cleansweep.widget.CleanSweepWidget.ACTION_DETAILS) {
+                        widgetActionHandled = true
+                        vm.navigate(Screen.HEALTH)
                     }
+                    if (intent?.action == com.universalrp.cleansweep.notify.SetupReminder.ACTION) vm.navigate(Screen.FEATURE_SETUP)
                     onDispose { }
                 }
 
@@ -67,7 +71,7 @@ class MainActivity : ComponentActivity() {
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) vm.refresh()
+                        if (event == Lifecycle.Event.ON_RESUME) { vm.refresh(); vm.checkSetupReminders() }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
                     onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -78,7 +82,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationsIfNeeded() {
+    override fun onStart() {
+        super.onStart()
+        com.universalrp.cleansweep.notify.AutomaticAlerts.start(applicationContext, alertOwner)
+    }
+
+    override fun onStop() {
+        com.universalrp.cleansweep.notify.AutomaticAlerts.stop(alertOwner)
+        super.onStop()
+    }
+
+    fun requestNotificationsIfNeeded() {
         if (Build.VERSION.SDK_INT < 33) return
         val granted = ContextCompat.checkSelfPermission(
             this, Manifest.permission.POST_NOTIFICATIONS
@@ -86,7 +100,7 @@ class MainActivity : ComponentActivity() {
         if (!granted) notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
     }
 
-    private fun requestLegacyStorageIfNeeded() {
+    fun requestLegacyStorageIfNeeded() {
         if (Build.VERSION.SDK_INT >= 30) return
         val permissions = arrayOf(
             Manifest.permission.READ_EXTERNAL_STORAGE,

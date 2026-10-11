@@ -3,34 +3,53 @@ package com.universalrp.cleansweep.notify
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.universalrp.cleansweep.voice.Announcer
+import kotlinx.coroutines.launch
 
 /**
  * Starts and stops the charging monitor the moment the cable goes in or comes out, so the
  * status-bar card (and the little watt reading) are there without opening the app first.
  *
- * ACTION_POWER_CONNECTED / DISCONNECTED are two of the few broadcasts an app may still
- * receive from the manifest, and they are ignored completely while both switches are off.
+ * Runtime power receivers are registered while the app/its existing monitor is active.
+ * Android8+ can restrict/defer manifest implicit-power delivery without a live owner.
+ * Visual monitoring is ignored while its switches are off; independent voice jobs remain gated.
  */
 class ChargingWatcher : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
         val app = context?.applicationContext ?: return
         val action = intent?.action ?: return
+        if (com.universalrp.cleansweep.data.ChargeHistoryRepo.enabled(app) &&
+            (action == Intent.ACTION_POWER_CONNECTED || action == Intent.ACTION_POWER_DISCONNECTED)) {
+            val pending = goAsync()
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    com.universalrp.cleansweep.data.ChargeHistoryRepo.record(app,
+                        com.universalrp.cleansweep.data.BatteryReader.read(app),
+                        plugEvent = action == Intent.ACTION_POWER_CONNECTED,
+                        unplugEvent = action == Intent.ACTION_POWER_DISCONNECTED)
+                } catch (e: Exception) { /* A history failure must not break the existing monitor. */ }
+                finally { pending.finish() }
+            }
+        }
         val prefs = app.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
-        // The service runs when the user wants any of the three: the status-bar card, the
-        // watt pill, or the spoken "charging started" line.
-        val voiceOn = prefs.getBoolean(Announcer.KEY_ON, true) &&
-            prefs.getBoolean(Announcer.KEY_CHARGE, true)
-        val wanted = prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
-            prefs.getBoolean(ChargeMonitorService.CARD_KEY, true) ||
-            voiceOn
+        // Visual monitoring is independent from voice. SystemEventWatcher schedules short
+        // enabled-event voice jobs even when every card/pill/monitor switch is off.
+        val persistent = ChargeMonitorService.persistentEnabled(app)
+        val wanted = persistent || prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
+            prefs.getBoolean(ChargeMonitorService.CARD_KEY, false)
         if (!wanted) return
 
         val service = Intent(app, ChargeMonitorService::class.java)
         if (action == Intent.ACTION_POWER_DISCONNECTED) {
-            app.stopService(service)
-            ChargeNotifier.clear(app)
+            if (persistent) {
+                // Do NOT tear down an opted-in data/meter monitor on unplug. Its battery
+                // receiver restores the normal pill immediately; the job also covers a dead service.
+                com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)
+            } else {
+                com.universalrp.cleansweep.work.ChargerWatchWorker.cancel(app)
+                app.stopService(service)
+                ChargeNotifier.clear(app)
+            }
             return
         }
         // v2.6: a broadcast receiver may no longer start a foreground service on Android 12+.

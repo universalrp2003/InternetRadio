@@ -53,7 +53,7 @@ object CrashLog {
     }
 
     private fun write(app: Context, thread: Thread, error: Throwable) {
-        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())
+        val stamp = com.universalrp.cleansweep.data.DisplayTime.dated(System.currentTimeMillis(), seconds = true)
         val text = buildString {
             appendLine("CleanSweep crash report")
             appendLine("When: $stamp")

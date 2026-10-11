@@ -86,7 +86,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                 runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
             }) { Text("Source code · GNU GPL v3") }
-            com.universalrp.updates.AppUpdates.Control("CleanSweep")
+            LiveGuardUpdateCard()
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
@@ -254,6 +254,26 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                             "on the Mobile screen.\n" +
                             "• No ads, no analytics, no accounts.\n" +
                             "• Files are only deleted after you select them and confirm.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextSecondary,
+                    )
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(tr("Works on every Android phone"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = AccentViolet,
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        "Redmi and other Xiaomi phones (HyperOS / MIUI), Samsung, Oppo, Vivo, Realme, " +
+                            "OnePlus, Motorola, Nokia, Tecno and stock Android — one app, the same features. " +
+                            "CleanSweep never touches your personal files unless you select them, and the only " +
+                            "thing that ever uses the internet is the AI analysis and Tamil info feeds you start yourself. " +
+                            "WhatsApp media (Settings → Storage) is usually the biggest single space saver.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextSecondary,
                     )

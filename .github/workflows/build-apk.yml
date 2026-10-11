@@ -167,6 +167,11 @@ jobs:
             bash tools/make_feature_graphics.sh
           } 2>&1 | tee store-art.log
 
+      - name: Check Cleaner source contracts and localization
+        run: |
+          python3 tools/verify_cleaner_localization.py
+          python3 tools/verify_cleaner_next_update_source.py
+
       - name: Build the APKs
         run: |
           set -o pipefail
@@ -176,7 +181,20 @@ jobs:
           # that already has the debug build updates to the release one normally.
           # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
           # apps since 2021); the APKs are what everyone else takes.
-          gradle :cleaner:testDebugUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+
+      - name: Verify required CleanSweep regression suites
+        run: python3 tools/verify_cleaner_regressions.py
+
+      - name: Upload unit-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: |
+            cleaner/build/test-results/test*UnitTest/*.xml
+            radio/build/test-results/test*UnitTest/*.xml
+          if-no-files-found: warn
 
       - name: Verify built APKs
         run: |
@@ -284,13 +302,69 @@ jobs:
             done
             echo "OK: no release APK carries the debuggable flag"
             APKSIGNER=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/apksigner 2>/dev/null | tail -1 || true)
-            if [ -n "$APKSIGNER" ]; then
-              echo "--- signing certificate of the release APK (F-Droid AllowedAPKSigningKeys) ---"
-              "$APKSIGNER" verify --print-certs "$CLEANER_REL" | head -6 || true
+            if [ -z "$APKSIGNER" ]; then
+              echo "FAIL: apksigner is required to verify every release APK"
+              exit 1
             fi
+            keytool -exportcert -keystore ci-keystore/release.p12 -storepass cleansweep-ci \
+              -alias cleansweep -file "$WORK/project-certificate.der"
+            EXPECTED_CERT=$(sha256sum "$WORK/project-certificate.der" | cut -d' ' -f1)
+            if [ "$EXPECTED_CERT" != "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55" ]; then
+              echo "FAIL: stable signing identity differs from previously published releases"; exit 1
+            fi
+            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+              # Do not mask signature failures with a pipeline or || true.
+              "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
+              cat "$WORK/signature.txt"
+              # SDK tools use either "Signer #1" or "V2 Signer" (and can report
+              # the same key for multiple schemes). Accept labels, never a different key.
+              ACTUAL_CERT=$(sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' "$WORK/signature.txt" | tr -d ' :\r' | tr 'A-F' 'a-f' | sort -u)
+              if [ -z "$ACTUAL_CERT" ]; then
+                echo "FAIL: could not read the verified APK signing certificate digest"
+                exit 1
+              fi
+              if [ "$ACTUAL_CERT" != "$EXPECTED_CERT" ]; then
+                echo "FAIL: $rel does not use the existing project signing certificate"
+                exit 1
+              fi
+              echo "OK: $rel signature verified with the existing project key"
+            done
+            # The version in the download filename must match the installable release,
+            # and API 26 support must not disappear silently.
+            "$AAPT" dump badging "$CLEANER_REL" > "$WORK/cleaner-release-badging.txt"
+            EXPECTED_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
+            EXPECTED_NAME=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
+            cat "$WORK/cleaner-release-badging.txt"
+            echo "Expected CleanSweep: versionCode=$EXPECTED_CODE versionName=$EXPECTED_NAME minSdk=26"
+            if ! grep -Fq "versionCode='$EXPECTED_CODE'" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release versionCode differs from source"; exit 1
+            fi
+            if ! grep -Fq "versionName='$EXPECTED_NAME'" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release versionName differs from source"; exit 1
+            fi
+            # SDK releases use sdkVersion or minSdkVersion, with optional whitespace.
+            # Match the MINIMUM SDK field, not targetSdkVersion or a bare '26' elsewhere.
+            if ! grep -Eiq "(^|[[:space:]])(sdkVersion|minSdkVersion)[[:space:]]*[:=][[:space:]]*['\"]?26(['\"]|[[:space:]]|$)" "$WORK/cleaner-release-badging.txt"; then
+              echo "FAIL: CleanSweep release must declare minimum SDK 26"; exit 1
+            fi
+            echo "OK: CleanSweep release version matches source and still supports API 26"
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
+
+          # Actual delivered universal APK must fit the in-app updater, not just a fake test size.
+          UPDATE_CAP_MB=$(sed -nE 's/.*MAX_APK_BYTES = ([0-9]+)L \* 1024 \* 1024.*/\1/p' cleaner/src/main/java/com/universalrp/cleansweep/updates/UpdatePolicy.kt)
+          test -n "$UPDATE_CAP_MB"
+          ACTUAL_BYTES=$(stat -c '%s' "$CLEANER_REL")
+          if [ "$ACTUAL_BYTES" -gt "$((UPDATE_CAP_MB * 1024 * 1024))" ]; then
+            echo "FAIL: release APK exceeds the in-app updater limit"; exit 1
+          fi
+          echo "OK: actual CleanSweep APK $ACTUAL_BYTES bytes fits updater cap ${UPDATE_CAP_MB}MiB"
+          # The immediate successor must also be downloadable by existing2.38 clients.
+          if [ "$ACTUAL_BYTES" -gt "$((50 * 1024 * 1024))" ]; then
+            echo "FAIL:2.39 delivery must fit2.38's50MiB updater cap"; exit 1
+          fi
+          echo "OK: actual2.39 APK also fits the previous2.38 client's50MiB cap"
 
           # The manifests are read from Gradle's plain-text merged manifests —
           # parsing the binary manifest out of the APK with `strings` is not
@@ -315,12 +389,22 @@ jobs:
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
           unzip -l "$RADIO" > "$WORK/radio-entries.txt"
 
+          # The estimate must be on the ACTIVE Home layout, not only an unused storage card.
+          grep -Fq 'LiveGuardMetricsMatrix(' cleaner/src/main/java/com/universalrp/cleansweep/ui/HomeScreen.kt
+          grep -Fq 'PhoneAgeBadge(state.phoneAge' cleaner/src/main/java/com/universalrp/cleansweep/ui/LiveGuardMetricsMatrix.kt
+          grep -Fq 'tr("Estimated phone age")' cleaner/src/main/java/com/universalrp/cleansweep/ui/LiveGuardMetricsMatrix.kt
+          echo "OK: active Home matrix retains the labelled phone-age estimate"
+
           echo "=== CleanSweep v1.3 checks ==="
           if [ -n "$MERGED_CLEANER" ] && grep -qi "accessibilityservice\|BIND_ACCESSIBILITY_SERVICE" "$MERGED_CLEANER"; then
             echo "FAIL: CleanSweep still declares an Accessibility service"
             exit 1
           fi
           echo "OK: no Accessibility service in CleanSweep's manifest"
+          for symbol in NewsPolicy BatteryValuePolicy AssistantEvidencePolicy WidgetReadingPolicy VoiceDeliveryPolicy VoiceObserverStatus PowerVoiceWorker AutomaticAlerts PhoneAgeEstimator PhoneAgeBadge ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
+            if grep -aq "$symbol" "$WORK/cleaner.dex"; then echo "OK: $symbol is in the APK"
+            else echo "FAIL: approved dashboard/history/tools feature $symbol missing from APK"; exit 1; fi
+          done
 
           if grep -aq "CacheCleanerService" "$WORK/cleaner.dex"; then
             echo "FAIL: CacheCleanerService is still compiled into the APK"
@@ -392,12 +476,12 @@ jobs:
           # A compiled APK has no "values-ta" folder — resources live compiled inside
           # resources.arsc and the strings in the dex. Search both for the actual Tamil app
           # name, which is the thing the user cares about.
-          if unzip -p "$CLEANER" resources.arsc | grep -qa "சுத்தம் செய்பவர்"; then
+          if unzip -p "$CLEANER" resources.arsc | grep -qa "லைவ் கார்டு"; then
             echo "OK: the Tamil launcher label is inside the APK resources"
           else
             echo "WARN: the Tamil launcher label was not found in resources.arsc"
           fi
-          if grep -aq "சுத்தம் செய்பவர்" "$WORK/cleaner.dex"; then
+          if grep -aq "லைவ் கார்டு" "$WORK/cleaner.dex"; then
             echo "OK: the Tamil name is in the CleanSweep dex (menu + About)"
           else
             echo "WARN: the Tamil name was not found in the CleanSweep dex"
@@ -424,7 +508,13 @@ jobs:
                         setVoiceEvent setQuietHours speakNow offlineFallback \
                         SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
                         setUnplugStartHour ChargerWatchWorker ChargeNotifier canSearchWeb \
-                        setOnlineVoice openScanner CrashLog; do
+                        setOnlineVoice openScanner CrashLog StatusPillContent showNetworkMeter \
+                        SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected \
+                        AiRequestPolicy RequestBudget BoundedHttp ProductEvidencePolicy PermissionReviewStore DisplayTime \
+                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen NotificationReaderScreen MessageReaderService \
+                        LocalMessageTranslator NotificationReaderPrefs LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
+                        LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
+                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
@@ -632,7 +722,7 @@ jobs:
       # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
       # and it is the download an alternative store such as IzzyOnDroid needs.
       - name: Publish a GitHub Release (verified maintained apps)
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && github.ref == 'refs/heads/arena/c4eae96a-internetradio' && contains(github.event.head_commit.message, '[publish]'))
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
         env:
           GH_TOKEN: ${{ github.token }}
           REQUESTED_TAG: ${{ inputs.release_tag }}
@@ -642,9 +732,36 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then TAG="$GITHUB_REF_NAME"
           else TAG="$(cat releases/latest-tag.txt)"; fi
           [[ "$TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release tag"; exit 1; }
+          # Never promote a stale branch candidate after a newer fix has been pushed.
+          if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
+            REMOTE_SOURCE=$(git ls-remote origin "$GITHUB_REF" | awk '{print $1}')
+            if [[ "$REMOTE_SOURCE" != "$GITHUB_SHA" ]]; then
+              echo "A newer branch source exists; refusing stale-candidate publication."
+              exit 1
+            fi
+          fi
           NOTES="releases/$TAG.md"
           test -f "$NOTES"
-          FILES=(cleaner/build/outputs/apk/release/*.apk radio/build/outputs/apk/release/*.apk equalizer/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab radio/build/outputs/bundle/release/*.aab equalizer/build/outputs/bundle/release/*.aab)
+          # Companions have no source change: reuse exact previous verified assets.
+          # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.
+          git fetch --depth=1 origin refs/tags/v2026.10.11-1
+          if ! git diff --quiet FETCH_HEAD "$GITHUB_SHA" -- radio equalizer shared build.gradle.kts gradle.properties settings.gradle.kts; then
+            echo "Companion sources changed: bump their versions and review publication first."; exit 1
+          fi
+          COMPANIONS="$RUNNER_TEMP/unchanged-companions"
+          mkdir -p "$COMPANIONS"
+          gh release download v2026.10.11-1 --dir "$COMPANIONS" \
+            --pattern 'Ramesh-Radio-v1.8.apk' --pattern 'Ramesh-Radio-v1.8.aab' \
+            --pattern 'PulseEQ-v1.2.apk' --pattern 'PulseEQ-v1.2.aab'
+          (
+            cd "$COMPANIONS"
+            printf '%s\n' \
+              'b1514b0c2ef9de1a947a05487ab38759e5bae051a09385590b4e77c7ea3e3cda  Ramesh-Radio-v1.8.apk' \
+              '74268c9c78b34da35283db8d476e379f56e4d51927527ec1c2af4ef46604b273  Ramesh-Radio-v1.8.aab' \
+              '3e2f5bafcb99af97e3f276621f24324743bedeb783d5d7f5210638ad65aeff30  PulseEQ-v1.2.apk' \
+              '46f7f191a3bb63646856a2a5217e7d6f34f4fc09105db7aa1d107208df1c4b20  PulseEQ-v1.2.aab' | sha256sum --check --strict
+          )
+          FILES=(cleaner/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab "$COMPANIONS"/*.apk "$COMPANIONS"/*.aab)
           for file in "${FILES[@]}"; do test -f "$file"; done
           # Draft until every asset is uploaded. Never clobber an existing published release.
           if gh release view "$TAG" >/dev/null 2>&1; then

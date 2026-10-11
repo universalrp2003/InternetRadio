@@ -38,6 +38,11 @@ data class BatteryReading(
     /** Rough pack capacity learned from charge-counter ÷ state-of-charge. */
     val estimatedCapacityMah: Float?,
     val currentSignNote: String,
+    /** Physical charger connection, including full/paused/not-charging states. */
+    val powerConnected: Boolean = charging,
+    /** Original broadcast resolution, not a calculated/learned-capacity percentage. */
+    val reportedLevel: Int? = null,
+    val reportedScale: Int? = null,
 )
 
 data class DeviceDetails(
@@ -97,7 +102,7 @@ object BatteryReader {
 
         val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
         val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-        var percent = if (level >= 0 && scale > 0) (level * 100) / scale else -1
+        var percent = if (scale > 0 && level in 0..scale) (level.toDouble() * 100.0 / scale).toInt() else -1
         if (percent < 0) {
             percent = try {
                 bm?.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY) ?: -1
@@ -117,28 +122,32 @@ object BatteryReader {
         val health = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
         val tech = intent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: ""
 
-        val currentA = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)?.let(::toAmps)
-        val averageCurrentA = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)?.let(::toAmps)
+        val currentA = BatteryValuePolicy.microAmpsToAmps(property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_NOW))
+        val averageCurrentA = BatteryValuePolicy.microAmpsToAmps(property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE))
         val chargeCounter = property(bm, BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             ?.let { it / 1000f } // µAh -> mAh
 
-        val charging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
-            status == BatteryManager.BATTERY_STATUS_FULL ||
-            plugged != 0
+        val powerConnected = plugged != 0
+        val charging = powerConnected && status == BatteryManager.BATTERY_STATUS_CHARGING
 
-        val powerW = if (voltageV != null && currentA != null) {
+        // Power is ONLY charging power when actively plugged into an external power source.
+        // During discharging, battery power drain is not charging power and must not be
+        // displayed as charging wattage.
+        // Furthermore, power measured here is battery-side electrical power (V_batt * I_batt),
+        // NOT charger adapter output wattage.
+        val powerW = if (charging && plugged != 0 && voltageV != null && currentA != null) {
             val watts = voltageV * abs(currentA)
-            // Filter obviously wrong kernel values (some ROMs report 0 or absurd numbers).
-            if (watts > 0f && watts < 200f) watts else null
+            // Filter obviously wrong kernel values (spikes or absurd sensor reports).
+            if (watts.isFinite() && watts >= 0f && watts < 150f) watts else null
         } else {
             null
         }
 
         val signNote = when {
             currentA == null -> "Current counter not reported on this phone"
-            currentA > 0.05f && charging -> "Positive = current flowing into the battery"
-            currentA < -0.05f -> "Negative = current drawn out of the battery"
+            charging && currentA > 0.05f -> "Positive = current flowing into the battery (battery-side)"
             charging -> "Trickle / full"
+            currentA < -0.05f -> "Negative = current drawn out of battery"
             else -> "Near zero right now"
         }
 
@@ -163,6 +172,9 @@ object BatteryReader {
             chargeCounterMah = chargeCounter,
             estimatedCapacityMah = capacity,
             currentSignNote = signNote,
+            powerConnected = powerConnected,
+            reportedLevel = level.takeIf { scale > 0 && it in 0..scale },
+            reportedScale = scale.takeIf { it > 0 && level in 0..it },
         )
     }
 
@@ -176,16 +188,6 @@ object BatteryReader {
         }
     }
 
-    /**
-     * Android's spec says microamps, but several ROMs (Samsung, some MediaTek
-     * kernels) report milliamps. Phones draw 100–3,000 mA, i.e. 100,000–3,000,000
-     * µA, so anything below 20,000 is far more likely to be milliamps.
-     */
-    private fun toAmps(raw: Int): Float {
-        val value = raw.toFloat()
-        val amps = if (abs(raw) < 20_000) value / 1_000f else value / 1_000_000f
-        return (amps * 1000f).roundToInt() / 1000f
-    }
 
     private fun pluggedLabel(plugged: Int): String = when (plugged) {
         BatteryManager.BATTERY_PLUGGED_AC -> "Charger (AC)"
@@ -403,6 +405,17 @@ object DeviceHealthReader {
     } catch (e: Exception) {
         0L
     }
+}
+
+fun batteryTimeMinutes(battery: BatteryReading): Int? {
+    val current = battery.currentA ?: return null
+    if (battery.percent < 0 || battery.percent >= 100) return null
+    val capacity = battery.estimatedCapacityMah ?: return null
+    val remainingMah = capacity * (1f - battery.percent / 100f)
+    if (battery.charging && current > 0.05f) {
+        return (remainingMah / (current * 1000f) * 60f).toInt().coerceIn(1, 14 * 60)
+    }
+    return null
 }
 
 /**

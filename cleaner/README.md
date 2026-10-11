@@ -1,8 +1,242 @@
-# CleanSweep — cleaner, phone health, security & network
+# Live Guard (CleanSweep) — cleaner, phone health, security & network
 
-A privacy-friendly app for **every Android 8+ phone** — Redmi and other Xiaomi phones
-(HyperOS / MIUI), Samsung One UI, Oppo, Vivo, Realme, OnePlus, Motorola, Nokia, Tecno
-and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
+A privacy-friendly app targeting **Android 8.0/API 26+**, with guarded settings
+routes and manufacturer-aware fallbacks for Xiaomi/Redmi/Poco (HyperOS / MIUI)
+and other Android phones. This is a compatibility target, not proof that every
+model or ROM has been tested. Manufacturer Settings links, overlays and background
+restrictions still need real-device validation.
+
+## v2.39 — current verified release
+
+[Install CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk)
+(**Live Guard**, same package/key; Android8+/API26). Updated44.6MB universal APK,
+allABIs retained, fits the2.38 client's50MiB limit as well as the new128MiB cap.
+Old2.38/2.37 assets are not overwritten; install as an update, not an uninstall.
+
+- Reviewed setup/optional quiet reminders respect savedOFF and Android consent.
+  No silent permanent monitor, private-message access or permission enablement.
+- Home verified browser-free APK download with progress/cancel, SHA/package/
+  version/signer checks and mandatory Android installer confirmation. No forced
+  or bypassed Play Protect/scanning claim. Companions reuse unchanged verified bytes.
+- Opt-in multi-app/sender notification reading: sender-only default, separate
+  full-message choice, local languageID/consented EN/TA models and non-network
+  installed voice; no message upload/history/AI-report/online speech fallback.
+  Unknown translation means sender only. Lock/DND/volume/OEM/redaction gates remain.
+- Official key/help text/voice guides, exact/datable LM Arena card (December2025
+  feed is not a current score, IQ or execution proof), three compact2×2-target
+  Battery/Data/Phone widgets with genuine observed-unplug time/% and metered or
+  Wi-Fi/unlimited details. Floating pill unchanged. Cache reopens fresh without
+  new auto-selection/deletion; system defaultsON only when unset.
+- Chat45/web8/checks15 and heavy90 owned budget/progress/cancel; no hidden provider
+  fallback or stale results. Exact-product prices/TODAY news, real last-review
+  date and actual A/B voice previews/one answer read retained; all six improvements
+  and estimated phone age remain.
+
+**Verified/published2.39/code44:** [CI 38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)
+/job114482383017 succeeded in **6m00s**, immutable compiled source/tag `6790a96b591b5a3215f5f28193726f0cd607c04f`.
+Both Cleaner variants executed all **295 required cases EACH** (177 retained+118 new,
+32 suites, none skipped), plus Radio regressions and all-module debug/release APKs
+and AABs. APK version/package/API26/non-debuggable/stable-certificate/packaged-feature
+and actual updater-size gates passed. Published **2026-10-11T13:38:57Z**, stable/latest
+**v2026.10.11-3**, with all six assets checked independently through GitHub API.
+
+Universal APK: **44,610,589 bytes (44.6MB /42.5MiB)**, GitHub SHA256
+`f29daac53da8e45cc8f278a93f7ffe9c78d36136f13497d16d93fb6f6fa89b98`. It fits both current128MiB and the
+previous2.38 client's50MiB cap. All supported native ABIs are retained; compression/
+extraction reduces download bytes, not an all-device native-runtime certification.
+Unchanged Radio1.8/EQ1.2 assets are byte-for-byte/digest-identical to verified2.37,
+not regenerated changed-hash copies. Previous2.37 and2.38 assets remain untouched.
+Stable certificate remains
+`9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55`.
+
+No physical-phone/emulator, newly heard automatic speech, OEM background, message/
+translation/redaction, live-provider/rating/feed or Android installation test is
+claimed. Sandbox CDN restrictions prevent independent local binary download;
+package/signature evidence is exact-source CI and public asset digests are GitHub
+metadata. See the [device plan](../docs/live-guard-2.39-device-test-plan.md).
+
+[2.39 notes](../releases/v2026.10.11-3.md) · [privacy](../PRIVACY.md).
+
+## v2.37 — current verified release: automatic speech, publication-today news and launcher widget
+
+[Install CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk)
+(launcher **Live Guard**, unchanged package/key). Published stable 11 October 2026;
+2.36 below remains the previous verified download. Resize/re-add an existing launcher
+widget if its previous small dimensions clip the larger layout.
+The owner's confirmed redesign is the **home-screen launcher widget**, not the floating
+pill: battery% and watts together, larger percentage, per-widget view cycling.
+
+- Main-thread TTS initialization, bounded per-request language queue, checked callbacks/
+  return values, one installed same-language offline retry, awaited short power jobs and
+  start-based cooldowns. Voice-only power jobs do not depend on card/pill switches or
+  silently enable permanent monitoring. Master/event switches, quiet hours and the
+  below90%/earliest-hour early-unplug conditions remain. Runtime power/network/battery listeners
+  require visible app, the existing enabled monitor or its visual fallback. Registration
+  status is visible; Android8+ manifest power broadcasts alone may be missed/deferred.
+  Without a live owner there is no cold-background trigger guarantee. Hourly/OEM jobs are not
+  instant-delivery guarantees. Diagnostics and **Test automatic charging voice** show
+  actual queued/blocked/failed/engine states, not assumed audibility. TTS settings are guarded.
+- Real Tamil RSS/Atom publication-today items in the phone's current local timezone;
+  canonical title/URL dedup, bounded day-scoped seen state and caught-up end to rotation.
+  No publisher ribbon, old/date-missing/future/update-only news or safety-tip/synthetic
+  fallback. Metadata/links remain internal with manual review/read/open actions. Cached
+  items must still be today; failures/empty/offline states are explicit. Live feeds are unverified.
+- Local provider/model identity answers do not call AI/web search or assert that a selected
+  model ran. Other fetched evidence is relevant/canonical-deduplicated, collapsible and
+  not independently verified. AI answer-language preference stays separate from Home UI.
+- Larger resizable4×4-target home widget, % + battery-side W default, %/W/both cycle,
+  snapshot time and useful available sensor/data/storage rows. Narrow fine-scale readings
+  stack; small heights hide secondary rows. Dated saved daily brief stays a secondary review
+  item, not current safety proof. Clean/Details/Refresh intents are distinct and IO refreshes
+  coalesced; no new always-running widget refresh service.
+- Five percent decimals only if the actual battery broadcast has that resolution. Normal
+  scale100 shows integer%. Watts use two formatting decimals, not adapter accuracy. Current
+  uses Android's specifiedµA units rather than a low-value magnitude guess. Unknown/full/
+  paused/unplugged watts are unavailable, not fabricated zero. A fractional20.x/80.x sample
+  is not rounded into a falsely exact observed20→80 history interval.
+- Estimated phone age on active Home, all six 2.35 improvements and history/privacy controls,
+  targeted settings, all-current-issues Ask AI and compact floating pill rules are retained.
+
+**Verification passed:** [CI 38127107781](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) / job 114433649992 completed in **3m46s** for
+immutable source `325576df99dc3d56ad635e5a2d229a0e468dd7da`: **177 required cases each** Cleaner variant
+(all 125 previous + 52 new), existing Radio tests, all-module compilation/APK/AAB generation,
+packaged features, version 2.37/code 42, API26 minimum, non-debuggable releases and the
+unchanged signing certificate. Six stable assets/tag/latest/source/digests were checked;
+previous 2.36/2.35 notes/source/assets remain unchanged. Later docs commits do not change
+this compiled source. A local APK download is blocked by this sandbox's CDN access;
+signing/version/package evidence comes from successful CI inspection, and asset digests
+from GitHub's release API, not a local device test.
+No phone/emulator or new audible/OEM/launcher/feed/provider result is claimed.
+See [2.37 release notes](../releases/v2026.10.11-1.md),
+[device plan](../docs/live-guard-2.37-device-test-plan.md), [changelog](../CHANGELOG.md)
+and [privacy](../PRIVACY.md).
+
+## v2.36 — previous verified release: phone-age estimate restored
+
+[Install CleanSweep-v2.36.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11/CleanSweep-v2.36.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
+
+The owner's **Estimated phone age** badge is restored beside the active Home
+readings heading, not only in an unused storage card. The title/badge wrap on narrow
+or large-font layouts; English/Tamil values wrap without truncation. Tap the badge
+for its local evidence basis and limitations.
+
+- Coarse model-family/initial-Android-generation heuristic only. Reference months
+  are approximate, not verified launch dates or this handset's manufacture,
+  purchase or first-use date. No universal Android API provides that exact age.
+- Initial/factory API properties are best effort and may be absent, blocked or
+  modified by an OEM/custom ROM. A firmware update, current vendor SDK, security
+  patch or uptime cannot establish physical phone age. Missing/unsupported/future
+  evidence stays **Not enough information** rather than inventing a 2022 baseline.
+- Calculation runs off the UI thread and is cached in memory per local calendar
+  day; no extra permission, upload, persistent history or background job is added.
+- All six 2.35 improvements below, watts-only charging/unplug behaviour, guarded
+  targeted settings, fresh complete AI reports and privacy choices remain intact.
+- The owner's request to retain this Home feature is recorded in `AGENTS.md`.
+
+**Publication verified:** [the cloud run passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) with **125 required regression
+cases per CleanSweep debug/release variant** (113 retained + 12 age), existing Radio
+checks, all-module builds and feature/version/API-26/non-debuggable/signing gates.
+Published **2.36 / code 41** uses immutable source `041f2ba9e84909af0ab53691f31be3810882a939`; all six maintained-app
+APK/AAB assets are uploaded, and 2.35/2.34 sources/assets were verified unchanged.
+Later documentation commits do not change that release source. UI rendering/OEM
+behaviour remains a real-device check, not a JVM-test result. See
+[the 2.36 device test plan](../docs/live-guard-2.36-device-test-plan.md).
+
+## v2.35 — six retained improvements
+
+[Install CleanSweep-v2.35.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-9/CleanSweep-v2.35.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
+
+All six approved improvements are reachable from **Home → History & tools**:
+
+1. **Honest dashboard**: Not checked/measured/reported instead of fabricated scores,
+   ping, RAM or storage. Values carry timestamps; a permission score is not malware safety.
+   UI reads/probes are off the main thread; a failed/missing probe gives unknown quality.
+2. **Phone self-test**: actual model/Android/API/app version, relevant permission,
+   notification/channel/configuration and sensor availability checks. Preview before
+   copy/share of an allowlisted report; no raw state, keys, app identities, SMS/files,
+   prompts/logs, network identifiers or serials. OEM rendering/background/settings
+   behaviour remains a physical-device test, not a flag-based certification.
+3. **Security timeline**: stable package+service identity; first available baselines,
+   newly observed/changed access, manual expected reviews and no-longer-observed findings.
+   Failed/partial or reduced-scope reads do not imply resolution. First seen is not
+   exact install/grant time; no longer listed is not a proven uninstall or safety verdict.
+4. **Observed charging sessions/charts**: percentage, elapsed duration, sampled mean/
+   peak battery-side watts, temperature, coverage, observed 20→80 time and comparisons.
+   Missed starts/ends, reboot/gaps and unavailable sensors are explicit. Charts show
+   nearby samples, not invented continuous sensor data or adapter output.
+5. **Data budgeting**: user recharge/period start and expiry/next-reset date, explicit inclusive
+   expiry or exclusive next-reset days,
+   estimated daily allowance and forecast with at least three usable complete past
+   days. Device-wide cellular history excludes Wi-Fi; incomplete/reboot-sensitive
+   counters withhold unsupported forecasts. Carrier billing/per-SIM/5G eligibility
+   is not inferable. Quota reset/recharge and expiry are separate manual actions.
+6. **AI-linked review checklist**: local Do first / Optional / Leave alone–expected
+   groups and guarded relevant routes. Optional AI explanations are bound to current
+   evidence tokens; arbitrary model intents/URLs/packages/group/completion fields
+   cannot become actions. Local fallback works offline. Reviewed does not revoke access
+   or resolve a finding; recheck fresh facts. Heat/storage/data/network observations
+   open relevant existing tools. No automatic uninstall, permission or file changes.
+
+### Local control and limits
+
+- All three history switches default **OFF**. Enabling history does not enable extra
+  persistent monitoring. Charging uses already-running monitoring and visible-app
+  readings plus connection events; missed observations remain partial.
+- Private no-backup storage only: security **200 events**, charging **30 sessions /
+  30 days**, **240 chart points** per session plus latest sample, mobile **90 daily records**.
+  Charging expiration is pruned on the next local read; no background cleanup job
+  is enabled. Clear controls are on each tab. Off pauses collection but does not erase old history.
+  Explicit reviewed choices are saved when selected, even if passive history is off;
+  clear security history removes those acknowledgements too.
+- The budget screen can query seven complete prior Android-reported days without
+  saving them. Today remains partial/in progress. Unknown is different from measured zero.
+- No history is silently uploaded. The diagnostic share preview contains only safe
+  public device facts and known status IDs. AI sharing remains separately user-controlled;
+  historical local timelines/sessions/day records are not added to the AI request.
+- Home/live quality uses a small TCP probe to Cloudflare, not a large speed test or
+  zero-data monitor. Blocked probes/initial missing jitter stay unknown; one endpoint
+  is not a guarantee about every website.
+
+CI enforces **113 required cases for each CleanSweep debug/release unit-test variant**
+(27 retained + 86 new), existing Radio tests, all-module compilation and release
+APK/version/minSDK/signing/feature checks before publication. [The final publication
+run passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38069097825) on source `51d6d7f`; the immutable release uses that source,
+not later documentation commits. No phone/emulator is
+available in the coding environment. **2.35 still needs real-device/OEM checks** in
+[the new test plan](../docs/live-guard-2.35-device-test-plan.md).
+
+## v2.34 fixes retained in 2.35/2.36
+
+[Previous CleanSweep-v2.34.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.10-8/CleanSweep-v2.34.apk)
+(the launcher is **Live Guard**; package/signing key unchanged).
+
+- While any charger is connected the status pill displays **watts only**. Data/5G
+  labels, D/U LEDs and quota alert styling are hidden, not overlapped. Missing
+  power is `— W`. Watts are battery-side, not the adapter's advertised output.
+- Unplugging restores normal data/LED display with the existing background-monitor
+  option enabled. Your preferences, accounting, position and scale are unchanged.
+  Charging-only mode still stops on unplug rather than silently enabling persistence.
+- Security **Manage** retains the selected app's package/service ID. **Fix/review**
+  opens the right category or asks which app. Unsupported OEM shortcuts show a
+  named manual path; they never fall through to the Settings homepage.
+- **Ask AI about all current issues** takes a fresh app/security/battery/storage
+  report. All findings and affected apps are included (when names are shared), plus
+  available dated scan results and optional network/data context. Both AI sharing
+  switches are honoured. No files, SMS, contacts, file paths or keys enter the report.
+- A 100/100 heuristic score does not prove safety. Necessary banking/accessibility
+  permissions should not be removed just for a score. Advice is manual and may be wrong.
+
+The previous release's 27 regression tests cover display policy, targeted routes, complete prompts and
+privacy. GitHub publication is gated on compilation/tests/APK/signature checks.
+After **2.34** publication, the owner confirmed the charging/normal-display transition on
+**Redmi 13 5G**, with screenshots. Its Android/ROM version was not supplied; other
+models and the full feature matrix remain unverified. See the
+[device evidence and test plan](../docs/live-guard-2.34-device-test-plan.md) and
+[release notes](../releases/v2026.10.10-8.md).
+
+## Historical highlights
 
 **v2.6 highlights**
 
@@ -23,7 +257,7 @@ and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
   consume the day, so the evening brief still arrives.
 - **The voice screen is readable** — `PanelCard` is a plain surface, not a column, so the six
   new cards' rows were painting on top of each other. Every card now stacks its own content.
-- **The charger works in the background** — Android 12+ refuses a foreground-service start
+- **Background charger fallback** — Android 12+ can refuse a foreground-service start
   from a broadcast receiver, which is why plugging in was silent. The plug-in broadcast now
   schedules an expedited job; the job starts the charging service when the system allows it
   and, when it does not, shows the same card (watts, current, voltage, °C, time to full) and
@@ -34,8 +268,9 @@ and stock Android. Tested on a Redmi 13 5G and an Oppo A3s.
   a question, and if you cannot look something up, say so and answer anyway. The plain
   OpenAI-style request remains the fallback.
 - **A more natural voice** — the phone's own cloud voice is preferred over the robotic
-  offline one, with the offline voice as the automatic fallback if the network is out. No API
-  key, no account, and only the sentence being spoken leaves the phone.
+  offline one when supported. Offline use/retry requires installed same-language data;
+  it is not guaranteed. The engine/provider can receive the spoken text; no developer
+  recording or API key is added.
 - **Smaller fixes the phone asked for** — **jitter is now labelled next to ping**, the
   **Wi-Fi network name is never shown and never sent** to the AI, and the built APK is named
   **`CleanSweep-v2.6.apk`** instead of `cleaner-debug.apk`.
@@ -253,7 +488,7 @@ no network call, no API key, no model download, and no data collection of any ki
 - Settings: hidden-folder scan, duplicate min size, large-file threshold,
   old-download age, protected folders list, sound effects, assistant detail level
 - MediaStore cleanup after deletion so gallery/file managers update instantly
-- No ads, no analytics, no accounts, no INTERNET permission
+- No ads, no analytics or developer-run accounts; Internet is used for optional AI, news, network tools, hash checks and release checks.
 
 ## Building the APK
 
@@ -293,14 +528,16 @@ gradle wrapper            # once, if the wrapper is missing
   cleaners. Redmi's built-in *Security → Cleaner* can reach some of them.
 - Cleaning junk frees real disk space; it does not "boost RAM" and it cannot cool a phone
   down. It *measures* heat honestly (CPU/battery sensors) and explains what is normal.
-- The security review is a **permissions and settings review**, not an antivirus: no file
-  hashes are checked anywhere. A phone can have malware that looks like a normal app.
-  Play Protect (and an online scanner) covers that part.
+- The security score is a **permissions and settings review**, not an antivirus. The
+  separate, user-started malware hash card checks known hashes against online databases,
+  not app files. Unknown/skipped hashes do not prove safety. The AI does not start that
+  scan; it may discuss a previously completed result when you ask for analysis.
 - The Wi-Fi device list can only show devices that answer. Sleeping phones, devices that
   block probes, and routers with "AP isolation" will not appear — the screen says so.
 - A few phone makers hide the battery **current** counter from apps, and some kernels do
   not expose a CPU temperature sensor. CleanSweep shows "not reported" rather than a
   made-up number.
-- The optional AI analysis is the only feature that uses the internet. Without a key it
-  uses public keyless endpoints (shared, rate-limited); with a key it uses your own
-  quota. Nothing is ever sent unless you tap **Analyse**.
+- AI reports go to your chosen provider (or a disclosed keyless fallback, shared and
+  rate-limited) on an explicit analysis/ask tap, or for a configured daily brief.
+  News, updates, live quality probes and network tools also use the internet when
+  enabled. See [privacy](../PRIVACY.md) for the details.

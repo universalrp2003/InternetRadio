@@ -24,9 +24,11 @@ import java.util.Locale
  *  * **Quiet hours win**: [speak] refuses to make a sound between the quiet start and end
  *    hours, whatever the per-event switches say. [speakNow] is for something the user just
  *    asked for by tapping — that is allowed at any hour.
- *  * **One voice at a time**: a new announcement flushes the old one instead of piling up.
+ *  * **One voice at a time**: a bounded automatic queue avoids alerts cancelling each other;
+ *    an explicit manual read can interrupt it. Each request retains its own language.
  *  * **Honest language**: if the phone has no Tamil voice, Tamil text is not read out in an
- *    English accent — the English wording is spoken instead.
+ *    English accent. Bilingual automatic alerts can use their English wording;
+ *    an explicit Tamil-only read reports missing Tamil data.
  *  * **Preferences live in plain SharedPreferences**, because a worker or service can wake up
  *    in a fresh process where the DataStore flow has not been read yet.
  */
@@ -38,11 +40,12 @@ object Announcer {
     const val KEY_ON = "voice_on"
 
     /**
-     * Prefer a natural online voice over the phone's robotic offline one. On by default —
-     * the user asked whether a better voice was possible, and this is the honest way to get
-     * one: the phone's own cloud voice, no key, no account, no audio stored anywhere.
+     * Prefer an available online voice when connected. Engine/provider support varies;
+     * alert text can be sent by the engine to its provider. Installed same-language
+     * offline data is needed for an offline retry; no developer audio recording occurs.
      */
     const val KEY_ONLINE = "voice_online"
+    const val KEY_LOUDER = "voice_louder"
     const val KEY_QUIET_START = "voice_quiet_start"
     const val KEY_QUIET_END = "voice_quiet_end"
     const val KEY_LOW = "voice_battery_low"
@@ -51,6 +54,7 @@ object Announcer {
     const val KEY_CHARGE = "voice_charging"
     const val KEY_DAILY = "voice_daily"
     const val KEY_ANSWERS = "voice_answers"
+    const val KEY_MESSAGES = "voice_messages"
     const val KEY_STORAGE = "voice_storage"
     const val KEY_UNPLUGGED = "voice_unplugged"
     const val KEY_UNPLUGGED_START = "voice_unplug_start"
@@ -103,6 +107,7 @@ object Announcer {
         CHARGING(KEY_CHARGE),
         DAILY(KEY_DAILY),
         ANSWER(KEY_ANSWERS),
+        MESSAGES(KEY_MESSAGES),
         STORAGE_LOW(KEY_STORAGE),
         UNPLUGGED_EARLY(KEY_UNPLUGGED),
         NETWORK_CHANGE(KEY_NET_CHANGE),
@@ -114,52 +119,53 @@ object Announcer {
         TEST(null),
     }
 
-    @Volatile
-    private var tts: TextToSpeech? = null
-
-    @Volatile
-    private var ready = false
-
-    @Volatile
-    private var tamilVoice = false
-
-    /**
-     * v2.6 — the natural voice. The phone's built-in engine ships a robotic, offline voice;
-     * the same engine also installs better, "network" voices (Google's cloud voices appear
-     * here). When the user turns this on, the best available voice for the language is
-     * chosen instead, and if the network is down the engine fails — at which point the app
-     * puts the offline voice back and says the same line again, so nothing ever goes silent.
-     */
-    @Volatile
-    private var usingNetworkVoice = false
-
-    @Volatile
-    private var networkRetried = false
-
-    @Volatile
-    private var lastSpoken: String? = null
-
-    /** Said before the engine finished starting, spoken as soon as it is up. */
-    private val pending = ArrayDeque<Pair<String, Boolean>>()
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    @Volatile private var tts: TextToSpeech? = null
+    @Volatile private var ready = false
+    @Volatile private var tamilVoice = false
+    private var initializing = false
+    private var generation = 0
+    private var prefsContext: Context? = null
+    private val previewedChoices = hashSetOf<String>() // This engine/session only; no claim the preview was physically heard.
+    private val automaticAnswerIds = linkedSetOf<String>()
+    private data class Request(val english: String?, val tamil: String?, val wanted: AppLang?, val event: Event,
+        val manual: Boolean, val done: kotlinx.coroutines.CompletableDeferred<Boolean>? = null, val onStarted: (() -> Unit)? = null,
+        val requestKey: String? = null, val preferredVoice: String? = null, val forceOffline: Boolean = false, val startGuard: (() -> Boolean)? = null) {
+        val id = java.util.UUID.randomUUID().toString()
+        val key = requestKey ?: (event.name + ":" + (tamil ?: english).orEmpty())
+        var language = wanted ?: AppLang.TA
+        var text = ""
+        var network = false
+        var retried = false
+        var started = false
+        var attemptId = ""
+    }
+    private val pending = ArrayDeque<Request>() // Only touched on main.
+    private var active: Request? = null
+    private val runtimeState = kotlinx.coroutines.flow.MutableStateFlow(VoiceDeliveryStatus())
+    private val automaticState = kotlinx.coroutines.flow.MutableStateFlow(VoiceDeliveryStatus())
+    val runtime: kotlinx.coroutines.flow.StateFlow<VoiceDeliveryStatus> = runtimeState
+    val automatic: kotlinx.coroutines.flow.StateFlow<VoiceDeliveryStatus> = automaticState
 
     fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     // ------------------------------------------------------------------ switches
 
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, true)
+    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ON, false)
 
     /** Voices installed by the phone's engine that need a network connection. */
     fun onlineVoice(context: Context): Boolean = prefs(context).getBoolean(KEY_ONLINE, true)
 
     fun setOnlineVoice(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_ONLINE, on).apply()
-        // Re-pick the voice the next time something is said.
-        try {
-            tts?.let { applyLanguage(it, context) }
-        } catch (e: Exception) {
-            // The next utterance will retry.
-        }
+    }
+
+    /** Louder voice alerts: boost alert speech volume (off by default). */
+    fun louderVoice(context: Context): Boolean = prefs(context).getBoolean(KEY_LOUDER, false)
+
+    fun setLouderVoice(context: Context, on: Boolean) {
+        prefs(context).edit().putBoolean(KEY_LOUDER, on).apply()
     }
 
     fun setEnabled(context: Context, on: Boolean) {
@@ -170,7 +176,7 @@ object Announcer {
     /** Per-event switch. Everything defaults to on except nothing — quiet hours do the rest. */
     fun allows(context: Context, event: Event): Boolean {
         val key = event.key ?: return true
-        return prefs(context).getBoolean(key, true)
+        return prefs(context).getBoolean(key, event != Event.MESSAGES)
     }
 
     fun setAllows(context: Context, event: Event, on: Boolean) {
@@ -218,7 +224,7 @@ object Announcer {
      * still happens at its own hour.
      */
     fun saveBrief(context: Context, date: String, text: String, markDay: Boolean = true) {
-        val edit = prefs(context).edit().putString(KEY_LAST_BRIEF, text)
+        val edit = prefs(context).edit().putString(KEY_LAST_BRIEF, text).putLong("last_brief_at_ms", System.currentTimeMillis())
         if (markDay) edit.putString(KEY_LAST_DAILY, date)
         edit.apply()
     }
@@ -235,222 +241,333 @@ object Announcer {
 
     // ------------------------------------------------------------------ speaking
 
-    /**
-     * Says something if the whole chain allows it: master switch on, this event allowed, and
-     * the clock outside the quiet window. Returns true when it actually spoke (or queued).
-     */
-    fun speak(context: Context, english: String, tamil: String, event: Event): Boolean {
-        val ctx = context.applicationContext
-        if (!enabled(ctx)) return false
-        if (!allows(ctx, event)) return false
-        if (event != Event.TEST && inQuietHours(ctx)) return false
-        val text = pick(ctx, english, tamil)
-        if (text.isBlank()) return false
-        return utter(ctx, text, flush = true)
-    }
+    /** Accepted/queued is NOT proof of playback; actual engine callbacks update diagnostics. */
+    fun speak(context: Context, english: String, tamil: String, event: Event, onStarted: (() -> Unit)? = null): Boolean =
+        submit(context, Request(english, tamil, null, event, event == Event.TEST, onStarted = onStarted))
 
-    /**
-     * Says something the user just asked for (an assistant answer, the test button). Quiet
-     * hours do not apply — but the master switch still does.
-     */
+    fun speakTamil(context: Context, tamilText: String, event: Event, onStarted: (() -> Unit)? = null): Boolean =
+        submit(context, Request(null, tamilText, AppLang.TA, event, event == Event.TEST, onStarted = onStarted))
+
     fun speakNow(context: Context, text: String): Boolean = speakNow(context, text, null)
-
-    /**
-     * The same, but in an explicit language: an AI answer is spoken in the language it was
-     * written in, whatever the menu language happens to be.
-     */
     fun speakNow(context: Context, text: String, language: AppLang?): Boolean {
+        val wanted = language ?: Lang.languageIn(context)
+        return submit(context, Request(if (wanted == AppLang.EN) text else null,
+            if (wanted == AppLang.TA) text else null, wanted, Event.TEST, true))
+    }
+
+    /** Private notification text always uses a reported non-network voice in the selected app language. */
+    fun speakNotification(context: Context, text: String, language: AppLang, key: String, startGuard: () -> Boolean): Boolean =
+        submit(context, Request(if (language == AppLang.EN) shorten(text) else null, if (language == AppLang.TA) shorten(text) else null,
+            language, Event.MESSAGES, false, requestKey = key, forceOffline = true, startGuard = startGuard))
+
+    fun cancelNotifications() { main.post {
+        pending.filter { it.event == Event.MESSAGES }.forEach { pending.remove(it); it.done?.complete(false) }
+        if (active?.event == Event.MESSAGES) { runCatching { tts?.stop() }; finish(VoiceDeliveryPolicy.Stage.CANCELLED, false) }
+    } }
+
+    /** One selected voice per answer. Automatic duplicates and cross-voice retries are forbidden. */
+    fun speakAnswer(context: Context, text: String, language: AppLang, slot: Int, answerId: String, manual: Boolean): Boolean {
+        val name = AnswerVoicePreferences.load(context, language).voice(slot)
+        if (name == null) {
+            main.post { record(context.applicationContext, Request(null, null, language, Event.ANSWER, manual), VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING) }
+            return false
+        }
+        return submit(context, Request(if (language == AppLang.EN) text else null, if (language == AppLang.TA) text else null,
+            language, Event.ANSWER, manual, requestKey = "answer:$answerId", preferredVoice = name))
+    }
+
+    /** Query the actual initialized engine; no guessed male/female names and no voice downloads. */
+    suspend fun installedAnswerVoices(context: Context, language: AppLang): List<InstalledAnswerVoice> =
+        kotlinx.coroutines.suspendCancellableCoroutine { continuation -> main.post {
+            val app = context.applicationContext
+            val started = android.os.SystemClock.elapsedRealtime()
+            ensureEngine(app)
+            fun check() {
+                if (!continuation.isActive) return
+                val engine = tts
+                if (ready && engine != null) {
+                    val inventory = voices(engine, language).sortedWith(compareBy<Voice> { it.isNetworkConnectionRequired }.thenBy { it.name })
+                        .map { InstalledAnswerVoice(it.name, it.locale.toLanguageTag(), it.isNetworkConnectionRequired) }
+                    continuation.resumeWith(Result.success(inventory))
+                } else if (!initializing || android.os.SystemClock.elapsedRealtime() - started >= 10_500) {
+                    continuation.resumeWith(Result.success(emptyList()))
+                } else main.postDelayed({ check() }, 100)
+            }
+            check()
+        } }
+
+    private fun choiceToken(engine: TextToSpeech, language: AppLang, name: String) = engine.defaultEngine.orEmpty() + ":" + language.id + ":" + name
+
+    /** Preview exactly the requested installed voice. No automatic alternative can disguise a failed candidate. */
+    suspend fun previewAnswerVoice(context: Context, language: AppLang, name: String): Boolean {
+        val valid = AnswerVoicePolicy.validPreference(name) ?: return false
+        val done = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val text = if (language == AppLang.TA) "வணக்கம். இது லைவ் கார்டு உதவியாளரின் குரல் முன்னோட்டம். ஒவ்வொரு பதிலும் ஒரு முறை மட்டுமே வாசிக்கப்படும். இந்தக் குரலைக் கேட்டு, குரல் ஏ அல்லது பி ஆகத் தேர்ந்தெடுக்கலாம்."
+            else "Hello. This is a Live Guard assistant voice preview. Each answer uses one voice and is read once. Listen to this voice, then choose it as Voice A or Voice B if you prefer."
+        val request = Request(if (language == AppLang.EN) text else null, if (language == AppLang.TA) text else null,
+            language, Event.TEST, true, done = done, preferredVoice = valid)
+        if (!submit(context, request)) return false
+        try { return kotlinx.coroutines.withTimeoutOrNull(35_000) { done.await() } ?: false } finally { if (!done.isCompleted) main.post { cancelRequest(request.id, VoiceDeliveryPolicy.Stage.CANCELLED) } }
+    }
+
+    suspend fun saveAnswerVoice(context: Context, language: AppLang, slot: Int, name: String): Boolean =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            val engine = tts ?: return@withContext false
+            if (!ready || slot !in 0..1 || choiceToken(engine, language, name) !in previewedChoices ||
+                voices(engine, language).none { it.name == name }) return@withContext false
+            val pair = AnswerVoicePreferences.load(context, language)
+            if (name == (if (slot == 0) pair.second else pair.first)) return@withContext false
+            AnswerVoicePreferences.save(context, language, slot, name)
+            true
+        }
+
+    /** Clear/cancel chat speech without cancelling unrelated battery/security alerts. */
+    fun cancelAnswers() { main.post {
+        pending.filter { it.event == Event.ANSWER }.forEach { pending.remove(it); it.done?.complete(false) }
+        if (active?.event == Event.ANSWER) { runCatching { tts?.stop() }; finish(VoiceDeliveryPolicy.Stage.CANCELLED, false) }
+    } }
+
+    /** Keep a worker alive until the engine finishes/fails, rather than finishing while TTS is still starting. */
+    suspend fun speakAndWait(context: Context, english: String, tamil: String, event: Event,
+        timeoutMs: Long = 45_000, onStarted: (() -> Unit)? = null, requestKey: String? = null): Boolean {
+        val done = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        val request = Request(english.takeIf { it.isNotBlank() }, tamil.takeIf { it.isNotBlank() }, null,
+            event, event == Event.TEST, done = done, onStarted = onStarted, requestKey = requestKey)
+        if (!submit(context, request)) return false
+        var endStage = VoiceDeliveryPolicy.Stage.TIMED_OUT
+        return try {
+            kotlinx.coroutines.withTimeoutOrNull(timeoutMs) { done.await() } ?: false
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            endStage = VoiceDeliveryPolicy.Stage.CANCELLED
+            throw e
+        } finally {
+            if (!done.isCompleted) main.post { cancelRequest(request.id, endStage) }
+        }
+    }
+
+    private fun submit(context: Context, request: Request): Boolean {
         val ctx = context.applicationContext
-        if (!enabled(ctx)) return false
-        val wanted = language ?: Lang.languageIn(ctx)
-        val speaking = if (wanted == AppLang.TA) {
-            if (ensureTamilVoice(ctx)) text else null
-        } else {
-            text
+        val blocked = VoiceDeliveryPolicy.blocked(enabled(ctx), request.manual || allows(ctx, request.event), inQuietHours(ctx), request.manual)
+        if (blocked != null) {
+            main.post { record(ctx, request, blocked); request.done?.complete(false) }
+            return false
         }
-        // A Tamil answer on a phone with no Tamil voice is not read out in an English accent:
-        // the caller already fell back to the English wording for the UI, so stay silent here
-        // and let the on-screen text be the answer.
-        if (speaking == null) return false
-        prepareVoice(ctx, wanted)
-        return utter(ctx, speaking, flush = true)
+        if (request.english.isNullOrBlank() && request.tamil.isNullOrBlank()) return false
+        main.post {
+            prefsContext = ctx
+            val duplicate = active?.key == request.key || pending.any { it.key == request.key } ||
+                (request.event == Event.ANSWER && !request.manual && request.key in automaticAnswerIds)
+            if (duplicate) { record(ctx, request, VoiceDeliveryPolicy.Stage.DUPLICATE); request.done?.complete(false); return@post }
+            if (request.event == Event.ANSWER && !request.manual) {
+                automaticAnswerIds.add(request.key)
+                if (automaticAnswerIds.size > 128) automaticAnswerIds.remove(automaticAnswerIds.first())
+            }
+            if ((request.manual || request.event == Event.OVERHEAT && active?.event == Event.ANSWER) && active != null) {
+                runCatching { tts?.stop() }; finish(VoiceDeliveryPolicy.Stage.CANCELLED, false, pump = false)
+            }
+            if (pending.size >= 4) pending.removeLast().also { record(ctx, it, VoiceDeliveryPolicy.Stage.CANCELLED); it.done?.complete(false) }
+            if (request.manual || request.event == Event.OVERHEAT) pending.addFirst(request) else pending.addLast(request)
+            record(ctx, request, VoiceDeliveryPolicy.Stage.QUEUED)
+            drain(ctx)
+        }
+        return true
     }
 
-    /** Points the engine at the right locale (and voice) before speaking. */
-    private fun prepareVoice(context: Context, lang: AppLang) {
+    private fun drain(context: Context) {
+        if (active != null || pending.isEmpty()) return
+        if (!ready) { ensureEngine(context); return }
+        val request = pending.removeFirst()
+        val blocked = VoiceDeliveryPolicy.blocked(enabled(context), request.manual || allows(context, request.event), inQuietHours(context), request.manual)
+        if (blocked != null) { record(context, request, blocked); request.done?.complete(false); drain(context); return }
+        active = request
+        val engine = tts ?: run { finish(VoiceDeliveryPolicy.Stage.NO_ENGINE, false); return }
+        val ta = runCatching { engine.isLanguageAvailable(TAMIL) }.getOrDefault(TextToSpeech.LANG_NOT_SUPPORTED)
+        val bare = if (ta < 0) runCatching { engine.isLanguageAvailable(Locale("ta")) }.getOrDefault(-3) else ta
+        tamilVoice = VoiceDeliveryPolicy.validStatus(bare)
+        request.language = request.wanted ?: if (tamilVoice && request.tamil.orEmpty().any { it.code in 0x0B80..0x0BFF }) AppLang.TA else AppLang.EN
+        request.text = if (request.language == AppLang.TA) request.tamil.orEmpty() else request.english.orEmpty()
+        if (request.text.isBlank()) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
+        startUtterance(context, request, offline = request.forceOffline)
+    }
+
+    private fun voices(engine: TextToSpeech, language: AppLang): List<Voice> = runCatching {
+        engine.voices.orEmpty().filter { it.locale.language == (if (language == AppLang.TA) "ta" else "en") &&
+            "notInstalled" !in it.features.orEmpty() }
+    }.getOrDefault(emptyList())
+
+    private fun startUtterance(context: Context, request: Request, offline: Boolean) {
+        if (request.startGuard != null && !runCatching { request.startGuard.invoke() }.getOrDefault(false)) {
+            finish(VoiceDeliveryPolicy.Stage.CANCELLED, false); return
+        }
+        val engine = tts ?: run { finish(VoiceDeliveryPolicy.Stage.NO_ENGINE, false); return }
+        try {
+            val locale = if (request.language == AppLang.TA) TAMIL else Locale.US
+            var languageResult = engine.setLanguage(locale)
+            if (languageResult < 0) languageResult = engine.setLanguage(if (request.language == AppLang.TA) Locale("ta") else Locale.ENGLISH)
+            if (!VoiceDeliveryPolicy.validStatus(languageResult)) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
+            val available = voices(engine, request.language)
+            val network = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val connected = runCatching { network?.activeNetwork?.let { network.getNetworkCapabilities(it) }
+                ?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET) == true }.getOrDefault(false)
+            val wantOnline = !offline && onlineVoice(context) && connected
+            val chosen = if (request.preferredVoice != null) available.firstOrNull { it.name == request.preferredVoice }
+                else available.filter { if (wantOnline) it.isNetworkConnectionRequired else !it.isNetworkConnectionRequired }
+                    .maxByOrNull { it.quality } ?: available.filter { !it.isNetworkConnectionRequired }.maxByOrNull { it.quality }
+            if (request.preferredVoice != null && (chosen == null || chosen.isNetworkConnectionRequired && !connected)) {
+                finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return
+            }
+            if (offline && chosen == null) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
+            if (chosen != null && engine.setVoice(chosen) != TextToSpeech.SUCCESS) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
+            request.network = chosen?.isNetworkConnectionRequired ?: (engine.voice?.isNetworkConnectionRequired == true)
+            if (!wantOnline && request.network && request.preferredVoice == null) { finish(VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING, false); return }
+            engine.setAudioAttributes(android.media.AudioAttributes.Builder().setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            engine.setPitch(1.02f); engine.setSpeechRate(0.96f)
+            val params = android.os.Bundle().apply {
+                putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_MUSIC)
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, if (louderVoice(context)) 1f else 0.9f)
+            }
+            request.attemptId = request.id + if (request.retried) "-offline" else "-first"
+            val result = engine.speak(plain(request.text).take(TextToSpeech.getMaxSpeechInputLength()), TextToSpeech.QUEUE_FLUSH, params, request.attemptId)
+            if (result != TextToSpeech.SUCCESS) { voiceError(request.attemptId, VoiceDeliveryPolicy.Stage.ENGINE_REJECTED); return }
+            record(context, request, VoiceDeliveryPolicy.Stage.QUEUED)
+            val attempt = request.attemptId
+            main.postDelayed({ if (active?.attemptId == attempt && !request.started) {
+                runCatching { tts?.stop() }
+                voiceError(attempt, VoiceDeliveryPolicy.Stage.TIMED_OUT)
+            } }, if (request.network) 12_000 else 20_000)
+        } catch (e: Exception) { finish(VoiceDeliveryPolicy.Stage.ENGINE_ERROR, false) }
+    }
+
+    private fun voiceError(utteranceId: String?, failedStage: VoiceDeliveryPolicy.Stage = VoiceDeliveryPolicy.Stage.ENGINE_ERROR) {
+        val request = active ?: return
+        if (request.attemptId != utteranceId) return // Old/duplicate callback cannot affect a newer utterance.
+        val ctx = prefsContext ?: return
         val engine = tts ?: return
+        val offline = voices(engine, request.language).any { !it.isNetworkConnectionRequired }
+        if (request.preferredVoice == null && AnswerVoicePolicy.retryInAnotherVoice(request.started, request.event == Event.ANSWER) &&
+            VoiceDeliveryPolicy.retryOffline(request.network, request.retried, offline)) {
+            request.retried = true
+            startUtterance(ctx, request, offline = true) // Explicit installed OFFLINE voice in the SAME language; once per request.
+        } else finish(failedStage, false)
+    }
+
+    private fun finish(stage: VoiceDeliveryPolicy.Stage, success: Boolean, pump: Boolean = true) {
+        val request = active ?: return
+        active = null
+        prefsContext?.let { record(it, request, stage) }
+        if (success && request.event == Event.TEST && request.preferredVoice != null) tts?.let {
+            previewedChoices.add(choiceToken(it, request.language, request.preferredVoice))
+        }
+        request.done?.complete(success)
+        if (pump) prefsContext?.let { drain(it) }
+    }
+
+    private fun cancelRequest(id: String, stage: VoiceDeliveryPolicy.Stage) {
+        if (active?.id == id) { runCatching { tts?.stop() }; finish(stage, false) }
+        else pending.firstOrNull { it.id == id }?.let {
+            pending.remove(it); prefsContext?.let { ctx -> record(ctx, it, stage) }; it.done?.complete(false)
+        }
+    }
+
+    fun stop() { main.post {
+        runCatching { tts?.stop() }
+        pending.forEach { it.done?.complete(false) }; pending.clear()
+        finish(VoiceDeliveryPolicy.Stage.CANCELLED, false, pump = false)
+    } }
+
+    fun shutdown() { main.post {
+        runCatching { tts?.stop(); tts?.shutdown() }
+        pending.forEach { it.done?.complete(false) }; pending.clear()
+        finish(VoiceDeliveryPolicy.Stage.CANCELLED, false, pump = false)
+        tts = null; ready = false; initializing = false; tamilVoice = false; generation++
+        previewedChoices.clear()
+    } }
+
+    /** Always constructed/used on main; callback is deferred until the constructor's holder is assigned. */
+    private fun ensureEngine(context: Context) {
+        if (ready || initializing) return
+        initializing = true; generation++
+        val mine = generation
+        pending.firstOrNull()?.let { record(context, it, VoiceDeliveryPolicy.Stage.INITIALIZING) }
         try {
-            val locale = if (lang == AppLang.TA) TAMIL else Locale.US
-            engine.setLanguage(locale)
-            if (onlineVoice(context)) pickNaturalVoice(engine, locale)
-        } catch (e: Exception) {
-            // Keep whatever voice is loaded.
-        }
-    }
-
-    /** Picks Tamil only when Tamil is the app language *and* the phone has a Tamil voice. */
-    fun pick(context: Context, english: String, tamil: String): String {
-        val wantsTamil = Lang.languageIn(context) == AppLang.TA
-        if (!wantsTamil) return english
-        return if (ensureTamilVoice(context)) tamil else english
-    }
-
-    private fun utter(context: Context, text: String, flush: Boolean): Boolean {
-        val engine = ensureEngine(context) ?: return false
-        if (!ready) {
-            // Still starting up: keep the last thing that was asked for.
-            pending.clear()
-            pending.addLast(text to flush)
-            return true
-        }
-        return say(engine, text, flush)
-    }
-
-    private fun say(engine: TextToSpeech, text: String, flush: Boolean): Boolean = try {
-        lastSpoken = text
-        val mode = if (flush) TextToSpeech.QUEUE_FLUSH else TextToSpeech.QUEUE_ADD
-        engine.speak(text, mode, null, "cleansweep-" + System.currentTimeMillis())
-        true
-    } catch (e: Exception) {
-        false
-    }
-
-    fun stop() {
-        try {
-            tts?.stop()
-        } catch (e: Exception) {
-            // Engine already gone.
-        }
-        pending.clear()
-    }
-
-    fun shutdown() {
-        stop()
-        try {
-            tts?.shutdown()
-        } catch (e: Exception) {
-            // Nothing to do.
-        }
-        tts = null
-        ready = false
-        tamilVoice = false
-    }
-
-    private fun ensureEngine(context: Context): TextToSpeech? {
-        prefsContext = context.applicationContext
-        tts?.let { return it }
-        synchronized(this) {
-            tts?.let { return it }
-            return try {
-                // The init callback can fire before the constructor returns, so it must close
-                // over this holder rather than over `tts` (which would still be null then).
-                var created: TextToSpeech? = null
-                created = TextToSpeech(context.applicationContext) { status ->
-                    ready = status == TextToSpeech.SUCCESS
-                    val engine = created ?: return@TextToSpeech
-                    if (ready) {
-                        applyLanguage(engine, context)
-                        val queue = pending.toList()
-                        pending.clear()
-                        queue.forEach { (text, flush) -> say(engine, text, flush) }
+            var created: TextToSpeech? = null
+            val made = TextToSpeech(context) { result -> main.post {
+                if (mine != generation) return@post
+                val engine = created
+                initializing = false
+                if (result == TextToSpeech.SUCCESS && engine != null) {
+                    tts = engine; ready = true
+                    drain(context)
+                } else failInitialization(context, VoiceDeliveryPolicy.Stage.INIT_FAILED)
+            } }
+            created = made
+            made.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onStart(id: String?) { main.post {
+                    val request = active ?: return@post
+                    if (request.attemptId == id) {
+                        record(context, request, VoiceDeliveryPolicy.Stage.PLAYING)
+                        if (!request.started) {
+                            request.started = true
+                            runCatching { request.onStarted?.invoke() }
+                            // Startup timeout is not a replay timer. A started answer is never restarted in another voice.
+                            val limit = if (request.event == Event.ANSWER) 150_000L else 45_000L
+                            main.postDelayed({ if (active?.attemptId == id) {
+                                runCatching { tts?.stop() }; finish(VoiceDeliveryPolicy.Stage.TIMED_OUT, false)
+                            } }, limit)
+                        }
                     }
-                }
-                try {
-                    created.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                        override fun onStart(utteranceId: String?) = Unit
-                        override fun onDone(utteranceId: String?) = Unit
+                } }
+                override fun onDone(id: String?) { main.post { if (active?.attemptId == id) finish(VoiceDeliveryPolicy.Stage.ENGINE_FINISHED, true) } }
+                @Suppress("OVERRIDE_DEPRECATION") override fun onError(id: String?) { main.post { voiceError(id) } }
+                override fun onError(id: String?, errorCode: Int) { main.post { voiceError(id) } }
+            })
+            tts = made
+            main.postDelayed({ if (mine == generation && !ready) failInitialization(context, VoiceDeliveryPolicy.Stage.INIT_TIMEOUT) }, 10_000)
+        } catch (e: Exception) { failInitialization(context, VoiceDeliveryPolicy.Stage.NO_ENGINE) }
+    }
 
-                        @Suppress("OVERRIDE_DEPRECATION")
-                        override fun onError(utteranceId: String?) = recoverFromVoiceError()
+    private fun failInitialization(context: Context, stage: VoiceDeliveryPolicy.Stage) {
+        generation++; initializing = false; ready = false
+        previewedChoices.clear()
+        runCatching { tts?.shutdown() }; tts = null
+        val failed = pending.toList(); pending.clear()
+        failed.forEach { record(context, it, stage); it.done?.complete(false) }
+    }
 
-                        override fun onError(utteranceId: String?, errorCode: Int) =
-                            recoverFromVoiceError()
-                    })
-                } catch (e: Exception) {
-                    // Old engines without a progress listener still speak.
-                }
-                tts = created
-                created
-            } catch (e: Exception) {
-                null
-            }
+    private fun record(context: Context, request: Request, stage: VoiceDeliveryPolicy.Stage) {
+        val volume = runCatching { (context.getSystemService(Context.AUDIO_SERVICE) as? android.media.AudioManager)
+            ?.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) }.getOrNull()
+        val snapshot = VoiceDeliveryStatus(stage, request.event.name, System.currentTimeMillis(), if (ready) tamilVoice else null,
+            volume, request.network, request.language.id)
+        runtimeState.value = snapshot
+        if (!request.manual) {
+            automaticState.value = snapshot
+            // One bounded status only; never save utterance text, prompts, audio, keys or engine-private identifiers.
+            prefs(context).edit().putString("voice_last_stage", stage.name).putString("voice_last_event", request.event.name)
+                .putLong("voice_last_attempt_ms", snapshot.atMs).apply()
         }
     }
 
-    private fun applyLanguage(engine: TextToSpeech, context: Context) {
-        try {
-            val wanted = if (Lang.languageIn(context) == AppLang.TA) TAMIL else Locale.US
-            val result = engine.setLanguage(wanted)
-            tamilVoice = wanted == TAMIL && result != TextToSpeech.LANG_MISSING_DATA &&
-                result != TextToSpeech.LANG_NOT_SUPPORTED
-            if (wanted == TAMIL && !tamilVoice) engine.setLanguage(Locale.US)
-            usingNetworkVoice = false
-            if (onlineVoice(context)) {
-                pickNaturalVoice(engine, if (tamilVoice) TAMIL else Locale.US)
-            }
-        } catch (e: Exception) {
-            tamilVoice = false
-        }
+    fun noteDelivery(context: Context, event: Event, stage: VoiceDeliveryPolicy.Stage) {
+        main.post { record(context.applicationContext, Request(null, null, null, event, false), stage) }
     }
 
-    /**
-     * Chooses the best voice the engine has for this language, preferring one that needs the
-     * network (those are the good ones), then the highest quality. Does nothing when the
-     * engine has no such voice — the phone keeps its offline voice and the user hears no
-     * difference, which is the honest outcome.
-     */
-    private fun pickNaturalVoice(engine: TextToSpeech, locale: Locale) {
-        try {
-            val voices = engine.voices ?: return
-            val wanted = locale.language
-            val candidates = voices.filter { it.locale.language.equals(wanted, ignoreCase = true) }
-            if (candidates.isEmpty()) return
-            val best = candidates.sortedWith(
-                compareByDescending<Voice> { it.isNetworkConnectionRequired }
-                    .thenByDescending { it.quality }
-                    .thenBy { it.name }
-            ).firstOrNull() ?: return
-            engine.voice = best
-            usingNetworkVoice = best.isNetworkConnectionRequired
-        } catch (e: Exception) {
-            // Any trouble here just means the default voice is used.
-            usingNetworkVoice = false
-        }
+    fun refreshDiagnostics(context: Context) {
+        val p = prefs(context)
+        if (automatic.value.atMs == 0L) automaticState.value = VoiceDeliveryStatus(
+            runCatching { VoiceDeliveryPolicy.Stage.valueOf(p.getString("voice_last_stage", "NOT_REQUESTED")!!) }.getOrDefault(VoiceDeliveryPolicy.Stage.NOT_REQUESTED),
+            p.getString("voice_last_event", "").orEmpty(), p.getLong("voice_last_attempt_ms", 0L))
     }
 
-    /**
-     * A cloud voice with no network fails silently: the line is simply never heard. When that
-     * happens the offline voice is put back and the same sentence is said once more, so the
-     * user hears the warning either way.
-     */
-    private fun recoverFromVoiceError() {
-        if (!usingNetworkVoice || networkRetried) return
-        networkRetried = true
-        val engine = tts ?: return
-        val text = lastSpoken ?: return
-        try {
-            usingNetworkVoice = false
-            engine.voice = null
-            val lang = prefsContext?.let { Lang.languageIn(it) } ?: AppLang.EN
-            engine.setLanguage(if (lang == AppLang.TA) TAMIL else Locale.US)
-            say(engine, text, flush = true)
-        } catch (e: Exception) {
-            // Nothing more to try: the on-screen text is still there.
-        }
-    }
+    fun pick(context: Context, english: String, tamil: String): String = if (tamilVoice && tamil.isNotBlank()) tamil else english
 
-    /** The last context the engine was built for, used by the recovery path above. */
-    @Volatile
-    private var prefsContext: Context? = null
+    /** Availability hint only; a test's callback/locale result, not this flag, is delivery evidence. */
+    fun canSpeak(context: Context): Boolean = runCatching {
+        context.packageManager.queryIntentServices(android.content.Intent(TextToSpeech.Engine.INTENT_ACTION_TTS_SERVICE), 0).isNotEmpty()
+    }.getOrDefault(false)
 
-    /** True when the engine really has a Tamil voice installed. */
-    private fun ensureTamilVoice(context: Context): Boolean {
-        val engine = ensureEngine(context) ?: return false
-        if (!ready) return engine.isLanguageAvailable(TAMIL) >= TextToSpeech.LANG_AVAILABLE
-        return tamilVoice
-    }
-
-    private val TAMIL: Locale = Locale.forLanguageTag("ta-IN")
+    private val TAMIL = Locale.forLanguageTag("ta-IN")
 
     // ------------------------------------------------------------------ text for speech
 
@@ -496,11 +613,4 @@ object Announcer {
         false
     }
 
-    /** True when this phone can talk at all — used to keep the UI honest. */
-    fun canSpeak(context: Context): Boolean = try {
-        val engine = ensureEngine(context)
-        engine != null && if (ready) true else engine.engines.isNotEmpty()
-    } catch (e: Exception) {
-        false
-    }
 }

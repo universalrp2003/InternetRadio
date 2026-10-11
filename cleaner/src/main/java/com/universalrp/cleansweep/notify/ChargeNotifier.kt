@@ -12,23 +12,16 @@ import com.universalrp.cleansweep.MainActivity
 import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
+import com.universalrp.cleansweep.data.DataUsageTracker
+import com.universalrp.cleansweep.data.LiveNetworkQuality
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.DisplayTime
 import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
- * The charging card and the spoken plug-in line, in one place.
- *
- * There are two ways CleanSweep can watch a charger, and both must show the same thing:
- *
- *  * [ChargeMonitorService] — the plain foreground service. Best case: a live card that
- *    updates every five seconds while the charger is in.
- *  * [com.universalrp.cleansweep.work.ChargerWatchWorker] — the road that always works.
- *    Android 12 and newer refuse to let a broadcast receiver start a foreground service, so
- *    the plug-in broadcast hands the work to a job, which is allowed to run, and the job
- *    keeps the same card and readings alive from inside itself.
- *
- * Nothing here needs a new permission: the numbers come from the system battery broadcast and
- * the card goes to the notification channel the app already has.
+ * The ongoing mobile data & charging status card and spoken announcements.
  */
 object ChargeNotifier {
 
@@ -40,7 +33,7 @@ object ChargeNotifier {
     private const val KEY_LAST_PLUG_ANNOUNCE = "last_plug_announce"
 
     fun read(context: Context): BatteryReading? = try {
-        BatteryReader.read(context)
+        BatteryReader.read(context).also { runCatching { com.universalrp.cleansweep.data.ChargeHistoryRepo.record(context, it) } }
     } catch (e: Exception) {
         null
     }
@@ -53,11 +46,10 @@ object ChargeNotifier {
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Charging status",
+                    Lang.forContext(context, "Mobile data & battery status"),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Charging power, battery level and time to full while the " +
-                        "charger is connected"
+                    description = Lang.forContext(context, "Observed mobile data usage, configured quota and battery readings")
                     setShowBadge(false)
                 }
             )
@@ -67,10 +59,14 @@ object ChargeNotifier {
     }
 
     /**
-     * The ongoing card: charging power in watts, current, voltage, temperature and how long
-     * is left. It cannot be swiped away, and it disappears the moment the charger comes out.
+     * Ongoing notification card:
+     * Prominently displays today's real mobile data usage,
+     * pack status (Used / Quota & Remaining GB left), and secondary battery/charging stats.
      */
     fun build(context: Context, battery: BatteryReading): Notification {
+        val language = Lang.languageIn(context)
+        fun t(text: String, vararg args: Any) = Lang.translate(language, text, *args)
+        val percent = com.universalrp.cleansweep.widget.WidgetReadingPolicy.percent(battery.percent, battery.reportedLevel, battery.reportedScale)
         val openApp = PendingIntent.getActivity(
             context,
             0,
@@ -78,58 +74,106 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
-        val title = when {
-            battery.charging && battery.percent >= 100 -> "Battery full — unplug to save power"
-            battery.charging -> {
-                val watts = battery.powerW
-                if (watts != null) {
-                    "Charging at %.1f W • %d%%".format(watts, battery.percent.coerceAtLeast(0))
-                } else {
-                    "Charging • ${battery.percent}%"
-                }
-            }
-            else -> "${battery.percent}% • ${battery.statusLabel}"
-        }
-
-        val timeLine = try {
-            batteryTimeLabel(battery)
+        val dataUsage = if (battery.powerConnected) null else try {
+            DataUsageTracker.getUsageInfo(context)
         } catch (e: Exception) {
             null
-        } ?: "Time estimate not available yet"
-
-        val details = buildString {
-            append(timeLine)
-            battery.currentA?.let { append(" • %.2f A".format(it)) }
-            battery.voltageV?.let { append(" • %.2f V".format(it)) }
-            battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
         }
 
-        val hint = when {
-            !battery.charging -> "Unplugged — the reading stops here."
-            battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged " +
-                "overnight is fine."
-            battery.percent >= 80 -> "Above 80% charging slows down on purpose — this is normal " +
-                "for lithium batteries."
-            else -> "Open CleanSweep for CPU temperature, battery health and security."
+        val isUnlimited = dataUsage?.isUnlimited5g == true
+        val chargingContent = StatusPillContent.resolve(battery.powerConnected, battery.powerW)
+        val title = when {
+            battery.powerConnected -> chargingContent.text // Measurement/unit, not an English-only sentence.
+            dataUsage != null && !dataUsage.readingAvailable -> t("Mobile usage unavailable · Battery %s", percent)
+            dataUsage != null && !isUnlimited -> t("Mobile data today: %s · Pack left: %s", dataUsage.formattedToday, dataUsage.formattedRemaining)
+            isUnlimited -> t("Unlimited 5G · user-set · Battery %s", percent)
+            else -> t("Battery %s · %s", percent, t(battery.statusLabel))
+        }
+        val minutes = runCatching { batteryTimeMinutes(battery) }.getOrNull()
+        val duration = minutes?.let { value ->
+            if (value >= 60) t("%s h %s min", value / 60, value % 60) else t("%s min", value)
+        }
+        val timeLine = when {
+            battery.percent == 100 -> t("Full")
+            duration != null -> t("Estimated time to full: %s", duration)
+            else -> t("Battery %s · %s", percent, t(battery.statusLabel))
+        }
+        val netQuality = if (battery.powerConnected) null else runCatching { LiveNetworkQuality.measure(context) }.getOrNull()
+        val details = buildString {
+            if (netQuality != null && (netQuality.isWifi || netQuality.isMobile)) {
+                val type = t(if (netQuality.isWifi) "Wi-Fi" else "Mobile data")
+                appendLine(t("%s · measured quality: %s", type, t(netQuality.labelEnglish)))
+                netQuality.pingMs?.let { append(t("Ping: %s ms", it)) }
+                netQuality.jitterMs?.let { append(t(" · Jitter: %s ms", it)) }
+                appendLine()
+                appendLine(t("Live traffic: ↓ %s · ↑ %s", netQuality.formattedRxSpeed, netQuality.formattedTxSpeed))
+            }
+            if (dataUsage != null && !isUnlimited) {
+                appendLine(if (!dataUsage.readingAvailable) t("Mobile statistics unavailable")
+                    else t("Pack used: %s / %s · left: %s", dataUsage.formattedPackTotal, dataUsage.formattedPackLimit, dataUsage.formattedRemaining))
+            } else if (isUnlimited) appendLine(t("Unlimited 5G mode is user-set; quota display is hidden."))
+            if (battery.powerConnected) {
+                append(t("Charger connected: %s", timeLine))
+                battery.powerW?.let { append(" · " + "%.2f W".format(java.util.Locale.US, it)) }
+                battery.currentA?.let { append(" · %.2f A".format(java.util.Locale.US, it)) }
+                battery.voltageV?.let { append(" · %.2f V".format(java.util.Locale.US, it)) }
+                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
+            } else {
+                append(t("Battery %s · %s", percent, t(battery.statusLabel)))
+                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
+            }
+            append("\n" + t("Card updated: %s", DisplayTime.clock(System.currentTimeMillis(), seconds = true)))
+        }
+        val hint = t(when {
+            battery.powerConnected && battery.powerW == null -> "Charging power is not reported by this phone. No wattage is guessed."
+            battery.powerConnected -> "Watts are measured at the battery, not at the charger adapter."
+            dataUsage != null && !dataUsage.readingAvailable -> "Mobile data statistics are unavailable; no usage or remaining quota is guessed."
+            dataUsage?.isPartial == true -> "Partial observed mobile counter; gaps/reboots can miss traffic. Not the carrier's official balance. Wi-Fi excluded."
+            dataUsage != null -> "Mobile data usage excludes Wi-Fi and is not the carrier's official balance."
+            else -> "Monitoring active. Open Live Guard for available phone readings."
+        })
+
+        val stopIntent = Intent(context, ChargeMonitorService::class.java).apply {
+            action = ChargeMonitorService.ACTION_STOP_SERVICE
+        }
+        val stopPending = PendingIntent.getService(
+            context,
+            4202,
+            stopIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+
+        val (netIconRes, netIconColor) = if (battery.powerConnected) {
+            Pair(R.drawable.ic_stat_battery, 0xFF38BDF8.toInt())
+        } else when (netQuality?.grade) {
+            com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.TOP_QUALITY ->
+                Pair(R.drawable.ic_stat_net_green, 0xFF00E676.toInt()) // Very Good Quality = Green
+            com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.MEDIUM_QUALITY ->
+                Pair(R.drawable.ic_stat_net_gold, 0xFFFFD600.toInt())  // Medium Quality = Yellow
+            com.universalrp.cleansweep.data.LiveNetworkQuality.QualityGrade.BAD_QUALITY ->
+                Pair(R.drawable.ic_stat_net_red, 0xFFFF3B30.toInt())   // Bad Quality = Red
+            else ->
+                Pair(R.drawable.ic_stat_data, 0xFF38BDF8.toInt())
         }
 
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_battery)
+            .setSmallIcon(netIconRes)
+            .setColor(netIconColor)
             .setContentTitle(title)
-            .setContentText(details)
+            .setContentText(if (battery.powerConnected) t("Battery-side charging power") else details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(openApp)
+            .addAction(0, t("Stop"), stopPending)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 
     /**
      * The plainest possible card. Used only as a last resort when the battery broadcast
-     * cannot be read at all — starting a foreground service without a valid notification is
-     * a crash, so there is always this to hand.
+     * cannot be read at all.
      */
     fun buildFallback(context: Context): Notification {
         channel(context)
@@ -140,9 +184,9 @@ object ChargeNotifier {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         return NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_stat_battery)
-            .setContentTitle("Charging")
-            .setContentText("CleanSweep is reading the charging numbers.")
+            .setSmallIcon(R.drawable.ic_stat_data)
+            .setContentTitle(Lang.forContext(context, "Live Guard monitor"))
+            .setContentText(Lang.forContext(context, "Battery reading unavailable. Monitoring is active; no value is guessed."))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -152,9 +196,10 @@ object ChargeNotifier {
     }
 
     /** Shows (or refreshes) the card. Silently does nothing when notifications are off. */
-    fun post(context: Context) {
+    fun post(context: Context, stillCurrent: () -> Boolean = { true }) {
+        if (!stillCurrent()) return
         val battery = read(context) ?: return
-        if (!battery.charging) {
+        if (!battery.powerConnected && !ChargeMonitorService.persistentEnabled(context)) {
             clear(context)
             return
         }
@@ -162,11 +207,13 @@ object ChargeNotifier {
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
             ?: return
         try {
-            manager.notify(NOTIFICATION_ID, build(context, battery))
+            val notification = build(context, battery)
+            if (!stillCurrent()) return
+            manager.notify(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
             // Notifications switched off by the user: the voice line still works.
         }
-        updatePill(context, battery)
+        updatePill(context, battery, stillCurrent)
     }
 
     fun clear(context: Context) {
@@ -179,63 +226,108 @@ object ChargeNotifier {
         StatusPill.remove()
     }
 
-    /** The little watt reading in the status bar, when the user switched it on and allowed it. */
-    fun updatePill(context: Context, battery: BatteryReading) {
+    /** Charger connected = watts only; unplugged = restore the configured data + D/U view. */
+    fun updatePill(context: Context, battery: BatteryReading, stillCurrent: () -> Boolean = { true }) {
         val wanted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(ChargeMonitorService.PILL_KEY, false)
-        if (!wanted || !StatusPill.canDraw(context) || !battery.charging) {
+        if (!stillCurrent()) return
+        if (!wanted || !StatusPill.canDraw(context)) {
             StatusPill.remove()
             return
         }
-        val text = when {
-            battery.powerW != null -> "\u26A1 %.1f W".format(battery.powerW)
-            battery.currentA != null -> "\u26A1 %.2f A".format(battery.currentA)
-            else -> "\u26A1 ${battery.percent}%"
+        if (battery.powerConnected) {
+            val content = StatusPillContent.resolve(true, battery.powerW)
+            StatusPill.update(context, content.text, showNetworkMeter = false, stillCurrent = stillCurrent)
+            // Keep accounting alive even though its text is hidden. Do this AFTER the
+            // immediate mode switch, so a slow stats query cannot leave the old wide pill up.
+            runCatching { DataUsageTracker.getUsageInfo(context) }
+            return
         }
-        StatusPill.update(context, text)
+        val dataUsage = runCatching { DataUsageTracker.getUsageInfo(context) }.getOrNull()
+        val isUnlimited = dataUsage?.isUnlimited5g == true
+        val packPercent = if (dataUsage != null && dataUsage.packLimitBytes > 0 && !isUnlimited) {
+            ((dataUsage.packTotalMobileBytes.toDouble() / dataUsage.packLimitBytes) * 100.0)
+                .coerceIn(0.0, 100.0).toInt()
+        } else null
+        val netQuality = runCatching { LiveNetworkQuality.measure(context) }.getOrNull()
+        if (!stillCurrent()) return // A plug/unplug arrived while the stats/ping query ran.
+        val content = StatusPillContent.resolve(
+            powerConnected = false,
+            powerW = null,
+            mobileData = dataUsage?.formattedToday,
+            unlimited5g = isUnlimited,
+            batteryPercent = battery.percent,
+            packPercent = packPercent,
+            hideDataOnWifiOrUnlimited = StatusPill.isHideDataOnWifi(context) &&
+                (netQuality?.isWifi == true || isUnlimited),
+        )
+        StatusPill.update(
+            context,
+            content.text,
+            content.packPercent,
+            netQuality?.grade,
+            netQuality?.rxSpeedBytesPerSec ?: 0L,
+            netQuality?.txSpeedBytesPerSec ?: 0L,
+            showNetworkMeter = content.showNetworkMeter,
+            stillCurrent = stillCurrent,
+        )
     }
 
     /**
      * Says what the charger is doing, once per plug-in.
-     *
-     * A phone reports no current for the first few seconds after the plug goes in, so this
-     * waits before it reads — otherwise the announcement would always be "not charging yet".
-     * The dedupe marker lives in prefs because the service and the fallback job can both ask
-     * for the line, and the user must not hear it twice.
      */
-    fun announcePluggedIn(context: Context, delayMs: Long = 7_000) {
+    suspend fun announcePluggedIn(context: Context, delayMs: Long = 800) {
         val app = context.applicationContext
         val prefs = app.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-        val last = prefs.getLong(KEY_LAST_PLUG_ANNOUNCE, 0L)
-        if (System.currentTimeMillis() - last < 90_000L) return
-        prefs.edit().putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
+        // Wait without blocking a thread, then de-duplicate by physical connection, not a four-second window.
+        if (delayMs > 0) kotlinx.coroutines.delay(delayMs)
+        val token = prefs.getString("voice_connection_token", "").orEmpty().ifBlank {
+            java.util.UUID.randomUUID().toString().also { prefs.edit().putString("voice_connection_token", it).apply() }
+        }
+        if (prefs.getString("voice_last_spoken_connection", "") == token) return
+        val battery = read(app) ?: return
+        if (!battery.powerConnected) return
 
-        // The caller is a worker or a service scope, never the main thread, but guard anyway.
-        try {
-            if (delayMs > 0) Thread.sleep(delayMs)
-        } catch (e: InterruptedException) {
-            Thread.currentThread().interrupt()
+        // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
+        val tempC = battery.temperatureC
+        if (tempC != null && tempC >= 42.0f) {
+            val tempRound = tempC.toInt()
+            val warnTamil = "எச்சரிக்கை! போன் மிக அதிக வெப்பமாக உள்ளது ($tempRound டிகிரி). வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும் அல்லது சார்ஜரை அகற்றவும்."
+            Announcer.speakAndWait(app, "The battery is unusually warm at plug-in. Please review charging conditions.", warnTamil,
+                Announcer.Event.OVERHEAT, onStarted = { prefs.edit().putString("voice_last_spoken_connection", token).apply() },
+                requestKey = "plug:$token")
             return
         }
-        val battery = read(app) ?: return
-        if (!battery.charging) return
 
-        val percent = battery.percent.coerceAtLeast(0)
+        val percent = battery.percent
         val watts = battery.powerW
-        val timeLine = try {
-            batteryTimeLabel(battery)
+        // Remaining time estimate: only announce when charging is stable and verified
+        val currentA = battery.currentA
+        val timeEstimate = try {
+            val mins = batteryTimeMinutes(battery)
+            if (mins != null && mins in 2..480 && currentA != null && currentA > 0.25f && percent in 5..94) {
+                val h = mins / 60
+                val m = mins % 60
+                if (h > 0) "$h மணி $m நிமிடம்" else "$m நிமிடம்"
+            } else null
         } catch (e: Exception) {
             null
         }
-        val english = buildString {
-            append("Charging started at $percent percent.")
-            if (watts != null) append(" " + "%.1f".format(watts) + " watts now.")
-            if (timeLine != null) append(" $timeLine.")
-        }
+
+        // Spoken immediately in Tamil on plug-in:
         val tamil = buildString {
-            append("சார்ஜ் தொடங்கியது — $percent சதவீதம்.")
-            if (watts != null) append(" இப்போது " + "%.1f".format(watts) + " வாட்ஸ்.")
+            if (watts != null && watts < 4.0f && percent < 90) {
+                append("மெதுவான சார்ஜிங்: $percent சதவீதம்.")
+            } else {
+                append(if (percent in 0..100) "சார்ஜர் இணைக்கப்பட்டது: $percent சதவீதம்." else "சார்ஜர் இணைக்கப்பட்டது. பேட்டரி அளவு தெரியவில்லை.")
+            }
+            if (timeEstimate != null) {
+                append(" நிறைவடைய $timeEstimate.")
+            }
         }
-        Announcer.speak(app, english, tamil, Announcer.Event.CHARGING)
+        Announcer.speakAndWait(app, "Charger connected" + (if (battery.percent in 0..100) ": ${battery.percent} percent." else ". Battery level not reported."),
+            tamil, Announcer.Event.CHARGING, onStarted = {
+                prefs.edit().putString("voice_last_spoken_connection", token).putLong(KEY_LAST_PLUG_ANNOUNCE, System.currentTimeMillis()).apply()
+            }, requestKey = "plug:$token")
     }
 }

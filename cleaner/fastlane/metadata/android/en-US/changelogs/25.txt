@@ -1,0 +1,6 @@
+CleanSweep v2.20:
+- Wi-Fi Scanner accuracy: Eliminated phantom device detections by enforcing active TCP socket replies, ARP MAC table validation, or confirmed LAN hostnames.
+- Pure Passive App Network & Tracker Monitor: Direct on-device network inspection without requiring VPN or loopback service. Attributes active socket connections and data transfers to apps and companies.
+- Tamil Info & Cyber Safety Strip: Smart filtering for system apps and OEM services (Qualcomm, Xiaomi, Android System, default SMS app) to eliminate false security alarms.
+- Quick AI Assistant: Instant search bar on the home screen immediately opens the AI Assistant conversation screen.
+- Bug fixes, device vendor recognition updates, and UI stability improvements.

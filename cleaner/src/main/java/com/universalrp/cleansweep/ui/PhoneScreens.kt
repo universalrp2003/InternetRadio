@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -48,6 +49,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -65,16 +67,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.AppRow
 import com.universalrp.cleansweep.data.Finding
+import com.universalrp.cleansweep.data.FindingApp
 import com.universalrp.cleansweep.data.LanDevice
+import com.universalrp.cleansweep.data.SecurityFixHelper
 import com.universalrp.cleansweep.data.Severity
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.tr
@@ -189,6 +195,8 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                                 color = TextSecondary,
                             )
                             Spacer(Modifier.height(4.dp))
+                            Text(tr("Permission/settings review only — not proof that the phone is safe."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            Text(tr("Permission/settings review only — not proof that the phone is safe."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                             Text(
                                 tr("Last checked %s", checkedAt(loaded.scannedAtMs)),
                                 style = MaterialTheme.typography.labelSmall,
@@ -335,6 +343,7 @@ private fun AppDetailDialog(row: AppRow, vm: MainViewModel, onClose: () -> Unit)
                 // v2.7: granted vs revoked. The old dialog listed everything the app ever asked
                 // for, so a revoked permission kept showing as held. Now \"has\" means Android
                 // grants it right now, and taken-away permissions are listed as removed.
+                if (!row.permissionsObserved) Text(tr("Permission grant state was not reported; do not infer granted or revoked access."), style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                 if (row.riskyPermissions.isNotEmpty()) {
                     Spacer(Modifier.height(8.dp))
                     Text(tr("Permissions this app has right now"),
@@ -463,6 +472,29 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
+            item(key = "security_tools") {
+                Column {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tr("Include system apps"))
+                            Text(tr("Included for review only; no automatic selection, permission grant or deletion."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        }
+                        androidx.compose.material3.Switch(checked = state.securityIncludeSystemApps, onCheckedChange = { vm.setSecurityIncludeSystemApps(it) })
+                    }
+                    state.lastPermissionReview?.let { previous ->
+                        Text(tr("Last checked %s", com.universalrp.cleansweep.data.DisplayTime.dated(previous.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA)),
+                            color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Saved last review only; not current findings or a safety verdict."), color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        if (previous.incomplete) Text(tr("Previous review incomplete"), color = WarnAmber, style = MaterialTheme.typography.labelSmall)
+                        if (previous.isFuture(System.currentTimeMillis())) Text(tr("Phone clock changed; saved date may be ahead of now."), color = WarnAmber, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { vm.clearLastPermissionReview() }) { Text(tr("Clear last-review summary")) }
+                    }
+                    TextButton(onClick = { vm.openInsights(InsightsTab.SECURITY_HISTORY) }) { Text(tr("What changed? Security timeline")) }
+                    TextButton(onClick = { vm.openInsights(InsightsTab.ACTION_CHECKLIST) }) { Text(tr("Action checklist")) }
+                    state.securityReadError?.let { Text(it, color = WarnAmber, style = MaterialTheme.typography.bodySmall) }
+                    if (state.securityReport?.unavailableChecks?.isNotEmpty() == true) Text(tr("Some checks are unavailable. Missing observations are not proof of safety."), color = WarnAmber, style = MaterialTheme.typography.bodySmall)
+                }
+            }
             if (state.securityBusy) {
                 item {
                     Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
@@ -479,19 +511,19 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                                 Icon(
                                     Icons.Outlined.Security,
                                     contentDescription = null,
-                                    tint = scoreColor(loaded.score),
+                                    tint = if (loaded.unavailableChecks.isEmpty()) scoreColor(loaded.score) else TextSecondary,
                                     modifier = Modifier.size(30.dp),
                                 )
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        "${loaded.score}/100",
+                                        tr(com.universalrp.cleansweep.data.ReadingPolicy.securityValue(loaded)),
                                         style = MaterialTheme.typography.headlineSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = scoreColor(loaded.score),
+                                        color = if (loaded.unavailableChecks.isEmpty()) scoreColor(loaded.score) else TextSecondary,
                                     )
                                     Text(
-                                        loaded.verdict,
+                                        tr(loaded.verdict),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = TextSecondary,
                                     )
@@ -503,9 +535,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                                 // so it stays out of the count.
                                 run {
                                     val n = loaded.findings.count { it.severity != Severity.INFO }
-                                    (if (n == 1) "1 finding" else "$n findings") +
-                                        " over ${loaded.appsChecked} apps • " +
-                                        "${loaded.highCount} high, ${loaded.mediumCount} medium"
+                                    tr("%s findings across %s apps · %s high, %s medium", n, loaded.appsChecked, loaded.highCount, loaded.mediumCount)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
@@ -520,44 +550,16 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                     }
                 }
 
+                item(key = "guidance") {
+                    SecurityGuidanceCard(state, vm)
+                }
+
                 item(key = "malware") {
                     MalwareCard(state, vm)
                 }
 
                 items(loaded.findings, key = { it.id }) { finding ->
                     FindingCard(finding)
-                }
-
-                item {
-                    PanelCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentViolet)
-                                Spacer(Modifier.width(10.dp))
-                                Text(tr("Want a second opinion?"),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                )
-                            }
-                            Spacer(Modifier.height(8.dp))
-                            Text(
-                                "The AI analysis reads these findings and explains which one matters " +
-                                    "most on your phone.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary,
-                            )
-                            Spacer(Modifier.height(10.dp))
-                            GradientButton(
-                                text = if (state.aiConfig.ready) "Analyse with AI" else "Set up AI analysis",
-                                icon = Icons.Outlined.SmartToy,
-                                onClick = {
-                                    if (state.aiConfig.ready) vm.runAiAnalysis()
-                                    else vm.navigate(Screen.AI_SETTINGS)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -566,9 +568,42 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
 
 @Composable
 private fun FindingCard(finding: Finding) {
-    // v2.9: the scanner hands over every name; the card shows the first few and
-    // expands to the full list on tap — no more "6 of 11" guessing.
-    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var expanded by remember(finding.id) { mutableStateOf(false) }
+    var chooseApp by remember(finding.id) { mutableStateOf(false) }
+    var actionGuidance by remember(finding.id) { mutableStateOf<String?>(null) }
+    val apps = finding.affectedApps
+
+    fun manage(app: FindingApp? = null) {
+        val result = SecurityFixHelper.openSpecificSettings(context, finding.id, app)
+        actionGuidance = result.guidance
+        if (!result.direct) {
+            android.widget.Toast.makeText(context, result.guidance, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    if (chooseApp) {
+        AlertDialog(
+            onDismissRequest = { chooseApp = false },
+            title = { Text(tr("Choose the app to manage")) },
+            text = {
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items(apps, key = { it.componentName ?: it.packageName }) { app ->
+                        Column(
+                            Modifier.fillMaxWidth().clickable {
+                                chooseApp = false
+                                manage(app)
+                            }.padding(vertical = 10.dp),
+                        ) {
+                            Text(app.label, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                            Text(app.componentName ?: app.packageName, color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { chooseApp = false }) { Text(tr("Cancel")) } },
+        )
+    }
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -590,47 +625,76 @@ private fun FindingCard(finding: Finding) {
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    finding.severity.name,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = severityColor(finding.severity),
-                    fontWeight = FontWeight.Bold,
-                )
+                Text(finding.severity.name, style = MaterialTheme.typography.labelSmall,
+                    color = severityColor(finding.severity), fontWeight = FontWeight.Bold)
             }
             Spacer(Modifier.height(6.dp))
-            Text(
-                finding.detail,
-                style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary,
-            )
-            if (finding.samples.isNotEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                val shown = if (expanded) finding.samples else finding.samples.take(6)
-                shown.forEach { sample ->
-                    Text("• $sample", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
-                }
-                if (finding.samples.size > 6) {
-                    TextButton(
-                        onClick = { expanded = !expanded },
-                        contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
+            Text(finding.detail, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            if (apps.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                val shown = if (expanded) apps else apps.take(6)
+                shown.forEach { app ->
+                    Row(
+                        Modifier.fillMaxWidth().padding(vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(
-                            if (expanded) tr("Show less")
-                            else tr("Show all %d", finding.samples.size),
-                            color = AccentCyan,
-                            fontWeight = FontWeight.Bold,
-                        )
+                        Column(Modifier.weight(1f)) {
+                            Text("• ${app.label}", style = MaterialTheme.typography.labelMedium, color = TextPrimary)
+                            Text(
+                                app.componentName ?: app.packageName,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        OutlinedButton(
+                            onClick = { manage(app) },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            shape = RoundedCornerShape(6.dp),
+                        ) {
+                            Text(tr("Manage"), style = MaterialTheme.typography.labelSmall, color = AccentCyan)
+                        }
                     }
+                }
+            } else if (finding.samples.isNotEmpty()) {
+                // Unknown/legacy display text is NOT enough to identify an installed app.
+                val shown = if (expanded) finding.samples else finding.samples.take(6)
+                shown.forEach { Text("• $it", style = MaterialTheme.typography.labelMedium, color = TextPrimary) }
+            }
+            val itemCount = maxOf(apps.size, finding.samples.size)
+            if (itemCount > 6) {
+                TextButton(onClick = { expanded = !expanded }, contentPadding = PaddingValues(0.dp)) {
+                    Text(if (expanded) tr("Show less") else tr("Show all %d", itemCount),
+                        color = AccentCyan, fontWeight = FontWeight.Bold)
                 }
             }
             finding.fixHint?.let { hint ->
+                Spacer(Modifier.height(10.dp))
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text(hint, style = MaterialTheme.typography.labelMedium, color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Spacer(Modifier.width(8.dp))
+                    Button(
+                        onClick = {
+                            // A multi-app finding has no single "exact app" until the owner
+                            // chooses it. Never discard that choice or guess from a label.
+                            if (apps.size > 1) chooseApp = true else manage(apps.singleOrNull())
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.15f)),
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    ) {
+                        Text(tr("Fix / review"), color = AccentCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            actionGuidance?.let {
                 Spacer(Modifier.height(8.dp))
-                Text(
-                    hint,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = AccentCyan,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Text(it, style = MaterialTheme.typography.bodySmall, color = WarnAmber)
+                Text(tr("Return here after changing the setting; the security check refreshes automatically."),
+                    style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             }
         }
     }
@@ -784,6 +848,7 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
                 }
             }
             Spacer(Modifier.height(10.dp))
+            VirusTotalKeyHelp()
             if (state.vtKeySaved) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -798,9 +863,7 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
                 }
             } else {
                 Text(
-                    "Optional: paste a free VirusTotal API key (virustotal.com → sign up → API key) " +
-                        "for a second opinion on flagged apps. The free quota is small, so it is " +
-                        "only spent there and on apps you check by hand.",
+                    tr("Optional VirusTotal hash checks use your account quota only for flagged or manually selected apps. No APK is uploaded. Check current account terms before enabling."),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
@@ -827,9 +890,9 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
     }
 }
 
-/** "14:32" — shown next to results so a fresh re-check is visible at a glance. */
+/** "2:32 PM" — shown next to results so a fresh re-check is visible at a glance. */
 private fun checkedAt(ms: Long): String = try {
-    SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
+    com.universalrp.cleansweep.data.DisplayTime.dated(ms, com.universalrp.cleansweep.data.Lang.isTamil)
 } catch (e: Exception) {
     ""
 }
@@ -892,6 +955,21 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                         onRequest = { permissionLauncher.launch(vm.networkPermissions()) },
                         onOpenSettings = { vm.requestNetworkPermission() },
                     )
+                }
+            }
+
+            if (report?.devices?.isNotEmpty() == true || state.aiDeviceBusy || state.aiDeviceResult != null) {
+                item(key = "bounded_device_ai") {
+                    PanelCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(tr("Optional device AI analysis"), style = MaterialTheme.typography.titleSmall)
+                            Text(tr("Sends displayed device IPs, hostnames, vendors and ports to your chosen provider only with network sharing enabled. Wi-Fi network name is omitted. AI guesses are not verified identities or saved contact names."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            if (state.aiDeviceBusy) AiOperationProgress(state.aiDeviceStartedMs, 90,
+                                if (state.networkBusy) "Scanning the network locally…" else "Waiting for the selected provider…", onCancel = { vm.cancelDeviceIdentification() })
+                            else TextButton(onClick = { vm.identifyDevicesWithAi() }) { Text(tr("Send current device facts to AI")) }
+                            state.aiDeviceResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
                 }
             }
 
@@ -960,12 +1038,13 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                             }
                             Spacer(Modifier.height(10.dp))
                             GradientButton(
-                                text = if (state.networkBusy) "Scanning…" else "Scan my network",
-                                icon = Icons.Outlined.Router,
-                                onClick = { vm.scanNetwork() },
-                                enabled = !state.networkBusy,
+                                text = tr(if (state.networkBusy) "Scanning with AI…" else "Scan my network with AI"),
+                                icon = Icons.Outlined.Devices,
+                                onClick = { vm.scanNetworkWithAi() },
+                                enabled = !state.networkBusy && !state.aiDeviceBusy,
                                 modifier = Modifier.fillMaxWidth(),
                             )
+
                             state.networkProgress?.let { (done, total) ->
                                 Spacer(Modifier.height(8.dp))
                                 Text(
@@ -975,44 +1054,6 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                                 )
                             }
                             Spacer(Modifier.height(8.dp))
-                            if (loaded.devices.size > 1) {
-                                GradientButton(
-                                    text = when {
-                                        state.aiDeviceBusy -> "Identifying…"
-                                        state.aiConfig.ready -> "Identify with AI"
-                                        else -> "Set up AI to identify"
-                                    },
-                                    icon = Icons.Outlined.SmartToy,
-                                    onClick = {
-                                        // With no provider this explains itself instead of
-                                        // being a button that does nothing.
-                                        if (state.aiConfig.ready) {
-                                            vm.identifyDevicesWithAi()
-                                        } else {
-                                            vm.openAiSettings()
-                                        }
-                                    },
-                                    enabled = !state.aiDeviceBusy,
-                                    modifier = Modifier.fillMaxWidth(),
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    if (state.aiConfig.ready) {
-                                        "The AI sees the same table (ports, names, MAC vendors) and " +
-                                            "says what each device probably is, with its confidence."
-                                    } else {
-                                        "CleanSweep's own guess is on each card below. Add a free AI " +
-                                            "key to get a second opinion with reasons."
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = TextSecondary,
-                                )
-                                state.aiDeviceResult?.let { result ->
-                                    Spacer(Modifier.height(8.dp))
-                                    AiText(result, style = MaterialTheme.typography.bodySmall)
-                                }
-                                Spacer(Modifier.height(8.dp))
-                            }
                             Text(
                                 loaded.note,
                                 style = MaterialTheme.typography.labelSmall,
@@ -1023,7 +1064,14 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                 }
 
                 if (loaded.devices.isNotEmpty()) {
-                    items(loaded.devices, key = { it.ip }) { device -> DeviceCard(device) }
+                    items(loaded.devices, key = { it.ip }) { device ->
+                        val devKey = device.mac ?: device.ip
+                        DeviceCard(
+                            device = device,
+                            onToggleVerified = { vm.toggleDeviceVerified(devKey) },
+                            onRename = { newName -> vm.setCustomDeviceName(devKey, newName) },
+                        )
+                    }
                 }
             }
 
@@ -1085,7 +1133,53 @@ private fun NetworkPermissionCard(
 }
 
 @Composable
-private fun DeviceCard(device: LanDevice) {
+private fun DeviceCard(
+    device: LanDevice,
+    onToggleVerified: () -> Unit = {},
+    onRename: (String) -> Unit = {},
+) {
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var renameInput by remember(device.customName) { mutableStateOf(device.customName.orEmpty()) }
+
+    if (showRenameDialog) {
+        AlertDialog(
+            onDismissRequest = { showRenameDialog = false },
+            title = { Text(tr("Device Name")) },
+            text = {
+                Column {
+                    Text(
+                        "${device.ip}${device.mac?.let { " • $it" } ?: ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = renameInput,
+                        onValueChange = { renameInput = it },
+                        placeholder = { Text("e.g. Living Room TV, Dad's Phone") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onRename(renameInput)
+                        showRenameDialog = false
+                    }
+                ) {
+                    Text(tr("Save"), color = AccentCyan, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRenameDialog = false }) {
+                    Text(tr("Cancel"), color = TextSecondary)
+                }
+            }
+        )
+    }
+
     PanelCard(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -1102,35 +1196,64 @@ private fun DeviceCard(device: LanDevice) {
                 },
                 contentDescription = null,
                 tint = if (device.isSelf || device.isGateway) AccentCyan else TextSecondary,
-                modifier = Modifier.size(20.dp),
+                modifier = Modifier.size(22.dp),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    device.ip + (device.hostname?.let { " • $it" } ?: ""),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.displayTitle,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    if (device.isSelf) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "This Phone",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    if (device.isVerifiedKnown) {
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            "✓ Verified",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoodGreen,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        device.ip,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = AccentCyan,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    device.latencyMs?.let { latency ->
+                        Text(
+                            " • ${latency}ms",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = GoodGreen,
+                        )
+                    }
+                }
                 Text(
                     buildString {
                         append(device.identity.type)
-                        append(" • ").append(device.identity.confidence)
-                        append(" (").append(device.identity.evidence).append(")")
+                        device.vendor?.let { append(" • ").append(it) }
                     },
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
-                device.vendor?.let { vendor ->
-                    Text(
-                        "Maker: $vendor",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                    )
-                }
                 device.mac?.let {
-                    Text("MAC $it", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text("MAC: $it", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
             }
             if (device.openPorts.isNotEmpty()) {
@@ -1139,6 +1262,25 @@ private fun DeviceCard(device: LanDevice) {
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentViolet,
                 )
+            }
+            if (!device.isSelf && !device.isGateway) {
+                Spacer(Modifier.width(4.dp))
+                IconButton(onClick = { showRenameDialog = true }) {
+                    Icon(
+                        Icons.Outlined.Info,
+                        contentDescription = "Name device",
+                        tint = if (device.customName != null) AccentCyan else TextSecondary.copy(alpha = 0.5f),
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                IconButton(onClick = onToggleVerified) {
+                    Icon(
+                        Icons.Outlined.CheckCircle,
+                        contentDescription = "Known device",
+                        tint = if (device.isVerifiedKnown) GoodGreen else TextSecondary.copy(alpha = 0.35f),
+                        modifier = Modifier.size(22.dp),
+                    )
+                }
             }
         }
     }
@@ -1177,5 +1319,101 @@ fun CheckLine(text: String, ok: Boolean) {
         )
         Spacer(Modifier.width(8.dp))
         Text(text, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+    }
+}
+
+@Composable
+fun SecurityGuidanceCard(state: UiState, vm: MainViewModel) {
+    var expanded by remember { mutableStateOf(false) }
+    val guidance = remember { com.universalrp.cleansweep.data.SecurityFixHelper.getDeviceGuidance() }
+
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Outlined.Security,
+                    contentDescription = null,
+                    tint = AccentCyan,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Phone-specific security guide"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr("Tailored instructions for your phone model and ROM"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                IconButton(onClick = { expanded = !expanded }) {
+                    Icon(
+                        if (expanded) Icons.Outlined.Close else Icons.Outlined.ChevronRight,
+                        contentDescription = "Expand",
+                        tint = TextSecondary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            androidx.compose.material3.Surface(
+                color = SurfaceHigh,
+                shape = RoundedCornerShape(10.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        guidance,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextPrimary,
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(10.dp))
+            Text(
+                tr("AI reviews a fresh security scan plus battery, storage and available scan results. Sharing follows your AI settings; no files, SMS or contacts are sent."),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = {
+                        if (state.aiConfig.ready) vm.runSecurityAiAnalysis() else vm.openAiSettings()
+                    },
+                    enabled = !state.aiBusy && !state.securityBusy,
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentCyan.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Icon(Icons.Outlined.SmartToy, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        if (state.aiConfig.ready) tr("Ask AI about all current issues") else tr("Set up AI analysis"),
+                        color = AccentCyan,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+
+                Button(
+                    onClick = {
+                        vm.speakTamilText("ஒவ்வொரு பாதுகாப்பு எச்சரிக்கையையும் படித்து, தேவையற்ற அனுமதிகளை மட்டும் மாற்றவும். வங்கி மற்றும் அணுகல்தன்மை செயலிகளுக்கு தேவையான அனுமதிகளை வைத்திருக்கவும். மாற்றிய பிறகு மீண்டும் பாதுகாப்பு சோதனை செய்யவும்.")
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentViolet.copy(alpha = 0.2f)),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text("Voice Guide", color = AccentViolet, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
     }
 }

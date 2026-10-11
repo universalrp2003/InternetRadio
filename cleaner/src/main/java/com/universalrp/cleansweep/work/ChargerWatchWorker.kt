@@ -13,21 +13,9 @@ import com.universalrp.cleansweep.notify.ChargeNotifier
 import kotlinx.coroutines.delay
 
 /**
- * Charger plug-in, the way that works on every Android version.
- *
- * The plug-in broadcast cannot start a foreground service on Android 12 and newer, and
- * starting one anyway is how "the charger was never announced" happened: the call was
- * refused, the exception was swallowed, and the phone stayed silent. A broadcast *can*
- * schedule a job, and a running job is allowed to do the real work — so that is what happens:
- *
- *  1. the job tries the normal charging service (the live card with watts, current and
- *     temperature, refreshed every five seconds);
- *  2. if the system still refuses, the job shows the same card itself, keeps refreshing it
- *     while the charger is in, and asks to be run again when its time is up, so the reading
- *     does not disappear while the phone is still plugged in.
- *
- * The one line about the charger is spoken from [ChargeNotifier], which de-duplicates it, so
- * a plug-in is never announced twice even when both paths run.
+ * Existing user-enabled card/pill/monitor fallback. Android/OEM rules can refuse or delay
+ * service starts and jobs; this is not guaranteed on every device. Voice-only power alerts
+ * are independent short PowerVoiceWorker jobs, with shared connection de-duplication.
  */
 class ChargerWatchWorker(
     context: Context,
@@ -36,13 +24,16 @@ class ChargerWatchWorker(
 
     override suspend fun doWork(): Result {
         val ctx = applicationContext
-        if (!ChargeMonitorService.cardEnabled(ctx)) {
-            // The user switched the charging card off: nothing to show, nothing to say.
+        val persistent = ChargeMonitorService.persistentEnabled(ctx)
+        val pill = ctx.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
+            .getBoolean(ChargeMonitorService.PILL_KEY, false)
+        if (!ChargeMonitorService.cardEnabled(ctx) && !pill && !persistent) {
+            // No visual monitoring requested. Voice-only events have their own short worker.
             ChargeNotifier.clear(ctx)
             return Result.success()
         }
         val battery = ChargeNotifier.read(ctx) ?: return Result.success()
-        if (!battery.charging) {
+        if (!battery.powerConnected && !persistent) {
             ChargeNotifier.clear(ctx)
             return Result.success()
         }
@@ -57,30 +48,25 @@ class ChargerWatchWorker(
         // 2. The fallback: the system will not give us a foreground service here, so the job
         //    itself keeps the same card alive. It runs in short stretches and re-schedules
         //    itself, which is allowed without any new permission.
-        ChargeNotifier.post(ctx)
-        ChargeNotifier.announcePluggedIn(ctx)
-
-        var ticks = 0
-        // isStopped is a member of every worker; a worker that has been cancelled or has
-        // run out of time comes back here as stopped, and then this loop ends cleanly.
-        while (ticks < 16 && !isStopped) {
-            delay(30_000)
-            ticks++
-            val now = ChargeNotifier.read(ctx) ?: break
-            if (!now.charging) {
-                ChargeNotifier.clear(ctx)
-                return Result.success()
+        val owner = "charger-worker:$id"
+        com.universalrp.cleansweep.notify.AutomaticAlerts.start(ctx, owner)
+        try {
+            ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
+            ChargeNotifier.announcePluggedIn(ctx)
+            var ticks = 0
+            while (ticks < 16 && !isStopped) {
+                delay(30_000); ticks++
+                val now = ChargeNotifier.read(ctx) ?: break
+                if (!now.powerConnected && !ChargeMonitorService.persistentEnabled(ctx)) {
+                    ChargeNotifier.clear(ctx); return Result.success()
+                }
+                ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
+                com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
             }
-            ChargeNotifier.post(ctx)
-            // The piggy-backed charge of the last few percent can be watched, but there is no
-            // point shouting about it — the card simply stays until the plug comes out.
-            if (now.percent >= 100) break
-        }
-
-        val still = ChargeNotifier.read(ctx)
-        if (still?.charging == true) schedule(ctx)
-
-        return Result.success()
+            val still = ChargeNotifier.read(ctx)
+            if (still?.powerConnected == true || ChargeMonitorService.persistentEnabled(ctx)) schedule(ctx, continuation = true)
+            return Result.success()
+        } finally { com.universalrp.cleansweep.notify.AutomaticAlerts.stop(owner) }
     }
 
     /**
@@ -102,15 +88,19 @@ class ChargerWatchWorker(
     companion object {
         private const val UNIQUE = "cleansweep_charger_watch"
 
+        fun cancel(context: Context) {
+            runCatching { WorkManager.getInstance(context.applicationContext).cancelUniqueWork(UNIQUE) }
+        }
+
         /** Schedules the watch. Safe to call from a broadcast receiver. */
-        fun schedule(context: Context) {
+        fun schedule(context: Context, continuation: Boolean = false) {
             try {
                 val request = OneTimeWorkRequestBuilder<ChargerWatchWorker>()
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
                 WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
                     UNIQUE,
-                    ExistingWorkPolicy.REPLACE,
+                    if (continuation) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP,
                     request,
                 )
             } catch (e: Exception) {

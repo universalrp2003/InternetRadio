@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Info
@@ -28,9 +29,15 @@ import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -41,6 +48,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -49,6 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import com.universalrp.cleansweep.MainViewModel
+import com.universalrp.cleansweep.InsightsTab
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.CellTower
@@ -112,6 +121,8 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
             }
         }
 
+        item { TextButton(onClick = { vm.openInsights(InsightsTab.DATA_BUDGET) }) { Text(tr("Data budget & history")) } }
+
         // ------------------------------------------------------------ signal card
         val mobile = state.mobile
         if (mobile == null) {
@@ -162,6 +173,9 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
 
         // -------------------------------------------------------------- speed test
         item { SpeedTestCard(state, vm) }
+
+        // -------------------------------------------------------------- app network tracker (v2.17)
+        item { AppTrackerCard(state, vm) }
 
         // -------------------------------------------------------------- data usage
         item { DataUsageCard(state, vm) }
@@ -717,6 +731,140 @@ private fun SpeedTestCard(state: UiState, vm: MainViewModel) {
 }
 
 @Composable
+private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
+    val report = state.appTrackerReport
+
+    PanelCard(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Outlined.SignalCellularAlt, contentDescription = null, tint = AccentCyan)
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        tr("Live App Connections & Trackers"),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        tr("Inspect active destinations & track telemetry"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                IconButton(onClick = { vm.scanAppTrackers() }) {
+                    Icon(Icons.Outlined.Refresh, contentDescription = "Inspect", tint = TextSecondary)
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                tr(
+                    "Socket visibility is best-effort and may be restricted by Android. Company and tracker labels are heuristics, not proof of identity or uploaded content."
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+            )
+            Spacer(Modifier.height(12.dp))
+
+            GradientButton(
+                text = if (state.appTrackerBusy) tr("Inspecting connections…") else tr("Inspect App Trackers"),
+                icon = Icons.Outlined.Refresh,
+                onClick = { vm.scanAppTrackers() },
+                enabled = !state.appTrackerBusy,
+                modifier = Modifier.fillMaxWidth(),
+            )
+
+            if (report != null) {
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "${report.connections.size} connection(s)",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = AccentCyan,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        if (report.trackerCount > 0) {
+                            Text(
+                                "• ${report.trackerCount} tracker(s)",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = DangerRed,
+                                fontWeight = FontWeight.Bold,
+                            )
+                        }
+                    }
+                    Text(
+                        report.mode,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                if (report.connections.isEmpty()) {
+                    Text(
+                        tr("No outward connections were visible in this read. Android may restrict access; this does not prove there are none."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        report.connections.take(16).forEach { conn ->
+                            TrackerItemCard(conn)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrackerItemCard(conn: com.universalrp.cleansweep.data.AppNetworkTracker.ActiveConnection) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(10.dp),
+        color = SurfaceHigh,
+    ) {
+        Column(Modifier.padding(10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    conn.appName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    conn.category,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (conn.isTracker) DangerRed else AccentCyan,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "Company / Provider: ${conn.orgOrCompany}",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextPrimary,
+            )
+            val destinationLine = if (conn.localPort == 0 && conn.destinationHost?.contains("transferred") == true) {
+                // Today's total data usage entry
+                "Data Transferred: ${conn.destinationHost}"
+            } else {
+                "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}"
+            }
+            Text(
+                destinationLine,
+                style = MaterialTheme.typography.labelSmall,
+                color = AccentCyan,
+            )
+        }
+    }
+}
+
+@Composable
 private fun DataUsageCard(state: UiState, vm: MainViewModel) {
     val usage = state.usage
     PanelCard(Modifier.fillMaxWidth()) {
@@ -744,18 +892,249 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     UsageTile(
-                        label = tr("Mobile data"),
+                        label = tr("Mobile data (Today)"),
                         value = usage.todayMobileBytes?.let { formatBytesSafe(it) } ?: "—",
                         color = AccentViolet,
                         modifier = Modifier.weight(1f),
                     )
                     UsageTile(
-                        label = tr("Wi-Fi"),
+                        label = tr("Wi-Fi (Today)"),
                         value = usage.todayWifiBytes?.let { formatBytesSafe(it) } ?: "—",
                         color = AccentCyan,
                         modifier = Modifier.weight(1f),
                     )
                 }
+
+                // Cumulative Pack Total & Variable Quota Entry
+                val pack = state.dataPackInfo
+                val isUnlimited = pack?.isUnlimited5g == true
+                var showResetDialog by remember { mutableStateOf(false) }
+                var showQuotaDialog by remember { mutableStateOf(false) }
+
+                Spacer(Modifier.height(10.dp))
+                // Unlimited 5G Switch
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Row(
+                        Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                tr("Unlimited 5G Data Plan"),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Bold,
+                                color = TextPrimary,
+                            )
+                            Text(
+                                tr("Turns off pack limit countdown & daily counters"),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                            )
+                        }
+                        Switch(
+                            checked = isUnlimited,
+                            onCheckedChange = { vm.setUnlimited5g(it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = AccentCyan,
+                                checkedTrackColor = AccentCyan.copy(alpha = 0.35f),
+                            ),
+                        )
+                    }
+                }
+
+                if (!isUnlimited) {
+                    Spacer(Modifier.height(10.dp))
+                }
+                if (!isUnlimited) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = SurfaceHigh,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(Modifier.padding(14.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    tr("Data Pack Plan"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextSecondary,
+                                )
+                                Text(
+                                    (pack?.formattedPackTotal ?: "0 MB") + " / " + (pack?.formattedPackLimit ?: "12 GB"),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = AccentCyan,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.End) {
+                                Text(
+                                    (pack?.formattedRemaining ?: "12 GB") + " left",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = GoodGreen,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                                Text(
+                                    tr("Strict Mobile Only"),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+
+                        // Progress Bar
+                        val progress = pack?.progressRatio ?: 0f
+                        Spacer(Modifier.height(8.dp))
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(Color(0xFF1E293B))
+                        ) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth(progress)
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp))
+                                    .background(if (progress >= 0.9f) DangerRed else AccentCyan)
+                            )
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Button(
+                                onClick = { showQuotaDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = SurfaceHigh.copy(alpha = 0.6f),
+                                    contentColor = AccentCyan,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Set Pack Size"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                            Button(
+                                onClick = { showResetDialog = true },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = AccentViolet.copy(alpha = 0.25f),
+                                    contentColor = AccentViolet,
+                                ),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(tr("Reset Recharge"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+                }
+
+                if (showResetDialog) {
+                    var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+                    AlertDialog(
+                        onDismissRequest = { showResetDialog = false },
+                        title = { Text(tr("Reset Recharge Data Pack"), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text(
+                                    tr("Did you recharge a new data pack? Enter your pack size in GB (e.g. 1.5, 3, 6, 12, 25, 50 GB) and reset the counter to zero."),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = inputGb,
+                                    onValueChange = { inputGb = it },
+                                    label = { Text(tr("Pack Size in GB")) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val size = inputGb.toFloatOrNull()
+                                    vm.resetDataPackCount(size)
+                                    showResetDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentViolet),
+                            ) {
+                                Text(tr("Reset to 0 MB"), fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showResetDialog = false }) {
+                                Text(tr("Cancel"), color = TextSecondary)
+                            }
+                        },
+                    )
+                }
+
+                if (showQuotaDialog) {
+                    var inputGb by remember { mutableStateOf(pack?.packLimitGb?.let { if (it % 1f == 0f) it.toInt().toString() else it.toString() } ?: "12") }
+                    AlertDialog(
+                        onDismissRequest = { showQuotaDialog = false },
+                        title = { Text(tr("Change Data Pack Limit"), fontWeight = FontWeight.Bold) },
+                        text = {
+                            Column {
+                                Text(
+                                    tr("Update your total data quota in GB without resetting current usage counter:"),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextSecondary,
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                OutlinedTextField(
+                                    value = inputGb,
+                                    onValueChange = { inputGb = it },
+                                    label = { Text(tr("Pack Quota (GB)")) },
+                                    singleLine = true,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        focusedTextColor = TextPrimary,
+                                        unfocusedTextColor = TextPrimary,
+                                        focusedBorderColor = AccentCyan,
+                                        unfocusedBorderColor = TextSecondary.copy(alpha = 0.4f),
+                                    ),
+                                    modifier = Modifier.fillMaxWidth(),
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            Button(
+                                onClick = {
+                                    val size = inputGb.toFloatOrNull() ?: 12f
+                                    vm.updateDataPackLimit(size)
+                                    showQuotaDialog = false
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentCyan),
+                            ) {
+                                Text(tr("Save Limit"), fontWeight = FontWeight.Bold)
+                            }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { showQuotaDialog = false }) {
+                                Text(tr("Cancel"), color = TextSecondary)
+                            }
+                        },
+                    )
+                }
+
                 usage.todayTotalBytes?.let { total ->
                     Spacer(Modifier.height(6.dp))
                     Text(
@@ -793,34 +1172,120 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                         Text(tr("Grant usage access"), fontWeight = FontWeight.Bold)
                     }
                 }
-                if (usage.todayAppMobile.isNotEmpty() || usage.todayAppWifi.isNotEmpty()) {
-                    Spacer(Modifier.height(10.dp))
-                    Text(
-                        tr("Apps using the most data today"),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    val apps = (usage.todayAppMobile + usage.todayAppWifi)
-                        .groupBy { it.pkg }
-                        .map { (_, list) -> DataAppUse(list.first().label, list.first().pkg, list.sumOf { it.bytes }) }
-                        .sortedByDescending { it.bytes }
-                        .take(6)
-                    apps.forEach { app ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
-                            Text(
-                                app.label,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextPrimary,
-                                modifier = Modifier.weight(1f),
-                            )
+                // Hotspot Data & Connected Devices Section
+                usage.hotspot?.let { hs ->
+                    if (hs.isHotspotActive || hs.hotspotBytesToday > 0L) {
+                        Spacer(Modifier.height(10.dp))
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = AccentCyan.copy(alpha = 0.12f),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Column(Modifier.padding(12.dp)) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(Icons.Filled.Wifi, contentDescription = null, tint = AccentCyan, modifier = Modifier.size(20.dp))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        tr("Personal Hotspot Active"),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = AccentCyan,
+                                    )
+                                    Spacer(Modifier.weight(1f))
+                                    Text(
+                                        "${hs.connectedDeviceCount} device(s) connected",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (hs.connectedDeviceCount > 0) GoodGreen else TextSecondary,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    "Hotspot Data Used Today: ${formatBytesSafe(hs.hotspotBytesToday)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary,
+                                )
+                                Text(
+                                    "${hs.sharingMode} • Hotspot shares your internet connection with connected devices.",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary,
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Tabbed Mobile Data & Wi-Fi usage by application (including system apps)
+                var selectedDataTab by remember { mutableStateOf(0) }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Button(
+                        onClick = { selectedDataTab = 0 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedDataTab == 0) AccentViolet else SurfaceHigh,
+                            contentColor = if (selectedDataTab == 0) Color.White else TextSecondary,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(tr("Mobile Data by App"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                    Button(
+                        onClick = { selectedDataTab = 1 },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (selectedDataTab == 1) AccentCyan else SurfaceHigh,
+                            contentColor = if (selectedDataTab == 1) Color(0xFF03202B) else TextSecondary,
+                        ),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Text(tr("Wi-Fi Data by App"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                val currentAppList = if (selectedDataTab == 0) usage.todayAppMobile else usage.todayAppWifi
+                val tabColor = if (selectedDataTab == 0) AccentViolet else AccentCyan
+
+                Spacer(Modifier.height(8.dp))
+                if (currentAppList.isNotEmpty()) {
+                    currentAppList.take(10).forEach { app ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    app.label,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = TextPrimary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    app.pkg,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = TextSecondary.copy(alpha = 0.7f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Text(
                                 formatBytesSafe(app.bytes),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = AccentCyan,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = tabColor,
                                 fontWeight = FontWeight.Bold,
                             )
                         }
                     }
+                } else {
+                    Text(
+                        if (selectedDataTab == 0) tr("No cellular data used by apps yet today.") else tr("No Wi-Fi data used by apps yet today."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(vertical = 6.dp),
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 Text(

@@ -8,36 +8,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-
-enum class Severity { HIGH, MEDIUM, LOW, INFO }
-
-data class Finding(
-    val id: String,
-    val title: String,
-    val detail: String,
-    val severity: Severity,
-    val count: Int = 0,
-    val samples: List<String> = emptyList(),
-    val fixHint: String? = null,
-)
-
-data class SecurityReport(
-    val findings: List<Finding>,
-    val score: Int,
-    val appsChecked: Int,
-    val scannedAtMs: Long,
-) {
-    val highCount: Int get() = findings.count { it.severity == Severity.HIGH }
-    val mediumCount: Int get() = findings.count { it.severity == Severity.MEDIUM }
-    val verdict: String
-        get() = when {
-            score >= 90 -> "Looking good"
-            score >= 75 -> "A few things to check"
-            score >= 55 -> "Needs attention"
-            else -> "Act on the red items"
-        }
-}
 
 /**
  * On-phone security review.
@@ -77,17 +49,40 @@ object SecurityScanner {
     private val ROOT_TOOL_NAME =
         Regex("(?i)\\broot\\b|rooted|magisk|supersu|kingroot|apatch|kernelsu")
 
+    /**
+     * Recognized banking and UPI payment apps that legitimately require SMS permission
+     * to perform SIM binding, account verification, and transaction tracking.
+     */
+    private val BANKING_OR_PAYMENT_HINTS = listOf(
+        "bank", "upi", "paytm", "phonepe", "gpay", "bhim", "cred", "yono", "imobile",
+        "kotak", "axis", "hdfc", "icici", "pnb", "bob", "canara", "unionbank", "indusind",
+        "slice", "jupiter", "fi.money", "mobikwik", "freecharge", "navi", "bajaj", "postpe"
+    )
+
+    fun isBankingOrPaymentApp(pkg: String, label: String): Boolean {
+        val lowerPkg = pkg.lowercase()
+        val lowerLabel = label.lowercase()
+        return BANKING_OR_PAYMENT_HINTS.any { hint ->
+            lowerPkg.contains(hint) || lowerLabel.contains(hint)
+        }
+    }
+
     suspend fun scan(
         context: Context,
         apps: List<AppRow>,
+        includesSystemApps: Boolean = true,
     ): SecurityReport = withContext(Dispatchers.IO) {
         val findings = mutableListOf<Finding>()
+        val unavailable = mutableSetOf<String>()
+        if (apps.isEmpty()) unavailable += SecurityHistoryPolicy.appChecks() + setOf("accessibility", "notification_listeners", "device_admin")
+        unavailable += apps.flatMap { it.unavailablePermissionChecks }
+        if (!includesSystemApps) unavailable += setOf("facebook_stubs", "root_tools")
         val pm = context.packageManager
 
         // ---------------------------------------------------- usability checks
-        val accessibility = enabledServices(
-            context, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        ).filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
+        val accessibilityRead = enabledServices(context, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+        if (accessibilityRead == null) unavailable += "accessibility"
+        val accessibility = accessibilityRead.orEmpty().filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
         if (accessibility.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -98,15 +93,16 @@ object SecurityScanner {
                         "malware loves this permission more than any other.",
                     severity = Severity.HIGH,
                     count = accessibility.size,
-                    samples = accessibility.map { it.substringAfterLast('/') },
+                    samples = accessibility.map { serviceApp(context, it)?.label ?: it },
+                    affectedApps = accessibility.mapNotNull { serviceApp(context, it) },
                     fixHint = "Settings → Accessibility → turn off anything you did not install on purpose.",
                 )
             )
         }
 
-        val listeners = enabledServices(
-            context, ENABLED_NOTIFICATION_LISTENERS
-        ).filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
+        val listenersRead = enabledServices(context, ENABLED_NOTIFICATION_LISTENERS)
+        if (listenersRead == null) unavailable += "notification_listeners"
+        val listeners = listenersRead.orEmpty().filter { name -> SYSTEM_ACCESSIBILITY.none { name.startsWith(it) } }
         if (listeners.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -116,7 +112,8 @@ object SecurityScanner {
                         "banking and OTP messages.",
                     severity = Severity.HIGH,
                     count = listeners.size,
-                    samples = listeners.map { it.substringAfterLast('/') },
+                    samples = listeners.map { serviceApp(context, it)?.label ?: it },
+                    affectedApps = listeners.mapNotNull { serviceApp(context, it) },
                     fixHint = "Settings → Notifications → Notification access.",
                 )
             )
@@ -124,7 +121,9 @@ object SecurityScanner {
 
         // com.google.android.gms is Find My Device — a device admin on every GMS phone by
         // design, not something the user did wrong. Only anything *else* is worth flagging.
-        val admins = activeAdmins(context).filter { it != "com.google.android.gms" }
+        val adminsRead = activeAdmins(context)
+        if (adminsRead == null) unavailable += "device_admin"
+        val admins = adminsRead.orEmpty().filter { it.packageName != "com.google.android.gms" }
         if (admins.isNotEmpty()) {
             findings.add(
                 Finding(
@@ -134,7 +133,10 @@ object SecurityScanner {
                         "uninstalling themselves.",
                     severity = Severity.MEDIUM,
                     count = admins.size,
-                    samples = admins.map { labelFor(context, it) ?: it },
+                    samples = admins.map { labelFor(context, it.packageName) ?: it.packageName },
+                    affectedApps = admins.map {
+                        FindingApp(labelFor(context, it.packageName) ?: it.packageName, it.packageName, it.flattenToString())
+                    },
                     fixHint = "Settings → Security → Device admin apps.",
                 )
             )
@@ -144,17 +146,21 @@ object SecurityScanner {
         // v2.9: the OS and its stores install apps by design; only user apps count here.
         val installers = apps.filter {
             !it.isSystem && "android.permission.REQUEST_INSTALL_PACKAGES" in it.grantedPermissions
-        }.filter { AppInventoryLoader.canInstallPackages(context, it.pkg) }
+        }.filter {
+            val allowed = AppInventoryLoader.canInstallPackages(context, it.pkg)
+            if (allowed == null) unavailable += "install_other_apps"
+            allowed == true
+        }
         if (installers.isNotEmpty()) {
             findings.add(
                 Finding(
                     id = "install_other_apps",
                     title = "Apps allowed to install other apps",
-                    detail = "With \"install unknown apps\" allowed, an app can silently drop new " +
-                        "APKs on your phone. Your app stores are never listed here.",
+                    detail = "Install unknown apps access lets an app request installation of APKs. Android normally still asks you to confirm. Review sources you no longer need.",
                     severity = Severity.HIGH,
                     count = installers.size,
                     samples = installers.map { it.label },
+                    affectedApps = installers.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Install unknown apps.",
                 )
             )
@@ -165,7 +171,11 @@ object SecurityScanner {
         val usageApps = apps.filter {
             !it.isSystem &&
                 "android.permission.PACKAGE_USAGE_STATS" in it.grantedPermissions &&
-                AppInventoryLoader.hasUsageAccess(context, it.pkg)
+                run {
+                    val allowed = AppInventoryLoader.hasUsageAccess(context, it.pkg)
+                    if (allowed == null) unavailable += "usage_access"
+                    allowed == true
+                }
         }
         if (usageApps.size > 3) {
             findings.add(
@@ -178,6 +188,7 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = usageApps.size,
                     samples = usageApps.map { it.label },
+                    affectedApps = usageApps.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Usage access.",
                 )
             )
@@ -205,6 +216,7 @@ object SecurityScanner {
                     severity = if (overlay.size > 6) Severity.MEDIUM else Severity.LOW,
                     count = overlay.size,
                     samples = overlay.map { it.label },
+                    affectedApps = overlay.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Settings → Apps → Special access → Display over other apps.",
                 )
             )
@@ -223,6 +235,7 @@ object SecurityScanner {
                     severity = Severity.MEDIUM,
                     count = sideloaded.size,
                     samples = sideloaded.map { it.label },
+                    affectedApps = sideloaded.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Open each one below and uninstall anything you do not recognise.",
                 )
             )
@@ -232,26 +245,50 @@ object SecurityScanner {
         // must disappear from this finding (v2.7 — \"revoked but still showing\").
         // v2.8: the default SMS app is supposed to read SMS — flagging it HIGH is a false
         // alarm, so it is excluded and named in the detail line instead.
-        val defaultSmsPkg = defaultSmsPackage(context)
-        val smsApps = apps.filter {
+        // Also distinguish banking/UPI applications that legitimately need SMS to verify
+        // bank accounts and receive OTPs (tagged INFO/review rather than high-risk malware alarm).
+        val defaultSmsPkg = try { android.provider.Telephony.Sms.getDefaultSmsPackage(context) } catch (e: Exception) {
+            unavailable += setOf("sms_readers", "banking_sms_readers"); null
+        }
+        val allSmsApps = apps.filter {
             it.pkg != defaultSmsPkg &&
                 it.grantedPermissions.any { p ->
                     p == "android.permission.READ_SMS" || p == "android.permission.RECEIVE_SMS"
                 } && !it.isSystem
         }
-        if (smsApps.isNotEmpty()) {
-            val defaultSmsName = defaultSmsPkg?.let { labelFor(context, it) }
-            val defaultNote = if (defaultSmsName != null) " Your default SMS app ($defaultSmsName) is not listed." else ""
+        val (bankingSmsApps, unexpectedSmsApps) = allSmsApps.partition {
+            isBankingOrPaymentApp(it.pkg, it.label)
+        }
+
+        if (unexpectedSmsApps.isNotEmpty()) {
+            val defaultNote = if (defaultSmsPkg != null) " Your default SMS app is not listed." else ""
             findings.add(
                 Finding(
                     id = "sms_readers",
-                    title = if (smsApps.size == 1) "1 installed app can read your SMS"
-                    else "${smsApps.size} installed apps can read your SMS",
-                    detail = "SMS is where OTPs arrive. Only your messaging app should need this.$defaultNote",
+                    title = if (unexpectedSmsApps.size == 1) "1 non-banking app can read your SMS"
+                    else "${unexpectedSmsApps.size} non-banking apps can read your SMS",
+                    detail = "SMS is where OTPs arrive. Only your messaging app and trusted banking apps should need this.$defaultNote",
                     severity = Severity.HIGH,
-                    count = smsApps.size,
-                    samples = smsApps.map { it.label },
+                    count = unexpectedSmsApps.size,
+                    samples = unexpectedSmsApps.map { it.label },
+                    affectedApps = unexpectedSmsApps.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Revoke SMS permission for anything that is not your SMS app.",
+                )
+            )
+        }
+
+        if (bankingSmsApps.isNotEmpty()) {
+            findings.add(
+                Finding(
+                    id = "banking_sms_readers",
+                    title = if (bankingSmsApps.size == 1) "1 banking/payment app has SMS permission"
+                    else "${bankingSmsApps.size} banking/payment apps have SMS permission",
+                    detail = "Banking & UPI payment apps legitimately use SMS for SIM verification and OTPs. Kept under weekly reminder check.",
+                    severity = Severity.INFO,
+                    count = bankingSmsApps.size,
+                    samples = bankingSmsApps.map { it.label },
+                    affectedApps = bankingSmsApps.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Verify that this is the official banking/payment app. Keep SMS only if needed for verification or OTPs; revoke if unused.",
                 )
             )
         }
@@ -267,6 +304,7 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = stubs.size,
                     samples = stubs.map { it.label },
+                    affectedApps = stubs.map { FindingApp(it.label, it.pkg) },
                     fixHint = "Disable them from their app page (they cannot be uninstalled on most ROMs).",
                 )
             )
@@ -289,12 +327,16 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = suspiciousInstallers.size,
                     samples = suspiciousInstallers.map { "${it.label} ← ${it.installer}" },
+                    affectedApps = suspiciousInstallers.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Open the listed app’s information page and verify its installation source.",
                 )
             )
         }
 
         // ------------------------------------------------------ device checks
-        if (!isScreenLocked(context)) {
+        val locked = isScreenLocked(context)
+        if (locked == null) unavailable += "no_lock"
+        if (locked == false) {
             findings.add(
                 Finding(
                     id = "no_lock",
@@ -307,7 +349,9 @@ object SecurityScanner {
             )
         }
 
-        if (developerOptionsEnabled(context)) {
+        val developer = developerOptionsEnabled(context)
+        if (developer == null) unavailable += "developer_options"
+        if (developer == true) {
             findings.add(
                 Finding(
                     id = "developer_options",
@@ -321,6 +365,7 @@ object SecurityScanner {
         }
 
         val patchAge = securityPatchAgeMonths(context)
+        if (patchAge == null) unavailable += "old_patch"
         if (patchAge != null && patchAge > 12) {
             findings.add(
                 Finding(
@@ -348,6 +393,8 @@ object SecurityScanner {
                     severity = Severity.LOW,
                     count = rootTools.size,
                     samples = rootTools.map { it.label },
+                    affectedApps = rootTools.map { FindingApp(it.label, it.pkg) },
+                    fixHint = "Review the listed app. A root-related name alone does not prove that the phone is rooted.",
                 )
             )
         }
@@ -356,20 +403,26 @@ object SecurityScanner {
             Finding(
                 id = "no_hash_lookup",
                 title = "Malware hash check is on this screen",
-                detail = "The “Malware hash check” card above compares each installed app's file " +
-                    "hash against MalwareBazaar automatically — hashes only, your files are never " +
-                    "uploaded — and against VirusTotal when you add a free key there.",
+                detail = "Use the “Malware hash check” card above to check installed app hashes " +
+                    "against MalwareBazaar, and optionally VirusTotal with your key. Only hashes, " +
+                    "never app files, are sent. Unchecked or unknown hashes do not prove an app is safe.",
                 severity = Severity.INFO,
             )
         )
 
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val score = score(findings)
-        SecurityReport(
+        val report = SecurityReport(
             findings = findings.sortedByDescending { it.severity.ordinal * -1 },
             score = score,
             appsChecked = apps.size,
             scannedAtMs = System.currentTimeMillis(),
+            unavailableChecks = unavailable,
         )
+        runCatching { PermissionReviewStore.record(context, report) }
+        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(context)
+        runCatching { SecurityHistoryRepo.record(context, report, apps) }
+        report
     }
 
     /** Findings are ordered worst-first, so sort on a numeric weight instead. */
@@ -386,19 +439,28 @@ object SecurityScanner {
         return score.coerceIn(0, 100)
     }
 
-    private fun enabledServices(context: Context, key: String): List<String> = try {
+    private fun enabledServices(context: Context, key: String): List<String>? = try {
         val raw = Settings.Secure.getString(context.contentResolver, key) ?: ""
         raw.split(':').map { it.trim() }.filter { it.isNotEmpty() }
     } catch (e: Exception) {
-        emptyList()
+        null
     }
 
-    private fun activeAdmins(context: Context): List<String> = try {
+    private fun activeAdmins(context: Context): List<ComponentName>? = try {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as? DevicePolicyManager
         @Suppress("DEPRECATION")
-        dpm?.activeAdmins?.map { (it as ComponentName).packageName }?.distinct().orEmpty()
+        if (dpm == null) null else dpm.activeAdmins?.distinct().orEmpty()
     } catch (e: Exception) {
-        emptyList()
+        null
+    }
+
+    private fun serviceApp(context: Context, rawComponent: String): FindingApp? {
+        val component = ComponentName.unflattenFromString(rawComponent) ?: return null
+        return FindingApp(
+            label = labelFor(context, component.packageName) ?: component.packageName,
+            packageName = component.packageName,
+            componentName = component.flattenToString(),
+        )
     }
 
     /** The package the user chose as their messaging app (Settings → Apps → Default apps). */
@@ -416,20 +478,20 @@ object SecurityScanner {
         null
     }
 
-    private fun isScreenLocked(context: Context): Boolean = try {
+    private fun isScreenLocked(context: Context): Boolean? = try {
         val km = context.getSystemService(Context.KEYGUARD_SERVICE)
             as? android.app.KeyguardManager
-        km?.isDeviceSecure ?: true
+        km?.isDeviceSecure
     } catch (e: Exception) {
-        true
+        null
     }
 
-    private fun developerOptionsEnabled(context: Context): Boolean = try {
+    private fun developerOptionsEnabled(context: Context): Boolean? = try {
         Settings.Global.getInt(
             context.contentResolver, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED, 0
         ) == 1
     } catch (e: Exception) {
-        false
+        null
     }
 
     private fun securityPatchAgeMonths(context: Context): Int? {

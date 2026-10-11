@@ -95,9 +95,17 @@ data class RadioStation(
 /** Station groups the app shows as chips. */
 object Category {
     const val TAMIL = "tamil"
-    const val TAMIL_NEWS = "tamil_news"
-    const val TAMIL_FM = "tamil_fm"
+    const val TAMIL_ILAYARAJA = "tamil_ilayaraja"
+    const val TAMIL_MSV = "tamil_msv"
+    const val TAMIL_AR_RAHMAN = "tamil_ar_rahman"
+    const val TAMIL_80S_90S = "tamil_80s_90s"
     const val TAMIL_DEVOTIONAL = "tamil_devotional"
+    const val TAMIL_NEWS = "tamil_news"
+    const val TOWNS = "towns"
+    const val ALL = "all"
+    const val FAVOURITES = "favourites"
+    const val RECENT = "recent"
+    const val TAMIL_FM = "tamil_fm"
     const val WORLD_NEWS = "world_news"
     const val INDIA_NEWS = "india_news"
     const val ENGLISH = "english"
@@ -105,15 +113,38 @@ object Category {
 
     /** UI-only filter: every news bucket at once. */
     const val ALL_NEWS = "all_news"
-
-    /** id used by the UI chips */
-    const val ALL = "all"
-    const val FAVOURITES = "favourites"
-    const val RECENT = "recent"
     const val LOCAL = "local"
 
-    /** UI-only filter: stations that carry a Tamil Nadu town or city in their name. */
-    const val TOWNS = "towns"
+    fun isIlayaraja(station: RadioStation): Boolean {
+        val text = (station.name + " " + station.tags + " " + station.state).lowercase()
+        return text.contains("ilayaraja") || text.contains("ilaiyaraaja") ||
+            text.contains("raja hits") || text.contains("radio maestro")
+    }
+
+    fun isMsv(station: RadioStation): Boolean {
+        val text = (station.name + " " + station.tags).lowercase()
+        return text.contains("viswanathan") || text.contains("msv")
+    }
+
+    fun isArRahman(station: RadioStation): Boolean {
+        val text = (station.name + " " + station.tags).lowercase()
+        return text.contains("rahman") || text.contains("arr radio")
+    }
+
+    fun is80s90s(station: RadioStation): Boolean {
+        val text = (station.name + " " + station.tags).lowercase()
+        return text.contains("80") || text.contains("90") || text.contains("classic") ||
+            text.contains("old hits") || text.contains("gold") || text.contains("evergreen") ||
+            text.contains("retro") || text.contains("tms") || text.contains("kannadasan") ||
+            text.contains("mellisai")
+    }
+
+    fun isDevotional(station: RadioStation): Boolean {
+        val text = (station.name + " " + station.tags).lowercase()
+        return station.category == TAMIL_DEVOTIONAL || text.contains("bakthi") ||
+            text.contains("devotional") || text.contains("jesus") || text.contains("shaiva") ||
+            text.contains("hindu") || text.contains("amuthu-bakthi") || text.contains("alaikal")
+    }
 
     /** Town / city names used by the [TOWNS] filter and by search suggestions. */
     val TOWN_WORDS = listOf(
@@ -147,21 +178,23 @@ object Category {
         id == TAMIL_NEWS || id == WORLD_NEWS || id == INDIA_NEWS
 
     fun label(id: String): String = when (id) {
-        ALL -> "All"
-        ALL_NEWS -> "All news"
-        FAVOURITES -> "Favourites"
-        CUSTOM -> "My stations"
-        RECENT -> "Recent"
-        TOWNS -> "TN towns"
-        // v1.2: the user asked for the language menu to read தமிழ், in Tamil, and to be the
-        // first thing selected when the app opens — not "All".
-        TAMIL -> "தமிழ்"
-        TAMIL_FM -> "Tamil worldwide"
-        TAMIL_NEWS -> "Tamil news"
-        TAMIL_DEVOTIONAL -> "Bakthi"
-        WORLD_NEWS -> "World news"
-        INDIA_NEWS -> "India news"
-        ENGLISH -> "English"
+        ALL -> "அனைத்தும்"
+        ALL_NEWS -> "செய்திகள்"
+        FAVOURITES -> "விருப்பமானவை"
+        CUSTOM -> "எனது வானொலி"
+        RECENT -> "சமீபத்தியவை"
+        TOWNS -> "நகரங்கள் & FM"
+        TAMIL -> "தமிழ் FM"
+        TAMIL_ILAYARAJA -> "இளையராஜா"
+        TAMIL_MSV -> "எம்.எஸ். விஸ்வநாதன்"
+        TAMIL_AR_RAHMAN -> "ஏ.ஆர். ரஹ்மான்"
+        TAMIL_80S_90S -> "80's & 90's ஹிட்ஸ்"
+        TAMIL_DEVOTIONAL -> "பக்தி பாடல்கள்"
+        TAMIL_NEWS -> "தமிழ் செய்திகள்"
+        TAMIL_FM -> "உலகத் தமிழ்"
+        WORLD_NEWS -> "உலகச் செய்திகள்"
+        INDIA_NEWS -> "இந்திய செய்திகள்"
+        ENGLISH -> "ஆங்கிலம்"
         else -> id.replaceFirstChar { it.uppercase() }
     }
 }

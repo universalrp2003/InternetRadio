@@ -1,0 +1,8 @@
+CleanSweep v2.16:
+- Maximize News Strip Space: Removed right-side buttons and badges to provide up to 3 lines of full news headlines; tap anywhere on the strip to listen aloud via TTS.
+- Top Multi-Source News: Curates headlines from BBC Tamil, News18 Tamil, Oneindia, and national/cybersecurity alerts.
+- Compact AI Ready Bar: Simplified to a sleek single-line summary card saving substantial screen space.
+- Scan & Clean Junk Placed Prominently: Moved immediately below the storage gauge for effortless one-tap cleaning without scrolling.
+- Free RAM in Storage Gauge: Integrated real-time available RAM indicator right inside the storage circular gauge.
+- Authentic Phone Age Heuristic: Evaluates factory first shipping API level (ro.product.first_api_level) and device model signatures rather than recent OS update dates.
+- Instant Tamil Voice Announcements: Plug-in and critical announcements trigger immediately in Tamil across all language modes.

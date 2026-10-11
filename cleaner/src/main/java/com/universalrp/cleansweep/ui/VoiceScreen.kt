@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.NightsStay
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.RecordVoiceOver
+import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Thermostat
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -37,6 +38,9 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,8 +66,14 @@ import com.universalrp.cleansweep.voice.Announcer
  * be turned off — the user asked for warnings "at day time, not disturb at user sleeping
  * time", so the quiet window is enforced in the speaker itself, not only in this screen.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun VoiceScreen(state: UiState, vm: MainViewModel) {
+    val delivery by Announcer.runtime.collectAsState()
+    val automatic by Announcer.automatic.collectAsState()
+    val observers by com.universalrp.cleansweep.notify.AutomaticAlerts.observers.collectAsState()
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(Unit) { Announcer.refreshDiagnostics(context) }
     Column(
         Modifier
             .fillMaxSize()
@@ -136,6 +146,34 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
               }
             }
 
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tr("Voice delivery diagnostics"), style = MaterialTheme.typography.titleMedium)
+                    Text(tr("Last request: %s", voiceStageLabel(delivery.stage)), style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Last automatic event: %s", automatic.event.ifEmpty { tr("Not observed yet") }), style = MaterialTheme.typography.bodySmall)
+                    Text(voiceStageLabel(automatic.stage), style = MaterialTheme.typography.bodySmall, color = AccentCyan)
+                    if (automatic.atMs > 0) Text(com.universalrp.cleansweep.data.DisplayTime.dated(automatic.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA, seconds = true), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    delivery.tamilAvailable?.let { Text(tr(if (it) "Tamil language reported available" else "Tamil language not available; install voice data"),
+                        style = MaterialTheme.typography.labelSmall, color = if (it) TextSecondary else WarnAmber) }
+                    delivery.mediaVolume?.let { Text(tr("Media volume step: %s", it), style = MaterialTheme.typography.labelSmall, color = if (it == 0) WarnAmber else TextSecondary) }
+                    Text(tr("An enabled switch or queued request is not proof of sound. Engine completion cannot verify that you heard it; check media volume, Bluetooth route and Do Not Disturb."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(tr("Runtime listeners (registration only)"), style = MaterialTheme.typography.labelMedium)
+                    if (observers.owners == 0) Text(tr("No live listener owner; background events may be missed"), style = MaterialTheme.typography.labelSmall, color = WarnAmber)
+                    else {
+                        Text(tr("Power listener: %s", listenerLabel(observers.power)), style = MaterialTheme.typography.labelSmall)
+                        Text(tr("Battery listener: %s", listenerLabel(observers.battery)), style = MaterialTheme.typography.labelSmall)
+                        Text(tr("Network listener: %s", listenerLabel(observers.network)), style = MaterialTheme.typography.labelSmall)
+                    }
+                    TextButton(onClick = { vm.testAutomaticVoice() }) { Text(tr("Test automatic charging voice")) }
+                    TextButton(onClick = { vm.openTtsSettings() }) { Text(tr("Text-to-speech settings")) }
+                    Text(tr("The automatic test uses the real master/event/quiet-hour gates. It is not a charger connection. Actual early-unplug alerts only apply below 90% after your chosen hour."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(tr("Live power/battery/network listeners run while the app is visible or its existing monitor is active. Without an active owner, Android8+ manifest power broadcasts may be missed or deferred. Jobs and hourly checks can be delayed; force-stop prevents delivery. No new persistent monitor is enabled."),
+                        style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                }
+            }
+
             // ------------------------------------------------------------ voice quality (v2.6)
             // The phone's own engine is the fallback and always works offline; the online voice
             // is opt-in because it sends the sentence (never files, never the key) to the
@@ -152,11 +190,20 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     checked = state.onlineVoice,
                     onCheckedChange = { vm.setOnlineVoice(it) },
                 )
+                VoiceSwitch(
+                    title = tr("Louder voice alerts"),
+                    subtitle = tr(
+                        "Uses full speech amplitude, but does not change Android media volume, override " +
+                            "Do Not Disturb or force audio away from Bluetooth. A muted media stream stays muted."
+                    ),
+                    checked = state.voiceLouder,
+                    onCheckedChange = { vm.setLouderVoice(it) },
+                )
                 Text(
                     tr(
-                        "Works in Tamil and English. If the phone has no cloud voice installed, or the " +
-                            "network is out, the offline voice reads the same line instead — " +
-                            "announcements never go silent. No API key is used for this."
+                        "Uses an installed Tamil/English voice. If a network voice fails, an installed " +
+                            "offline voice in the same language is tried once. Missing voice data or engine " +
+                            "errors are shown in diagnostics; offline speech is not guaranteed. No API key is used."
                     ),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
@@ -207,7 +254,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(
                             20 to 7,
                             21 to 6,
@@ -215,7 +262,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                             0 to 23,
                         ).forEach { (start, end) ->
                             ModeChipExtra(
-                                label = if (start == 0) tr("All day") else "%02d:00–%02d:00".format(start, end),
+                                label = com.universalrp.cleansweep.data.DisplayTime.hour(start) + " – " + com.universalrp.cleansweep.data.DisplayTime.hour(end),
                                 selected = state.voiceQuietStart == start && state.voiceQuietEnd == end,
                                 onClick = { vm.setQuietHours(start, end) },
                             )
@@ -279,9 +326,9 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.CHARGING, it) },
                 )
                 VoiceSwitch(
-                    title = tr("Daily brief"),
-                    subtitle = tr("One short spoken summary a day, with the details in a notification."),
-                    icon = Icons.Outlined.RecordVoiceOver,
+                    title = tr("Daily security warnings"),
+                    subtitle = tr("Spoken Tamil warning only when High or Medium security risk settings/apps are detected."),
+                    icon = Icons.Outlined.Security,
                     tint = AccentCyan,
                     checked = state.voiceDaily,
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.DAILY, it) },
@@ -305,7 +352,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                 )
                 VoiceSwitch(
                     title = tr("Charger connected but not charging"),
-                    subtitle = tr("A worn cable or weak charger shows as plugged in and delivers nothing."),
+                    subtitle = tr("A connected-but-paused reading can be normal adaptive charging; it does not prove a cable fault."),
                     icon = Icons.Outlined.ElectricalServices,
                     tint = WarnAmber,
                     checked = state.voiceChargerIdle,
@@ -321,20 +368,13 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                 )
                 VoiceSwitch(
                     title = tr("Wi-Fi ⇄ mobile data switches"),
-                    subtitle = tr("Off by default: a phone that hops networks would otherwise talk all day."),
+                    subtitle = tr("Announces observed Wi-Fi/mobile switches while the app or existing monitor is active; hourly checks are a delayed fallback."),
                     icon = Icons.Outlined.SwapHoriz,
                     tint = AccentCyan,
                     checked = state.voiceNetworkChange,
                     onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NETWORK_CHANGE, it) },
                 )
-                VoiceSwitch(
-                    title = tr("New device joined my Wi-Fi"),
-                    subtitle = tr("Uses the network scan; spoken only when it is on and you run a scan."),
-                    icon = Icons.Outlined.Devices,
-                    tint = AccentCyan,
-                    checked = state.voiceNewDevice,
-                    onCheckedChange = { vm.setVoiceEvent(Announcer.Event.NEW_DEVICE, it) },
-                )
+
                 VoiceSwitch(
                     title = tr("Read AI answers aloud"),
                     subtitle = tr("Speak the answer when you ask the assistant something."),
@@ -346,15 +386,16 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
               }
             }
 
+            AnswerVoicesCard(state.lang, vm)
+
             // ------------------------------------------------------------ the daily check
             PanelCard(Modifier.fillMaxWidth()) {
               Column(Modifier.fillMaxWidth()) {
                 VoiceSwitch(
-                    title = tr("Daily full check"),
+                    title = tr("Daily security risk watch"),
                     subtitle = tr(
-                        "Once a day CleanSweep reads the battery, temperature, storage, junk and " +
-                            "security, asks the AI for a two-sentence summary when a key is saved, " +
-                            "speaks it and posts the full report."
+                        "Once a day CleanSweep checks security settings, permissions, battery and system health. " +
+                            "Speaks out loud strictly when High or Medium risk items are found."
                     ),
                     checked = state.dailyScanOn,
                     onCheckedChange = { vm.setDailyScanOn(it) },
@@ -366,10 +407,10 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(5, 6, 7, 8, 9).forEach { hour ->
                             ModeChipExtra(
-                                label = "%02d:00".format(hour),
+                                label = com.universalrp.cleansweep.data.DisplayTime.hour(hour),
                                 selected = state.voiceUnplugStart == hour,
                                 onClick = { vm.setUnplugStartHour(hour) },
                             )
@@ -382,10 +423,10 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(9, 13, 18, 20, 21).forEach { hour ->
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(9 to "9:00 AM", 13 to "1:00 PM", 18 to "6:00 PM", 20 to "8:00 PM", 21 to "9:00 PM").forEach { (hour, label) ->
                             ModeChipExtra(
-                                label = "%02d:00".format(hour),
+                                label = label,
                                 selected = state.dailyHour == hour,
                                 onClick = { vm.setDailyHour(hour) },
                             )
@@ -467,7 +508,7 @@ private fun VoiceChip(
     }
 }
 
-/** Hour stepper: −1 / +1 with the hour in the middle, so no tiny dropdown is needed. */
+/** Hour stepper: −1 / +1 with the hour in 12-hour AM/PM format. */
 @Composable
 private fun HourPicker(value: Int, onPick: (Int) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -475,7 +516,7 @@ private fun HourPicker(value: Int, onPick: (Int) -> Unit) {
             Text("−", style = MaterialTheme.typography.titleMedium, color = AccentCyan)
         }
         Text(
-            "%02d:00".format(value),
+            com.universalrp.cleansweep.data.DisplayTime.hour(value),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = TextPrimary,
@@ -500,3 +541,31 @@ private fun ModeChipExtra(label: String, selected: Boolean, onClick: () -> Unit)
         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
     )
 }
+
+private fun voiceStageLabel(stage: com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage): String = tr(when (stage) {
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.NOT_REQUESTED -> "No request observed in this process"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.DISABLED -> "Blocked: master voice switch is off"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.EVENT_OFF -> "Blocked: this event's voice switch is off"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.QUIET_HOURS -> "Blocked: quiet hours"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.QUEUED -> "Queued, not yet confirmed playing"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INITIALIZING -> "Speech engine starting"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.NO_ENGINE -> "Speech engine could not be created"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INIT_FAILED -> "Speech engine initialization failed"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.INIT_TIMEOUT -> "Speech engine initialization timed out"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.LANGUAGE_MISSING -> "Required language/offline voice data missing"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_REJECTED -> "Speech engine rejected the request"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.PLAYING -> "Speech engine reported playback started"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_FINISHED -> "Speech engine reported completion; audibility unverified"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.ENGINE_ERROR -> "Speech engine reported an error"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.TIMED_OUT -> "Speech delivery timed out"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.CANCELLED -> "Speech request cancelled/interrupted"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.DUPLICATE -> "Duplicate request skipped"
+    com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.STALE_EVENT -> "Delayed/stale power event skipped"
+})
+
+@Composable
+private fun listenerLabel(value: Boolean?): String = tr(when (value) {
+    true -> "Registered; event delivery unverified"
+    false -> "Failed/unavailable"
+    null -> "Not active"
+})

@@ -1,9 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">CleanSweep</string>
+    <string name="app_name">Live Guard</string>
     <!-- Home-screen widget (v2.4). -->
-    <string name="widget_description">Battery, storage and the daily brief, one tap away</string>
+    <string name="widget_description">Compact battery level and last observed charger-unplug time and level</string>
     <string name="widget_clean">Clean</string>
     <string name="widget_speak">Read brief</string>
     <!-- v1.3: no accessibility service description needed; CleanSweep declares no accessibility service. -->
+    <string name="widget_battery_label">Live Guard • Battery</string>
+    <string name="widget_data_label">Live Guard • Data</string>
+    <string name="widget_phone_label">Live Guard • Phone</string>
+    <string name="widget_data_description">Compact battery and mobile usage; Wi-Fi or user-set unlimited 5G uses phone details</string>
+    <string name="widget_phone_description">Compact battery, temperature, free storage and observed last unplug</string>
+    <string name="notification_reader_label">Live Guard • Selected notification reading</string>
 </resources>

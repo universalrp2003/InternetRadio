@@ -24,6 +24,11 @@ data class AssistantMessage(
      * Shown under the bubble so a wrong answer can be checked instead of trusted.
      */
     val sources: List<String> = emptyList(),
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val answerVoiceSlot: Int = 0,
+    val welcome: Boolean = false,
+    val error: Boolean = false,
+    val localUnavailable: Boolean = false,
 )
 
 /**
@@ -35,7 +40,7 @@ enum class AssistantAction { NONE, SCAN, OPEN_APP_CACHE, OPEN_RESULTS, OPEN_SETT
 /**
  * A snapshot of everything the assistant is allowed to know.
  * It is built from the current screen state — nothing is fetched from a server,
- * because CleanSweep has no INTERNET permission at all.
+ * and online mode sends the chosen question and allowed facts to the configured provider.
  */
 data class AssistantContext(
     val storage: StorageInfo? = null,
@@ -61,18 +66,15 @@ object Assistant {
 
     // ------------------------------------------------------------------ public
 
-    fun welcome(ctx: AssistantContext, verbose: Boolean): AssistantMessage {
+    fun welcome(ctx: AssistantContext, verbose: Boolean, online: Boolean = false, ready: Boolean = false,
+        tamil: Boolean = com.universalrp.cleansweep.data.Lang.isTamil): AssistantMessage {
+        val lang = if (tamil) com.universalrp.cleansweep.data.AppLang.TA else com.universalrp.cleansweep.data.AppLang.EN
         val storageLine = ctx.storage?.let {
-            "You have ${it.free.formatBytes()} free out of ${it.total.formatBytes()}."
-        } ?: "Storage numbers are still loading."
-
-        val full = buildString {
-            append("Hi! I'm the CleanSweep assistant — I run entirely on this phone, offline.\n\n")
-            append("$storageLine I can explain what is eating your space, tell you what is safe to delete, ")
-            append("and walk you through clearing app caches step by step.\n\n")
-            append("Try one of the suggestions below, or ask me anything in your own words.")
-        }
-        return AssistantMessage(fromUser = false, text = if (verbose) full else storageLine)
+            com.universalrp.cleansweep.data.Lang.translate(lang, "Storage free: %s of %s.", it.free.formatBytes(), it.total.formatBytes())
+        } ?: com.universalrp.cleansweep.data.Lang.translate(lang, "Storage readings are not available yet.")
+        val intro = AssistantModePolicy.welcome(online, ready, tamil)
+        val tips = com.universalrp.cleansweep.data.Lang.translate(lang, "I can explain the available phone readings and guide you through cleaning. Try a suggestion or type a question.")
+        return AssistantMessage(false, intro + if (verbose) "\n\n$storageLine $tips" else "", welcome = true)
     }
 
     /** Context-aware quick questions shown as chips in the chat. */
@@ -118,7 +120,7 @@ object Assistant {
                         append("• Explain every junk category and what happens if you delete it\n")
                         append("• Walk you through clearing the cache of any app (Android makes this a two-tap job)\n")
                         append("• Answer questions about privacy, duplicates, big files, downloads and more\n\n")
-                        append("Everything I say is computed on this phone from your real numbers. I'm not a cloud chatbot — CleanSweep doesn't even have internet permission.")
+                        append("These local cleaning answers use this phone's available readings. Online AI is optional and sends your question and the allowed facts to your chosen provider; the app also uses internet access for news and other online features.")
                     },
                 )
 
@@ -127,11 +129,11 @@ object Assistant {
                 AssistantMessage(
                     false,
                     buildString {
-                        append("Your data never leaves this phone.\n\n")
-                        append("• CleanSweep has no INTERNET permission — the Android system would block any upload attempt\n")
-                        append("• I run entirely on-device: your question is matched against built-in rules right here\n")
-                        append("• No ads, no analytics, no accounts, and no file names are ever transmitted\n\n")
-                        append("The only things stored are your app settings, protected folders and the last-clean summary, all in the app's private storage.")
+                        append("Local assistant mode matches built-in rules on this phone.\n\n")
+                        append("• Optional online AI sends your question and the facts allowed in AI settings to the selected provider\n")
+                        append("• Optional web lookup sends the question as a search query, not your phone inventory\n")
+                        append("• News and other enabled online features use internet access; a selected network TTS voice may also use its engine's service\n\n")
+                        append("App settings, cleaning summaries and the aggregate last permission-review date are stored locally. Package-specific security history remains opt-in. Check AI, voice and history settings before sharing sensitive questions.")
                     },
                 )
 
@@ -403,6 +405,7 @@ object Assistant {
             text,
             actionLabel = if (ctx.report != null) "Review selection" else "Scan now",
             action = if (ctx.report != null) AssistantAction.OPEN_RESULTS else AssistantAction.SCAN,
+            localUnavailable = true,
         )
     }
 
@@ -433,21 +436,12 @@ object Assistant {
      * assistant offers to ask the real AI (which answers anything) and keeps the useful
      * on-device idea as a second option.
      */
-    fun offlineFallback(question: String): AssistantMessage = AssistantMessage(
-        false,
-        buildString {
-            append("That one needs the AI, and the AI is not answering right now.\n\n")
-            append("Tap “Ask the AI” and CleanSweep will send your question again — with the ")
-            append("phone facts it can read — the moment a provider answers.")
-            if (question.isNotBlank()) {
-                append("\n\nYour question: “")
-                append(question.take(120))
-                append("”")
-            }
-        },
-        actionLabel = "Ask the AI",
-        action = AssistantAction.ASK_AI,
-    )
+    fun offlineFallback(question: String, tamil: Boolean = com.universalrp.cleansweep.data.Lang.isTamil): AssistantMessage {
+        val lang = if (tamil) com.universalrp.cleansweep.data.AppLang.TA else com.universalrp.cleansweep.data.AppLang.EN
+        return AssistantMessage(false, com.universalrp.cleansweep.data.Lang.translate(lang,
+            "This question is outside the built-in local topics. Tap Ask the AI to send it and the allowed facts to your selected provider."),
+            actionLabel = "Ask the AI", action = AssistantAction.ASK_AI)
+    }
 
     private fun fallback(ctx: AssistantContext): AssistantMessage {
         val ideas = suggestionChips(ctx).take(3)

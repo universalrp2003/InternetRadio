@@ -1,2 +1,10 @@
 __pycache__/
 *.pyc
+
+# Local build/tool scratch and installable CI downloads are not source.
+.arena/
+.gradle/
+**/build/
+local.properties
+*.apk
+*.aab
