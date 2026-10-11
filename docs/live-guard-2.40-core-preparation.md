@@ -137,12 +137,21 @@ git diff --check
 3. Build a signed candidate **without** publication (`[publish]` is deliberately gated).
 4. Pass the JVM/APK/manifest/DEX/signing/API-26/version/size/companion gates.
 5. Hand over the exact candidate APK: version, code, source commit, CI run, SHA-256.
+   Each candidate run records every produced file with its size and SHA-256 in the run
+   summary, in `.apk.sha256` sidecars inside the `cleansweep-apk` artifact, and in
+   `docs/candidate-build-digests.md` on candidate branches.
 6. The owner installs those exact bytes from the normal download route with Play Protect
    **on** and records the real outcome in
    `docs/live-guard-2.40-device-evidence.md`.
 7. If blocked, stop and pursue Google's official route — no bypass, no disguise.
 8. Only then publish the **same tested bytes** with a fresh tag. The publication step
-   refuses to run for a CleanSweep version newer than 2.39 unless the evidence file quotes
-   the exact APK digest, so a rebuilt APK can never silently inherit an old device test.
+   refuses to run for a CleanSweep version newer than 2.39 unless the evidence file exists,
+   records the real Play Protect **and** installer outcome, and carries the machine-readable
+   `TESTED-APK-SHA256` / `TESTED-RUN-ID` lines. If the rebuild happens to reproduce that
+   digest, the freshly built APK is published; otherwise the step downloads the recorded
+   run's `cleansweep-apk` artifact, verifies its digest and publishes **those** bytes —
+   exact-artifact promotion, implemented in `.github/workflows/build-apk.yml`. A different
+   digest with no recorded run id stops publication, so a rebuilt APK can never silently
+   inherit an old device test.
 9. Post-publication: verify stable/latest release, tag/source, asset names/sizes/digests
    and unchanged older assets, and update README/changelog/privacy/notes/device limits.

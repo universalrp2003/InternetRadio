@@ -10,7 +10,9 @@ and do not write "HyperOS" or "MIUI" unless the phone actually says so.
 
 ## 0. Before installing
 
-- [ ] Candidate APK SHA-256 recorded and matched to the one CI produced (`sha256sum`).
+- [ ] Candidate APK SHA-256 taken from the run summary, the `.apk.sha256` sidecar inside the
+      `cleansweep-apk` artifact, or `docs/candidate-build-digests.md` on the candidate branch,
+      and re-checked on the downloaded file.
 - [ ] Install route: the **normal download route** (GitHub release/artifact link), Play
       Protect **left ON**. Do not use adb, `pm install` bypasses or a modified build.
 - [ ] Previous Live Guard version noted (expected: 2.39/code44 or older), because the
@@ -66,8 +68,9 @@ and do not write "HyperOS" or "MIUI" unless the phone actually says so.
 
 Copy `docs/live-guard-2.40-device-evidence-template.md` to
 `docs/live-guard-2.40-device-evidence.md`, fill in the real observations (including the
-exact APK SHA-256) and commit it. That file is what the CI publication step requires for a
-CleanSweep version newer than 2.39.
+`TESTED-APK-SHA256` and `TESTED-RUN-ID` lines) and commit it. That file is what the CI
+publication step requires for a CleanSweep version newer than 2.39, and it is also what
+makes the workflow publish those exact bytes rather than a rebuild.
 
 If the result is a block: this plan ends at step 1. Do the policy/privacy review and use
 Google's official channels — never disable Play Protect, never disguise the source, never

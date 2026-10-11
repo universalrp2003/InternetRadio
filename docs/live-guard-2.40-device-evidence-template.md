@@ -3,15 +3,28 @@
 Copy this file to **`docs/live-guard-2.40-device-evidence.md`** and replace every
 placeholder with real observations. The CI publication step for a CleanSweep version newer
 than 2.39 refuses to publish unless that file exists, mentions the **actual Play Protect
-result** and the **installer outcome**, and contains the **exact SHA-256** of the APK that
-is being published. This template deliberately keeps the gate closed.
+result** and the **installer outcome**, and carries the machine-readable lines below. This
+template deliberately keeps the gate closed.
+
+The `TESTED-APK-SHA256` / `TESTED-RUN-ID` lines are what the workflow uses to publish the
+**same bytes that were installed**. If the rebuild reproduces that digest the freshly built
+APK is published; otherwise the workflow downloads the recorded run's `cleansweep-apk`
+artifact, verifies its digest against these lines and publishes those bytes instead of
+rebuilding. A different digest with no recorded run id stops publication.
+
+Every APK produced by a candidate build is listed with its SHA-256 in the run summary, in
+`SHA256SUMS`-style sidecar files inside the `cleansweep-apk` artifact, and on candidate
+branches in `docs/candidate-build-digests.md`.
 
 - Candidate: Live Guard / CleanSweep 2.40, versionCode 45
-- Exact APK SHA-256: `<sha256 of the exact APK that was installed>`
 - APK file name: `CleanSweep-v2.40.apk`
-- CI run / job: `<run id> / <job id>`
 - Compiled source commit: `<40-hex commit the APK was built from>`
-- Download route used: `<normal public download route (release or CI artifact link)>`
+- Download route used: `<normal public download route: GitHub release or the run's artifact>`
+
+TESTED-APK-SHA256: `<64 hex characters, exactly as printed by the build>`
+TESTED-RUN-ID: `<numeric workflow run id that produced the APK that was installed>`
+TESTED-APK-SIZE-BYTES: `<bytes>`
+TESTED-JOB-ID: `<numeric job id>`
 - Phone: Redmi 13 5G — ROM/build: `<exact string from Settings, e.g. "Android 16, build …">`
 - Play Protect state during install: **ON** (do not disable it for the test)
 - Date/time of the test (phone-local): `<yyyy-mm-dd hh:mm AM/PM>`

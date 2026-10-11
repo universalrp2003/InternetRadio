@@ -12,11 +12,13 @@ requests publication; ordinary pushes remain test builds.
 **Device-evidence gate (since the 2026-10-11 Play Protect install block).** For any
 CleanSweep version newer than 2.39/code44, publication is additionally refused unless
 `docs/live-guard-2.40-device-evidence.md` exists, records the real **Play Protect** result
-and the **installer outcome**, and contains the **exact SHA-256** of the APK being
-published. This exists so a rebuilt APK can never inherit an earlier device test. Do not
-delete or weaken that gate to publish; the advisory and next steps live in
-`docs/live-guard-play-protect-install-block.md`, and the test checklist in
-`docs/live-guard-2.40-device-test-plan.md`. Manual dispatch also accepts
+and the **installer outcome**, and carries the machine-readable `TESTED-APK-SHA256` and
+`TESTED-RUN-ID` lines. When the tested digest is recorded, the step either publishes the
+fresh build (only if it reproduces that digest byte-for-byte) or promotes the recorded
+run's `cleansweep-apk` artifact after verifying its digest — so a rebuilt APK can never
+inherit an earlier device test. Do not delete or weaken that gate to publish; the advisory
+and next steps live in `docs/live-guard-play-protect-install-block.md`, and the test
+checklist in `docs/live-guard-2.40-device-test-plan.md`. Manual dispatch also accepts
 `release_tag` when the GitHub connection has Actions-write permission. Published
 assets are release APKs/AABs for the three maintained apps, never debug or legacy APKs.
 A new release is assembled as a draft, then published after uploading all assets.
