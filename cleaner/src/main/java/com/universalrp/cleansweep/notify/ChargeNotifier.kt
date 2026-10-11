@@ -14,6 +14,8 @@ import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
 import com.universalrp.cleansweep.data.DataUsageTracker
 import com.universalrp.cleansweep.data.LiveNetworkQuality
+import com.universalrp.cleansweep.data.Lang
+import com.universalrp.cleansweep.data.DisplayTime
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.voice.Announcer
@@ -44,10 +46,10 @@ object ChargeNotifier {
             manager.createNotificationChannel(
                 NotificationChannel(
                     CHANNEL_ID,
-                    "Mobile data & battery status",
+                    Lang.forContext(context, "Mobile data & battery status"),
                     NotificationManager.IMPORTANCE_LOW,
                 ).apply {
-                    description = "Live mobile data usage, custom data pack balance and battery metrics"
+                    description = Lang.forContext(context, "Observed mobile data usage, configured quota and battery readings")
                     setShowBadge(false)
                 }
             )
@@ -62,6 +64,9 @@ object ChargeNotifier {
      * pack status (Used / Quota & Remaining GB left), and secondary battery/charging stats.
      */
     fun build(context: Context, battery: BatteryReading): Notification {
+        val language = Lang.languageIn(context)
+        fun t(text: String, vararg args: Any) = Lang.translate(language, text, *args)
+        val percent = com.universalrp.cleansweep.widget.WidgetReadingPolicy.percent(battery.percent, battery.reportedLevel, battery.reportedScale)
         val openApp = PendingIntent.getActivity(
             context,
             0,
@@ -78,61 +83,55 @@ object ChargeNotifier {
         val isUnlimited = dataUsage?.isUnlimited5g == true
         val chargingContent = StatusPillContent.resolve(battery.powerConnected, battery.powerW)
         val title = when {
-            battery.powerConnected -> chargingContent.text
-            dataUsage != null && !isUnlimited ->
-                "Today's Mobile Data: ${dataUsage.formattedToday} • Pack: ${dataUsage.formattedRemaining} left"
-            isUnlimited -> "Unlimited 5G mode (user-set) • Battery ${battery.percent}%"
-            else -> "${battery.percent}% • ${battery.statusLabel}"
+            battery.powerConnected -> chargingContent.text // Measurement/unit, not an English-only sentence.
+            dataUsage != null && !dataUsage.readingAvailable -> t("Mobile usage unavailable · Battery %s", percent)
+            dataUsage != null && !isUnlimited -> t("Mobile data today: %s · Pack left: %s", dataUsage.formattedToday, dataUsage.formattedRemaining)
+            isUnlimited -> t("Unlimited 5G · user-set · Battery %s", percent)
+            else -> t("Battery %s · %s", percent, t(battery.statusLabel))
         }
-
-        val timeLine = try {
-            batteryTimeLabel(battery)
-        } catch (e: Exception) {
-            null
-        } ?: "Battery: ${battery.percent}%"
-
-        val netQuality = if (battery.powerConnected) null else try {
-            LiveNetworkQuality.measure(context)
-        } catch (e: Exception) {
-            null
+        val minutes = runCatching { batteryTimeMinutes(battery) }.getOrNull()
+        val duration = minutes?.let { value ->
+            if (value >= 60) t("%s h %s min", value / 60, value % 60) else t("%s min", value)
         }
-
+        val timeLine = when {
+            battery.percent == 100 -> t("Full")
+            duration != null -> t("Estimated time to full: %s", duration)
+            else -> t("Battery %s · %s", percent, t(battery.statusLabel))
+        }
+        val netQuality = if (battery.powerConnected) null else runCatching { LiveNetworkQuality.measure(context) }.getOrNull()
         val details = buildString {
             if (netQuality != null && (netQuality.isWifi || netQuality.isMobile)) {
-                val netType = if (netQuality.isWifi) "Wi-Fi" else "Mobile Data"
-                val pingInfo = netQuality.pingMs?.let { "Ping: ${it}ms" } ?: ""
-                val jitterInfo = netQuality.jitterMs?.let { " • Jitter: ${it}ms" } ?: ""
-                append("[$netType] Quality: ${netQuality.labelEnglish} ($pingInfo$jitterInfo)\n")
-                append("Live: ↓ ${netQuality.formattedRxSpeed} • ↑ ${netQuality.formattedTxSpeed}\n")
+                val type = t(if (netQuality.isWifi) "Wi-Fi" else "Mobile data")
+                appendLine(t("%s · measured quality: %s", type, t(netQuality.labelEnglish)))
+                netQuality.pingMs?.let { append(t("Ping: %s ms", it)) }
+                netQuality.jitterMs?.let { append(t(" · Jitter: %s ms", it)) }
+                appendLine()
+                appendLine(t("Live traffic: ↓ %s · ↑ %s", netQuality.formattedRxSpeed, netQuality.formattedTxSpeed))
             }
             if (dataUsage != null && !isUnlimited) {
-                append("Pack Used: ${dataUsage.formattedPackTotal} / ${dataUsage.formattedPackLimit} • Left: ${dataUsage.formattedRemaining}\n")
-            } else if (isUnlimited) {
-                append("Unlimited 5G mode (user-set) • quota display hidden\n")
-            }
+                appendLine(if (!dataUsage.readingAvailable) t("Mobile statistics unavailable")
+                    else t("Pack used: %s / %s · left: %s", dataUsage.formattedPackTotal, dataUsage.formattedPackLimit, dataUsage.formattedRemaining))
+            } else if (isUnlimited) appendLine(t("Unlimited 5G mode is user-set; quota display is hidden."))
             if (battery.powerConnected) {
-                append("Charger connected: $timeLine")
-                battery.powerW?.let { append(" • %.1f W".format(it)) }
-                battery.currentA?.let { append(" • %.2f A".format(it)) }
-                battery.voltageV?.let { append(" • %.2f V".format(it)) }
-                battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
+                append(t("Charger connected: %s", timeLine))
+                battery.powerW?.let { append(" · " + "%.2f W".format(java.util.Locale.US, it)) }
+                battery.currentA?.let { append(" · %.2f A".format(java.util.Locale.US, it)) }
+                battery.voltageV?.let { append(" · %.2f V".format(java.util.Locale.US, it)) }
+                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
             } else {
-                append("Battery: ${battery.percent}% • ${battery.statusLabel}")
-                battery.temperatureC?.let { append(" • %.1f °C".format(it)) }
+                append(t("Battery %s · %s", percent, t(battery.statusLabel)))
+                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
             }
+            append("\n" + t("Card updated: %s", DisplayTime.clock(System.currentTimeMillis(), seconds = true)))
         }
-
-        val hint = when {
+        val hint = t(when {
             battery.powerConnected && battery.powerW == null -> "Charging power is not reported by this phone. No wattage is guessed."
             battery.powerConnected -> "Watts are measured at the battery, not at the charger adapter."
             dataUsage != null && !dataUsage.readingAvailable -> "Mobile data statistics are unavailable; no usage or remaining quota is guessed."
             dataUsage?.isPartial == true -> "Partial observed mobile counter; gaps/reboots can miss traffic. Not the carrier's official balance. Wi-Fi excluded."
-            dataUsage != null -> "Mobile data usage is tracked from cellular networks (zero Wi-Fi), not the carrier's official bill."
-            !battery.charging -> "Unplugged — monitoring active."
-            battery.percent >= 90 -> "Above 90% most phones trickle-charge; leaving it plugged overnight is fine."
-            battery.percent >= 80 -> "Above 80% charging slows down on purpose — this is normal for lithium batteries."
-            else -> "Open CleanSweep for CPU temperature, battery health and security."
-        }
+            dataUsage != null -> "Mobile data usage excludes Wi-Fi and is not the carrier's official balance."
+            else -> "Monitoring active. Open Live Guard for available phone readings."
+        })
 
         val stopIntent = Intent(context, ChargeMonitorService::class.java).apply {
             action = ChargeMonitorService.ACTION_STOP_SERVICE
@@ -161,13 +160,13 @@ object ChargeNotifier {
             .setSmallIcon(netIconRes)
             .setColor(netIconColor)
             .setContentTitle(title)
-            .setContentText(if (battery.powerConnected) "Battery-side charging power" else details)
+            .setContentText(if (battery.powerConnected) t("Battery-side charging power") else details)
             .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setContentIntent(openApp)
-            .addAction(0, "Stop", stopPending)
+            .addAction(0, t("Stop"), stopPending)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
@@ -186,8 +185,8 @@ object ChargeNotifier {
         )
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_data)
-            .setContentTitle("CleanSweep Monitoring")
-            .setContentText("CleanSweep is monitoring mobile data and device stats.")
+            .setContentTitle(Lang.forContext(context, "Live Guard monitor"))
+            .setContentText(Lang.forContext(context, "Battery reading unavailable. Monitoring is active; no value is guessed."))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)

@@ -34,8 +34,7 @@ enum class AiProvider(
         baseUrl = "https://generativelanguage.googleapis.com/v1beta/openai",
         defaultModel = "gemini-2.5-flash",
         needsKey = true,
-        signupHint = "Free key at aistudio.google.com → Get API key. Free tier is generous " +
-            "(Gemini 2.5 Flash: ~10 requests/min, ~250/day) and needs no credit card.",
+        signupHint = "Create a key at the official Google AI Studio link. Availability, quotas and charges depend on your account; check the dashboard.",
     ),
     NVIDIA(
         id = "nvidia",
@@ -82,7 +81,7 @@ enum class AiProvider(
     );
 
     /**
-     * Models that worked when this version was built. The AI settings screen also has a
+     * Example model IDs, not verified executions or a promise of continuing access. The AI settings screen has a
      * "Load models" button that asks the provider itself (GET /models) and lists exactly
      * what your key can use — providers retire model ids, and a retired id is what makes
      * an otherwise good key answer "410 model has reached its end of life".

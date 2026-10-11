@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 
 /**
@@ -409,6 +410,7 @@ object SecurityScanner {
             )
         )
 
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
         val score = score(findings)
         val report = SecurityReport(
             findings = findings.sortedByDescending { it.severity.ordinal * -1 },
@@ -417,6 +419,8 @@ object SecurityScanner {
             scannedAtMs = System.currentTimeMillis(),
             unavailableChecks = unavailable,
         )
+        runCatching { PermissionReviewStore.record(context, report) }
+        com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(context)
         runCatching { SecurityHistoryRepo.record(context, report, apps) }
         report
     }

@@ -1,5 +1,44 @@
 # Changelog — maintained Android apps
 
+## Live Guard2.38/code43 — authorized release candidate
+
+Owner now authorizes the next build and verified publication on11 October2026.
+Candidate **2.38/code43**, tag `v2026.10.11-2`; do not publish failed builds or
+replace the existing **2.37/code42** assets. Actual verification follows CI.
+
+- Reviewed feature setup with saved-OFF respect, explicit access/voice/background
+  choices and optional quiet aggregate reminders. No blanket permission grant.
+- Cleaner-only Home Update control: eligible official-release pulse, bounded
+  browser-free private APK download, hash/package/version/signing checks, explained
+  unknown-apps access and mandatory Android installer confirmation. No forced or
+  bypassed Play Protect claim. Radio/PulseEQ shared updater remains unchanged.
+- Opt-in multi-app/multi-sender notification reading: sender-only default,
+  per-app full-message option, consented local EN/TA language models and non-network
+  installed TTS. No notification-to-AI/upload/history path; unknown translation
+  means sender only. Android/OEM/privacy gates still apply.
+- Nearby official provider/VirusTotal key links and bilingual text/voice guides.
+  Exact LM Arena source/category/date/no-match card; the verified public feed is
+  December2025, so it is dated, **not a current October2026 score or IQ**.
+- Three compact launcher widget profiles replace the large `% + W` default:
+  current battery, genuine observed unplug time/level, metered usage or useful
+  Wi-Fi/user-set unlimited5G phone details. Floating pill unchanged. System-app
+  review/cache inclusion defaults ON when unset; cache opens fresh without new
+  automatic selections/deletion.
+- Previous 45-second cancellable chat/exact-product/TODAY news, localized stable
+  errors, mode-aware welcomes, genuine saved-review/12-hour times and actual A/B
+  voice-preview/alternate-between-answers fixes retained. Heavy report/device-AI
+  whole operations now have owned 90-second progress/cancel/stale-result gates;
+  network scan+AI uses one batch and never saves guesses as verified user names.
+
+**Validation:** static localization/placeholder/time/privacy/component audits,
+XML well-formedness and lightweight source syntax only. **177 retained +118 new
+=295 future required cases per variant,32 suites; NOT executed.** All22 shipped
+test files match the actual compiled2.37 source. No Kotlin/Compose/Android build,
+live provider, APK update/install, message/voice or phone tests for this patch.
+Dynamic legacy text/translation meaning/layout and all device behavior remain
+uncertified. See [next-update review](docs/live-guard-next-update-review.md).
+Published2.37 and immutable release assets are unchanged.
+
 Detailed historical notes remain in [`releases/`](releases/). This summary does not
 claim app-store publication or physical-device certification.
 

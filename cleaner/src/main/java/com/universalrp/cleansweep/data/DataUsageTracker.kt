@@ -47,6 +47,8 @@ object DataUsageTracker {
         prefs(context).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
         context.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).edit().putBoolean(KEY_UNLIMITED_5G, enabled).apply()
     }
+    /** A default UI value is not evidence of the user's actual carrier allowance. */
+    fun hasConfiguredPlan(context: Context): Boolean = prefs(context).contains(KEY_PACK_LIMIT_GB)
     fun getPackLimitGb(context: Context) = prefs(context).getFloat(KEY_PACK_LIMIT_GB, DEFAULT_PACK_LIMIT_GB)
     fun setPackLimitGb(context: Context, limitGb: Float) {
         if (!limitGb.isFinite() || limitGb <= 0 || limitGb > 100_000) return

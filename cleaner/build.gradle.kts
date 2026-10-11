@@ -18,8 +18,8 @@ android {
         applicationId = "com.universalrp.cleansweep"
         minSdk = 26
         targetSdk = 36
-        versionCode = 42
-        versionName = "2.37"
+        versionCode = 43
+        versionName = "2.38"
     }
 
     signingConfigs {
@@ -75,6 +75,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+    // Explicit model download, local Tamil/English notification translation; no online message translation.
+    implementation("com.google.mlkit:translate:17.0.3")
+    implementation("com.google.mlkit:language-id:17.0.6")
 
     // The hourly health watch (battery low/full, overheating, the daily brief). WorkManager
     // survives reboots and is the only scheduler Google allows for this kind of background work.

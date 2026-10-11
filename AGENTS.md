@@ -18,8 +18,8 @@
   purchase date; unsupported model/factory evidence must remain unavailable.
 
 - Following the owner's 2026-10-11 voice/news/widget choices: redesign the **launcher
-  home-screen widget**, not the floating pill; default to larger battery % plus
-  battery-side watts together, with a per-widget view selector. Keep floating
+  home-screen widget**, not the floating pill; latest compact Battery/Data/Phone
+  profiles supersede the former large battery/watts layout. Keep floating
   watts-only charging/unplug behaviour intact. Never invent five-decimal battery
   precision or turn display decimal places into an accuracy claim.
 - Home news must be **today only in the phone's local timezone**, real publication
@@ -35,3 +35,46 @@
   Runtime receivers must be owner-scoped to the visible app or existing enabled monitor/
   visual fallback, with honest registration evidence and no cold-background guarantee
   when no owner runs. Do not silently enable a persistent service to mask this limitation.
+
+- Owner explicitly lifted the source-only hold on 11 October 2026: **build the next
+  version and publish after verification**. Prepare Live Guard2.38/code43; execute
+  all required tests/build/package/signing gates before publication. Never claim a
+  failed or untested candidate is a verified released APK.
+- Use correct corresponding Tamil/English throughout Live Guard, its launcher
+  widget and notification text; notifications follow the selected app language.
+  Human-visible clock times use **12-hour AM/PM**; preserve machine/feed parsing formats.
+- Bound and cancel assistant requests; show progress/errors, discard superseded
+  results, and do not invent live-web success/current prices. Exact Redmi13 5G
+  evidence must not be replaced by Redmi12/13C/4G Wikipedia prices.
+- Confirmed answer voice choice: **alternate two selected/previewed voices BETWEEN
+  answers, reading each answer ONCE**. Do not re-ask that choice or infer gender
+  from Android voice metadata. Missing suitable voices must be honestly reported.
+- Preserve the genuine last completed permission-review date across navigation/
+  restart. A saved dated summary is not a fresh check or a safety verdict; do not
+  fabricate a review date just by opening the app. Keep unknown/incomplete states
+  and opt-in package-specific history distinct.
+
+## Latest reviewed source batch — build/publication now authorized
+
+Owner choices: **reviewed_setup**, **on_device_only** notification translation,
+**lmarena** exact/datable ratings. Respect saved OFF choices; no silent sensitive
+access, private-message upload, online message TTS fallback, APK installation or
+Play Protect bypass/scan guarantee. The **compact Battery/Data/Phone launcher
+profiles supersede the old large BOTH widget default**; floating pill unchanged.
+Only real observed unplug events may create its timestamp/level. System app
+inclusion is review/scope, never automatic selection or deletion.
+
+New source-only helpers/screens/services and dependency declarations are NOT
+compiled/verified APK behavior. Future gate: **295 required cases EACH variant,
+32 suites**; declaration counts are not executed tests. See
+`docs/live-guard-next-update-review.md` and run the static contracts with
+`python3 tools/verify_cleaner_next_update_source.py` before any authorized build.
+Owner has now explicitly authorized commit/push/CI/build and verified publication.
+Until the checks succeed this remains a candidate. Browser background
+or screen-off is not a guarantee of an active Arena turn surviving suspension;
+saved files persist independently.
+
+- Current authorization: build/release **2.38 / code43**, tag **v2026.10.11-2**.
+  Release only after all295 required cases EACH variant and all-module APK/AAB,
+  stable signing/API26/non-debuggable/packaged-feature checks pass. Preserve the
+  immutable2.37 and older assets. Device limitations must remain visible.

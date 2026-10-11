@@ -1,5 +1,7 @@
 package com.universalrp.cleansweep.ui
 
+import kotlinx.coroutines.isActive
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -49,6 +51,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -132,18 +135,18 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                             Spacer(Modifier.width(10.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(
-                                    if (state.aiStatusChecking) "Checking…"
-                                    else if (state.aiStatusOk) "Working: ${state.aiEngineLabel}"
-                                    else "Not answering yet",
+                                    if (state.aiStatusChecking) tr("Checking…")
+                                    else if (state.aiStatusOk) tr("Provider responded: %s", state.aiEngineLabel)
+                                    else tr("Not checked or unavailable"),
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.SemiBold,
                                 )
                                 Text(
                                     state.aiStatusText
                                         ?: if (state.aiConfig.ready) {
-                                            "Tested when the app opened and after every change."
+                                            tr("Connection checks do not prove generation. Test connection sends a small generation request.")
                                         } else {
-                                            "Pick a provider below — a pasted key selects it for you."
+                                            tr("Choose a provider and save its key if required.")
                                         },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = TextSecondary,
@@ -153,7 +156,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(6.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             TextButton(onClick = { vm.refreshAiStatus(announce = true) }) {
-                                Text("Check now", color = AccentCyan, fontWeight = FontWeight.Bold)
+                                Text(tr("Check now"), color = AccentCyan, fontWeight = FontWeight.Bold)
                             }
                             TextButton(onClick = { vm.useAnotherFreeAi() }) {
                                 Text(tr("Use a free AI"), color = GoodGreen, fontWeight = FontWeight.Bold)
@@ -170,9 +173,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         StepHeader(1, "Pick who analyses the report")
                         Spacer(Modifier.height(6.dp))
                         Text(
-                            "Three taps to working AI: pick a provider below, paste its key, tap " +
-                                "\"Load models\" and choose one. CleanSweep talks to the provider directly — " +
-                                "there is no CleanSweep server, and nothing is sent until you tap Analyse.",
+                            tr("Choose a provider, save its key if required, then load available models. Requests go directly to that provider, not a developer server. Connection checks may run on app opening or settings changes; online questions and manual reports send their selected text and allowed facts."),
                             style = MaterialTheme.typography.bodySmall,
                             color = TextSecondary,
                         )
@@ -188,11 +189,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         }
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Already paying for Gemini / ChatGPT Pro? Those subscriptions do not " +
-                                "include API access — the key is separate and has its own free tier. " +
-                                "Google sign-in inside a sideloaded app would need an OAuth project " +
-                                "registered to this APK's signing key, so the key route below is the one " +
-                                "that works for everyone.",
+                            tr("Chat subscriptions and API access are separate. Availability, models, quotas and charges depend on the provider and account; check the provider dashboard. A configured model name is not proof it is usable."),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                         )
@@ -200,6 +197,9 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
+            item(key = "lmarena_rating") {
+                ArenaRatingCard(state.aiConfig.resolvedModel, ambiguous = state.aiConfig.provider == com.universalrp.cleansweep.ai.AiProvider.FREE)
+            }
             // --------------------------------------------------- 2. key and model
             item {
                 // ---- the language the AI answers in (separate from the menu language) ----
@@ -226,12 +226,12 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 onClick = { vm.setAnswerLanguage("auto") },
                             )
                             ModeChip2(
-                                label = "English",
+                                label = tr("English"),
                                 selected = state.aiAnswerLanguage == "en",
                                 onClick = { vm.setAnswerLanguage("en") },
                             )
                             ModeChip2(
-                                label = "தமிழ்",
+                                label = tr("Tamil"),
                                 selected = state.aiAnswerLanguage == "ta",
                                 onClick = { vm.setAnswerLanguage("ta") },
                             )
@@ -243,26 +243,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                     Column(Modifier.padding(16.dp)) {
                         StepHeader(2, "Paste the key")
                         Spacer(Modifier.height(6.dp))
-                        Text(
-                            provider.signupHint,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                        )
-                        if (provider.signupUrl.isNotBlank()) {
-                            Spacer(Modifier.height(8.dp))
-                            TextButton(onClick = { openUrl(context, provider.signupUrl) }) {
-                                Icon(
-                                    Icons.Outlined.OpenInNew,
-                                    contentDescription = null,
-                                    tint = AccentCyan,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text("Open ${provider.signupUrl.substringAfter("://").substringBefore("/")}",
-                                    color = AccentCyan)
-                            }
-                        }
-
+                        ProviderKeyHelp(provider)
                         if (provider.needsKey) {
                             Spacer(Modifier.height(8.dp))
                             OutlinedTextField(
@@ -291,10 +272,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         } else {
                             Spacer(Modifier.height(8.dp))
                             Text(
-                                "No key needed. The app asks public endpoints in turn (Kilo first, " +
-                                    "then Pollinations, then OVHcloud). They are shared with everyone, so " +
-                                    "they can be slow or busy at peak times — a free Gemini key is more " +
-                                    "reliable and takes about a minute to get.",
+                                tr("Free AI needs no key and tries at most two endpoints within the same deadline. Shared endpoints may be busy or unavailable. Another provider is an explicit choice, not a silent cross-provider fallback."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = AccentCyan,
                             )
@@ -307,7 +285,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 onValueChange = { baseDraft = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
-                                label = { Text("Base URL") },
+                                label = { Text(tr("Base URL")) },
                                 placeholder = { Text("http://192.168.1.5:11434/v1") },
                             )
                         }
@@ -317,16 +295,13 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         Spacer(Modifier.height(6.dp))
                         if (provider == AiProvider.FREE) {
                             Text(
-                                "Each free endpoint uses its own model automatically: " +
-                                    "kilo-auto/free → openai → gpt-oss-120b.",
+                                tr("Free endpoints use configured model IDs. Replies name the endpoint that returned an answer and its requested model; the underlying routed model may not be reported."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
                             )
                         } else {
                             Text(
-                                "Tap \"Load models\" to ask the provider which models your key can use. " +
-                                    "Model names change: a retired one answers with a 410 error, which is " +
-                                    "why the list is worth loading instead of typing.",
+                                tr("Load models asks the provider for available model IDs. A listed model still needs a successful generation test; names, access and quotas can change."),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
                             )
@@ -397,7 +372,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 onValueChange = { modelDraft = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
-                                label = { Text("Model (or type one)") },
+                                label = { Text(tr("Model (or type one)")) },
                                 placeholder = {
                                     Text(provider.defaultModel.ifBlank { "model name" })
                                 },
@@ -409,7 +384,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                             Text(
                                 result,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (result.startsWith("OK")) GoodGreen else DangerRed,
+                                color = TextSecondary,
                             )
                         }
 
@@ -428,10 +403,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         )
                         SwitchRow(
                             label = tr("Live web lookup"),
-                            detail = "Before answering, fetch fresh keyless web snippets " +
-                                "(DuckDuckGo + Wikipedia) with today's date, so news, prices " +
-                                "and versions stop coming from stale memory. Only used for " +
-                                "assistant questions.",
+                            detail = tr("Fetch relevant web excerpts for assistant questions, with an 8-second lookup limit inside the 45-second chat deadline. Prices require exact-product seller evidence; news requires today's publication date. Excerpts and provider search citations are not independently verified."),
                             checked = state.aiWebLookup,
                             onChange = { vm.setAiWebLookup(it) },
                         )
@@ -458,8 +430,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                             )
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                "Never sent: your files, photos, messages, contacts, file paths or the " +
-                                    "API key itself. Only the report text goes, and only when you tap Analyse.",
+                                tr("The app does not collect file contents, photos, messages or contacts for AI requests. Your typed question/report and allowed facts are sent to the selected provider. Its API key is sent only for authentication. Web lookup sends the question as a search query. Do not type private information you do not want to share."),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )
@@ -690,7 +661,8 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                         val who = state.aiUsedProvider.ifBlank { state.aiConfig.engineLabel }
                         val modelText = state.aiUsedModel
                         Text(
-                            "Answered by: $who" + (if (modelText.isNotBlank()) " · $modelText" else ""),
+                            if (state.aiAnswer != null) tr("Responding service: %s", who) + (if (modelText.isNotBlank()) " · " + tr("Requested model: %s", modelText) else "")
+                                else tr("Selected service; not a completed response: %s", state.aiConfig.engineLabel),
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                         )
@@ -708,24 +680,11 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                             style = MaterialTheme.typography.labelSmall,
                             color = TextSecondary,
                         )
-                        state.aiFallbackNote?.let { note ->
-                            Spacer(Modifier.height(6.dp))
-                            Text(
-                                "Your provider did not answer first, so a free AI replied. " +
-                                    "Reason: $note",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = WarnAmber,
-                            )
-                        }
                         if (state.aiBusy) {
                             Spacer(Modifier.height(12.dp))
                             CircularProgressIndicator(color = AccentCyan)
                             Spacer(Modifier.height(8.dp))
-                            Text(
-                                "Big reports take 20–60 seconds on a free service.",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
-                            )
+                            AiOperationProgress(state.aiStartedMs, 90, state.aiPhase, onCancel = { vm.cancelAiReport() })
                         }
                         if (!state.aiConfig.ready) {
                             Spacer(Modifier.height(10.dp))
@@ -1092,7 +1051,7 @@ private fun VitalBox(
                     .background(colour)
             )
             Spacer(Modifier.height(8.dp))
-            Text(title, style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+            Text(tr(title), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
             Text(
                 value,
                 style = MaterialTheme.typography.titleMedium,
@@ -1202,4 +1161,20 @@ private fun openUrl(context: Context, url: String) {
     } catch (e: Exception) {
         // No browser installed.
     }
+}
+
+
+/** Elapsed budget is not model-completion percentage. Leaving this composition stops the timer. */
+@Composable
+fun AiOperationProgress(startedMs: Long, limitSeconds: Int, phase: String?, onCancel: () -> Unit) {
+    var elapsed by remember(startedMs) { mutableStateOf(0L) }
+    LaunchedEffect(startedMs) {
+        while (kotlinx.coroutines.currentCoroutineContext().isActive) {
+            elapsed = ((android.os.SystemClock.elapsedRealtime() - startedMs).coerceAtLeast(0) / 1_000).coerceAtMost(limitSeconds.toLong())
+            kotlinx.coroutines.delay(1_000)
+        }
+    }
+    Text(tr(phase ?: "Waiting for the selected provider…"), style = MaterialTheme.typography.bodySmall)
+    Text(tr("%d s elapsed; whole-operation limit %d s", elapsed, limitSeconds), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+    TextButton(onClick = onCancel) { Text(tr("Cancel")) }
 }

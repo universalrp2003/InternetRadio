@@ -76,7 +76,7 @@ fun PermissionHubCard(vm: MainViewModel) {
                             Icon(Icons.Outlined.Lock, contentDescription = null, tint = WarnAmber, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text(
-                                tr("“Allow restricted settings” Required"),
+                                tr("Restricted settings may need manual approval"),
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = WarnAmber,

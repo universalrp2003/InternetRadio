@@ -6,6 +6,23 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
+## v2.38 — authorized release candidate, verification pending
+
+Candidate2.38/code43, `v2026.10.11-2`: owner approved build/publication on11 October2026.
+Prepared changes: reviewed setup; private in-app APK verification/download;
+selected app/sender notification reading with local EN/TA translation and offline
+speech; key/voice guides; exact/datable LM Arena card; compact Battery/Data/Phone
+widgets. System app/cache inclusion defaults ON when unset; no automatic selection
+or deletion. AI operations have owned budgets/progress/cancel. This supersedes the
+large2.37 launcher widget, not the floating pill.
+
+**Not a verified download until exact-source CI/publication passes.** All295 cases
+EACH variant, all-module compilation and package/signing/API26/release gates must
+pass. Physical sound, OEM survival, notification privacy/redaction, local model
+quality, widget sizes and Android installation still need testing.
+[Candidate notes](../releases/v2026.10.11-2.md) ·
+[2.38 device plan](../docs/live-guard-2.38-device-test-plan.md).
+
 ## v2.37 — current verified release: automatic speech, publication-today news and launcher widget
 
 [Install CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk)

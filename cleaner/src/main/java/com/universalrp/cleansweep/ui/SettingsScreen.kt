@@ -99,6 +99,12 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    TextButton(onClick = { vm.navigate(Screen.FEATURE_SETUP) }) { Text(tr("Review feature setup")) }
+                    TextButton(onClick = { vm.navigate(Screen.NOTIFICATION_READER) }) { Text(tr("Selected notification reading")) }
+                }
+            }
             // ------------------------------------------------------- voice (v2.4)
             PanelCard(Modifier.fillMaxWidth()) {
                 Row(
@@ -278,7 +284,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                                 fontWeight = FontWeight.SemiBold,
                             )
                             Text(
-                                tr("Xiaomi / Oppo / Vivo require enabling Autostart in Security settings so background monitoring and widgets restore after reboot."),
+                                tr("Some Xiaomi, Oppo and Vivo ROMs expose an Autostart setting. Availability varies; it may help after reboot but cannot guarantee background delivery or survive a force-stop."),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = TextSecondary,
                             )

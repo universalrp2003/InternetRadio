@@ -51,6 +51,7 @@ class ChargeMonitorService : Service() {
     override fun onCreate() {
         super.onCreate()
         alive = true
+        running = this
         AutomaticAlerts.start(applicationContext, "monitor")
         ChargeNotifier.channel(this)
         startForeground(ChargeNotifier.NOTIFICATION_ID, initialNotification())
@@ -123,6 +124,7 @@ class ChargeMonitorService : Service() {
 
     override fun onDestroy() {
         alive = false
+        if (running === this) running = null
         AutomaticAlerts.stop("monitor")
         // Unplugged or switched off: the status-bar reading goes with it.
         StatusPill.remove()
@@ -144,6 +146,8 @@ class ChargeMonitorService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
+        @Volatile private var running: ChargeMonitorService? = null
+        fun refreshIfRunning() { running?.update() }
         const val CHANNEL_ID = ChargeNotifier.CHANNEL_ID
         const val NOTIFICATION_ID = ChargeNotifier.NOTIFICATION_ID
 
@@ -167,7 +171,7 @@ class ChargeMonitorService : Service() {
         /** Is the charging card wanted at all? (The user's switch in Settings.) */
         fun cardEnabled(context: Context): Boolean =
             context.getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(CARD_KEY, true)
+                .getBoolean(CARD_KEY, false)
 
         /**
          * Starts the service if it is wanted and the phone is on the charger. Returns true

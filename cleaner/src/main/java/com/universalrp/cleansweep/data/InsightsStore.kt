@@ -67,6 +67,8 @@ object ChargeHistoryRepo {
         if (!value) interrupt(context)
     }
     @Synchronized fun record(context: Context, battery: BatteryReading, plugEvent: Boolean = false, unplugEvent: Boolean = false) {
+        if (plugEvent) LastUnplugRepo.connected(context)
+        LastUnplugRepo.observe(context, battery, explicitDisconnect = unplugEvent)
         if (!enabled(context)) return
         val elapsed = SystemClock.elapsedRealtime()
         val before = load(context)

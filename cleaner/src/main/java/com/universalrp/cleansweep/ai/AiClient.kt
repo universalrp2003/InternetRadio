@@ -1,15 +1,14 @@
 package com.universalrp.cleansweep.ai
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import com.universalrp.cleansweep.net.BoundedHttp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.io.OutputStreamWriter
-import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
-import java.net.URL
 import java.net.UnknownHostException
 
 /**
@@ -30,20 +29,12 @@ object AiClient {
         /** Which keyless endpoint answered, so the app can reuse the one that works. */
         val endpointUrl: String? = null,
         val model: String = "",
+        val searchUsed: Boolean = false,
+        val nativeSources: List<String> = emptyList(),
     )
 
-    private const val CONNECT_TIMEOUT_MS = 20_000
-
-    /**
-     * Big reports on a free service can genuinely take a minute, and the 503s the user hit
-     * come from the provider being busy rather than from anything wrong on the phone. So the
-     * read timeout is generous and a busy/timed-out request is retried automatically.
-     */
-    private const val READ_TIMEOUT_MS = 180_000
-    private const val RETRIES = 2
-
-    /** Told which attempt is running, so the screen can say "retrying…" instead of freezing. */
-    var attemptListener: ((attempt: Int, of: Int, reason: String) -> Unit)? = null
+    /** Kept for old callers while progress is moved to per-request state; no global retry callbacks are fired. */
+    @Deprecated("Use request-owned progress") var attemptListener: ((attempt: Int, of: Int, reason: String) -> Unit)? = null
 
     suspend fun ask(
         config: AiConfig,
@@ -55,7 +46,8 @@ object AiClient {
          * not for the phone reports, which are about numbers this app measured itself.
          */
         allowSearch: Boolean = false,
-    ): Result = withContext(Dispatchers.IO) {
+        budget: RequestBudget = RequestBudget(AiRequestPolicy.Use.REPORT),
+    ): Result = withTimeoutOrNull(budget.remainingMs().coerceAtLeast(1)) { withContext(Dispatchers.IO) {
         if (!config.ready) {
             return@withContext Result(
                 ok = false,
@@ -69,14 +61,16 @@ object AiClient {
         // endpoint first and quietly fall back to the plain one, so an older model or a
         // locked-down key still answers.
         if (allowSearch && config.canSearchWeb) {
-            val grounded = postGoogleWithSearch(config, systemPrompt, userPrompt)
-            if (grounded.first) {
-                val parts = grounded.second
+            val grounded = postGoogleWithSearch(config, systemPrompt, userPrompt, budget)
+            if (grounded.ok) {
+                val parts = grounded.text
                 return@withContext Result(
                     ok = true,
                     text = parts,
-                    providerLabel = config.provider.label + " (with web search)",
+                    providerLabel = config.provider.label,
                     model = config.resolvedModel,
+                    searchUsed = grounded.sources.isNotEmpty(),
+                    nativeSources = grounded.sources,
                 )
             }
         }
@@ -85,7 +79,8 @@ object AiClient {
             var lastError = "No free endpoint answered."
             // Try the endpoint that worked last time first.
             val ordered = AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }
-            for (endpoint in ordered) {
+            for (endpoint in ordered.take(AiRequestPolicy.MAX_FREE_ENDPOINTS)) {
+                if (!AiRequestPolicy.mayFallback(budget.remainingMs())) break
                 val which = endpoint.label.substringBefore(" (")
                 val result = postWithRetry(
                     url = endpoint.url,
@@ -93,6 +88,7 @@ object AiClient {
                     model = endpoint.model,
                     systemPrompt = systemPrompt,
                     userPrompt = userPrompt,
+                    budget = budget,
                 )
                 if (result.first) {
                     return@withContext Result(
@@ -109,11 +105,11 @@ object AiClient {
                 ok = false,
                 text = "",
                 providerLabel = "Free (no key)",
-                error = "$lastError\n\nFree endpoints are shared and often busy. Try again in a " +
-                    "minute, or add a free Gemini key in AI settings for a reliable answer.",
+                error = AiFailurePolicy.message(lastError),
             )
         }
 
+        if (budget.remainingMs() <= 0) return@withContext Result(false, "", config.provider.label, "The AI request timed out. Retry or choose another provider.")
         val base = config.resolvedBaseUrl
         val url = if (base.endsWith("/chat/completions")) base else "$base/chat/completions"
         val (ok, payload) = postWithRetry(
@@ -122,6 +118,7 @@ object AiClient {
             model = config.resolvedModel,
             systemPrompt = systemPrompt,
             userPrompt = userPrompt,
+            budget = budget,
         )
         if (ok) {
             Result(
@@ -135,11 +132,11 @@ object AiClient {
                 ok = false,
                 text = "",
                 providerLabel = config.provider.label,
-                error = payload,
+                error = AiFailurePolicy.message(payload),
                 model = config.resolvedModel,
             )
         }
-    }
+    } } ?: Result(false, "", config.provider.label, "The AI request timed out. Retry or choose another provider.", model = config.resolvedModel)
 
     /**
      * "Is my AI actually usable right now?" — the check the app runs when it opens.
@@ -148,88 +145,19 @@ object AiClient {
      * Returns the label of whatever answered, plus the endpoint url when it is the free
      * option, so the app can remember it.
      */
-    suspend fun ping(config: AiConfig): Result = withContext(Dispatchers.IO) {
-        if (config.provider == AiProvider.FREE) {
-            var lastError = "No free endpoint answered."
-            for (endpoint in AiSettings.KEYLESS.sortedByDescending { it.url == config.freeEndpointUrl }) {
-                val which = endpoint.label.substringBefore(" (")
-                val (ok, payload) = postWithRetry(
-                    url = endpoint.url,
-                    apiKey = null,
-                    model = endpoint.model,
-                    systemPrompt = "You are a health check. Answer with one word.",
-                    userPrompt = "Reply with: ready",
-                )
-                if (ok) {
-                    return@withContext Result(
-                        ok = true,
-                        text = payload,
-                        providerLabel = "Free AI • $which",
-                        endpointUrl = endpoint.url,
-                        model = endpoint.model,
-                    )
-                }
-                lastError = "$which: $payload"
-            }
-            return@withContext Result(
-                ok = false,
-                text = "",
-                providerLabel = "Free AI",
-                error = lastError,
-            )
-        }
-
-        if (!config.ready) {
-            return@withContext Result(
-                ok = false,
-                text = "",
-                providerLabel = config.provider.label,
-                error = "No key saved yet.",
-            )
-        }
-
+    suspend fun ping(config: AiConfig): Result = withTimeoutOrNull(AiRequestPolicy.Use.TEST.budgetMs) {
+        val budget = RequestBudget(AiRequestPolicy.Use.TEST)
+        if (config.provider == AiProvider.FREE) return@withTimeoutOrNull test(config, budget)
+        if (!config.ready) return@withTimeoutOrNull Result(false, "", config.provider.label, "No key saved yet.")
+        val (models, listError) = listModels(config, budget)
         val configured = normalizeModelId(config.resolvedModel)
-        val (models, listError) = listModels(config)
-        val normalizedModels = models.map { normalizeModelId(it) }
-
-        if (normalizedModels.isNotEmpty()) {
-            val modelOk = configured in normalizedModels ||
-                normalizedModels.any { it.equals(configured, ignoreCase = true) }
-            if (modelOk) {
-                return@withContext Result(
-                    ok = true,
-                    text = "",
-                    providerLabel = config.provider.label,
-                    error = null,
-                    model = config.resolvedModel,
-                )
-            }
-            // Do not assume a model is unusable solely because it is absent from the listing!
-            // Providers (like Gemini / NVIDIA) often support newer or alias models
-            // (e.g. gemini-3.8-flash) before or without listing them in GET /models.
-            // Fall back to testing the configured model directly with a tiny probe.
-            val probe = test(config)
-            if (probe.ok) {
-                return@withContext probe.copy(
-                    ok = true,
-                    error = null,
-                    model = config.resolvedModel,
-                )
-            }
-            return@withContext Result(
-                ok = false,
-                text = "",
-                providerLabel = config.provider.label,
-                error = "\"${config.resolvedModel}\" did not respond (${probe.error ?: "model unavailable"}). " +
-                    "Tap Load models and pick a current one.",
-                model = config.resolvedModel,
-            )
+        if (models.any { normalizeModelId(it).equals(configured, ignoreCase = true) })
+            Result(true, "Model listed; generation not tested.", config.provider.label, model = config.resolvedModel)
+        else {
+            val probe = test(config, budget)
+            if (probe.ok) probe else probe.copy(error = probe.error ?: listError)
         }
-
-        // Some providers do not implement GET /models — fall back to one tiny question.
-        val probe = test(config)
-        if (probe.ok) probe.copy(error = null) else probe.copy(error = listError ?: probe.error)
-    }
+    } ?: Result(false, "", config.provider.label, "The connection check timed out. Try again.")
 
     fun normalizeModelId(raw: String): String =
         raw.trim().removePrefix("models/").removePrefix("google/")
@@ -240,65 +168,30 @@ object AiClient {
      * what the "Load models" button in AI settings calls, so nobody has to guess a model
      * name or discover that theirs was retired by reading a 410 error.
      */
-    suspend fun listModels(config: AiConfig): Pair<List<String>, String?> = withContext(Dispatchers.IO) {
-        val base = config.resolvedBaseUrl
-        if (config.provider == AiProvider.FREE || base.isBlank()) {
-            return@withContext AiProvider.FREE.suggestedModels to null
-        }
-        var connection: HttpURLConnection? = null
-        try {
-            connection = (URL("$base/models").openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = 30_000
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.1 (Android)")
-                if (config.apiKey.isNotBlank()) {
-                    setRequestProperty("Authorization", "Bearer ${config.apiKey.trim()}")
-                }
-            }
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val body = stream?.let { readAll(it) }.orEmpty()
-            if (status !in 200..299) {
-                return@withContext emptyList<String>() to explain(status, body)
-            }
-            val ids = mutableListOf<String>()
-            val json = JSONObject(body)
-            val data = json.optJSONArray("data")
-            if (data != null) {
-                for (i in 0 until data.length()) {
-                    val item = data.optJSONObject(i) ?: continue
-                    val id = item.optString("id").ifBlank { item.optString("name") }
-                    if (id.isNotBlank()) ids.add(id)
-                }
-            } else {
-                // Gemini's native shape, in case a compatibility layer is not present.
-                val models = json.optJSONArray("models")
-                if (models != null) {
-                    for (i in 0 until models.length()) {
-                        val item = models.optJSONObject(i) ?: continue
-                        val name = item.optString("name").removePrefix("models/")
-                        if (name.isNotBlank()) ids.add(name)
-                    }
-                }
-            }
-            ids.toList() to null
-        } catch (e: UnknownHostException) {
-            emptyList<String>() to "No internet connection (could not reach the AI service)."
-        } catch (e: Exception) {
-            emptyList<String>() to "${e.javaClass.simpleName}: ${e.message ?: "could not list models"}"
-        } finally {
-            connection?.disconnect()
-        }
-    }
+    suspend fun listModels(config: AiConfig, budget: RequestBudget = RequestBudget(AiRequestPolicy.Use.MODELS)): Pair<List<String>, String?> =
+        withTimeoutOrNull(budget.remainingMs().coerceAtLeast(1)) { withContext(Dispatchers.IO) {
+            if (config.provider == AiProvider.FREE || config.resolvedBaseUrl.isBlank())
+                return@withContext AiProvider.FREE.suggestedModels to null
+            try {
+                val response = BoundedHttp.request("${config.resolvedBaseUrl}/models", budget.remainingMs(), headers = requestHeaders(config.apiKey))
+                if (response.code !in 200..299) return@withContext emptyList<String>() to explain(response.code, response.body)
+                val json = JSONObject(response.body)
+                val array = json.optJSONArray("data") ?: json.optJSONArray("models") ?: JSONArray()
+                val ids = (0 until minOf(array.length(), 1000)).mapNotNull { index ->
+                    val item = array.optJSONObject(index) ?: return@mapNotNull null
+                    item.optString("id").ifBlank { item.optString("name").removePrefix("models/") }.takeIf { it.isNotBlank() }
+                }.distinct()
+                ids to null
+            } catch (e: CancellationException) { throw e } catch (e: Exception) { emptyList<String>() to connectionError(e) }
+        } } ?: (emptyList<String>() to "Loading models timed out. Try again.")
 
     /** Quick check used by the "Test connection" button. */
-    suspend fun test(config: AiConfig): Result =
+    suspend fun test(config: AiConfig, budget: RequestBudget = RequestBudget(AiRequestPolicy.Use.TEST)): Result =
         ask(
             config = config,
             systemPrompt = "You are a test. Answer in five words or fewer.",
             userPrompt = "Reply with: CleanSweep AI connected.",
+            budget = budget,
         )
 
     /**
@@ -308,16 +201,17 @@ object AiClient {
      * tool — a short "Sources:" line built from what it actually read, so the user can see
      * where a live answer came from instead of having to trust it.
      */
-    private fun postGoogleWithSearch(
+    private suspend fun postGoogleWithSearch(
         config: AiConfig,
         systemPrompt: String,
         userPrompt: String,
-    ): Pair<Boolean, String> {
-        val base = config.googleNativeBase ?: return false to "This provider cannot search."
+        budget: RequestBudget,
+    ): NativeReply {
+        val base = config.googleNativeBase ?: return NativeReply(false, "This provider cannot search.")
         val key = config.apiKey.trim()
-        if (key.isBlank()) return false to "No key saved."
+        if (key.isBlank()) return NativeReply(false, "No key saved.")
         val model = config.resolvedModel.trim().removePrefix("models/")
-        val url = "$base/models/$model:generateContent?key=" + java.net.URLEncoder.encode(key, "UTF-8")
+        val url = "$base/models/$model:generateContent"
 
         val body = JSONObject().apply {
             put(
@@ -342,97 +236,34 @@ object AiClient {
                 "generationConfig",
                 JSONObject().apply {
                     put("temperature", 0.4)
-                    put("maxOutputTokens", 2400)
+                    put("maxOutputTokens", budget.use.outputTokens)
                 },
             )
         }.toString()
 
-        var last = false to "No answer."
-        for (attempt in 1..(RETRIES + 1)) {
-            attemptListener?.invoke(attempt, RETRIES + 1, "")
-            last = postJson(url, body, bearer = null)
-            if (last.first) return last
-            val retryable = listOf("429", "502", "503", "504", "timeout", "Unable to resolve host")
-                .any { last.second.contains(it) }
-            if (!retryable || attempt > RETRIES) return last
-            try {
-                Thread.sleep(1_200L * attempt)
-            } catch (e: InterruptedException) {
-                return last
-            }
-        }
-        return last
+        return postJson(url, body, bearer = null, budget = budget, googleKey = key)
     }
 
     /** A raw JSON POST with optional bearer auth; used by the Google search call. */
-    private fun postJson(url: String, body: String, bearer: String?): Pair<Boolean, String> {
-        var connection: HttpURLConnection? = null
-        try {
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.12 (Android)")
-                if (!bearer.isNullOrBlank()) {
-                    setRequestProperty("Authorization", "Bearer ${bearer.trim()}")
-                }
-            }
-            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
-                writer.write(body)
-                writer.flush()
-            }
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.let { readAll(it) }.orEmpty()
-            if (status !in 200..299) {
-                return false to explain(status, text)
-            }
-            return true to extractGoogleText(text)
-        } catch (e: UnknownHostException) {
-            return false to "No internet connection (could not reach the AI service)."
-        } catch (e: SocketTimeoutException) {
-            return false to "The AI service took too long to answer (${READ_TIMEOUT_MS / 1000} s)."
-        } catch (e: Exception) {
-            return false to "${e.javaClass.simpleName}: ${e.message ?: "request failed"}"
-        } finally {
-            connection?.disconnect()
-        }
-    }
+    private suspend fun postJson(url: String, body: String, bearer: String?, budget: RequestBudget, googleKey: String? = null): NativeReply = try {
+        val response = BoundedHttp.request(url, budget.remainingMs(), "POST", body, requestHeaders(bearer) + (googleKey?.let { mapOf("x-goog-api-key" to it) } ?: emptyMap()))
+        if (response.code !in 200..299) NativeReply(false, explain(response.code, response.body))
+        else extractGoogleText(response.body)
+    } catch (e: CancellationException) { throw e } catch (e: Exception) { NativeReply(false, connectionError(e)) }
 
-    /**
-     * Pulls the answer out of a generateContent reply and appends the pages the model used,
-     * when it searched. Grounded answers arrive as several parts; all of them are kept.
-     */
-    private fun extractGoogleText(body: String): String {
-        return try {
-            val json = JSONObject(body)
-            val candidates = json.optJSONArray("candidates")
-            val builder = StringBuilder()
-            var sources = listOf<String>()
-            if (candidates != null && candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
-                val parts = candidate.optJSONObject("content")?.optJSONArray("parts")
-                if (parts != null) {
-                    for (i in 0 until parts.length()) {
-                        val piece = parts.optJSONObject(i)?.optString("text").orEmpty()
-                        if (piece.isNotBlank()) builder.append(piece)
-                    }
-                }
-                sources = readSources(candidate)
-            }
-            val answer = builder.toString().trim().ifBlank { "The provider returned no final answer." }
-            if (sources.isEmpty()) {
-                answer
-            } else {
-                answer + "\n\n" + "Sources:" + "\n" + sources.joinToString("\n") { "- $it" }
-            }
-        } catch (e: Exception) {
-            "The provider returned an unreadable response."
-        }
-    }
+    private data class NativeReply(val ok: Boolean, val text: String, val sources: List<String> = emptyList())
+
+    /** Only actual grounding metadata, not the words "Sources" in a model answer, can claim cited search. */
+    private fun extractGoogleText(body: String): NativeReply = try {
+        val candidate = JSONObject(body).optJSONArray("candidates")?.optJSONObject(0)
+        val parts = candidate?.optJSONObject("content")?.optJSONArray("parts")
+        val answer = if (parts == null) "" else (0 until parts.length()).mapNotNull { index ->
+            val part = parts.optJSONObject(index)
+            part?.optString("text")?.takeIf { part?.optBoolean("thought") != true && it.isNotBlank() }
+        }.joinToString("").trim()
+        if (answer.isBlank()) NativeReply(false, "The provider returned no final answer.")
+        else NativeReply(true, answer, candidate?.let { readSources(it) }.orEmpty())
+    } catch (error: Exception) { NativeReply(false, "The provider returned no final answer.") }
 
     private fun readSources(candidate: JSONObject): List<String> {
         val out = LinkedHashSet<String>()
@@ -441,8 +272,8 @@ object AiClient {
             val chunks = metadata.optJSONArray("groundingChunks") ?: return emptyList()
             for (i in 0 until chunks.length()) {
                 val web = chunks.optJSONObject(i)?.optJSONObject("web") ?: continue
-                val uri = web.optString("uri").takeIf { it.isNotBlank() } ?: continue
-                val title = web.optString("title").takeIf { it.isNotBlank() }
+                val uri = com.universalrp.cleansweep.data.NewsPolicy.canonicalLink(web.optString("uri")) ?: continue
+                val title = web.optString("title").take(150).takeIf { it.isNotBlank() }
                 out.add(if (title != null) "$title ($uri)" else uri)
                 if (out.size >= 4) break
             }
@@ -452,153 +283,36 @@ object AiClient {
         return out.toList()
     }
 
-    /**
-     * Sends the request, retrying when the service is busy (429/5xx) or the connection broke.
-     * Returns the last answer either way; a caller never sees an exception from here.
-     */
-    private fun postWithRetry(
-        url: String,
-        apiKey: String?,
-        model: String,
-        systemPrompt: String,
-        userPrompt: String,
-    ): Pair<Boolean, String> {
-        var last: Pair<Boolean, String> = false to "No answer."
-        var attempt = 0
-        while (attempt <= RETRIES) {
-            attempt++
-            attemptListener?.invoke(attempt, RETRIES + 1, "")
-            val result = post(url, apiKey, model, systemPrompt, userPrompt, attempt, RETRIES + 1)
-            last = result
-            if (result.first) return result
-            val retryable = result.second.contains("503") ||
-                result.second.contains("502") ||
-                result.second.contains("504") ||
-                result.second.contains("429") ||
-                result.second.contains("too long to answer") ||
-                result.second.contains("timeout") ||
-                result.second.contains("Connection reset") ||
-                result.second.contains("Unable to resolve host") ||
-                result.second.contains("No internet connection")
-            if (!retryable || attempt > RETRIES) return result
-            // A short pause, longer after each try: providers that say 503 usually recover.
-            try {
-                Thread.sleep(1_200L * attempt)
-            } catch (e: InterruptedException) {
-                return result
-            }
-        }
-        return last
-    }
-
-    private fun post(
-        url: String,
-        apiKey: String?,
-        model: String,
-        systemPrompt: String,
-        userPrompt: String,
-        attempt: Int = 1,
-        attempts: Int = 1,
-    ): Pair<Boolean, String> {
-        var connection: HttpURLConnection? = null
-        try {
+    /** One attempt. Explicit retry has its own request ID/deadline; a timeout never triggers an endless fallback chain. */
+    private suspend fun postWithRetry(url: String, apiKey: String?, model: String, systemPrompt: String, userPrompt: String,
+        budget: RequestBudget): Pair<Boolean, String> {
+        return try {
             val body = JSONObject().apply {
-                put("model", model)
-                put("temperature", 0.4)
-                put("max_tokens", 3600)
-                put(
-                    "messages",
-                    JSONArray().apply {
-                        put(
-                            JSONObject().apply {
-                                put("role", "system")
-                                put("content", systemPrompt)
-                            }
-                        )
-                        put(
-                            JSONObject().apply {
-                                put("role", "user")
-                                put("content", userPrompt)
-                            }
-                        )
-                    }
-                )
+                put("model", model); put("temperature", 0.4); put("max_tokens", budget.use.outputTokens)
+                put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt))
+                    .put(JSONObject().put("role", "user").put("content", userPrompt)))
             }.toString()
-
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = CONNECT_TIMEOUT_MS
-                readTimeout = READ_TIMEOUT_MS
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.0 (Android)")
-                if (!apiKey.isNullOrBlank()) {
-                    setRequestProperty("Authorization", "Bearer ${apiKey.trim()}")
-                }
-            }
-
-            OutputStreamWriter(connection.outputStream, Charsets.UTF_8).use { writer ->
-                writer.write(body)
-                writer.flush()
-            }
-
-            val status = connection.responseCode
-            val stream = if (status in 200..299) connection.inputStream else connection.errorStream
-            val text = stream?.let { readAll(it) }.orEmpty()
-
-            if (status !in 200..299) {
-                val explained = explain(status, text)
-                return false to if (attempts > 1) "$explained (try $attempt of $attempts)" else explained
-            }
-            val answer = extractText(text)
-            return if (answer.isBlank()) false to "The provider returned no final answer (possibly an unsupported tool call). Please try another provider." else true to answer
-        } catch (e: UnknownHostException) {
-            return false to "No internet connection (could not reach the AI service)."
-        } catch (e: SocketTimeoutException) {
-            return false to "The AI service took too long to answer (${READ_TIMEOUT_MS / 1000} s). " +
-                "Big reports on a free service can be slow — try again, or use a paid/faster provider."
-        } catch (e: java.net.SocketException) {
-            return false to "The connection dropped while waiting (${e.message ?: "socket error"}). " +
-                "Mobile data and some Wi-Fi routers cut long requests; try again or switch network."
-        } catch (e: Exception) {
-            return false to "${e.javaClass.simpleName}: ${e.message ?: "request failed"}"
-        } finally {
-            connection?.disconnect()
-        }
+            val response = BoundedHttp.request(url, budget.remainingMs(), "POST", body, requestHeaders(apiKey))
+            if (response.code !in 200..299) false to explain(response.code, response.body)
+            else extractText(response.body).let { if (it.isBlank()) false to "The provider returned no final answer (possibly an unsupported tool call). Please try another provider." else true to it }
+        } catch (e: CancellationException) { throw e } catch (e: Exception) { false to connectionError(e) }
     }
 
-    private fun readAll(stream: java.io.InputStream): String {
-        BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-            val builder = StringBuilder()
-            var line = reader.readLine()
-            while (line != null) {
-                builder.append(line)
-                line = reader.readLine()
-            }
-            return builder.toString()
-        }
+    private fun requestHeaders(key: String?): Map<String, String> = buildMap {
+        put("Accept", "application/json"); put("Content-Type", "application/json; charset=utf-8")
+        put("User-Agent", "LiveGuard/Android")
+        if (!key.isNullOrBlank()) put("Authorization", "Bearer ${key.trim()}")
     }
 
-    private fun explain(status: Int, body: String): String {
-        val detail = extractApiMessage(body)
-        return when (status) {
-            400 -> "The service rejected the request${detail?.let { ": $it" } ?: ""}. " +
-                "Check the model name in AI settings."
-            401, 403 -> "The API key was refused (HTTP $status). Paste it again — no spaces, whole key."
-            404 -> "Model not found. Tap \"Load models\" in AI settings to list the models your key can use."
-            410 -> "That model has been retired by the provider (HTTP 410). Tap \"Load models\" in " +
-                "AI settings and pick a current one — providers retire model ids every few months."
-            413 -> "The report was too large for this model. Turn off \"send app names\" and retry."
-            429 -> "The provider is rate-limiting you (HTTP 429) — the free quota is used up for now. " +
-                "CleanSweep already retried; wait a minute or switch provider."
-            502, 503, 504 -> "The AI service is overloaded right now (HTTP $status) — that is the " +
-                "provider's side, not your phone or your key. CleanSweep retried automatically; " +
-                "tap Analyse again in a minute, or switch to another provider."
-            in 500..599 -> "The AI service had a server error (HTTP $status). Try again shortly."
-            else -> "HTTP $status${detail?.let { ": $it" } ?: ""}"
-        }
+    private fun connectionError(error: Exception): String = when (error) {
+        is UnknownHostException -> "Could not reach the AI host. Check the connection and endpoint."
+        is SocketTimeoutException -> "The AI service took too long to answer. Retry or choose another provider."
+        is java.util.concurrent.RejectedExecutionException -> "Network tasks are busy; cancel or retry shortly."
+        else -> "The AI request failed. Check the connection or retry." // No endpoint/key/raw exception details in user-facing output.
     }
+
+    private fun explain(status: Int, body: String): String =
+        AiFailurePolicy.message("HTTP $status " + extractApiMessage(body).orEmpty().take(300))
 
     private fun extractApiMessage(body: String): String? = try {
         val json = JSONObject(body)

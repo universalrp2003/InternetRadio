@@ -167,6 +167,11 @@ jobs:
             bash tools/make_feature_graphics.sh
           } 2>&1 | tee store-art.log
 
+      - name: Check Cleaner source contracts and localization
+        run: |
+          python3 tools/verify_cleaner_localization.py
+          python3 tools/verify_cleaner_next_update_source.py
+
       - name: Build the APKs
         run: |
           set -o pipefail
@@ -304,6 +309,9 @@ jobs:
             keytool -exportcert -keystore ci-keystore/release.p12 -storepass cleansweep-ci \
               -alias cleansweep -file "$WORK/project-certificate.der"
             EXPECTED_CERT=$(sha256sum "$WORK/project-certificate.der" | cut -d' ' -f1)
+            if [ "$EXPECTED_CERT" != "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55" ]; then
+              echo "FAIL: stable signing identity differs from previously published releases"; exit 1
+            fi
             for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
               # Do not mask signature failures with a pipeline or || true.
               "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
@@ -454,12 +462,12 @@ jobs:
           # A compiled APK has no "values-ta" folder — resources live compiled inside
           # resources.arsc and the strings in the dex. Search both for the actual Tamil app
           # name, which is the thing the user cares about.
-          if unzip -p "$CLEANER" resources.arsc | grep -qa "சுத்தம் செய்பவர்"; then
+          if unzip -p "$CLEANER" resources.arsc | grep -qa "லைவ் கார்டு"; then
             echo "OK: the Tamil launcher label is inside the APK resources"
           else
             echo "WARN: the Tamil launcher label was not found in resources.arsc"
           fi
-          if grep -aq "சுத்தம் செய்பவர்" "$WORK/cleaner.dex"; then
+          if grep -aq "லைவ் கார்டு" "$WORK/cleaner.dex"; then
             echo "OK: the Tamil name is in the CleanSweep dex (menu + About)"
           else
             echo "WARN: the Tamil name was not found in the CleanSweep dex"
@@ -487,7 +495,12 @@ jobs:
                         SystemEventWatcher CleanSweepWidget answerLanguage setAnswerLanguage \
                         setUnplugStartHour ChargerWatchWorker ChargeNotifier canSearchWeb \
                         setOnlineVoice openScanner CrashLog StatusPillContent showNetworkMeter \
-                        SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected; do
+                        SecuritySettingsRoutes FindingApp SecurityAiPrompt runSecurityAiAnalysis powerConnected \
+                        AiRequestPolicy RequestBudget BoundedHttp ProductEvidencePolicy PermissionReviewStore DisplayTime \
+                        AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen NotificationReaderScreen MessageReaderService \
+                        LocalMessageTranslator NotificationReaderPrefs LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
+                        LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
+                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else

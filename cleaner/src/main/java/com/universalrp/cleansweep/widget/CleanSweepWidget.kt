@@ -19,12 +19,12 @@ import java.util.Date
 import java.util.Locale
 
 /** Launcher widget only; the separate floating status pill retains its existing watts-only charging mode. */
-class CleanSweepWidget : AppWidgetProvider() {
+open class CleanSweepWidget : AppWidgetProvider() {
     override fun onUpdate(context: Context, manager: AppWidgetManager, ids: IntArray) { refresh(context) }
     override fun onAppWidgetOptionsChanged(context: Context, manager: AppWidgetManager, id: Int, options: Bundle) { refresh(context) }
     override fun onDeleted(context: Context, ids: IntArray) {
         val edit = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-        ids.forEach { edit.remove("mode_$it") }; edit.apply()
+        ids.forEach { edit.remove("mode_$it"); edit.remove("profile_$it") }; edit.apply()
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -33,8 +33,8 @@ class CleanSweepWidget : AppWidgetProvider() {
                 val id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1)
                 if (id !in ownedIds(context).toSet()) return
                 val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-                val mode = WidgetReadingPolicy.Mode.parse(prefs.getString("mode_$id", null)).next()
-                prefs.edit().putString("mode_$id", mode.name).apply()
+                val profile = profile(context, id).next()
+                prefs.edit().putString("profile_$id", profile.name).apply()
             }
             val pending = goAsync()
             val finished = java.util.concurrent.atomic.AtomicBoolean(false)
@@ -57,8 +57,16 @@ class CleanSweepWidget : AppWidgetProvider() {
         private var refreshJob: Job? = null
         @Volatile private var anotherFrame = false
 
-        private fun ownedIds(context: Context): IntArray = AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, CleanSweepWidget::class.java))
+        private fun ownedIds(context: Context): IntArray {
+            val manager = AppWidgetManager.getInstance(context)
+            return listOf(CleanSweepWidget::class.java, CleanSweepDataWidget::class.java, CleanSweepPhoneWidget::class.java)
+                .flatMap { manager.getAppWidgetIds(ComponentName(context, it)).toList() }.toIntArray()
+        }
+        private fun profile(context: Context, id: Int): CompactWidgetPolicy.Profile {
+            val component = AppWidgetManager.getInstance(context).getAppWidgetInfo(id)?.provider?.className.orEmpty()
+            return CompactWidgetPolicy.parse(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("profile_$id", null),
+                CompactWidgetPolicy.defaultFor(component))
+        }
 
         /** Coalesced IO snapshots; never do battery/stats/storage work on Compose or receiver's main thread. */
         @Synchronized fun refresh(context: Context): Job {
@@ -71,9 +79,7 @@ class CleanSweepWidget : AppWidgetProvider() {
                         refreshNow(app)
                         if (!synchronized(CleanSweepWidget.Companion) { anotherFrame }) break
                     }
-                } catch (e: CancellationException) { throw e }
-                catch (e: Exception) { /* An unavailable launcher/widget must not break monitoring. */ }
-                finally {
+                } catch (e: CancellationException) { throw e } catch (e: Exception) { /* An unavailable launcher/widget must not break monitoring. */ } finally {
                     // Clear ownership atomically before completion, so a tap in the final-frame race is not lost.
                     val running = currentCoroutineContext()[Job]
                     val followUp = synchronized(CleanSweepWidget.Companion) {
@@ -101,71 +107,63 @@ class CleanSweepWidget : AppWidgetProvider() {
         private fun build(context: Context, id: Int, options: Bundle, battery: BatteryReading?, storage: StorageInfo?, data: DataUsageTracker.UsageInfo?, checked: Long): RemoteViews {
             val tamil = Lang.languageIn(context) == AppLang.TA
             fun label(en: String, ta: String) = if (tamil) ta else en
-            val mode = WidgetReadingPolicy.Mode.parse(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("mode_$id", null))
-            val width = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 300)
+            val profile = profile(context, id)
+            val views = RemoteViews(context.packageName, R.layout.widget_cleansweep_compact)
             val percent = WidgetReadingPolicy.percent(battery?.percent, battery?.reportedLevel, battery?.reportedScale)
-            val stacked = mode == WidgetReadingPolicy.Mode.BOTH && percent.length > 6 && width < 360
-            val views = RemoteViews(context.packageName, if (stacked) R.layout.widget_cleansweep_stacked else R.layout.widget_cleansweep)
-            val height = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 260)
-            val compact = height < (if (stacked) 330 else 260)
-            views.setTextViewText(R.id.widget_title, label("Live Guard", "லைவ் கார்டு"))
-            views.setTextViewText(R.id.widget_battery_label, label("Battery", "பேட்டரி"))
-            views.setTextViewText(R.id.widget_power_label, label("Battery-side watts", "பேட்டரி பக்க வாட்"))
-            views.setTextViewText(R.id.widget_battery, WidgetReadingPolicy.percent(battery?.percent, battery?.reportedLevel, battery?.reportedScale))
-            views.setTextViewText(R.id.widget_power, WidgetReadingPolicy.watts(battery?.powerConnected == true, battery?.charging == true, battery?.powerW))
-            views.setViewVisibility(R.id.widget_battery_group, if (mode == WidgetReadingPolicy.Mode.WATTS) View.GONE else View.VISIBLE)
-            views.setViewVisibility(R.id.widget_power_group, if (mode == WidgetReadingPolicy.Mode.PERCENT) View.GONE else View.VISIBLE)
-            val state = when {
-                battery == null -> label("Battery not reported", "பேட்டரி தகவல் இல்லை")
-                !battery.powerConnected -> label("Unplugged", "சார்ஜர் இல்லை")
-                battery.percent == 100 -> label("Connected · full", "இணைந்துள்ளது · முழுமை")
-                battery.charging -> label("Charging", "சார்ஜ் ஆகிறது")
-                else -> label("Connected · paused/not charging", "இணைந்துள்ளது · சார்ஜ் ஆகவில்லை")
-            }
-            val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(checked))
-            views.setTextViewText(R.id.widget_state, "$state · $time")
-            val valid = battery?.percent?.takeIf { it in 0..100 }
-            views.setViewVisibility(R.id.widget_charge_bar, if (valid == null) View.GONE else View.VISIBLE)
-            if (valid != null) views.setProgressBar(R.id.widget_charge_bar, 100, valid, false)
-            views.setTextViewText(R.id.widget_sensors, "${WidgetReadingPolicy.temperature(battery?.temperatureC)}   ·   ${WidgetReadingPolicy.current(battery?.currentA)}   ·   ${WidgetReadingPolicy.voltage(battery?.voltageV)}")
-            views.setViewVisibility(R.id.widget_sensors, if (compact) View.GONE else View.VISIBLE)
-            val today = when {
-                data == null || !data.readingAvailable -> label("Mobile usage not reported", "மொபைல் பயன்பாடு தெரியவில்லை")
-                data.isUnlimited5g -> label("Unlimited 5G · user-set", "வரம்பற்ற 5G · பயனர் தேர்வு")
-                else -> label("Today mobile: ", "இன்றைய மொபைல்: ") + data.formattedToday +
-                    label(" · left: ", " · மீதி: ") + data.formattedRemaining + if (data.isPartial) label(" · partial", " · பகுதி") else ""
-            }
-            views.setTextViewText(R.id.widget_data, today)
-            views.setViewVisibility(R.id.widget_data, if (height < (if (stacked) 290 else 240)) View.GONE else View.VISIBLE)
-            views.setTextViewText(R.id.widget_storage, label("Storage free: ", "காலி சேமிப்பு: ") + (storage?.free?.formatBytes() ?: "—"))
-            views.setViewVisibility(R.id.widget_storage, if (compact) View.GONE else View.VISIBLE)
-            val briefAt = com.universalrp.cleansweep.voice.Announcer.prefs(context).getLong("last_brief_at_ms", 0L)
-            val brief = com.universalrp.cleansweep.voice.Announcer.lastBrief(context).lineSequence().firstOrNull { it.isNotBlank() }.orEmpty()
-            val datedBrief = if (briefAt > 0 && brief.isNotBlank()) SimpleDateFormat("d MMM HH:mm", Locale.getDefault()).format(Date(briefAt)) + " · " + brief
-                else label("Open app for a dated security review", "தேதியுள்ள பாதுகாப்பு ஆய்வுக்கு ஆப்பைத் திறக்கவும்")
-            views.setTextViewText(R.id.widget_brief, datedBrief)
-            views.setViewVisibility(R.id.widget_brief, if (height >= (if (stacked) 340 else 290)) View.VISIBLE else View.GONE)
-            views.setTextViewText(R.id.widget_mode, when(mode) {
-                WidgetReadingPolicy.Mode.BOTH -> "% + W"
-                WidgetReadingPolicy.Mode.WATTS -> "W"
-                WidgetReadingPolicy.Mode.PERCENT -> "%"
+            views.setTextViewText(R.id.widget_title, when (profile) {
+                CompactWidgetPolicy.Profile.BATTERY -> label("Battery now", "இப்போதைய பேட்டரி")
+                CompactWidgetPolicy.Profile.DATA -> label("Data / connection", "தரவு / இணைப்பு")
+                CompactWidgetPolicy.Profile.PHONE -> label("Phone snapshot", "போன் சுருக்கம்")
             })
-            views.setTextViewText(R.id.widget_clean, label("Clean", "சுத்தம்"))
-            views.setTextViewText(R.id.widget_details, label("Details", "விவரங்கள்"))
+            views.setTextViewText(R.id.widget_battery, percent)
+            val unplug = LastUnplugRepo.load(context)
+            val unplugLine = when {
+                unplug == null -> label("Last unplug: not observed", "கடைசி சார்ஜர் நீக்கம்: கவனிக்கப்படவில்லை")
+                !LastUnplugPolicy.usable(unplug, checked) -> label("Last unplug: phone clock changed", "கடைசி சார்ஜர் நீக்கம்: போன் நேரம் மாறியுள்ளது")
+                else -> label("Observed unplug: ", "கவனித்த சார்ஜர் நீக்கம்: ") + DisplayTime.dated(unplug.atMs, tamil) + " · " + CompactWidgetPolicy.wholePercent(unplug.percent)
+            }
+            val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+            val wifi = runCatching { manager?.let { it.getNetworkCapabilities(it.activeNetwork)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) } == true }.getOrDefault(false)
+            val line = when (profile) {
+                CompactWidgetPolicy.Profile.BATTERY -> unplugLine
+                CompactWidgetPolicy.Profile.DATA -> when {
+                    !CompactWidgetPolicy.meteredData(wifi, data?.isUnlimited5g == true) ->
+                        (if (wifi) label("Wi-Fi", "வைஃபை") else label("Unlimited 5G · user-set", "வரம்பற்ற 5G · பயனர் தேர்வு")) +
+                            label(" · storage free ", " · காலி சேமிப்பு ") + (storage?.free?.formatBytes() ?: "—")
+                    data?.readingAvailable != true -> label("Mobile usage unavailable; set up Usage access", "மொபைல் பயன்பாடு இல்லை; பயன்பாட்டு அணுகலை அமைக்கவும்")
+                    !DataUsageTracker.hasConfiguredPlan(context) -> label("Today ", "இன்று ") + data.formattedToday + label(" · set plan limit", " · திட்ட வரம்பை அமைக்கவும்")
+                    else -> label("Today ", "இன்று ") + data.formattedToday + label(" · left ", " · மீதி ") + data.formattedRemaining +
+                        if (data.isPartial) label(" · partial", " · பகுதி") else ""
+                }
+                CompactWidgetPolicy.Profile.PHONE -> label("Storage free ", "காலி சேமிப்பு ") + (storage?.free?.formatBytes() ?: "—") + " · " + WidgetReadingPolicy.temperature(battery?.temperatureC)
+            }
+            views.setTextViewText(R.id.widget_data, line)
+            val status = when {
+                battery == null -> label("Not reported", "தகவல் இல்லை")
+                battery.powerConnected && battery.charging -> label("Charging", "சார்ஜ் ஆகிறது")
+                battery.powerConnected -> label("Connected", "இணைந்துள்ளது")
+                else -> label("On battery", "பேட்டரியில் இயங்குகிறது")
+            }
+            views.setTextViewText(R.id.widget_state, "$status · ${DisplayTime.clock(checked)}")
+            val extra = if (profile == CompactWidgetPolicy.Profile.BATTERY) label("Storage free ", "காலி சேமிப்பு ") + (storage?.free?.formatBytes() ?: "—") else unplugLine
+            views.setTextViewText(R.id.widget_brief, extra)
+            views.setViewVisibility(R.id.widget_brief, if (options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 165) < 145) View.GONE else View.VISIBLE)
+            views.setTextViewText(R.id.widget_mode, label("View", "காட்சி"))
+            views.setTextViewText(R.id.widget_details, label("Open", "திற"))
             views.setTextViewText(R.id.widget_refresh, label("Refresh", "புதுப்பி"))
-            views.setContentDescription(R.id.widget_mode, label("Switch battery/watts view", "பேட்டரி/வாட் காட்சியை மாற்று"))
-            views.setContentDescription(R.id.widget_battery, label("Reported battery level ", "பதிவான பேட்டரி அளவு ") + WidgetReadingPolicy.percent(battery?.percent, battery?.reportedLevel, battery?.reportedScale))
+            views.setContentDescription(R.id.widget_mode, label("Switch compact battery, data or phone view", "சிறிய பேட்டரி, தரவு, போன் காட்சியை மாற்று"))
+            views.setContentDescription(R.id.widget_battery, label("Reported battery level ", "பதிவான பேட்டரி அளவு ") + percent)
             views.setOnClickPendingIntent(R.id.widget_mode, action(context, id, ACTION_MODE, false))
             views.setOnClickPendingIntent(R.id.widget_refresh, action(context, id, ACTION_REFRESH_WIDGET, false))
             views.setOnClickPendingIntent(R.id.widget_details, action(context, id, ACTION_DETAILS, true))
             views.setOnClickPendingIntent(R.id.widget_root, action(context, id, ACTION_DETAILS, true))
-            views.setOnClickPendingIntent(R.id.widget_clean, action(context, id, ACTION_CLEAN, true))
             return views
         }
 
         private fun action(context: Context, id: Int, action: String, activity: Boolean): PendingIntent {
-            val intent = Intent(context, if (activity) MainActivity::class.java else CleanSweepWidget::class.java)
-                .setAction(action).setData(Uri.parse("liveguard-widget://view/$id/${action.substringAfterLast('.')}"))
+            val intent = if (activity) Intent(context, MainActivity::class.java) else Intent().setComponent(
+                AppWidgetManager.getInstance(context).getAppWidgetInfo(id)?.provider ?: ComponentName(context, CleanSweepWidget::class.java))
+            intent.setAction(action).setData(Uri.parse("liveguard-widget://view/$id/${action.substringAfterLast('.')}"))
                 .putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id)
             if (activity) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
@@ -173,3 +171,7 @@ class CleanSweepWidget : AppWidgetProvider() {
         }
     }
 }
+
+/** Separate launcher entries, each retaining the same compact three-view selector. */
+class CleanSweepDataWidget : CleanSweepWidget()
+class CleanSweepPhoneWidget : CleanSweepWidget()

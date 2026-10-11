@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/widget_phone_description" android:initialLayout="@layout/widget_cleansweep_compact"
+    android:minWidth="156dp" android:minResizeWidth="156dp"
+    android:minHeight="165dp" android:minResizeHeight="120dp"
+    android:previewLayout="@layout/widget_cleansweep_compact" android:resizeMode="horizontal|vertical"
+    android:targetCellWidth="2" android:targetCellHeight="2"
+    android:updatePeriodMillis="1800000" android:widgetCategory="home_screen" />

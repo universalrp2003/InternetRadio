@@ -32,7 +32,7 @@ class WifiScanWorker(
     override suspend fun doWork(): Result {
         val ctx = applicationContext
         val prefs = Announcer.prefs(ctx)
-        val bgScanEnabled = prefs.getBoolean(KEY_BG_WIFI_SCAN, true)
+        val bgScanEnabled = prefs.getBoolean(KEY_BG_WIFI_SCAN, false)
         if (!bgScanEnabled) return Result.success()
 
         val wifi = NetworkScanner.details(ctx)
@@ -86,9 +86,9 @@ class WifiScanWorker(
                 manager.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL_WIFI_INTRUDER,
-                        "Wi-Fi Network Alerts",
+                        com.universalrp.cleansweep.data.Lang.forContext(ctx, "Wi-Fi network alerts"),
                         NotificationManager.IMPORTANCE_HIGH,
-                    ).apply { description = "Alerts when an unknown device joins your Wi-Fi" }
+                    ).apply { description = com.universalrp.cleansweep.data.Lang.forContext(ctx, "Alerts for newly observed Wi-Fi devices") }
                 )
             } catch (e: Exception) {
                 // Channel already exists
@@ -102,11 +102,12 @@ class WifiScanWorker(
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
 
+        val text = if (com.universalrp.cleansweep.data.Lang.languageIn(ctx) == com.universalrp.cleansweep.data.AppLang.TA) tamilMsg else engMsg
         val notification = NotificationCompat.Builder(ctx, CHANNEL_WIFI_INTRUDER)
             .setSmallIcon(R.drawable.ic_stat_battery)
-            .setContentTitle("CleanSweep Wi-Fi Alert")
-            .setContentText(tamilMsg)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$tamilMsg\n$engMsg"))
+            .setContentTitle(com.universalrp.cleansweep.data.Lang.forContext(ctx, "Live Guard Wi-Fi alert"))
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setContentIntent(open)
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

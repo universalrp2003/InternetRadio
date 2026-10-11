@@ -66,6 +66,7 @@ import com.universalrp.cleansweep.voice.Announcer
  * be turned off — the user asked for warnings "at day time, not disturb at user sleeping
  * time", so the quiet window is enforced in the speaker itself, not only in this screen.
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun VoiceScreen(state: UiState, vm: MainViewModel) {
     val delivery by Announcer.runtime.collectAsState()
@@ -151,8 +152,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     Text(tr("Last request: %s", voiceStageLabel(delivery.stage)), style = MaterialTheme.typography.bodySmall)
                     Text(tr("Last automatic event: %s", automatic.event.ifEmpty { tr("Not observed yet") }), style = MaterialTheme.typography.bodySmall)
                     Text(voiceStageLabel(automatic.stage), style = MaterialTheme.typography.bodySmall, color = AccentCyan)
-                    if (automatic.atMs > 0) Text(java.text.SimpleDateFormat("d MMM HH:mm:ss", java.util.Locale.getDefault())
-                        .format(java.util.Date(automatic.atMs)), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    if (automatic.atMs > 0) Text(com.universalrp.cleansweep.data.DisplayTime.dated(automatic.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA, seconds = true), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                     delivery.tamilAvailable?.let { Text(tr(if (it) "Tamil language reported available" else "Tamil language not available; install voice data"),
                         style = MaterialTheme.typography.labelSmall, color = if (it) TextSecondary else WarnAmber) }
                     delivery.mediaVolume?.let { Text(tr("Media volume step: %s", it), style = MaterialTheme.typography.labelSmall, color = if (it == 0) WarnAmber else TextSecondary) }
@@ -254,19 +254,15 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         )
                     }
                     Spacer(Modifier.height(8.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(
                             20 to 7,
                             21 to 6,
                             22 to 7,
                             0 to 23,
                         ).forEach { (start, end) ->
-                            val startH = if (start == 0 || start == 12) 12 else start % 12
-                            val startAmPm = if (start < 12) "AM" else "PM"
-                            val endH = if (end == 0 || end == 12) 12 else end % 12
-                            val endAmPm = if (end < 12) "AM" else "PM"
                             ModeChipExtra(
-                                label = if (start == 0) tr("All day") else "$startH $startAmPm – $endH $endAmPm",
+                                label = com.universalrp.cleansweep.data.DisplayTime.hour(start) + " – " + com.universalrp.cleansweep.data.DisplayTime.hour(end),
                                 selected = state.voiceQuietStart == start && state.voiceQuietEnd == end,
                                 onClick = { vm.setQuietHours(start, end) },
                             )
@@ -390,6 +386,8 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
               }
             }
 
+            AnswerVoicesCard(state.lang, vm)
+
             // ------------------------------------------------------------ the daily check
             PanelCard(Modifier.fillMaxWidth()) {
               Column(Modifier.fillMaxWidth()) {
@@ -409,10 +407,10 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(5, 6, 7, 8, 9).forEach { hour ->
                             ModeChipExtra(
-                                label = "%d:00 AM".format(hour),
+                                label = com.universalrp.cleansweep.data.DisplayTime.hour(hour),
                                 selected = state.voiceUnplugStart == hour,
                                 onClick = { vm.setUnplugStartHour(hour) },
                             )
@@ -425,7 +423,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                         fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
                     )
                     Spacer(Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         listOf(9 to "9:00 AM", 13 to "1:00 PM", 18 to "6:00 PM", 20 to "8:00 PM", 21 to "9:00 PM").forEach { (hour, label) ->
                             ModeChipExtra(
                                 label = label,
@@ -513,14 +511,12 @@ private fun VoiceChip(
 /** Hour stepper: −1 / +1 with the hour in 12-hour AM/PM format. */
 @Composable
 private fun HourPicker(value: Int, onPick: (Int) -> Unit) {
-    val h = if (value == 0 || value == 12) 12 else value % 12
-    val ampm = if (value < 12) "AM" else "PM"
     Row(verticalAlignment = Alignment.CenterVertically) {
         TextButton(onClick = { onPick((value + 23) % 24) }) {
             Text("−", style = MaterialTheme.typography.titleMedium, color = AccentCyan)
         }
         Text(
-            "$h:00 $ampm",
+            com.universalrp.cleansweep.data.DisplayTime.hour(value),
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
             color = TextPrimary,

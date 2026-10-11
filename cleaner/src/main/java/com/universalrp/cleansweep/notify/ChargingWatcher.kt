@@ -36,7 +36,7 @@ class ChargingWatcher : BroadcastReceiver() {
         // enabled-event voice jobs even when every card/pill/monitor switch is off.
         val persistent = ChargeMonitorService.persistentEnabled(app)
         val wanted = persistent || prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
-            prefs.getBoolean(ChargeMonitorService.CARD_KEY, true)
+            prefs.getBoolean(ChargeMonitorService.CARD_KEY, false)
         if (!wanted) return
 
         val service = Intent(app, ChargeMonitorService::class.java)

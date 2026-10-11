@@ -24,6 +24,20 @@ EXPECTED = {
     "com.universalrp.cleansweep.data.PermissionObservationPolicyTest": 6,
     "com.universalrp.cleansweep.data.InsightsJsonTest": 6,
     "com.universalrp.cleansweep.ai.ActionChecklistTest": 12,
+    "com.universalrp.cleansweep.ai.AiRequestPolicyTest": 8,
+    "com.universalrp.cleansweep.ai.ProductEvidencePolicyTest": 12,
+    "com.universalrp.cleansweep.ai.AssistantModePolicyTest": 6,
+    "com.universalrp.cleansweep.ai.AiFailurePolicyTest": 8,
+    "com.universalrp.cleansweep.data.DisplayTimeTest": 8,
+    "com.universalrp.cleansweep.data.PermissionReviewSummaryTest": 8,
+    "com.universalrp.cleansweep.data.LocalizedTextTest": 4,
+    "com.universalrp.cleansweep.voice.AnswerVoicePolicyTest": 8,
+    "com.universalrp.cleansweep.updates.UpdatePolicyTest": 12,
+    "com.universalrp.cleansweep.notifications.NotificationReadingPolicyTest": 12,
+    "com.universalrp.cleansweep.data.LastUnplugPolicyTest": 8,
+    "com.universalrp.cleansweep.widget.CompactWidgetPolicyTest": 8,
+    "com.universalrp.cleansweep.data.FeatureSetupPolicyTest": 8,
+    "com.universalrp.cleansweep.ai.ArenaRatingPolicyTest": 8,
 }
 
 

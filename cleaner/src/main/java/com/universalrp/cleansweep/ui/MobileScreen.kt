@@ -758,8 +758,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
             Spacer(Modifier.height(8.dp))
             Text(
                 tr(
-                    "Inspects on-device socket connections and data transfers directly without needing VPN. " +
-                        "Attributes network traffic to specific apps, companies (Google, Meta, Cloudflare), and telemetry trackers."
+                    "Socket visibility is best-effort and may be restricted by Android. Company and tracker labels are heuristics, not proof of identity or uploaded content."
                 ),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary,
@@ -806,7 +805,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                 Spacer(Modifier.height(8.dp))
                 if (report.connections.isEmpty()) {
                     Text(
-                        tr("No active outward connections at this exact moment."),
+                        tr("No outward connections were visible in this read. Android may restrict access; this does not prove there are none."),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )

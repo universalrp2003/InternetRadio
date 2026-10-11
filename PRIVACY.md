@@ -16,6 +16,36 @@ uploaded to the developer, and the developer cannot see anything on your phone.
 usage statistics. There is no backend to receive them; the developer has no way to collect
 them.
 
+## Pending source changes (next APK build/publication on hold)
+
+These changes are being prepared, not shipped in the verified2.37 APK:
+
+- A single app-private last permission-review aggregate stores the real completed
+  scan time, counts and an incomplete flag. No app/package/finding identities or
+  timeline are added to this cache. Reading it does not create a review date or a
+  current safety verdict. It remains until cleared with **Clear last-review summary**,
+  app-data removal or uninstall; Android backup stays disabled. Optional detailed
+  security history remains opt-in and separate.
+- Explicit assistant Voice A/B selections save installed engine voice IDs per
+  Tamil/English language and a bounded alternating-answer counter in local settings.
+  Previews use the phone's initialized TTS engine; no inferred gender, new recording,
+  microphone permission, developer upload or automatic voice-data download is added.
+  Network TTS voices may send the spoken answer/preview text to their provider.
+  Preview/engine completion does not prove the owner heard it. Answer speech is not
+  automatically retried/replayed in another voice.
+- Price questions may query public DuckDuckGo HTML search in addition to the
+  existing lookup sources; news uses English/Tamil Google News RSS when selected.
+  Search hosts receive the question/search query and normal connection metadata,
+  not the phone inventory or personal file contents. Excerpts/citations remain
+  unverified; fetch time is not current-price or publication-date proof.
+- Request timers/progress and ownership IDs are runtime state, not a new saved
+  diagnostic/history. AI keys are sent to the selected provider for authentication;
+  provider HTML/raw error bodies are not echoed in normal user-facing errors.
+  No silent chosen-provider-to-Free cross-provider question/report transmission
+  is added. A different provider is an explicit user choice.
+
+See `docs/live-guard-next-update-review.md` for the uncompiled source/test limitations.
+
 ## Live Guard 2.37: news, automatic speech and launcher widget
 
 The Home news strip requests public Tamil RSS/Atom feeds (publisher endpoints,
@@ -164,16 +194,18 @@ contents, file paths, messages, contacts, credentials or GPS coordinates.
 
 ## Children
 
-These apps are general-purpose tools, not directed at children, and they collect no data from
-anyone.
+These apps are general-purpose tools, not directed at children. Optional local features process the information
+explicitly described in this policy; private messages are not submitted to an AI
+by the notification-reading feature.
 
 ## Data retention and deletion
 
 The apps keep their settings, your AI key (stored in the app's private storage on your phone),
 favourites and the last daily brief on your phone only. Uninstalling the app removes all of it.
 Deleting a provider key stops authenticated requests to that provider, not the Free
-lane or an already configured daily brief. Turn off online assistance/AI daily use
-if you do not want those requests.
+lane. Pending source makes automatic online daily summaries a separate explicit
+choice, OFF by default. Turn off online assistance and that daily choice if you do
+not want those requests; a manual report/AI-analysis button is a separate action.
 There is nothing on any server for the developer to delete, because nothing was ever sent to
 the developer.
 
@@ -191,3 +223,59 @@ Source code and issue tracker: <https://github.com/universalrp2003/InternetRadio
 These apps check GitHub published releases at most once a day on launch, with an off switch and manual check in About/More. GitHub receives normal connection metadata, including your IP address. No app inventory or audio is sent. Opening a release/download is user initiated. PulseEQ now has Internet permission for these checks; audio processing stays on-device.
 
 CleanSweep headline queries use Google News RSS when web lookup is enabled. Google receives the query and connection metadata; fetched headline links open their corresponding news pages.
+
+## Pending next update — source only, not shipped in published2.37
+
+The owner has held the next build/publication. These details describe prepared
+source, **not a device-tested update**.
+
+- **Reviewed setup:** Android permissions and optional permanent monitoring, voice,
+  charging notification and background Wi-Fi scanning require explicit choices.
+  Saved OFF preferences are respected. Optional setup reminder notifications are
+  silent aggregate counts, OFF by default, at most daily, and omit identities and
+  deliberately OFF/skipped features. No new permanent reminder service.
+- **Selective notification reading:** only explicitly selected apps/sender-name
+  rules. Default sender name only; each app has a separate full-message option.
+  Android notification access is broad and must be granted/revoked in Android
+  settings. OFF stops reading but does not itself revoke that Android access.
+  App-supplied names are not verified contact identities; no Contacts permission.
+  Message content/audio is not logged, saved as a history, sent to AI, added to
+  reports, or translated online by Live Guard. Candidate names and deduplication
+  fingerprints are bounded session memory; explicit package/sender selections
+  persist privately and can be cleared. Default unlocked/screen-on-only; OTP
+  suppression is heuristic, not a guarantee that every sensitive message is found.
+- **Local language processing:** ML Kit local language identification and English/
+  Tamil translation. Unknown/unsupported language or absent/failed model means
+  sender-only. A model download needs explicit consent, Wi-Fi by default; Google
+  receives model-download/connection metadata, not private message text for
+  translation. SDK operational metadata follows Google's SDK policy. A consented
+  SDK download may complete after leaving the screen. Notification speech selects
+  an installed voice reported as non-network; the external TTS engine implements
+  it and its own policy applies. Live Guard has no online private-message speech
+  fallback. No callback or registration proves that you heard a voice.
+- **Last observed unplug:** one local clearable disconnect timestamp/available
+  battery level, separate from opt-in charging-session history. Created only by an
+  actual observed power-disconnect event, not by opening an unplugged phone.
+  Missed events/force-stop/OEM restrictions mean unknown or a last-observed record,
+  never an invented actual-latest time/percentage. Phone-clock limitations apply.
+- **Verified APK update:** explicit official GitHub download to a private cache
+  directory, published digest/size and package/newer-version/certificate checks;
+  only that directory can be shared through FileProvider with Android's installer.
+  GitHub/CDN receives normal download metadata. No browser download or silent
+  installation. Android grants unknown-apps access and controls installation/
+  signature verification/Play Protect; no scan or bypass guarantee. Cache may be
+  removed by Android/uninstall, or upon failed/superseded downloads.
+- **LM Arena:** optional public dataset refresh from official `lmarena/arena-catalog`
+  GitHub source, locally exact-matched model ID and dated category/interval. Your
+  selected model/API key is not included in the public-source request. GitHub
+  receives normal connection metadata. The verified feed is dated December2025,
+  not proof of a current October2026 rating or underlying execution model.
+- **Online daily reports:** pending source requires separate explicit daily-AI
+  consent, default OFF. Allowed phone facts can be sent to the selected provider
+  and consume quota. Notification content is never included. Manual device AI
+  respects the network-sharing switch, omits Wi-Fi network name, uses one bounded
+  batch, and does not save new AI guesses as verified names/identities.
+
+Actual behavior, SDK/engine privacy gates, permissions, installation and device
+background delivery still require the next authorized compile/test and physical
+phone validation before release.

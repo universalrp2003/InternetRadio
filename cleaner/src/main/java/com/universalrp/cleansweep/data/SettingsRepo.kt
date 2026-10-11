@@ -71,7 +71,7 @@ class SettingsRepo(context: Context) {
         store.edit { it[Keys.ASSISTANT_VERBOSE] = value }
 
     /** Ongoing charging notification in the status bar. */
-    val chargeMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.CHARGE_MONITOR] ?: true }
+    val chargeMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.CHARGE_MONITOR] ?: false }
 
     suspend fun setChargeMonitor(value: Boolean) =
         store.edit { it[Keys.CHARGE_MONITOR] = value }

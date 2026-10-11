@@ -5,10 +5,16 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URL
+import com.universalrp.cleansweep.net.BoundedHttp
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.net.URI
+import java.net.URLDecoder
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 import java.net.URLEncoder
 
 /**
@@ -35,9 +41,13 @@ object WebLookup {
      * question named an office — it doubles as the verification source, so the
      * answer can be checked against it without trusting the model.
      */
-    data class Lookup(val snippets: List<Snippet>, val office: Snippet? = null)
-
-    private const val TIMEOUT_MS = 12_000
+    enum class Status { FETCHED, NO_RELEVANT, UNAVAILABLE, TIMED_OUT, SKIPPED }
+    data class Lookup(val snippets: List<Snippet>, val office: Snippet? = null, val status: Status = Status.FETCHED,
+        val fetchedAtMs: Long = System.currentTimeMillis())
+    private class Trace : AbstractCoroutineContextElement(Key) {
+        companion object Key : CoroutineContext.Key<Trace>
+        val successfulGets = AtomicInteger()
+    }
 
     /**
      * Words that usually mean \"the answer changes over time\". Used to explain in the UI
@@ -69,6 +79,8 @@ object WebLookup {
     fun isGreetingOrSmallTalk(question: String): Boolean {
         val cleaned = question.trim().lowercase().trimEnd('?', '.', '!', ';', ',').trim()
         if (cleaned in GREETING_WORDS) return true
+        val words = cleaned.split(Regex("\\s+"))
+        if (words.size in 1..8 && words.all { it in setOf("hi", "hello", "hey", "வணக்கம்", "vanakkam", "there", "friend", "sir", "நண்பா", "சார்") }) return true
         if (cleaned.length <= 4 && (cleaned == "hi" || cleaned == "hey" || cleaned == "வணக்கம்")) return true
         return false
     }
@@ -88,40 +100,75 @@ object WebLookup {
      * snippets are fragments built around the query words and too often mangle the
      * answer — one such fragment is how \"Tamil Nadu's CM\" once came back wrong.
      */
-    suspend fun lookup(query: String): Lookup = coroutineScope {
+    suspend fun lookup(query: String, budget: RequestBudget = RequestBudget(AiRequestPolicy.Use.CHAT), newsTamil: Boolean? = null): Lookup {
         val q = query.trim().take(300)
-        if (q.isEmpty() || isGreetingOrSmallTalk(q) || AssistantEvidencePolicy.asksAboutThisAssistant(q)) return@coroutineScope Lookup(emptyList())
-        if (NewsLookup.applies(q)) return@coroutineScope Lookup(NewsLookup.fetch(q))
-        // v2.11: chit-chat ("hi you know who is...") makes a terrible search query — it
-        // once surfaced "List of megaprojects in India" for a CM question. Search the
-        // shaped query; the office parser and the model still get the raw question.
-        val sq = searchQuery(q)
-        val ddg = async(Dispatchers.IO) { runCatching { duckDuckGo(sq) }.getOrNull().orEmpty() }
-        val wiki = async(Dispatchers.IO) { runCatching { wikipedia(sq) }.getOrNull() }
-        // v2.9: a second, targeted retrieval for "who is the current X" questions.
-        // The office article ("Chief Minister of Tamil Nadu") names the incumbent
-        // outright, but plain search kept surfacing the person article instead —
-        // whose lead ("served from 2021 to 2026") a small model still misread as
-        // current. This fetch goes straight for the office article.
-        val office = async(Dispatchers.IO) { runCatching { officeSummary(q) }.getOrNull() }
-        val ddgSnippets = ddg.await()
-        val (wikiSnippets, wikiTitles) =
-            wiki.await() ?: (emptyList<Snippet>() to emptyList<String>())
-        val summaries = wikiTitles.take(3).map { title ->
-            async(Dispatchers.IO) { runCatching { wikiSummary(title) }.getOrNull() }
-        }.mapNotNull { it.await() }
-        // Office lead first, then article leads, then the rest: the model reads
-        // top-down, and the office lead is the best evidence. Deduped because the
-        // office fetch can return an article the plain search also found.
-        val officeSnippet = office.await()
-        val all = (listOfNotNull(officeSnippet) + summaries + ddgSnippets + wikiSnippets)
-            .filter { it == officeSnippet || AssistantEvidencePolicy.relevant(it.source + " " + it.text.take(200), sq) }
-            .distinctBy { AssistantEvidencePolicy.evidenceKey(it.url, it.text) }
-        Lookup(all.take(8), officeSnippet)
+        if (q.isEmpty() || isGreetingOrSmallTalk(q) || AssistantEvidencePolicy.asksAboutThisAssistant(q))
+            return Lookup(emptyList(), status = Status.SKIPPED)
+        val trace = Trace()
+        return withTimeoutOrNull(minOf(AiRequestPolicy.WEB_BUDGET_MS, budget.remainingMs()).coerceAtLeast(1)) {
+            withContext(Dispatchers.IO + trace) { coroutineScope {
+                if (NewsLookup.applies(q)) {
+                    return@coroutineScope NewsLookup.fetchResult(q, newsTamil ?: q.any { it.code in 0x0B80..0x0BFF })
+                }
+                val sq = searchQuery(q)
+                // Seller/search excerpts, not an encyclopedia, are needed for an exact current price.
+                if (ProductEvidencePolicy.priceQuestion(q)) {
+                    val prices = readSource { webSearch(sq) }.orEmpty()
+                        .filter { ProductEvidencePolicy.sellerPriceEvidence(it.source, it.text, q) }
+                        .distinctBy { AssistantEvidencePolicy.evidenceKey(it.url, it.text) }.take(4)
+                    return@coroutineScope Lookup(prices, status = status(prices, trace))
+                }
+                val ddg = async { readSource { duckDuckGo(sq) }.orEmpty() }
+                val wiki = async { readSource { wikipedia(sq) } }
+                val office = async { readSource { officeSummary(q) } }
+                val ddgSnippets = ddg.await()
+                val (wikiSnippets, wikiTitles) = wiki.await() ?: (emptyList<Snippet>() to emptyList<String>())
+                val summaries = wikiTitles.take(2).map { title -> async { readSource { wikiSummary(title) } } }.mapNotNull { it.await() }
+                val officeSnippet = office.await()
+                val all = (listOfNotNull(officeSnippet) + summaries + ddgSnippets + wikiSnippets)
+                    .filter { ProductEvidencePolicy.exactModel(it.source + " " + it.text, q) &&
+                        (it == officeSnippet || AssistantEvidencePolicy.relevant(it.source + " " + it.text.take(400), sq)) }
+                    .distinctBy { AssistantEvidencePolicy.evidenceKey(it.url, it.text) }.take(6)
+                Lookup(all, officeSnippet?.takeIf { it in all }, status(all, trace))
+            } }
+        } ?: Lookup(emptyList(), status = Status.TIMED_OUT)
     }
 
+    private fun status(items: List<Snippet>, trace: Trace): Status = when {
+        items.isNotEmpty() -> Status.FETCHED
+        trace.successfulGets.get() > 0 -> Status.NO_RELEVANT
+        else -> Status.UNAVAILABLE
+    }
+    private suspend fun <T> readSource(block: suspend () -> T): T? = try { block() } catch (e: CancellationException) { throw e } catch (_: Exception) { null }
+
+    /** Real search result excerpts; no substitution of instant-answer encyclopedia abstracts for prices. */
+    private suspend fun webSearch(query: String): List<Snippet> {
+        val body = get("https://html.duckduckgo.com/html/?q=" + URLEncoder.encode(query, "UTF-8"), "text/html")
+        if (body.isBlank()) return emptyList()
+        val anchors = Regex("""<a\b(?=[^>]*class=["'][^"']*result__a\b)[^>]*>.*?</a>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .findAll(body).take(8).toList()
+        return anchors.mapIndexedNotNull { index, hit ->
+            val href = Regex("""href=["']([^"']+)["']""", RegexOption.IGNORE_CASE).find(hit.value)?.groupValues?.get(1)?.replace("&amp;", "&") ?: return@mapIndexedNotNull null
+            val url = searchTarget(href) ?: return@mapIndexedNotNull null
+            val end = minOf(anchors.getOrNull(index + 1)?.range?.first ?: body.length, hit.range.last + 6_000)
+            val tail = body.substring(hit.range.last + 1, end)
+            val detail = Regex("""<(?:a|div)[^>]*class=["'][^"']*result__snippet[^"']*["'][^>]*>(.*?)</(?:a|div)>""",
+                setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL)).find(tail)?.groupValues?.get(1).orEmpty()
+            val text = (stripTags(hit.value) + ": " + stripTags(detail)).replace(Regex("\\s+"), " ").trim().take(800)
+            if (text.length < 35) return@mapIndexedNotNull null
+            Snippet("Search excerpt · " + runCatching { URI(url).host }.getOrNull().orEmpty(), text, url)
+        }
+    }
+
+    private fun searchTarget(raw: String): String? = runCatching {
+        val uri = URI(if (raw.startsWith("//")) "https:$raw" else raw)
+        val redirect = if (uri.host?.endsWith("duckduckgo.com") == true) uri.rawQuery?.split('&')?.firstOrNull { it.startsWith("uddg=") }
+            ?.substringAfter('=')?.let { URLDecoder.decode(it, "UTF-8") } else null
+        com.universalrp.cleansweep.data.NewsPolicy.canonicalLink(redirect ?: uri.toString())
+    }.getOrNull()
+
     /** DuckDuckGo's keyless instant-answer API: an abstract plus related topics. */
-    private fun duckDuckGo(query: String): List<Snippet> {
+    private suspend fun duckDuckGo(query: String): List<Snippet> {
         val url = "https://api.duckduckgo.com/?q=" + URLEncoder.encode(query, "UTF-8") +
             "&format=json&no_html=1&skip_disambig=1"
         val body = get(url).ifBlank { return emptyList() }
@@ -166,7 +213,7 @@ object WebLookup {
      * Wikipedia's keyless search API: titles plus short text extracts. Returns the
      * snippets together with the hit titles, so their article leads can be fetched next.
      */
-    private fun wikipedia(query: String): Pair<List<Snippet>, List<String>> {
+    private suspend fun wikipedia(query: String): Pair<List<Snippet>, List<String>> {
         val url = "https://en.wikipedia.org/w/api.php?action=query&list=search" +
             "&srsearch=" + URLEncoder.encode(query, "UTF-8") +
             "&srlimit=5&format=json&utf8=1"
@@ -207,7 +254,7 @@ object WebLookup {
      * The lead section of one Wikipedia article, via the keyless REST summary endpoint.
      * Skips disambiguation pages. Null when the article has no usable lead.
      */
-    private fun wikiSummary(title: String, maxLen: Int = 700): Snippet? {
+    private suspend fun wikiSummary(title: String, maxLen: Int = 700): Snippet? {
         val slug = URLEncoder.encode(title.replace(' ', '_'), "UTF-8")
         val body = get("https://en.wikipedia.org/api/rest_v1/page/summary/$slug")
         if (body.isBlank()) return null
@@ -299,7 +346,7 @@ object WebLookup {
      * "tamilnadu" still land on the right page. Null unless an office-shaped
      * question yields an office-shaped article — never a guess.
      */
-    private fun officeSummary(question: String): Snippet? {
+    private suspend fun officeSummary(question: String): Snippet? {
         if (!OFFICE_HINT.containsMatchIn(question)) return null
         // v2.11: voice typing hears "of" as "if" ("cm if tamilnadu") — hear it as "of"
         // when it sits between an office word and whatever follows.
@@ -340,7 +387,7 @@ object WebLookup {
     }
 
     /** Read the entire lead before selecting evidence; REST summaries can omit the holder. */
-    private fun officeLead(title: String): Snippet? {
+    private suspend fun officeLead(title: String): Snippet? {
         val encoded = URLEncoder.encode(title, "UTF-8")
         val body = get("https://en.wikipedia.org/w/api.php?action=query&prop=extracts&exintro=1&explaintext=1&redirects=1&format=json&titles=$encoded")
         val pages = runCatching { JSONObject(body).getJSONObject("query").getJSONObject("pages") }.getOrNull()
@@ -362,7 +409,7 @@ object WebLookup {
         }
 
     /** Wikipedia's keyless opensearch: fuzzy title suggestions for a phrase. */
-    private fun wikiOpensearch(phrase: String): List<String> {
+    private suspend fun wikiOpensearch(phrase: String): List<String> {
         val url = "https://en.wikipedia.org/w/api.php?action=opensearch&search=" +
             URLEncoder.encode(phrase, "UTF-8") + "&limit=5&namespace=0&format=json"
         val body = get(url).ifBlank { return emptyList() }
@@ -377,34 +424,10 @@ object WebLookup {
     private fun stripTags(html: String): String =
         html.replace(Regex("<[^>]*>"), "").replace("&quot;", "\"").replace("&amp;", "&")
 
-    private fun get(url: String): String {
-        var connection: HttpURLConnection? = null
-        return try {
-            connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                connectTimeout = TIMEOUT_MS
-                readTimeout = TIMEOUT_MS
-                setRequestProperty("Accept", "application/json")
-                setRequestProperty("User-Agent", "CleanSweep/2.12 (Android)")
-            }
-            if (connection.responseCode !in 200..299) return ""
-            connection.inputStream?.let { readAll(it) }.orEmpty()
-        } catch (e: Exception) {
-            ""
-        } finally {
-            connection?.disconnect()
-        }
-    }
-
-    private fun readAll(stream: java.io.InputStream): String {
-        BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { reader ->
-            val builder = StringBuilder()
-            var line = reader.readLine()
-            while (line != null) {
-                builder.append(line)
-                line = reader.readLine()
-            }
-            return builder.toString()
-        }
+    private suspend fun get(url: String, accept: String = "application/json"): String {
+        val response = BoundedHttp.request(url, AiRequestPolicy.WEB_BUDGET_MS, headers = mapOf("Accept" to accept, "User-Agent" to "LiveGuard/Android"))
+        if (response.code !in 200..299) return ""
+        coroutineContext[Trace]?.successfulGets?.incrementAndGet()
+        return response.body
     }
 }

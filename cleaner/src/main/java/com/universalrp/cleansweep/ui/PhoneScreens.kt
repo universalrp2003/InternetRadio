@@ -474,6 +474,21 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
         ) {
             item(key = "security_tools") {
                 Column {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(tr("Include system apps"))
+                            Text(tr("Included for review only; no automatic selection, permission grant or deletion."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                        }
+                        androidx.compose.material3.Switch(checked = state.securityIncludeSystemApps, onCheckedChange = { vm.setSecurityIncludeSystemApps(it) })
+                    }
+                    state.lastPermissionReview?.let { previous ->
+                        Text(tr("Last checked %s", com.universalrp.cleansweep.data.DisplayTime.dated(previous.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA)),
+                            color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        Text(tr("Saved last review only; not current findings or a safety verdict."), color = TextSecondary, style = MaterialTheme.typography.labelSmall)
+                        if (previous.incomplete) Text(tr("Previous review incomplete"), color = WarnAmber, style = MaterialTheme.typography.labelSmall)
+                        if (previous.isFuture(System.currentTimeMillis())) Text(tr("Phone clock changed; saved date may be ahead of now."), color = WarnAmber, style = MaterialTheme.typography.labelSmall)
+                        TextButton(onClick = { vm.clearLastPermissionReview() }) { Text(tr("Clear last-review summary")) }
+                    }
                     TextButton(onClick = { vm.openInsights(InsightsTab.SECURITY_HISTORY) }) { Text(tr("What changed? Security timeline")) }
                     TextButton(onClick = { vm.openInsights(InsightsTab.ACTION_CHECKLIST) }) { Text(tr("Action checklist")) }
                     state.securityReadError?.let { Text(it, color = WarnAmber, style = MaterialTheme.typography.bodySmall) }
@@ -502,13 +517,13 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                                 Spacer(Modifier.width(12.dp))
                                 Column(Modifier.weight(1f)) {
                                     Text(
-                                        com.universalrp.cleansweep.data.ReadingPolicy.securityValue(loaded),
+                                        tr(com.universalrp.cleansweep.data.ReadingPolicy.securityValue(loaded)),
                                         style = MaterialTheme.typography.headlineSmall,
                                         fontWeight = FontWeight.Bold,
                                         color = if (loaded.unavailableChecks.isEmpty()) scoreColor(loaded.score) else TextSecondary,
                                     )
                                     Text(
-                                        loaded.verdict,
+                                        tr(loaded.verdict),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = TextSecondary,
                                     )
@@ -520,9 +535,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                                 // so it stays out of the count.
                                 run {
                                     val n = loaded.findings.count { it.severity != Severity.INFO }
-                                    (if (n == 1) "1 finding" else "$n findings") +
-                                        " over ${loaded.appsChecked} apps • " +
-                                        "${loaded.highCount} high, ${loaded.mediumCount} medium"
+                                    tr("%s findings across %s apps · %s high, %s medium", n, loaded.appsChecked, loaded.highCount, loaded.mediumCount)
                                 },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
@@ -835,6 +848,7 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
                 }
             }
             Spacer(Modifier.height(10.dp))
+            VirusTotalKeyHelp()
             if (state.vtKeySaved) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -849,9 +863,7 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
                 }
             } else {
                 Text(
-                    "Optional: paste a free VirusTotal API key (virustotal.com → sign up → API key) " +
-                        "for a second opinion on flagged apps. The free quota is small, so it is " +
-                        "only spent there and on apps you check by hand.",
+                    tr("Optional VirusTotal hash checks use your account quota only for flagged or manually selected apps. No APK is uploaded. Check current account terms before enabling."),
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary,
                 )
@@ -880,7 +892,7 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
 
 /** "2:32 PM" — shown next to results so a fresh re-check is visible at a glance. */
 private fun checkedAt(ms: Long): String = try {
-    SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date(ms))
+    com.universalrp.cleansweep.data.DisplayTime.dated(ms, com.universalrp.cleansweep.data.Lang.isTamil)
 } catch (e: Exception) {
     ""
 }
@@ -943,6 +955,21 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                         onRequest = { permissionLauncher.launch(vm.networkPermissions()) },
                         onOpenSettings = { vm.requestNetworkPermission() },
                     )
+                }
+            }
+
+            if (report?.devices?.isNotEmpty() == true || state.aiDeviceBusy || state.aiDeviceResult != null) {
+                item(key = "bounded_device_ai") {
+                    PanelCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp)) {
+                            Text(tr("Optional device AI analysis"), style = MaterialTheme.typography.titleSmall)
+                            Text(tr("Sends displayed device IPs, hostnames, vendors and ports to your chosen provider only with network sharing enabled. Wi-Fi network name is omitted. AI guesses are not verified identities or saved contact names."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                            if (state.aiDeviceBusy) AiOperationProgress(state.aiDeviceStartedMs, 90,
+                                if (state.networkBusy) "Scanning the network locally…" else "Waiting for the selected provider…", onCancel = { vm.cancelDeviceIdentification() })
+                            else TextButton(onClick = { vm.identifyDevicesWithAi() }) { Text(tr("Send current device facts to AI")) }
+                            state.aiDeviceResult?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                        }
+                    }
                 }
             }
 
@@ -1011,10 +1038,10 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                             }
                             Spacer(Modifier.height(10.dp))
                             GradientButton(
-                                text = if (state.networkBusy) "Scanning with AI…" else tr("Scan my network with AI"),
+                                text = tr(if (state.networkBusy) "Scanning with AI…" else "Scan my network with AI"),
                                 icon = Icons.Outlined.Devices,
                                 onClick = { vm.scanNetworkWithAi() },
-                                enabled = !state.networkBusy,
+                                enabled = !state.networkBusy && !state.aiDeviceBusy,
                                 modifier = Modifier.fillMaxWidth(),
                             )
 

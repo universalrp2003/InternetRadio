@@ -39,6 +39,8 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
     val ram = ReadingPolicy.ramUsedFraction(device?.totalRamBytes, device?.availableRamBytes)
     val quality = state.liveNetworkQuality
     val report = state.securityReport
+    val previous = state.lastPermissionReview?.takeIf { it.valid() }
+    val previousFuture = previous?.isFuture(System.currentTimeMillis()) == true
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             // Keep the owner's phone-age feature visible; wrap instead of crowding the title on small/large-font screens.
@@ -63,10 +65,18 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MetricPillarCard(Modifier.weight(1f), Icons.Outlined.Security, tr("Permission review"),
-                    tr(ReadingPolicy.securityValue(report)), tr(ReadingPolicy.securityNote(report)),
-                    if (report == null) tr("Not checked") else if (report.unavailableChecks.isNotEmpty()) tr("Incomplete") else tr("Review findings"),
+                    if (report != null) tr(ReadingPolicy.securityValue(report)) else tr(if (!state.lastPermissionReviewLoaded) "Reading saved review…" else if (previous != null) "Previous review" else "Not checked"),
+                    when {
+                        report != null -> tr(ReadingPolicy.securityNote(report))
+                        previousFuture -> tr("Phone clock changed. Saved review is not a current verification.")
+                        previous != null -> tr("Saved review only. Run a fresh check for current findings.")
+                        else -> tr(ReadingPolicy.securityNote(null))
+                    },
+                    when { state.securityBusy -> tr("Checking…"); report != null -> tr(if (report.unavailableChecks.isNotEmpty()) "Incomplete" else "Review findings")
+                        previous != null -> tr(if (previous.incomplete) "Previous review incomplete" else "Tap to check again")
+                        else -> tr("Tap to run a review") },
                     if (report == null || report.unavailableChecks.isNotEmpty()) TextSecondary else if (report.highCount > 0) WarnAmber else AccentCyan,
-                    report?.scannedAtMs, onClick = { vm.loadSecurity() })
+                    report?.scannedAtMs ?: previous?.atMs, onClick = { vm.loadSecurity() })
                 MetricPillarCard(Modifier.weight(1f), Icons.Outlined.Speed, tr("Network probe"),
                     tr(ReadingPolicy.pingValue(quality?.pingMs)), quality?.let { tr(it.labelEnglish) } ?: tr("Not measured"),
                     when { quality == null -> tr("Not measured"); quality.isWifi -> "Wi-Fi"; quality.isMobile -> tr("Cellular"); else -> tr("Other / offline") },
@@ -135,4 +145,4 @@ private fun MetricPillarCard(
 }
 
 internal fun readingTime(atMs: Long): String = if (atMs <= 0) tr("Not checked") else
-    SimpleDateFormat("dd MMM, HH:mm:ss", Locale.getDefault()).format(Date(atMs))
+    DisplayTime.dated(atMs, Lang.isTamil, seconds = true)

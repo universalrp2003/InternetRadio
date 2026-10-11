@@ -121,5 +121,5 @@ object SecurityAiPrompt {
     }
 
     private fun date(atMs: Long): String =
-        SimpleDateFormat("yyyy-MM-dd HH:mm:ss z", Locale.US).format(Date(atMs))
+        SimpleDateFormat("yyyy-MM-dd h:mm:ss a z", Locale.US).format(Date(atMs))
 }

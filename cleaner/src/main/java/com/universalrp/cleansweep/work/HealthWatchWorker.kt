@@ -33,6 +33,7 @@ import com.universalrp.cleansweep.data.ScanSettings
 import com.universalrp.cleansweep.data.SecurityScanner
 import com.universalrp.cleansweep.data.Severity
 import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.data.formatBytes
 import com.universalrp.cleansweep.data.hasAllFilesAccess
 import com.universalrp.cleansweep.voice.Announcer
@@ -75,9 +76,13 @@ class HealthWatchWorker(
         // what the phone showed.
         val forced = inputData.getBoolean(KEY_FORCE, false)
         try {
+            if (com.universalrp.cleansweep.data.FeatureSetupPrefs.reminders(ctx)) {
+                val configured = com.universalrp.cleansweep.data.FeatureDirectory.localState(ctx)
+                com.universalrp.cleansweep.notify.SetupReminder.maybePost(ctx, com.universalrp.cleansweep.data.FeatureDirectory.list(ctx, configured))
+            }
             if (!forced) warnings(ctx)
             daily(ctx, forced)
-        } catch (e: Exception) {
+        } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (e: Exception) {
             // Never let a bad read kill the schedule: try again next hour.
             return Result.retry()
         }
@@ -194,8 +199,8 @@ class HealthWatchWorker(
         val lastSecReminder = prefs.getLong("last_sec_reminder_ms", 0L)
         if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, lastSecReminder, 7 * 24 * 60 * 60 * 1000L)) {
             val weeklyReport = try {
-                val apps = AppInventoryLoader.load(ctx, includeSystem = true).rows
-                SecurityScanner.scan(ctx, apps)
+                val apps = AppInventoryLoader.load(ctx, includeSystem = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).getBoolean("security_include_system", true)).rows
+                SecurityScanner.scan(ctx, apps, includesSystemApps = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).getBoolean("security_include_system", true))
             } catch (e: Exception) { null }
             val highRisks = weeklyReport?.findings?.filter { it.severity == Severity.HIGH }.orEmpty()
             if (highRisks.isNotEmpty()) {
@@ -289,12 +294,12 @@ class HealthWatchWorker(
         }
         val storage = health?.storage
         val apps = try {
-            AppInventoryLoader.load(ctx, includeSystem = true).rows
+            AppInventoryLoader.load(ctx, includeSystem = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).getBoolean("security_include_system", true)).rows
         } catch (e: Exception) {
             emptyList()
         }
         val security = try {
-            SecurityScanner.scan(ctx, apps)
+            SecurityScanner.scan(ctx, apps, includesSystemApps = ctx.getSharedPreferences("cleansweep_state", Context.MODE_PRIVATE).getBoolean("security_include_system", true))
         } catch (e: Exception) {
             null
         }
@@ -315,7 +320,10 @@ class HealthWatchWorker(
         val cpuTemp = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
         val freeGb = storage?.free?.let { "%.1f".format(it / 1024.0 / 1024.0 / 1024.0) } ?: "?"
         val freeRam = health?.device?.availableRamBytes?.let { (it / 1024.0 / 1024.0).toInt().toString() } ?: "?"
-        val timeToFull = battery?.let { batteryTimeLabelOrNull(it) }
+        val timeToFull = battery?.let { batteryTimeMinutes(it) }?.let { minutes ->
+            val duration = if (minutes >= 60) Lang.forContext(ctx, "%s h %s min", minutes / 60, minutes % 60) else Lang.forContext(ctx, "%s min", minutes)
+            Lang.forContext(ctx, "Estimated time to full: %s", duration)
+        }
 
         // ---- the one line that is spoken (Strictly High/Medium security risk warnings)
         val spoken: Pair<String, String>? = when {
@@ -334,7 +342,7 @@ class HealthWatchWorker(
         val full = buildString {
             appendLine(if (tamil) "தினசரி அறிக்கை" else "Daily brief")
             appendLine((if (tamil) "பேட்டரி" else "Battery") + ": ${battery?.percent ?: "?"}% — " +
-                (battery?.statusLabel ?: "?") + ", $batteryTemp°C" +
+                (battery?.statusLabel?.let { Lang.forContext(ctx, it) } ?: "?") + ", $batteryTemp°C" +
                 (timeToFull?.let { " ($it)" } ?: ""))
             appendLine((if (tamil) "CPU வெப்பம்" else "CPU temperature") + ": $cpuTemp°C")
             appendLine((if (tamil) "சேமிப்பு காலி" else "Storage free") + ": $freeGb GB" +
@@ -347,7 +355,7 @@ class HealthWatchWorker(
             )
             appendLine(
                 (if (tamil) "பாதுகாப்பு மதிப்பெண்" else "Security score") + ": " +
-                    (security?.let { "${com.universalrp.cleansweep.data.ReadingPolicy.securityValue(it)}, ${it.findings.size} " +
+                    (security?.let { "${Lang.forContext(ctx, com.universalrp.cleansweep.data.ReadingPolicy.securityValue(it))}, ${it.findings.size} " +
                         (if (tamil) "கண்டுபிடிப்புகள்" else "findings") } ?: "?")
             )
         }.trim()
@@ -359,10 +367,16 @@ class HealthWatchWorker(
         } catch (e: Exception) {
             null
         }
-        if (spokenFinal != null && config != null && config.ready) {
+        if (com.universalrp.cleansweep.data.FeatureSetupPrefs.prefs(ctx).getBoolean("daily_ai", false) && spokenFinal != null && config != null && config.ready) {
             val prompt = buildString {
                 appendLine("Security warning for this Android phone right now:")
-                appendLine(full)
+                if (config.includeAppNames) appendLine(full) else {
+                    // Do not leak labels embedded in finding prose when app-name sharing is OFF.
+                    appendLine("Phone-local security warning counts; app names withheld by user choice.")
+                    security?.findings?.filter { it.severity == Severity.HIGH || it.severity == Severity.MEDIUM }?.forEach { finding ->
+                        appendLine("${finding.id}: ${finding.severity.name}; count=${finding.count}")
+                    }
+                }
                 appendLine()
                 appendLine(
                     "Write a concise Tamil security voice warning in 1-2 short sentences, under 35 words. " +
@@ -376,7 +390,7 @@ class HealthWatchWorker(
                         "Focus strictly on high and medium security warnings.",
                     prompt,
                 )
-            } catch (e: Exception) {
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled } catch (e: Exception) {
                 null
             }
             if (result?.ok == true && result.text.isNotBlank()) {
@@ -386,7 +400,7 @@ class HealthWatchWorker(
 
         // A hand-run brief keeps the day free, so the evening brief still arrives.
         Announcer.saveBrief(ctx, today, full, markDay = !forced)
-        val notifSummary = spokenFinal ?: when {
+        val notifSummary = (if (tamil) spokenFinal else spoken?.first) ?: when {
             security == null || security.unavailableChecks.isNotEmpty() -> if (tamil) "பாதுகாப்பு ஆய்வு முழுமையடையவில்லை" else "Security review incomplete"
             tamil -> "அதிக/மிதமான எச்சரிக்கை காணப்படவில்லை; பாதுகாப்புச் சான்றல்ல"
             else -> "No high/medium warnings observed; not a safety verdict"
@@ -395,7 +409,7 @@ class HealthWatchWorker(
         if (spokenFinal != null) {
             Announcer.speakAndWait(
                 ctx,
-                spokenFinal,
+                spoken?.first.orEmpty(),
                 spokenFinal,
                 Announcer.Event.DAILY,
             )
@@ -441,9 +455,9 @@ class HealthWatchWorker(
                 manager.createNotificationChannel(
                     NotificationChannel(
                         CHANNEL,
-                        "Daily phone brief",
+                        Lang.forContext(ctx, "Daily phone brief"),
                         NotificationManager.IMPORTANCE_DEFAULT,
-                    ).apply { description = "Once a day: battery, temperature, storage, junk and security" }
+                    ).apply { description = Lang.forContext(ctx, "Daily local readings and permission review") }
                 )
             } catch (e: Exception) {
                 // Channel already there.
@@ -457,7 +471,7 @@ class HealthWatchWorker(
         )
         val notification: Notification = NotificationCompat.Builder(ctx, CHANNEL)
             .setSmallIcon(R.drawable.ic_stat_battery)
-            .setContentTitle("CleanSweep daily brief")
+            .setContentTitle(Lang.forContext(ctx, "Live Guard daily brief"))
             .setContentText(short)
             .setStyle(NotificationCompat.BigTextStyle().bigText(full))
             .setContentIntent(open)

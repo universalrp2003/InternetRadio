@@ -49,7 +49,7 @@ object AssistantEvidencePolicy {
 
     fun relevant(title: String, query: String): Boolean {
         val queryWords = words(query); val titleWords = words(title)
-        return queryWords.isNotEmpty() && queryWords.any { it in titleWords }
+        return ProductEvidencePolicy.exactModel(title, query) && queryWords.isNotEmpty() && queryWords.any { it in titleWords }
     }
 
     fun evidenceKey(url: String, text: String): String = NewsPolicy.canonicalLink(url) ?: normalized(text).take(160)

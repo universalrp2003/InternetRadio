@@ -259,6 +259,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 item(key = "setup") { SetupCard(vm) }
             }
 
+            item(key = "published_update") { LiveGuardUpdateCard() }
+            item(key = "reviewed_feature_setup") { FeatureSetupHomeCard(state, vm) }
             item(key = "storage") { LiveGuardMetricsMatrix(state, vm) }
 
             item(key = "status_pill_controls") { StatusPillHomeControls(state, vm) }
@@ -762,8 +764,7 @@ fun TamilInfoStrip(
                 items.take(com.universalrp.cleansweep.data.NewsPolicy.MAX_ITEMS).forEach { item ->
                     Text(item.title, style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.clickable { currentKey = item.key; showHeadlines = false })
-                    Text(java.time.Instant.ofEpochMilli(item.publishedAtMs).atZone(java.time.ZoneId.systemDefault())
-                        .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")), color = TextSecondary,
+                    Text(com.universalrp.cleansweep.data.DisplayTime.clock(item.publishedAtMs), color = TextSecondary,
                         style = MaterialTheme.typography.labelSmall)
                     Row {
                         TextButton(onClick = { onSpeak(item.title) }) { Text(tr("Read aloud")) }
@@ -1019,7 +1020,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
             } else {
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    tr("Enjoy high-speed 5G without quota limits. Daily data tracking and pack warnings are hidden."),
+                    tr("Unlimited 5G is a user setting, not a verified carrier entitlement. Quota countdown and pack warnings are hidden."),
                     style = MaterialTheme.typography.labelSmall,
                     color = AccentCyan,
                 )
