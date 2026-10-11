@@ -70,7 +70,7 @@ object CorePrivacyMigration {
             stored.forEach { edit.remove(it) }
             edit.commit() && stored.none { prefs.contains(it) }
         }
-    }
+    }.getOrDefault(false)
 
     private fun clearReaderSetupReminder(app: Context): Boolean = runCatching {
         val prefs = app.getSharedPreferences(CorePrivacyMigrationPolicy.SKIPPED_PREFS, Context.MODE_PRIVATE)
