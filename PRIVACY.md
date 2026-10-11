@@ -224,10 +224,11 @@ These apps check GitHub published releases at most once a day on launch, with an
 
 CleanSweep headline queries use Google News RSS when web lookup is enabled. Google receives the query and connection metadata; fetched headline links open their corresponding news pages.
 
-## Pending next update — source only, not shipped in published2.37
+## Live Guard2.39 — reviewed setup, local notification reading and in-app updates
 
-The owner has held the next build/publication. These details describe prepared
-source, **not a device-tested update**.
+The owner authorized build/publication. These features are now in the verified
+2.39/code44 release. Cloud tests/build/signature gates passed; this is **not a
+physical-device-tested privacy/delivery guarantee**.
 
 - **Reviewed setup:** Android permissions and optional permanent monitoring, voice,
   charging notification and background Wi-Fi scanning require explicit choices.
@@ -276,6 +277,7 @@ source, **not a device-tested update**.
   respects the network-sharing switch, omits Wi-Fi network name, uses one bounded
   batch, and does not save new AI guesses as verified names/identities.
 
-Actual behavior, SDK/engine privacy gates, permissions, installation and device
-background delivery still require the next authorized compile/test and physical
-phone validation before release.
+Actual SDK/engine privacy gates, permission/redaction/installation behavior and
+background delivery still require physical-phone validation. Cloud compilation/
+regression/signature checks do not prove audible speech, OEM survival or a
+forced Play Protect scan.

@@ -14,30 +14,22 @@ and the device; not every model has been tested.
 AppForge (`builder`) and the original Internet Radio (`app`) are preserved as
 legacy projects, but are not part of this release or the current development focus.
 
-## Authorized final release candidate — Live Guard2.39
-
-The owner approved build/publication on11 October2026. Final candidate **2.39/code44**,
-`v2026.10.11-3`, must pass all295 required cases EACH Cleaner variant, all-module
-compilation and APK/AAB/package/signature checks. Reviewed setup, compact widgets,
-opt-in local notification translation/offline speech and browser-free verified
-updates are prepared; actual phone delivery is not certified. 2.38 passed/published but its universal APK exceeded the updater cap;2.39
-corrects packaging/cap and adds a size gate without replacing2.38 assets.
-Until final verification,2.37 remains the previous recommended download below.
-[Candidate notes](releases/v2026.10.11-3.md) ·
-[2.38 device plan](docs/live-guard-2.39-device-test-plan.md).
-
 ## Download — release APKs
 
-**2.37 verified and published** on 11 October 2026, with the unchanged project signing key.
-The [previous verified 2.36 release](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11) remains available.
+**2.39 verified and published** on11 October2026, unchanged package/signing key,
+minimumAPI26. Install over your existing app—do not uninstall and lose settings.
+[Previous2.38](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-2)
+and [2.37](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-1)
+assets remain immutable.2.39 supersedes2.38's updater-size limit; the universal
+APK is now44.6MB and fits its older client's50MiB cap.
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.37 | [CleanSweep-v2.37.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/CleanSweep-v2.37.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-1/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.39 | [CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-1)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-3)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not
@@ -46,6 +38,21 @@ GitHub publication does not mean the apps have been published to Google Play or 
 CI artifacts are temporary build downloads, not the public release channel.
 
 ## What's new
+
+- **Live Guard2.39/code44**: reviewed feature setup with saved-OFF respect;
+  Home verified in-app APK download/Android confirmation; opt-in selected app/
+  sender reading, sender-only default, consented local EN/TA translation and
+  non-network speech; nearby official key/voice guides; exact/datable LM Arena
+  source card (the December2025 feed is **not current or IQ**). Three compact
+  Battery/Data/Phone widgets with genuine observed-unplug details supersede the
+  large launcher widget; floating pill unchanged. System/cache scope defaults
+  ON when unset, refresh without automatic selection/deletion. Shared chat45/
+  heavy90 budgets, progress/cancel, exact-product/TODAY news, genuine last-review
+  date, installed A/B answer previews and all six shipped improvements retained.
+  Actual44.6MB delivery and both update-client caps checked, allABIs preserved.
+  No actual-device/audibility/privacy/native-runtime guarantee.
+  [Release notes](releases/v2026.10.11-3.md) ·
+  [2.39 device plan](docs/live-guard-2.39-device-test-plan.md).
 
 - **Live Guard / CleanSweep 2.37:** automatic voice delivery now checks
   initialization, actual callbacks and failures, with awaited power jobs and a real-gated
@@ -101,6 +108,29 @@ Earlier highlights:
 all devices. Phone AI advice can be wrong; news headlines are attributed feed items,
 not independently verified reporting.
 
+**Verified/published2.39/code44:** [CI 38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)
+/job114482383017 succeeded in **6m00s**, immutable compiled source/tag `6790a96b591b5a3215f5f28193726f0cd607c04f`.
+Both Cleaner variants executed all **295 required cases EACH** (177 retained+118 new,
+32 suites, none skipped), plus Radio regressions and all-module debug/release APKs
+and AABs. APK version/package/API26/non-debuggable/stable-certificate/packaged-feature
+and actual updater-size gates passed. Published **2026-10-11T13:38:57Z**, stable/latest
+**v2026.10.11-3**, with all six assets checked independently through GitHub API.
+
+Universal APK: **44,610,589 bytes (44.6MB /42.5MiB)**, GitHub SHA256
+`f29daac53da8e45cc8f278a93f7ffe9c78d36136f13497d16d93fb6f6fa89b98`. It fits both current128MiB and the
+previous2.38 client's50MiB cap. All supported native ABIs are retained; compression/
+extraction reduces download bytes, not an all-device native-runtime certification.
+Unchanged Radio1.8/EQ1.2 assets are byte-for-byte/digest-identical to verified2.37,
+not regenerated changed-hash copies. Previous2.37 and2.38 assets remain untouched.
+Stable certificate remains
+`9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55`.
+
+No physical-phone/emulator, newly heard automatic speech, OEM background, message/
+translation/redaction, live-provider/rating/feed or Android installation test is
+claimed. Sandbox CDN restrictions prevent independent local binary download;
+package/signature evidence is exact-source CI and public asset digests are GitHub
+metadata. See the [device plan](docs/live-guard-2.39-device-test-plan.md).
+
 **2.37 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) in **3m46s** for
 immutable source `325576df99dc3d56ad635e5a2d229a0e468dd7da`. Both Cleaner variants ran all 177 required cases
 (125 retained + 52 new), with existing Radio tests, all-module builds and packaged-feature/
@@ -113,7 +143,7 @@ engine-finished voice status cannot prove sound was heard. See the device plan a
 
 **2.36 publication verified:** [GitHub Actions passed](https://github.com/universalrp2003/InternetRadio/actions/runs/38097130627) for source `041f2ba`: both CleanSweep unit-test variants, all 125 required cases per variant, existing Radio tests, all-module builds and release APK/feature/version/API-26/signing gates. All six maintained-app APK/AAB assets are published; existing 2.35/2.34 assets are unchanged. This is not a physical-device test pass.
 
-See [full release notes](releases/v2026.10.11-1.md), [changelog](CHANGELOG.md), [privacy](PRIVACY.md),
+See [full release notes](releases/v2026.10.11-3.md), [changelog](CHANGELOG.md), [privacy](PRIVACY.md),
 [Radio device test plan](docs/radio-1.6-device-test-plan.md), and
 [publishing guidance](PUBLISHING.md).
 

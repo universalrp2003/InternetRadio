@@ -85,3 +85,15 @@ saved files persist independently.
   and CI checks actual APK fits the update cap before publication. Unchanged
   Radio/EQ companions are carried byte-for-byte from verified2.37 rather than
   changing binaries under their unchanged versions.
+
+## Final verified publication
+
+-2.39/code44 is verified/published as stable/latest`v2026.10.11-3`, source`6790a96b591b5a3215f5f28193726f0cd607c04f`,
+  CI38143638654/job114482383017SUCCESS6m00s; all295 required tests EACH variant and APK/AAB/
+  stable-certificate/API26/feature/actual-size gates passed. Actual44,610,589-byte
+  universalAPK fits both128MiB and prior50MiB caps. Never replace its assets.
+-2.38 was published then superseded for updater-size correction, not overwritten.
+  Companion1.8/1.2 assets in2.39 match verified2.37 bytes/digests exactly. Older
+  assets preserved. Metadata/notes/README should identify actual compiled source,
+  not a later documentation commit. Phone/native/voice/notification tests remain
+  unperformed. Any further code change needs another unique version/tag.

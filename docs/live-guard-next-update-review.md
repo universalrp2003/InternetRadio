@@ -1,14 +1,15 @@
-# Live Guard2.39 — final authorized release candidate review
+# Live Guard2.39 — verified release and remaining device review
 
-Owner explicitly authorized **build the next version and publish** on 11 October
-2026 after the source-only preparation. Final candidate is **2.39/code44**,
-`v2026.10.11-3`.2.38 passed and published from `f044675…`, but its universal
-APK size exceeded the original updater cap. That published version/assets remain
-immutable;2.39 fixes the cap/packaging and adds an actual-size publication gate. Publish only after successful exact-source CI and release gates.
-Until actual success/publication are recorded, verified published2.37 remains
-`v2026.10.11-1`, compiled source `325576df99dc3d56ad635e5a2d229a0e468dd7da`.
-The source-only checkpoints below are historical preparation evidence, not a
-claim that this candidate has passed compilation or physical-phone tests.
+Owner authorized build/publication on11 October2026. **2.39/code44 is now
+verified/published** as stable/latest`v2026.10.11-3`, **2026-10-11T13:38:57Z**.
+[CI38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)
+/job114482383017 succeeded6m00s using exact immutable source`6790a96b591b5a3215f5f28193726f0cd607c04f`;
+all295 required cases EACH variant, all-module builds, API26/signature/feature
+and actual APK size gates passed. Actual universal APK44,610,589 bytes, allABIs
+retained. Both update caps and identical previous companion bytes were checked.
+2.38 passed/published but its size-limit issue is superseded without changing its
+assets.2.37 and older assets remain unchanged. Preparation-only checkpoints below
+are historical, not a substitute for actual device validation.
 
 ## Confirmed owner choices
 
@@ -73,18 +74,22 @@ claim that this candidate has passed compilation or physical-phone tests.
 - Localization validator: **929 EN/TA catalog keys** at this checkpoint, no duplicates/format-placeholder mismatches; audited explicit literal `tr()`/`t()` keys covered; owned clocks 12-hour and saved-review reads invent no date. Broader dynamic legacy text and translation meaning/layout are not fully certified.
 - Kotlin lightweight parser: **151 main/test Kotlin files checked with no suspect nodes**; one unchanged previously shipped `WidgetReadingPolicy.kt` companion form excluded for a grammar-only limitation. `TamilInfoStripRepo.kt` catch whitespace was normalized in memory only for the parser. Retained shipped tests cover these files in the next actual build. Parser success is **not Kotlin type/API/Compose compilation**.
 - XML well-formedness: **20** cleaner manifest/resource XML files. Not Android resource linking/rendering.
-- All **22 shipped test source files** verified byte-for-byte/Git-blob-identical against actual compiled source `325576df…`. New declarations: previous62 + latest56. Required future gate: **177 retained +118 new =295 cases EACH debug and release**, **32 required suites**. **No JVM tests executed** for this pending source.
+- All **22 shipped test source files** verified byte-for-byte/Git-blob-identical against actual compiled source `325576df…`. New declarations: previous62 + latest56. Required future gate: **177 retained +118 new =295 cases EACH debug and release**, **32 required suites**. At preparation time these tests were unexecuted. Both2.38 and final2.39 exact-source
+  CI then executed/verified all295 required cases EACH variant with no skips.
 - Whitespace/static-contract checks must be rerun after any later edits. No Java/Kotlin compiler, Android SDK, emulator or physical phone in this workspace.
 - Restored local metadata was aligned to the verified remote docs commit `3b3d376…`
   only after checking400 baseline blobs (356 unchanged/44 intentional edits,0 missing)
   and preserving all452 working files byte-for-byte. No worktree reset/checkout.
   Radio/EQ and previously shipped source remain intact.
 
-## Mandatory next authorized validation
+## Completed cloud validation and required remaining device validation
 
 1. Authorization is now explicit. Final candidate2.39/code44 uses a new release tag;
    never overwrite existing2.37 assets or publish a failed candidate.
-2. Compile/type-check/resource-link/lint and execute all295 required cases in **both** variants; verify existing tests/signing/API26/package and Radio/PulseEQ compatibility. Fix any newly discovered errors before publication.
+2. Completed: Kotlin/resource builds, all295 required tests in both variants,
+   Radio checks, all-module APK/AAB and signature/package/API26/release/size gates.
+   No lint-only all-device certification is claimed. The first SDK compile failure
+   was fixed before publication; the size correction uses a new version/tag.
 3. Redmi13 5G / Android16 actual ROM: both UI languages/font scales, today news/date boundaries, exact-product evidence/no-price state, provider timeout/cancel/model retirement/permission changes and source metadata. Manual vs automatic audible tests with two saved installed voices; callbacks/registration are not proof of heard speech or OEM survival.
 4. Notification reader: consent/OFF, several apps/senders, duplicate titles/groups/summaries/reposts, unsupported/short languages, model failures/no-network TTS, sensitive-code redaction, muted media/quiet/DND, screen lock mid-queue/utterance, revoked access, process restart/force-stop and rapid config/language changes. Verify no content in app storage/logs/AI requests.
 5. APK updater: current/no-new/missing digest/rate-limit/offline, slow/cancelled/redirect downloads, wrong package/version/size/hash/signature/installed certificate, private URI grants/cache eviction, permission-denied/returned, installer cancellation/failure/success. Do not claim a forced Play Protect scan.

@@ -1,6 +1,6 @@
 # Changelog — maintained Android apps
 
-## Live Guard2.39/code44 — final verified-publication candidate
+## Live Guard2.39/code44 — verified/published11 October2026
 
 Follow-up to the passed/published2.38: its universal APK is82,630,093 bytes,
 above the updater's50MiB limit.2.39 uses a128MiB bounded cap, compresses/extracts
@@ -9,7 +9,11 @@ actual APK fitting the updater. Same package/certificate/API26. No changed file
 is uploaded under the existing2.38 version. Unchanged Radio/EQ assets are carried
 byte-for-byte from verified2.37; rebuilt changed-hash companions are not reused.
 All2.38 functional changes below retained; all295 required cases EACH variant,
-all-module/signature and new size gates must pass again. Device tests still pending.
+all-module/signature and new size gates passed again in CI38143638654/job114482383017
+(6m00s), source6790a96…, published13:38:57Z as stable/latestv2026.10.11-3.
+Actual universal APK44,610,589 bytes fits new128MiB and old50MiB caps. Device tests
+remain pending; release assets/tag/latest/source/digests and copied companion bytes
+were independently checked. Older2.37/2.38 assets remain untouched.
 
 ## Live Guard2.38/code43 — verified/published; superseded by2.39 size correction
 
@@ -44,14 +48,12 @@ Its assets stay immutable; the discovered updater-size issue is fixed in2.39.
   whole operations now have owned 90-second progress/cancel/stale-result gates;
   network scan+AI uses one batch and never saves guesses as verified user names.
 
-**Validation:** static localization/placeholder/time/privacy/component audits,
-XML well-formedness and lightweight source syntax only. **177 retained +118 new
-=295 future required cases per variant,32 suites; NOT executed.** All22 shipped
-test files match the actual compiled2.37 source. No Kotlin/Compose/Android build,
-live provider, APK update/install, message/voice or phone tests for this patch.
-Dynamic legacy text/translation meaning/layout and all device behavior remain
-uncertified. See [next-update review](docs/live-guard-next-update-review.md).
-Published2.37 and immutable release assets are unchanged.
+**Actual2.38 validation:** CI38142967677 succeeded, all295 required cases EACH
+variant and all-module/API26/non-debuggable/signature/packaging gates passed; no
+phone/live-provider tests. All22 shipped tests unchanged in source.2.39 repeats
+that gate with size/companion immutability checks, recorded above. Dynamic legacy
+translation meaning/layout and device behavior remain uncertified. See
+[next-update review](docs/live-guard-next-update-review.md). Previous assets unchanged.
 
 Detailed historical notes remain in [`releases/`](releases/). This summary does not
 claim app-store publication or physical-device certification.

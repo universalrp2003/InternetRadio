@@ -6,26 +6,56 @@ and other Android phones. This is a compatibility target, not proof that every
 model or ROM has been tested. Manufacturer Settings links, overlays and background
 restrictions still need real-device validation.
 
-## v2.39 — authorized release candidate, verification pending
+## v2.39 — current verified release
 
-Final candidate2.39/code44, `v2026.10.11-3`: owner approved build/publication on11 October2026.
-Prepared changes: reviewed setup; private in-app APK verification/download;
-selected app/sender notification reading with local EN/TA translation and offline
-speech; key/voice guides; exact/datable LM Arena card; compact Battery/Data/Phone
-widgets. System app/cache inclusion defaults ON when unset; no automatic selection
-or deletion. AI operations have owned budgets/progress/cancel. This supersedes the
-large2.37 launcher widget, not the floating pill.
+[Install CleanSweep-v2.39.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-3/CleanSweep-v2.39.apk)
+(**Live Guard**, same package/key; Android8+/API26). Updated44.6MB universal APK,
+allABIs retained, fits the2.38 client's50MiB limit as well as the new128MiB cap.
+Old2.38/2.37 assets are not overwritten; install as an update, not an uninstall.
 
-**Not a verified download until exact-source CI/publication passes.** All295 cases
-EACH variant, all-module compilation and package/signing/API26/release gates must
-pass. Physical sound, OEM survival, notification privacy/redaction, local model
-quality, widget sizes and Android installation still need testing.
-[Candidate notes](../releases/v2026.10.11-3.md) ·
-[2.38 device plan](../docs/live-guard-2.39-device-test-plan.md).
+- Reviewed setup/optional quiet reminders respect savedOFF and Android consent.
+  No silent permanent monitor, private-message access or permission enablement.
+- Home verified browser-free APK download with progress/cancel, SHA/package/
+  version/signer checks and mandatory Android installer confirmation. No forced
+  or bypassed Play Protect/scanning claim. Companions reuse unchanged verified bytes.
+- Opt-in multi-app/sender notification reading: sender-only default, separate
+  full-message choice, local languageID/consented EN/TA models and non-network
+  installed voice; no message upload/history/AI-report/online speech fallback.
+  Unknown translation means sender only. Lock/DND/volume/OEM/redaction gates remain.
+- Official key/help text/voice guides, exact/datable LM Arena card (December2025
+  feed is not a current score, IQ or execution proof), three compact2×2-target
+  Battery/Data/Phone widgets with genuine observed-unplug time/% and metered or
+  Wi-Fi/unlimited details. Floating pill unchanged. Cache reopens fresh without
+  new auto-selection/deletion; system defaultsON only when unset.
+- Chat45/web8/checks15 and heavy90 owned budget/progress/cancel; no hidden provider
+  fallback or stale results. Exact-product prices/TODAY news, real last-review
+  date and actual A/B voice previews/one answer read retained; all six improvements
+  and estimated phone age remain.
 
-2.38 was verified/published, then its82MB universal APK revealed an updater
-size limit;2.39 increases the guarded cap, compresses JNI without dropping ABIs,
-and checks actual APK size before release. Neither2.38 nor earlier assets are replaced.
+**Verified/published2.39/code44:** [CI 38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)
+/job114482383017 succeeded in **6m00s**, immutable compiled source/tag `6790a96b591b5a3215f5f28193726f0cd607c04f`.
+Both Cleaner variants executed all **295 required cases EACH** (177 retained+118 new,
+32 suites, none skipped), plus Radio regressions and all-module debug/release APKs
+and AABs. APK version/package/API26/non-debuggable/stable-certificate/packaged-feature
+and actual updater-size gates passed. Published **2026-10-11T13:38:57Z**, stable/latest
+**v2026.10.11-3**, with all six assets checked independently through GitHub API.
+
+Universal APK: **44,610,589 bytes (44.6MB /42.5MiB)**, GitHub SHA256
+`f29daac53da8e45cc8f278a93f7ffe9c78d36136f13497d16d93fb6f6fa89b98`. It fits both current128MiB and the
+previous2.38 client's50MiB cap. All supported native ABIs are retained; compression/
+extraction reduces download bytes, not an all-device native-runtime certification.
+Unchanged Radio1.8/EQ1.2 assets are byte-for-byte/digest-identical to verified2.37,
+not regenerated changed-hash copies. Previous2.37 and2.38 assets remain untouched.
+Stable certificate remains
+`9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55`.
+
+No physical-phone/emulator, newly heard automatic speech, OEM background, message/
+translation/redaction, live-provider/rating/feed or Android installation test is
+claimed. Sandbox CDN restrictions prevent independent local binary download;
+package/signature evidence is exact-source CI and public asset digests are GitHub
+metadata. See the [device plan](../docs/live-guard-2.39-device-test-plan.md).
+
+[2.39 notes](../releases/v2026.10.11-3.md) · [privacy](../PRIVACY.md).
 
 ## v2.37 — current verified release: automatic speech, publication-today news and launcher widget
 
