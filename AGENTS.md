@@ -30,3 +30,8 @@
   13 5G (Android16/API36 screenshots, exact ROM unknown). Diagnose delivery gates,
   callbacks/background paths honestly; never claim enabled switches or TTS engine
   completion certify audible speech/OEM background survival.
+
+- Automatic power delivery cannot rely solely on Android8+ manifest implicit broadcasts.
+  Runtime receivers must be owner-scoped to the visible app or existing enabled monitor/
+  visual fallback, with honest registration evidence and no cold-background guarantee
+  when no owner runs. Do not silently enable a persistent service to mask this limitation.

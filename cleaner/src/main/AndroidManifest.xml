@@ -124,8 +124,9 @@
         </service>
 
         <!--
-          Plug in the charger and the status-bar card / watt reading appear on their own —
-          no need to open the app first. Ignored while both switches are off.
+          Best-effort manifest power fallback. Android8+ may restrict/defer implicit delivery;
+          AutomaticAlerts also owns runtime receivers while visible/existing monitoring runs.
+          Visual monitoring is ignored while its switches are off.
         -->
         <receiver
             android:name=".notify.ChargingWatcher"

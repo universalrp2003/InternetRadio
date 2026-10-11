@@ -27,3 +27,6 @@ data class VoiceDeliveryStatus(
     val online: Boolean = false,
     val language: String = "",
 )
+
+/** Registration evidence only, never proof that a physical event arrived or audio was heard. Runtime-only. */
+data class VoiceObserverStatus(val owners: Int = 0, val battery: Boolean? = null, val network: Boolean? = null, val power: Boolean? = null)

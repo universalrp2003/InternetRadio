@@ -70,6 +70,7 @@ import com.universalrp.cleansweep.voice.Announcer
 fun VoiceScreen(state: UiState, vm: MainViewModel) {
     val delivery by Announcer.runtime.collectAsState()
     val automatic by Announcer.automatic.collectAsState()
+    val observers by com.universalrp.cleansweep.notify.AutomaticAlerts.observers.collectAsState()
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(Unit) { Announcer.refreshDiagnostics(context) }
     Column(
@@ -157,11 +158,18 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     delivery.mediaVolume?.let { Text(tr("Media volume step: %s", it), style = MaterialTheme.typography.labelSmall, color = if (it == 0) WarnAmber else TextSecondary) }
                     Text(tr("An enabled switch or queued request is not proof of sound. Engine completion cannot verify that you heard it; check media volume, Bluetooth route and Do Not Disturb."),
                         style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(tr("Runtime listeners (registration only)"), style = MaterialTheme.typography.labelMedium)
+                    if (observers.owners == 0) Text(tr("No live listener owner; background events may be missed"), style = MaterialTheme.typography.labelSmall, color = WarnAmber)
+                    else {
+                        Text(tr("Power listener: %s", listenerLabel(observers.power)), style = MaterialTheme.typography.labelSmall)
+                        Text(tr("Battery listener: %s", listenerLabel(observers.battery)), style = MaterialTheme.typography.labelSmall)
+                        Text(tr("Network listener: %s", listenerLabel(observers.network)), style = MaterialTheme.typography.labelSmall)
+                    }
                     TextButton(onClick = { vm.testAutomaticVoice() }) { Text(tr("Test automatic charging voice")) }
                     TextButton(onClick = { vm.openTtsSettings() }) { Text(tr("Text-to-speech settings")) }
                     Text(tr("The automatic test uses the real master/event/quiet-hour gates. It is not a charger connection. Actual early-unplug alerts only apply below 90% after your chosen hour."),
                         style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                    Text(tr("Live battery/network alerts run while the app is visible or its existing monitor is active. Background power jobs and hourly checks may be delayed by Android/OEM restrictions; force-stop prevents delivery. No new persistent monitor is enabled."),
+                    Text(tr("Live power/battery/network listeners run while the app is visible or its existing monitor is active. Without an active owner, Android8+ manifest power broadcasts may be missed or deferred. Jobs and hourly checks can be delayed; force-stop prevents delivery. No new persistent monitor is enabled."),
                         style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
             }
@@ -557,4 +565,11 @@ private fun voiceStageLabel(stage: com.universalrp.cleansweep.voice.VoiceDeliver
     com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.CANCELLED -> "Speech request cancelled/interrupted"
     com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.DUPLICATE -> "Duplicate request skipped"
     com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.Stage.STALE_EVENT -> "Delayed/stale power event skipped"
+})
+
+@Composable
+private fun listenerLabel(value: Boolean?): String = tr(when (value) {
+    true -> "Registered; event delivery unverified"
+    false -> "Failed/unavailable"
+    null -> "Not active"
 })

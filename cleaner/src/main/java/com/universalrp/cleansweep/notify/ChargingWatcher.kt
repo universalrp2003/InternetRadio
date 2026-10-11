@@ -9,8 +9,9 @@ import kotlinx.coroutines.launch
  * Starts and stops the charging monitor the moment the cable goes in or comes out, so the
  * status-bar card (and the little watt reading) are there without opening the app first.
  *
- * ACTION_POWER_CONNECTED / DISCONNECTED are two of the few broadcasts an app may still
- * receive from the manifest, and they are ignored completely while both switches are off.
+ * Runtime power receivers are registered while the app/its existing monitor is active.
+ * Android8+ can restrict/defer manifest implicit-power delivery without a live owner.
+ * Visual monitoring is ignored while its switches are off; independent voice jobs remain gated.
  */
 class ChargingWatcher : BroadcastReceiver() {
 

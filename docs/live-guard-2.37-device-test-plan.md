@@ -43,10 +43,15 @@ private screenshots, prompts, audio or a raw state/preferences dump.
 4. Turn the master off, then category off, then enter quiet hours separately: test
    must record disabled/event-off/quiet-hour outcomes and remain silent. Turning a
    switch on is not a playback-success result. Re-enable only your chosen settings.
-5. Cold process/locked phone: plug in outside quiet hours with card, pill and
-   persistent monitor **all off**, but charging speech enabled. A bounded job should
-   attempt speech independently; no permanent visual monitor may be silently enabled.
-   Repeat with the normal enabled card/pill. Record whether the engine initialized,
+5. With Home visible, plug in outside quiet hours with card, pill and persistent
+   monitor **all off**, but charging speech enabled. Registered runtime power listeners
+   should schedule a bounded voice-only job independently; no permanent visual monitor
+   may be silently enabled. Check listener registration diagnostics, not just voice switches.
+   Then lock/background the phone: with an existing opted-in monitor or its visual
+   fallback running, runtime listeners should remain owned. Without any live owner,
+   Android8+ manifest power delivery may be missed/deferred before a job exists; explicitly
+   record this limitation rather than claiming a cold-background guarantee. Repeat with
+   the normal enabled card/pill. Record whether the engine initialized,
    reported start/completion, and whether you actually heard it, as three different facts.
 6. Duplicate/reconnect: one physical connection must not repeatedly announce from
    card/service/job races. Unplug and reconnect should permit a new announcement.

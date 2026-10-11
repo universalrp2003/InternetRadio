@@ -48,31 +48,25 @@ class ChargerWatchWorker(
         // 2. The fallback: the system will not give us a foreground service here, so the job
         //    itself keeps the same card alive. It runs in short stretches and re-schedules
         //    itself, which is allowed without any new permission.
-        ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
-        ChargeNotifier.announcePluggedIn(ctx)
-
-        var ticks = 0
-        // isStopped is a member of every worker; a worker that has been cancelled or has
-        // run out of time comes back here as stopped, and then this loop ends cleanly.
-        while (ticks < 16 && !isStopped) {
-            delay(30_000)
-            ticks++
-            val now = ChargeNotifier.read(ctx) ?: break
-            if (!now.powerConnected && !ChargeMonitorService.persistentEnabled(ctx)) {
-                ChargeNotifier.clear(ctx)
-                return Result.success()
-            }
+        val owner = "charger-worker:$id"
+        com.universalrp.cleansweep.notify.AutomaticAlerts.start(ctx, owner)
+        try {
             ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
-            com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
-            // The piggy-backed charge of the last few percent can be watched, but there is no
-            // point shouting about it — the card simply stays until the plug comes out.
-            if (now.percent >= 100) break
-        }
-
-        val still = ChargeNotifier.read(ctx)
-        if (still?.powerConnected == true || ChargeMonitorService.persistentEnabled(ctx)) schedule(ctx)
-
-        return Result.success()
+            ChargeNotifier.announcePluggedIn(ctx)
+            var ticks = 0
+            while (ticks < 16 && !isStopped) {
+                delay(30_000); ticks++
+                val now = ChargeNotifier.read(ctx) ?: break
+                if (!now.powerConnected && !ChargeMonitorService.persistentEnabled(ctx)) {
+                    ChargeNotifier.clear(ctx); return Result.success()
+                }
+                ChargeNotifier.post(ctx, stillCurrent = { !isStopped })
+                com.universalrp.cleansweep.widget.CleanSweepWidget.refresh(ctx)
+            }
+            val still = ChargeNotifier.read(ctx)
+            if (still?.powerConnected == true || ChargeMonitorService.persistentEnabled(ctx)) schedule(ctx, continuation = true)
+            return Result.success()
+        } finally { com.universalrp.cleansweep.notify.AutomaticAlerts.stop(owner) }
     }
 
     /**
@@ -99,14 +93,14 @@ class ChargerWatchWorker(
         }
 
         /** Schedules the watch. Safe to call from a broadcast receiver. */
-        fun schedule(context: Context) {
+        fun schedule(context: Context, continuation: Boolean = false) {
             try {
                 val request = OneTimeWorkRequestBuilder<ChargerWatchWorker>()
                     .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
                     .build()
                 WorkManager.getInstance(context.applicationContext).enqueueUniqueWork(
                     UNIQUE,
-                    ExistingWorkPolicy.REPLACE,
+                    if (continuation) ExistingWorkPolicy.APPEND_OR_REPLACE else ExistingWorkPolicy.KEEP,
                     request,
                 )
             } catch (e: Exception) {

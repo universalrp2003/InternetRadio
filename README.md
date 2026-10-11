@@ -37,7 +37,8 @@ CI artifacts are temporary build downloads, not the public release channel.
 
 - **Live Guard / CleanSweep 2.37 candidate:** automatic voice delivery now checks
   initialization, actual callbacks and failures, with awaited power jobs and a real-gated
-  automatic test/diagnostics. Today's dated Tamil headlines only, finite unseen rotation,
+  automatic test/diagnostics and owner-scoped runtime power/network/battery listeners.
+  Manifest-only cold-background power delivery is not guaranteed. Today's dated Tamil headlines only, finite unseen rotation,
   no publisher ribbon or old/safety-tip fallback. API/model identity is answered locally
   without irrelevant duplicated web evidence. Larger resizable launcher widget defaults
   to **battery% + battery-side W**, with per-widget view cycling and truthful precision;

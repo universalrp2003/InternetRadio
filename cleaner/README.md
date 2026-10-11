@@ -19,8 +19,10 @@ pill: battery% and watts together, larger percentage, per-widget view cycling.
   return values, one installed same-language offline retry, awaited short power jobs and
   start-based cooldowns. Voice-only power jobs do not depend on card/pill switches or
   silently enable permanent monitoring. Master/event switches, quiet hours and the
-  below90%/earliest-hour early-unplug conditions remain. Live network/battery listeners
-  require visible app or the existing enabled monitor; hourly fallback/OEM jobs are not
+  below90%/earliest-hour early-unplug conditions remain. Runtime power/network/battery listeners
+  require visible app, the existing enabled monitor or its visual fallback. Registration
+  status is visible; Android8+ manifest power broadcasts alone may be missed/deferred.
+  Without a live owner there is no cold-background trigger guarantee. Hourly/OEM jobs are not
   instant-delivery guarantees. Diagnostics and **Test automatic charging voice** show
   actual queued/blocked/failed/engine states, not assumed audibility. TTS settings are guarded.
 - Real Tamil RSS/Atom publication-today items in the phone's current local timezone;

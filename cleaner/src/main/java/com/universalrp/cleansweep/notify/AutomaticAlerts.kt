@@ -7,6 +7,7 @@ import android.os.Looper
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.voice.Announcer
 import com.universalrp.cleansweep.voice.VoiceDeliveryPolicy
+import com.universalrp.cleansweep.voice.VoiceObserverStatus
 import kotlinx.coroutines.*
 
 /** Immediate listeners only while the app is visible or its EXISTING charging/background service is running. */
@@ -18,6 +19,10 @@ object AutomaticAlerts {
     private var connectivity: ConnectivityManager? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var batteryJob: Job? = null
+    private val observerState = kotlinx.coroutines.flow.MutableStateFlow(VoiceObserverStatus())
+    val observers: kotlinx.coroutines.flow.StateFlow<VoiceObserverStatus> = observerState
+    private val powerReceiver = SystemEventWatcher()
+    private val chargingReceiver = ChargingWatcher()
     private var knownTransport: String? = null
     @Volatile private var generation = 0
     private val networkRefresh = Runnable { context?.let { observeNetwork(it) } }
@@ -33,22 +38,30 @@ object AutomaticAlerts {
 
     fun start(context: Context, owner: String) { main.post {
         owners.add(owner)
-        if (registered) return@post
+        if (registered) { observerState.value = observerState.value.copy(owners = owners.size); return@post }
         this.context = context.applicationContext; registered = true; generation++
         connectivity = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
         knownTransport = transport(context).takeIf { it in setOf("wifi", "mobile") }
         knownTransport?.let { Announcer.prefs(context).edit().putString("last_transport", it).apply() }
-        runCatching { connectivity?.registerDefaultNetworkCallback(callback) }
-        runCatching { context.applicationContext.registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }
+        val network = connectivity != null && runCatching { connectivity?.registerDefaultNetworkCallback(callback) }.isSuccess
+        val battery = runCatching { context.applicationContext.registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) }.isSuccess
+        val powerFilter = IntentFilter().apply { addAction(Intent.ACTION_POWER_CONNECTED); addAction(Intent.ACTION_POWER_DISCONNECTED) }
+        // Android8+ manifest implicit-power delivery can be restricted/deferred. Explicit runtime owners are required.
+        val power = runCatching { context.applicationContext.registerReceiver(powerReceiver, powerFilter) }.isSuccess
+        runCatching { context.applicationContext.registerReceiver(chargingReceiver, powerFilter) }
+        observerState.value = VoiceObserverStatus(owners.size, battery, network, power)
     } }
 
     fun stop(owner: String) { main.post {
         owners.remove(owner)
-        if (owners.isNotEmpty() || !registered) return@post
+        if (owners.isNotEmpty() || !registered) { observerState.value = observerState.value.copy(owners = owners.size); return@post }
         registered = false; generation++
         main.removeCallbacks(networkRefresh)
         runCatching { connectivity?.unregisterNetworkCallback(callback) }
         runCatching { context?.unregisterReceiver(batteryReceiver) }
+        runCatching { context?.unregisterReceiver(powerReceiver) }
+        runCatching { context?.unregisterReceiver(chargingReceiver) }
+        observerState.value = VoiceObserverStatus()
         batteryJob?.cancel(); batteryJob = null; context = null; knownTransport = null
     } }
 

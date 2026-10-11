@@ -10,7 +10,9 @@ Verification/publication pending at source preparation; see
 
 - Automatic TTS main-thread initialization, bounded per-language queue, callbacks,
   checked return values, awaited background events, one same-language offline retry,
-  start-based cooldowns and connection/job deduplication. Voice diagnostics distinguish
+  start-based cooldowns and connection/job deduplication. Runtime power/battery/network
+  receivers are owner-scoped; registration evidence is shown, and manifest-only
+  cold-background power delivery is not guaranteed. Voice diagnostics distinguish
   queued/blocked/failed/engine outcomes; real-gated automatic test and guarded TTS settings.
 - Real publication-today Tamil RSS/Atom news in phone-local timezone, canonical title/URL
   deduplication, day-scoped unseen rotation ending when caught up, no publisher ribbon,

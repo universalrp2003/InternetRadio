@@ -117,6 +117,21 @@ import java.util.Locale
 @Composable
 fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
     val owner = LocalLifecycleOwner.current
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.DisposableEffect(context) {
+        val clockReceiver = object : android.content.BroadcastReceiver() {
+            override fun onReceive(c: android.content.Context?, intent: android.content.Intent?) {
+                vm.expireNewsForLocalDay(); vm.loadTamilInfoStrip()
+            }
+        }
+        val filter = android.content.IntentFilter().apply {
+            addAction(android.content.Intent.ACTION_DATE_CHANGED)
+            addAction(android.content.Intent.ACTION_TIME_CHANGED)
+            addAction(android.content.Intent.ACTION_TIMEZONE_CHANGED)
+        }
+        val registered = runCatching { context.applicationContext.registerReceiver(clockReceiver, filter) }.isSuccess
+        onDispose { if (registered) runCatching { context.applicationContext.unregisterReceiver(clockReceiver) } }
+    }
     LaunchedEffect(owner) {
         owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             var newsTick = 0

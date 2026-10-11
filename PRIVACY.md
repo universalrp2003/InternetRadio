@@ -52,8 +52,10 @@ available battery/storage/mobile measurements and their snapshot time. Queries
 are off-main and use existing permissions; widget refresh does not enable a new
 permanent monitor. Short power-event jobs respect enabled voice categories/quiet
 hours and do not enable the existing opt-in persistent service. Live listeners
-are owned by the visible activity or the already-running monitor; Android/OEM and
-force-stop restrictions still apply. Extra percentage digits require actual
+are owned by the visible activity, already-running monitor or its existing visual
+fallback job. Runtime listener registration status is displayed, not persisted.
+Android8+ manifest power delivery can be missed/deferred with no live owner; Android/OEM
+and force-stop restrictions still apply. Extra percentage digits require actual
 reported level/scale resolution, not estimated-capacity interpolation. Histories,
 phone-age privacy, all-current-issues report controls and app-name/network sharing
 choices are unchanged.

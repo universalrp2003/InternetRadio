@@ -379,7 +379,7 @@ jobs:
             exit 1
           fi
           echo "OK: no Accessibility service in CleanSweep's manifest"
-          for symbol in NewsPolicy BatteryValuePolicy AssistantEvidencePolicy WidgetReadingPolicy VoiceDeliveryPolicy PowerVoiceWorker AutomaticAlerts PhoneAgeEstimator PhoneAgeBadge ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
+          for symbol in NewsPolicy BatteryValuePolicy AssistantEvidencePolicy WidgetReadingPolicy VoiceDeliveryPolicy VoiceObserverStatus PowerVoiceWorker AutomaticAlerts PhoneAgeEstimator PhoneAgeBadge ReadingPolicy CompatibilityReport SecurityHistoryPolicy ChargeHistoryPolicy DataBudgetPolicy MobileCounterPolicy PermissionObservationPolicy ActionChecklistPolicy InsightsScreen; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then echo "OK: $symbol is in the APK"
             else echo "FAIL: approved dashboard/history/tools feature $symbol missing from APK"; exit 1; fi
           done
@@ -705,6 +705,14 @@ jobs:
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then TAG="$GITHUB_REF_NAME"
           else TAG="$(cat releases/latest-tag.txt)"; fi
           [[ "$TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release tag"; exit 1; }
+          # Never promote a stale branch candidate after a newer fix has been pushed.
+          if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
+            REMOTE_SOURCE=$(git ls-remote origin "$GITHUB_REF" | awk '{print $1}')
+            if [[ "$REMOTE_SOURCE" != "$GITHUB_SHA" ]]; then
+              echo "A newer branch source exists; refusing stale-candidate publication."
+              exit 1
+            fi
+          fi
           NOTES="releases/$TAG.md"
           test -f "$NOTES"
           FILES=(cleaner/build/outputs/apk/release/*.apk radio/build/outputs/apk/release/*.apk equalizer/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab radio/build/outputs/bundle/release/*.aab equalizer/build/outputs/bundle/release/*.aab)

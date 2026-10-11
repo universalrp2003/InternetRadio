@@ -45,6 +45,8 @@ class VoiceDeliveryPolicyTest {
     }
     @Test fun diagnosticDefaultsDoNotClaimPlaybackOrIncludeUtteranceText() {
         val snapshot = VoiceDeliveryStatus()
+        val observers = VoiceObserverStatus()
+        assertEquals(0, observers.owners); assertNull(observers.power); assertNull(observers.network); assertNull(observers.battery)
         assertEquals(VoiceDeliveryPolicy.Stage.NOT_REQUESTED, snapshot.stage); assertNull(snapshot.tamilAvailable)
         assertNull(snapshot.mediaVolume); assertEquals("", snapshot.event); assertEquals(0L, snapshot.atMs)
     }
