@@ -80,6 +80,9 @@ class CoreManifestTest(unittest.TestCase):
         no_provider = BASE.replace("</application>", "</application>").replace(
             '<provider android:name="androidx.core.content.FileProvider"\n            android:authorities="${applicationId}.updates.files"\n            android:exported="false" android:grantUriPermissions="true" />', "")
         self.assertTrue(any("FileProvider is missing" in item for item in problems(no_provider)))
+        # A real merged manifest has ${applicationId} substituted; that must still pass.
+        merged = BASE.replace("${applicationId}.updates.files", "com.universalrp.cleansweep.updates.files")
+        self.assertEqual(problems(merged), [])
 
     def test_retired_classes_are_rejected_in_compiled_dex(self):
         clean = {"cleaner.dex": b"\x00\x01\x02com/universalrp/cleansweep/MainActivity\x03"}

@@ -102,7 +102,10 @@ def manifest_problems(manifest: ET.Element, label: str = "manifest") -> list[str
         if "notification" in name.lower() or "MessageReader" in name:
             problems.append(f"{label}: notification service declared: {name}")
 
-    providers = [node for node in application.findall("provider") if node.get(ANDROID + "authorities") == "${applicationId}.updates.files"]
+    # The source manifest uses the "${applicationId}.updates.files" placeholder; a real merged
+    # manifest has it substituted (com.universalrp.cleansweep.updates.files), so match the suffix.
+    providers = [node for node in application.findall("provider")
+                 if (node.get(ANDROID + "authorities") or "").endswith(".updates.files")]
     if not providers:
         problems.append(f"{label}: verified-update FileProvider is missing")
     elif providers[0].get(ANDROID + "exported") != "false":
