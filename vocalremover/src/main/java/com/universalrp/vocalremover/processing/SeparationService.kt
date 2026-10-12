@@ -731,15 +731,16 @@ class SeparationService : Service() {
     private fun ensureForeground(job: SeparationJob) {
         val notification = buildNotification(job)
         if (Build.VERSION.SDK_INT >= 35) {
-            ServiceCompat.startForeground(
-                this,
+            // AndroidX Core 1.15 masks foreground types it doesn't know to type NONE.
+            // MEDIA_PROCESSING is an API 35 type, so call the platform API directly here;
+            // target SDK 36 correctly rejects a type-less foreground service.
+            startForeground(
                 NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROCESSING,
             )
         } else if (Build.VERSION.SDK_INT >= 29) {
-            ServiceCompat.startForeground(
-                this,
+            startForeground(
                 NOTIFICATION_ID,
                 notification,
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
