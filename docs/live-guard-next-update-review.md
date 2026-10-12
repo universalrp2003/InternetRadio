@@ -63,8 +63,9 @@ are historical, not a substitute for actual device validation.
   (was 45 °C in the voice path and 42 °C in one plug-in check), honest sensor naming, a
   formatted real temperature, a 3-hour hush, and no claimed cause or diagnosis. The status
   gate fails if `Announcer.HOT_BATTERY_C` and the policy drift apart.
-- Preparation-only, exactly like every earlier candidate: publication waits for the owner's
-  device test recorded in `docs/live-guard-2.41-device-evidence.md`.
+- **Published 12 October 2026** as `v2026.10.12-1` from the exact device-tested bytes after the
+  owner's Redmi 13 5G install (Play Protect ON: "App scan recommended" → "Scanning…" → "This app
+  looks safe"); record in `docs/live-guard-2.41-device-evidence.md`.
 
 ### Selective notification reader — REMOVED in the 2.40 core candidate
 

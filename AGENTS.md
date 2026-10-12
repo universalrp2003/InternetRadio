@@ -75,8 +75,10 @@
   an honest sensor name and a hush window. The owner did **not** authorize publication:
   2.41 is published only after the owner installs the exact candidate APK on his phone and
   the real Play Protect wording plus installer outcome are recorded with the tested digest
-  and run id in `docs/live-guard-2.41-device-evidence.md`. Never publish a rebuilt digest as
-  if the device test covered it; keep 2.40's published assets, the 2.39 history and the
+  and run id in `docs/live-guard-2.41-device-evidence.md`. **That happened on 12 October
+  2026:** the owner installed the candidate (Play Protect "App scan recommended" → "Scanning…"
+  → "This app looks safe"), and 2.41 was published as `v2026.10.12-1` from the tested bytes in
+  run 38202739572. Never publish a rebuilt digest as if the device test covered it; keep 2.40's published assets, the 2.39 history and the
   install-block advisory intact, and keep `releases/latest-tag.txt` at `v2026.10.11-4` until
   a real publication happens.
 

@@ -1,6 +1,6 @@
 # Privacy policy — CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ
 
-**Last updated: 12 October 2026** (2.40 published: notification reader removed; 2.41 is a preparation candidate, not published)
+**Last updated: 12 October 2026** (2.41 published: honest charging readings, 44 °C heat warning, AI budgets; notification reader stays removed)
 **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
 ## The short version
@@ -10,9 +10,9 @@ no account to create, no advertising, no analytics, and no developer-side tracki
 user-controlled local histories stay on your phone (described below). Nothing is
 uploaded to the developer, and the developer cannot see anything on your phone.
 
-## Prepared for 2.41 (candidate — not published, no phone test yet)
+## Live Guard 2.41 (published) — no new data flow
 
-The 2.41 candidate does not add a data flow. In its own words:
+The published 2.41 does not add a data flow. In its own words:
 
 - **Honest charging numbers** are read from the same local battery broadcast and kernel
   interfaces as before (battery-side voltage × current, temperature). Nothing new is

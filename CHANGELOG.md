@@ -1,17 +1,18 @@
 # Changelog — maintained Android apps
 
-## Live Guard 2.41/code46 — candidate 12 October 2026: honest charging readings, 44 °C heat warning, AI budgets
+## Live Guard 2.41/code46 — verified/published 12 October 2026: honest charging readings, 44 °C heat warning, AI budgets
 
-**Candidate only — not published, not device-tested yet.** Owner-requested follow-up work
-on the published 2.40 core: the charging numbers must say what they really are, the phone
-must warn once at 44 °C, the AI asks must stay inside a bounded output budget, and a model
-the provider does not list must fail fast instead of producing a doomed request. The
-workflow's device-evidence gate keeps publication blocked until the owner installs the
-exact candidate APK and
-[`docs/live-guard-2.41-device-evidence.md`](docs/live-guard-2.41-device-evidence.md)
-records the real Play Protect wording, the installer outcome and the tested digest in
-`TESTED-APK-SHA256` / `TESTED-RUN-ID` form. Full write-up:
-[`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md).
+**Published** as stable/latest `v2026.10.12-1` after the owner installed the exact candidate
+APK on the phone with Play Protect **ON**. The published APK is the exact device-tested build:
+`CleanSweep-v2.41.apk`, **13,565,004 bytes**, SHA-256
+`f728a3435f12952370759feed743431c01179b95e84ba48259bae89a35ba7a03`, built in CI run
+**38202739572** (source `e31828f74bbe25f6c8e59c278284c06fe24826f3`). With Play Protect **on**, on
+the same Redmi 13 5G as 2.40, Play Protect showed "App scan recommended" → "Scanning…" →
+"This app looks safe — You can continue to install it", Android's installer completed and
+About shows CleanSweep v2.41, upgrading in place over 2.40 (45). That is one phone, one build —
+not Google's approval, not all-device certification and not proof of any cause. Record:
+[`docs/live-guard-2.41-device-evidence.md`](docs/live-guard-2.41-device-evidence.md). Full
+write-up: [`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md).
 
 - **Honest watts/amps** (`data/ChargingHonestyPolicy.kt`): charging power and current are
   labelled battery-side, shown only when measured, never substituted for one another and
@@ -37,7 +38,8 @@ records the real Play Protect wording, the installer outcome and the tested dige
   +3 suites, +20 declarations), 941 audited EN/TA catalog keys (931 before), the unchanged
   core-manifest/retired-capability gate, plus a new CI DEX check that `batterySideWatts`,
   `screenNote`, `shouldAnnounce`, `effectiveOutputTokens` and `checkModel` are compiled into
-  **both** shipped variants. Publication still requires the recorded device test.
+  **both** shipped variants. Publication required the recorded device test above; the
+  device-evidence gate published the tested bytes and was not weakened.
 
 ## Live Guard 2.40/code45 — verified/published 11 October 2026: notification/message reading removed
 
