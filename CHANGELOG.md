@@ -24,7 +24,10 @@ unchanged and travel as their previously verified bytes.
   its own charge history recorded real 4.6–4.8 W sessions. The current was read only from
   `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW`, which older/OEM kernels answer with `0` or
   "unsupported" while the broadcast extra `BatteryManager.EXTRA_CURRENT` still carries the real
-  charge current; `4.36 V × 0 A` then looked like a measurement. One policy now decides which
+  charge current; `4.36 V × 0 A` then looked like a measurement. The fallback reads the
+  broadcast's `current_now` key (public as `BatteryManager.EXTRA_CURRENT_NOW` only from API 34,
+  so the literal is used — minSdk 26; a constant reference would trip NewApi lint). One policy
+  now decides which
   reading may be used **and records its source**: a real non-zero property value, then the
   broadcast extra, then a broadcast zero (a genuine trickle/full reading), otherwise nothing. A
   bare property `0` with no broadcast corroboration is *not* reported as 0 A — an unsupported

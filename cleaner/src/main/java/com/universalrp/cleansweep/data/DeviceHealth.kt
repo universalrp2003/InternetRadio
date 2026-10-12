@@ -96,6 +96,22 @@ object BatteryReader {
 
     private const val UNKNOWN = Int.MIN_VALUE
 
+    /**
+     * Keys of the sticky `ACTION_BATTERY_CHANGED` broadcast's current readings, in microamps.
+     *
+     * Android only exposed these as `BatteryManager.EXTRA_CURRENT_NOW` /
+     * `EXTRA_CURRENT_AVERAGE` in **API 34**; the keys themselves have been in the broadcast
+     * long before minSdk 26, and reading them is the way to get a current on kernels whose
+     * `getIntProperty` answers `0` or "unsupported" — the owner's OPPO A3s among them. The
+     * literals are used deliberately: referencing the API 34 constants would trip NewApi lint
+     * on API 26-33, even though String constants are inlined at compile time.
+     *
+     * If a kernel does not put the key in the broadcast at all, [UNKNOWN] comes back and the
+     * reading is reported as *not measured* — never as a fake `0.00 W`.
+     */
+    private const val EXTRA_CURRENT_NOW = "current_now"
+    private const val EXTRA_CURRENT_AVERAGE = "current_average"
+
     fun read(context: Context): BatteryReading {
         val intent: Intent? = try {
             context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -135,10 +151,13 @@ object BatteryReader {
         // evidence of a different unit, and an unsupported sensor never becomes "0.00 W".
         val current = BatteryValuePolicy.currentReading(
             propertyMicroAmps = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
-            broadcastMicroAmps = intent?.getIntExtra(BatteryManager.EXTRA_CURRENT, UNKNOWN),
+            broadcastMicroAmps = intent?.getIntExtra(EXTRA_CURRENT_NOW, UNKNOWN),
         )
         val currentA = current.amps
-        val averageCurrentA = BatteryValuePolicy.microAmpsToAmps(property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE))
+        val averageCurrentA = BatteryValuePolicy.currentReading(
+            propertyMicroAmps = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE),
+            broadcastMicroAmps = intent?.getIntExtra(EXTRA_CURRENT_AVERAGE, UNKNOWN),
+        ).amps
         val chargeCounter = property(bm, BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             ?.let { it / 1000f } // µAh -> mAh
 

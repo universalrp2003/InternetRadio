@@ -16,7 +16,11 @@ object BatteryValuePolicy {
         /** `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW` — Android's documented counter. */
         PROPERTY,
 
-        /** `BatteryManager.EXTRA_CURRENT` from the `ACTION_BATTERY_CHANGED` broadcast. */
+        /**
+         * The `current_now` / `current_average` extra of the `ACTION_BATTERY_CHANGED`
+         * broadcast — public as `BatteryManager.EXTRA_CURRENT_NOW` only from API 34, but
+         * present in the broadcast long before minSdk 26.
+         */
         BROADCAST,
 
         /** Neither source produced a plausible value. */
@@ -34,8 +38,11 @@ object BatteryValuePolicy {
      * Older and OEM kernels answer the *property* with `0` or "unsupported" while the
      * *broadcast extra* still carries the real charge current — the OPPO A3s (Android
      * 8.1 / ColorOS) regression the owner reported in 2.42: the card showed `0.00 W` /
-     * `-0.00 A` while the same phone's charge history recorded real 4.6–4.8 W sessions,
-     * because that history was written from a broadcast-derived sample.
+     * `-0.00 A` while the same phone's charge history recorded real 4.6–4.8 W sessions.
+     *
+     * This is a fallback, not a promise: if a kernel puts no current in the broadcast
+     * either, the answer is [CurrentSource.NONE] and the UI says "not reported". That is
+     * the honest outcome, and it is strictly better than printing a measured-looking zero.
      *
      * Order of trust:
      *  1. a real **non-zero** property value — Android's documented counter;

@@ -101,7 +101,9 @@ def main():
     battery = source('data/BatteryValuePolicy.kt')
     require('fun currentReading' in battery and 'enum class CurrentSource' in battery and 'BROADCAST' in battery,
             'Battery-current source policy missing')
-    require('BatteryManager.EXTRA_CURRENT' in source('data/DeviceHealth.kt') and
+    # The broadcast key is a literal on purpose: BatteryManager only exposed the constant in
+    # API 34, and minSdk is 26. Referencing the constant would trip NewApi on older devices.
+    require('"current_now"' in source('data/DeviceHealth.kt') and
             'BatteryValuePolicy.currentReading' in source('data/DeviceHealth.kt'),
             'The battery broadcast current extra is not read')
     require('currentSource = current.source' in source('data/DeviceHealth.kt'),

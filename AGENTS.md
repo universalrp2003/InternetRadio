@@ -99,7 +99,8 @@
   published without one must say so in its own words — see `releases/v2026.10.12-2.md`.
 - **2026-10-12 owner request (Live Guard 2.42/code47) — the nine-item work list:** (1) restore
   charging watts on phones whose `BATTERY_PROPERTY_CURRENT_NOW` reports nothing by falling back
-  to the `BatteryManager.EXTRA_CURRENT` broadcast extra, keeping one unit decider and one watts
+  to the battery broadcast's `current_now` extra (public as `BatteryManager.EXTRA_CURRENT_NOW`
+  only from API 34, so the literal key is used — minSdk is 26), keeping one unit decider and one watts
   decider and never faking `0.00 W`; (2) choose Voice A / Voice B automatically from the real
   installed inventory and never show the "choose and preview two voices" error again; (3) the
   ongoing status-bar charging meter defaults ON and is re-armed by an update or reboot even when

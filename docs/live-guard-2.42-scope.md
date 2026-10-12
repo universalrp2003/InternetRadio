@@ -40,8 +40,10 @@ phone's charge-history cards recorded real sessions at 4.6 W average and 4.8 W p
 Diagnosis confirmed in source: `data/DeviceHealth.kt` read the current **only** from
 `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW`. Older and OEM kernels (the A3s is Android
 8.1/ColorOS) answer that property with `0` or "unsupported" while the battery broadcast extra
-`BatteryManager.EXTRA_CURRENT` still carries the real charge current. The broadcast extra was
-not read anywhere in the app. `BatteryValuePolicy.microAmpsToAmps(0)` returns `0f`, so
+the broadcast's `current_now` extra still carries the real charge current. That extra was not
+read anywhere in the app. (Android only exposed the key as `BatteryManager.EXTRA_CURRENT_NOW` in
+**API 34**; with minSdk 26 the literal key is used deliberately, because referencing the newer
+constant would trip NewApi lint on API 26-33 even though String constants are inlined.) `BatteryValuePolicy.microAmpsToAmps(0)` returns `0f`, so
 `ChargingHonestyPolicy.batterySideWatts` computed `4.36 V × 0 A = 0.00 W` — a *measured-looking*
 zero produced by a sensor that reported nothing.
 
@@ -56,9 +58,13 @@ Built:
 - A bare property `0` with no broadcast corroboration is **not** reported as 0 A. On those
   kernels `0` means "unsupported", and an unsupported sensor must never be rendered as
   `0.00 W` — that rule from 2.41 is preserved, not relaxed.
-- `data/DeviceHealth.kt` reads `BatteryManager.EXTRA_CURRENT` from the sticky battery broadcast
-  and stores `currentSource` on `BatteryReading`. When the broadcast rescued the reading, the
-  existing sign note says so in the owner's language (new EN/TA string).
+- `data/DeviceHealth.kt` reads `current_now` (and, symmetrically, `current_average`) from the
+  sticky battery broadcast and stores `currentSource` on `BatteryReading`. When the broadcast
+  rescued the reading, the existing sign note says so in the owner's language (new EN/TA string).
+- **This is a fallback, not a promise.** If the A3s kernel puts no current in the broadcast
+  either, the reading becomes `NONE` and the screen says "not reported" — which is still
+  strictly better than printing a measured-looking `0.00 W`. The owner's screenshot is what
+  decides which of the two happened; neither outcome is claimed in advance.
 - `BatteryValuePolicy.microAmpsToAmps` remains the **single unit decider** — both inputs are
   microamps and magnitude is never treated as evidence of a different unit, exactly as that
   file's own comment requires. `ChargingHonestyPolicy` remains the **single watts decider**; no
