@@ -41,7 +41,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -85,6 +84,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.universalrp.vocalremover.audio.WavPlaybackController
+import com.universalrp.vocalremover.audio.WavPlaybackState
+import com.universalrp.vocalremover.audio.WavPlaybackStatus
 import com.universalrp.vocalremover.health.DeviceMonitor
 import com.universalrp.vocalremover.health.DeviceSnapshot
 import com.universalrp.vocalremover.model.ModelRepository
@@ -125,8 +127,11 @@ private data class ModelDownloadUiState(
 )
 
 class MainActivity : ComponentActivity() {
+    private lateinit var wavPlaybackController: WavPlaybackController
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        wavPlaybackController = WavPlaybackController(applicationContext)
         SeparationJobStore.initialize(applicationContext)
         val recoveredJob = SeparationJobStore.current(applicationContext)
         if (recoveredJob?.status in setOf(JobStatus.RUNNING, JobStatus.QUEUED, JobStatus.PAUSING)) {
@@ -153,18 +158,29 @@ class MainActivity : ComponentActivity() {
                     error = Coral,
                 ),
             ) {
-                VocalRemoverScreen()
+                VocalRemoverScreen(wavPlaybackController)
             }
         }
+    }
+
+    override fun onStop() {
+        if (::wavPlaybackController.isInitialized) wavPlaybackController.stop()
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        if (::wavPlaybackController.isInitialized) wavPlaybackController.release()
+        super.onDestroy()
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VocalRemoverScreen() {
+private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
     val context = LocalContext.current
     val activity = context as? Activity
     val job by SeparationJobStore.job.collectAsState()
+    val playbackState by wavPlaybackController.state.collectAsState()
     val serviceSnapshot by ServiceTelemetry.device.collectAsState()
     val monitor = remember { DeviceMonitor(context.applicationContext) }
     var localSnapshot by remember { mutableStateOf<DeviceSnapshot?>(null) }
@@ -276,8 +292,13 @@ private fun VocalRemoverScreen() {
                     onResume = { startServiceAction(context, SeparationService.ACTION_RESUME) },
                     onCancel = { startServiceAction(context, SeparationService.ACTION_CANCEL) },
                     onRetry = { startServiceAction(context, SeparationService.ACTION_RETRY) },
-                    onOpen = { openWav(context, job!!.outputUri) },
+                    playbackState = playbackState,
+                    onPlay = { wavPlaybackController.play(job!!.outputUri) },
+                    onPausePlayback = { wavPlaybackController.pause() },
+                    onResumePlayback = { wavPlaybackController.resume() },
+                    onStopPlayback = { wavPlaybackController.stop() },
                     onNewSong = {
+                        wavPlaybackController.stop()
                         discardTerminalJob(context, job!!)
                         SeparationJobStore.initialize(context)
                     },
@@ -604,7 +625,11 @@ private fun JobCard(
     onResume: () -> Unit,
     onCancel: () -> Unit,
     onRetry: () -> Unit,
-    onOpen: () -> Unit,
+    playbackState: WavPlaybackState,
+    onPlay: () -> Unit,
+    onPausePlayback: () -> Unit,
+    onResumePlayback: () -> Unit,
+    onStopPlayback: () -> Unit,
     onNewSong: () -> Unit,
 ) {
     val isActive = job.status in setOf(JobStatus.RUNNING, JobStatus.QUEUED, JobStatus.PAUSING)
@@ -698,13 +723,72 @@ private fun JobCard(
                     }
                     OutlinedButton(onClick = onNewSong, shape = RoundedCornerShape(13.dp)) { Text("Discard") }
                 }
-                isComplete -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                    Button(onClick = onOpen, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
-                        androidx.compose.material3.Icon(Icons.Default.OpenInNew, null, modifier = Modifier.size(17.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Open / play WAV")
+                isComplete -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    when (playbackState.status) {
+                        WavPlaybackStatus.STOPPED -> Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Button(onClick = onPlay, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Play instrumental")
+                            }
+                            OutlinedButton(onClick = onNewSong, shape = RoundedCornerShape(13.dp)) { Text("New song") }
+                        }
+                        WavPlaybackStatus.PREPARING -> Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            OutlinedButton(onClick = onStopPlayback, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.Close, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Cancel playback")
+                            }
+                            OutlinedButton(onClick = onNewSong, shape = RoundedCornerShape(13.dp)) { Text("New song") }
+                        }
+                        WavPlaybackStatus.PLAYING -> Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            OutlinedButton(onClick = onPausePlayback, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.Pause, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Pause")
+                            }
+                            Button(onClick = onStopPlayback, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.Close, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Stop")
+                            }
+                        }
+                        WavPlaybackStatus.PAUSED -> Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Button(onClick = onResumePlayback, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Resume")
+                            }
+                            OutlinedButton(onClick = onStopPlayback, modifier = Modifier.weight(1f), shape = RoundedCornerShape(13.dp)) {
+                                androidx.compose.material3.Icon(Icons.Default.Close, null, modifier = Modifier.size(17.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Stop")
+                            }
+                        }
                     }
-                    OutlinedButton(onClick = onNewSong, shape = RoundedCornerShape(13.dp)) { Text("New song") }
+                    playbackState.errorMessage?.let { message ->
+                        Text(message, color = Coral, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (playbackState.status != WavPlaybackStatus.STOPPED) {
+                        Text(
+                            "Playback stays in this app and stops when you leave it.",
+                            color = Muted,
+                            fontSize = 10.sp,
+                            lineHeight = 14.sp,
+                        )
+                    }
                 }
                 isCanceled -> OutlinedButton(onClick = onNewSong, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Text("Choose another song") }
             }
@@ -903,17 +987,4 @@ private fun discardTerminalJob(context: Context, job: SeparationJob) {
 private fun startServiceAction(context: Context, action: String) {
     val intent = Intent(context, SeparationService::class.java).setAction(action)
     androidx.core.content.ContextCompat.startForegroundService(context, intent)
-}
-
-private fun openWav(context: Context, value: String) {
-    if (value.isBlank()) return
-    val intent = Intent(Intent.ACTION_VIEW).apply {
-        setDataAndType(Uri.parse(value), "audio/wav")
-        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-    }
-    try {
-        context.startActivity(intent)
-    } catch (_: Exception) {
-        Toast.makeText(context, "No audio player is installed. The WAV is in Music/Vocal Remover Studio.", Toast.LENGTH_LONG).show()
-    }
 }

@@ -8,6 +8,7 @@ This module is intentionally separate from Ramesh Radio while its native audio p
 2. Pick an MP3 with Android's document picker and choose Slow, Medium, or Fast.
 3. Android's local MP3 decoder writes temporary float PCM to app-private storage. The sherpa-onnx source-separation C API processes bounded 12-second windows, with 1-second context and overlap. Completed chunks are fsynced and retained as resumable checkpoints.
 4. The non-vocal/accompaniment stem is joined with a crossfade, written as a stereo 16-bit PCM WAV, and saved in `Music/Vocal Remover Studio`.
+5. Preview the saved WAV inside the app with Play, Pause, Resume, and Stop controls. Playback stops when the app leaves the foreground, rather than handing playback to a separate player that can outlive this app.
 
 The input song is copied for processing; the selected original is never modified. This app contains no API that uploads selected audio. Network access is for the model download only.
 
