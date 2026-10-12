@@ -43,11 +43,38 @@ jobs:
         with:
           gradle-version: "8.14.3"
 
-      - name: Set up Android SDK tools
-        uses: android-actions/setup-android@v3
-
+      # The hosted Ubuntu images already contain Android SDK command-line tools. Use
+      # sdkmanager directly instead of the Node-based setup action; the latter failed
+      # before compilation on the current runner, so it never reached the NDK/build steps.
       - name: Install Android NDK for native runtime packaging
-        run: sdkmanager "ndk;27.2.12479018"
+        shell: bash
+        run: |
+          set -eu
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            for candidate in \
+              "$sdk_root/cmdline-tools/latest/bin/sdkmanager" \
+              "$sdk_root/tools/bin/sdkmanager"; do
+              if [ -x "$candidate" ]; then
+                sdkmanager="$candidate"
+                break
+              fi
+            done
+          fi
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::error::Android sdkmanager was not found under $sdk_root"
+            exit 1
+          fi
+          echo "Using $sdkmanager (SDK root: $sdk_root)"
+          license_answers="$(mktemp)"
+          trap 'rm -f "$license_answers"' EXIT
+          for _ in {1..100}; do printf 'y\n' >> "$license_answers"; done
+          "$sdkmanager" --sdk_root="$sdk_root" --licenses < "$license_answers" >/dev/null
+          "$sdkmanager" --sdk_root="$sdk_root" --install "ndk;27.2.12479018"
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
