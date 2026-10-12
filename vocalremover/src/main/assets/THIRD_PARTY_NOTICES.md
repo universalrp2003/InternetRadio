@@ -1,0 +1,25 @@
+Vocal Remover Studio — third-party notices
+
+UVR MDX-Net 9482 model
+- Model: UVR_MDXNET_9482.onnx
+- Source: https://github.com/k2-fsa/sherpa-onnx/releases/tag/source-separation-models
+- SHA-256: 9d78f8566fa8198065214ab628be1de966a500c57786695aa4b13e2b27a7727d
+- Attribution: UVR (Anjok07 and aufr33), UVR MDX-Net 9482.
+- The official UVR README says the UVR GUI code is MIT-licensed and asks third-party apps using UVR's models to credit UVR and its developers. The model-hosting repositories do not publish a separate per-file license manifest for these weights. This prototype provides attribution and does not represent the weights as covered by sherpa-onnx's license. Review/confirm model terms before commercial redistribution.
+- UVR license/attribution notice: https://github.com/Anjok07/ultimatevocalremovergui#license
+
+sherpa-onnx Android FFI runtime
+- Version 1.13.8, from the official sherpa-onnx Flutter platform packages on pub.dev.
+- arm64 package archive SHA-256: 29db5572735afb1bc29f0f95ab160f7fb38b4b3f926f48e9113457fd740264f4
+- armeabi-v7a package archive SHA-256: fe81837bd12f67d136a456c6d2b39876caaba09edd77761cb527cb170dac2d2a
+- License: Apache License 2.0. Project: https://github.com/k2-fsa/sherpa-onnx
+- The standard upstream Android AAR is JNI-focused and lacks the C API library required for source separation; this build uses the FFI native packages instead.
+- Bundled ONNX Runtime components are MIT-licensed: https://github.com/microsoft/onnxruntime/blob/main/LICENSE
+
+JNA Android runtime
+- Version 5.14.0. License: dual-licensed under LGPL 2.1 or later or Apache License 2.0.
+- Project: https://github.com/java-native-access/jna
+
+AndroidX, Kotlin and Jetpack Compose are provided under their upstream Apache License 2.0 notices.
+
+Privacy: selected audio is processed on-device and is never sent by this app. Internet is only used for the user-requested, checksum-pinned model download. Runtime packages are build-time dependencies, not downloaded by the app.

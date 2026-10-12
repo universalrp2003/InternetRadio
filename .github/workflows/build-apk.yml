@@ -4,6 +4,7 @@
 # - AppForge offline app builder (:builder)
 # - PulseEQ 20-band equalizer (:equalizer)
 # - Ramesh Radio (Tamilnadu FM Radio) — Tamil FM + world news + local audio + 10-band EQ (:radio)
+# - Vocal Remover Studio — standalone on-device vocal-separation prototype (:vocalremover)
 name: Build APK
 
 on:
@@ -41,6 +42,12 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14.3"
+
+      - name: Set up Android SDK tools
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android NDK for native runtime packaging
+        run: sdkmanager "ndk;27.2.12479018"
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
@@ -98,7 +105,7 @@ jobs:
             echo ""
             echo "How to apply this licence to these apps"
             echo ""
-            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ"
+            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ and Vocal Remover Studio"
             echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
             echo ""
             echo "This program is free software: you can redistribute it and/or modify it under"
@@ -182,13 +189,9 @@ jobs:
       - name: Build the APKs
         run: |
           set -o pipefail
-          # Debug APKs stay the quick family channel. The release pair is what a store will
-          # take: app stores reject an APK with android:debuggable, and F-Droid builds the
-          # release variant as well. Both are signed with the same ci-keystore, so a phone
-          # that already has the debug build updates to the release one normally.
-          # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
-          # apps since 2021); the APKs are what everyone else takes.
-          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          # Debug APKs are built for every module. Only the maintained apps get release APKs
+          # and Play bundles; Vocal Remover remains a standalone debug-only prototype.
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :vocalremover:testDebugUnitTest assembleDebug :app:assembleRelease :cleaner:assembleRelease :builder:assembleRelease :equalizer:assembleRelease :radio:assembleRelease :app:bundleRelease :cleaner:bundleRelease :builder:bundleRelease :equalizer:bundleRelease :radio:bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify required CleanSweep regression suites
         run: python3 tools/verify_cleaner_regressions.py
@@ -201,6 +204,7 @@ jobs:
           path: |
             cleaner/build/test-results/test*UnitTest/*.xml
             radio/build/test-results/test*UnitTest/*.xml
+            vocalremover/build/test-results/test*UnitTest/*.xml
           if-no-files-found: warn
 
       - name: Verify built APKs
@@ -210,7 +214,7 @@ jobs:
           WORK=$(mktemp -d)
 
           echo "=== APK files ==="
-          for m in app cleaner builder equalizer radio; do
+          for m in app cleaner builder equalizer radio vocalremover; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
 
@@ -218,8 +222,16 @@ jobs:
           BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
           RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
+          VOCAL_REMOVER=$(ls vocalremover/build/outputs/apk/debug/*.apk | head -1)
+          test -n "$VOCAL_REMOVER" || { echo "FAIL: Vocal Remover prototype debug APK was not produced"; exit 1; }
+          echo "OK: standalone Vocal Remover prototype APK: $VOCAL_REMOVER"
+          if compgen -G "vocalremover/build/outputs/apk/release/*.apk" >/dev/null || \
+             compgen -G "vocalremover/build/outputs/bundle/release/*.aab" >/dev/null; then
+            echo "FAIL: Vocal Remover is a debug-only prototype and must not produce store-facing release artifacts"
+            exit 1
+          fi
 
-          # --- v2.6: the release APKs. These are the store-facing pair.
+          # --- v2.6: the release APKs for maintained apps only. These are the store-facing pair.
           APP_REL=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
@@ -764,6 +776,7 @@ jobs:
           rename_apk app       Internet-Radio  debug   "-debug"
           rename_apk builder   AppForge        debug   "-debug"
           rename_apk equalizer PulseEQ         debug   "-debug"
+          rename_apk vocalremover Vocal-Remover-Studio debug "-debug"
           echo "=== APK file names ==="
           ls -la */build/outputs/apk/*/*.apk
 
@@ -1129,7 +1142,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: store-bundles
-          path: "*/build/outputs/bundle/release/*.aab"
+          path: |
+            app/build/outputs/bundle/release/*.aab
+            cleaner/build/outputs/bundle/release/*.aab
+            builder/build/outputs/bundle/release/*.aab
+            equalizer/build/outputs/bundle/release/*.aab
+            radio/build/outputs/bundle/release/*.aab
 
       - name: Upload Internet Radio APK
         uses: actions/upload-artifact@v4
@@ -1162,3 +1180,10 @@ jobs:
         with:
           name: ramesh-radio-apk
           path: radio/build/outputs/apk/*/*.apk
+
+      - name: Upload Vocal Remover Studio prototype APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vocal-remover-studio-prototype-apk
+          path: vocalremover/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
