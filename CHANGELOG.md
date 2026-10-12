@@ -1,5 +1,34 @@
 # Changelog — maintained Android apps
 
+## Live Guard 2.43/code48 — published 12 October 2026: a zero is never a measurement
+
+**Published** as stable/latest `v2026.10.12-3`, package `com.universalrp.cleansweep`, unchanged
+stable signing key, minSdk 26, target/compileSdk 36. Ramesh Radio 1.8 and PulseEQ 1.2 unchanged.
+**No device test covered these bytes** before publication (the owner's 12 October rule requires
+one only when a release adds a dangerous permission; this one adds none, and the gate compared
+this build's merged-manifest permissions against the published 2.42 APK). CI ran all **349**
+required cases in both variants. The A3s outcome ("not reported" instead of `0.00 W`) still needs
+one owner screenshot.
+
+- **A zero is never a measurement** (`data/BatteryValuePolicy.kt`): the owner installed 2.42 on
+  the OPPO A3s and reported the charging card **still showed 0.00 W** — diagnostic, because that
+  kernel answers zero through *both* the documented current property and the battery broadcast
+  extra, so there is no current to rescue. 2.42's fallback had treated a broadcast zero as a
+  *measured trickle*, reprinting the fake number. From 2.43 a non-zero property value wins, then a
+  non-zero broadcast value, otherwise the reading is **not reported**. A working counter reports a
+  trickle as a small non-zero value, so genuine low-current charging still shows real watts; only
+  the impossible "exactly zero microamps" reading disappears. Watts still come from one place and
+  units from one place. Regression tests assert zero-from-both is `NONE` with no watts, that a
+  small non-zero value is still used, and that the removed broadcast-zero branch cannot return.
+- **2.42 device evidence recorded — two phones, one build**
+  ([`docs/live-guard-2.42-device-evidence.md`](docs/live-guard-2.42-device-evidence.md)): the owner
+  installed 2.42 on **both** the Redmi 13 5G and the OPPO A3s with Play Protect ON; Play Protect
+  said "App scan recommended", the owner scanned, then **"This app looks safe — You can continue to
+  install it"**, the installer completed in place over 2.41 (46) and About shows 2.42. The installed
+  digest matched the published asset exactly (`79400ed9e61898f6e6f3e85c75dc3ee694c580ec58709a3d687fd6ef2af2f9e0`,
+  CI run 38222530199). The six screenshots were delivered in chat but did not persist into the
+  workspace, so the record quotes their content instead of committing images.
+
 ## Live Guard 2.42/code47 — published 12 October 2026: the owner's nine-item work list
 
 **Published** as stable/latest `v2026.10.12-2`, package `com.universalrp.cleansweep`, unchanged

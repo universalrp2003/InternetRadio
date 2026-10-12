@@ -40,18 +40,23 @@ object BatteryValuePolicy {
      * 8.1 / ColorOS) regression the owner reported in 2.42: the card showed `0.00 W` /
      * `-0.00 A` while the same phone's charge history recorded real 4.6–4.8 W sessions.
      *
-     * This is a fallback, not a promise: if a kernel puts no current in the broadcast
-     * either, the answer is [CurrentSource.NONE] and the UI says "not reported". That is
-     * the honest outcome, and it is strictly better than printing a measured-looking zero.
+     * This is a fallback, not a promise: a kernel that answers zero (or nothing) through
+     * *both* paths has no current to report, and the answer is then [CurrentSource.NONE] —
+     * the UI says "not reported", which is strictly better than printing a measured-looking
+     * zero. The owner's OPPO A3s is exactly such a kernel; see the 2.43 note above.
      *
      * Order of trust:
      *  1. a real **non-zero** property value — Android's documented counter;
      *  2. a real **non-zero** broadcast value — the fallback that rescues those kernels;
-     *  3. a broadcast **zero** — a genuine trickle/full measurement from the same healthd
-     *     path that also supplies the voltage and temperature shown next to it;
-     *  4. nothing. A bare property `0` with no broadcast corroboration is *not* reported as
-     *     0 A, because on those kernels `0` means "unsupported" — and an unsupported sensor
-     *     must never be rendered as a measured `0.00 W`.
+     *  3. otherwise nothing.
+     *
+     * **A zero is never a measurement** (2.43). 2.42 briefly treated a broadcast zero as a
+     * genuine trickle reading; on the owner's OPPO A3s the kernel answers zero through *both*
+     * paths, which is indistinguishable from an unsupported sensor, and the card printed the
+     * same fake `0.00 W` the owner reported. A phone whose counter really works reports a
+     * trickle as a small non-zero value, so nothing honest is lost by refusing zero: an
+     * unsupported sensor, and a kernel that cannot tell trickle from unsupported, both become
+     * "not reported" instead of a measured-looking `0.00 W`.
      *
      * Both inputs go through [microAmpsToAmps], so plausibility is bounded once, here.
      */
@@ -61,7 +66,6 @@ object BatteryValuePolicy {
         return when {
             fromProperty != null && fromProperty != 0f -> CurrentReading(fromProperty, CurrentSource.PROPERTY)
             fromBroadcast != null && fromBroadcast != 0f -> CurrentReading(fromBroadcast, CurrentSource.BROADCAST)
-            fromBroadcast != null -> CurrentReading(fromBroadcast, CurrentSource.BROADCAST)
             else -> CurrentReading(null, CurrentSource.NONE)
         }
     }

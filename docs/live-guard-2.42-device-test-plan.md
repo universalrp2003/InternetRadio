@@ -10,26 +10,29 @@ Record results by editing this file, one line per check, with the phone, the And
 and what was actually seen. Where a device result is quoted anywhere else, it must say
 **"one phone, one build"**.
 
-## 1. OPPO A3s charging watts — the regression that started this release (highest priority)
+## 1. OPPO A3s charging reading — tested twice, honest answer recorded (highest priority)
 
-Phone: OPPO A3s, Android 8.1 / ColorOS. Test at a **low-ish battery level** (the owner's
-screenshot was at 92 %, where a genuine trickle can look like a zero) and again mid-charge.
+Phone: OPPO A3s, Android 8.1 / ColorOS.
 
-- [ ] While charging, the battery card shows a **non-zero** watt figure and a matching amp
-      figure. Expected order of magnitude from the A3s' own charge history: about 4.6 W
-      average, 4.8 W peak at 4.36 V.
-- [ ] The current line's note says the reading came **from the battery broadcast**, because
-      this phone's current property reports nothing. That is the new honest provenance line.
-- [ ] The figure is labelled battery-side. It is not the charger adapter's output and must not
-      be described as such.
-- [ ] With the charger unplugged, no charging watts are shown at all (never `0.00 W`).
-- [ ] A new charge-history session records watts consistent with the card, as it did before.
-- [ ] **One screenshot** sent back, as the owner asked, showing percentage, voltage, current
-      and watts together.
+**Result of the 2.42 test (12 October 2026): the card still showed `0.00 W`.** The kernel answers
+zero through *both* the current property and the battery broadcast, so no current exists to
+rescue; see [`live-guard-2.42-device-evidence.md`](live-guard-2.42-device-evidence.md). 2.43
+therefore reports *not reported* instead of a measured zero.
 
-Redmi 13 5G must be **unchanged**:
+Checks for **2.43** on the A3s, while charging at a low-ish level and again mid-charge:
 
-- [ ] Same phone, same charger: watts, amps and the sign note read exactly as they did on 2.41.
+- [ ] The battery card shows **no watt figure and no `0.00 W`**; the current reads *not reported*.
+- [ ] No provenance line claiming a broadcast reading appears (a zero is not a reading).
+- [ ] Percentage, voltage, temperature and the charge history are unchanged and still sensible.
+- [ ] With the charger unplugged, still no charging watts at all.
+- [ ] **One screenshot** sent back, as the owner asked. If a *future* ColorOS/Android build of this
+      phone ever reports a non-zero current in either path, the card will show real watts again
+      with the provenance line — that is the fallback working, not a regression.
+
+On any phone whose counter works (the Redmi 13 5G):
+
+- [ ] Same phone, same charger: watts, amps and the sign note read exactly as they did on 2.41
+      and 2.42 (2.43 only removes the impossible exactly-zero reading).
 - [ ] The provenance line does **not** appear there (the Redmi's current property works, so the
       source is the property, not the broadcast).
 - [ ] The 44 °C heat warning, the screen-on/off note and the health screen all still agree with

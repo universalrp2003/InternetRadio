@@ -116,6 +116,16 @@
   needs both ROMs checked: see `docs/live-guard-2.42-device-test-plan.md`. Do not describe
   either as proven on hardware until that happens.
 
+- **2026-10-12 owner device test result (2.42 → 2.43):** the owner installed 2.42 on **both**
+  phones with Play Protect ON (recorded in `docs/live-guard-2.42-device-evidence.md`, two phones,
+  one build) and reported the OPPO A3s charging card **still showed 0.00 W**. That kernel answers
+  zero through *both* the current property and the battery broadcast, so 2.42's "broadcast zero is
+  a measured trickle" branch was wrong and is gone: **a zero is never a measurement** — non-zero
+  property, else non-zero broadcast, else *not reported*. `tools/verify_cleaner_next_update_source.py`
+  fails the build if that branch returns. No app can show real watts on a kernel that reports no
+  current through either path; do not claim otherwise, and keep asking for one A3s screenshot of
+  the new "not reported" wording.
+
 ## Latest reviewed source batch — build/publication now authorized
 
 Owner choices: **reviewed_setup**, **on_device_only** notification translation,

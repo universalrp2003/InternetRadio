@@ -40,6 +40,22 @@ are declared inside the package, so runtime OFF does not remove them.
 Full advisory, official Google references and the next steps:
 [`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
 
+## Live Guard 2.43 — published (12 October 2026)
+
+One focused fix from the owner's own device test of 2.42: on the OPPO A3s the kernel answers
+**zero through both** battery-current paths, which is indistinguishable from an unsupported
+sensor, so 2.42's "broadcast zero is a trickle" branch reprinted the fake `0.00 W` the owner
+reported. From 2.43 **a zero is never a measurement**: a non-zero property value wins, then a
+non-zero broadcast value, otherwise the current reads *not reported* and no watt figure is shown.
+Phones with a working counter are unchanged — a real trickle is a small non-zero value. This release
+also records the owner's 2.42 install evidence: both phones, Play Protect ON, "App scan
+recommended" → "This app looks safe — You can continue to install it" → installed in place over
+2.41, digest matching the published asset
+([evidence](docs/live-guard-2.42-device-evidence.md)). **No device test covered the 2.43 bytes
+before publication** (no dangerous permission was added); one A3s screenshot while charging will
+confirm the new wording — see
+[`docs/live-guard-2.42-device-test-plan.md`](docs/live-guard-2.42-device-test-plan.md).
+
 ## Live Guard 2.42 — published (12 October 2026)
 
 The owner's nine-item work list is **published as 2.42 / code47**: charging watts come back on
@@ -79,13 +95,13 @@ Google's approval or all-device certification. Detailed notes:
 
 ## Download — release APKs
 
-**2.42 is the current published Live Guard release** (12 October 2026, unchanged
+**2.43 is the current published Live Guard release** (12 October 2026, unchanged
 package/signing key, minimumAPI26) — install it over your existing app rather than
-uninstalling, and see the advisory above. **No device test covered these bytes**: 2.42 was
-published without a recorded physical-device install because the release adds no dangerous
-permission, under the owner's 12 October 2026 decision; the published digest is recorded in the
-tag run and in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md). If you want
-a build that *was* installed and observed on a phone with Play Protect on, use
+uninstalling, and see the advisory above. **No device test covered the 2.43 bytes before
+publication** (no dangerous permission added); 2.42 *was* installed and observed afterwards on
+both of the owner's phones with Play Protect ON
+([evidence](docs/live-guard-2.42-device-evidence.md)). If you want a build whose bytes were
+verified on a phone **before** it was published, use
 [2.41](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.12-1) — the exact
 device-tested build (13,565,004 bytes, SHA-256
 `f728a3435f12952370759feed743431c01179b95e84ba48259bae89a35ba7a03`): on one Redmi 13 5G with
@@ -102,11 +118,11 @@ assets remain immutable.
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.42 | [CleanSweep-v2.42.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-2/CleanSweep-v2.42.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-2/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-2/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.43 | [CleanSweep-v2.43.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-3/CleanSweep-v2.43.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-3/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-3/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.12-2)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.12-3)
 
 Ramesh Radio and PulseEQ are unchanged; their assets are the previously verified bytes reused
 by the publication step, not rebuilt copies.

@@ -74,9 +74,18 @@ Built:
   4.6–4.8 W range the A3s charge history already recorded — and that every unsupported
   combination still yields `null`, never `"0.00 W"`.
 
-**Still needs the owner's phone.** This is the one item on the list that cannot be called fixed
-from source: the owner tests on the OPPO A3s at a low-ish battery level and sends one
-screenshot, and the Redmi 13 5G must still read exactly as before. See
+**Owner's device test, 12 October 2026 — result: not fixed by 2.42, fixed honestly in 2.43.**
+The owner installed 2.42 on **both** phones with Play Protect ON (recorded in
+[`live-guard-2.42-device-evidence.md`](live-guard-2.42-device-evidence.md)) and checked the A3s
+while charging: the card **still showed 0.00 W**. That is diagnostic — the A3s kernel answers
+zero through *both* the current property and the battery broadcast extra, so there was no current
+to rescue, and 2.42's "broadcast zero is a measured trickle" branch reprinted the fake number.
+A zero from both sources is indistinguishable from an unsupported sensor, so **2.43 / code 48
+makes a zero never a measurement**: non-zero property, else non-zero broadcast, else *not
+reported*. The Redmi and any phone with a working counter are unchanged, because a real trickle
+arrives as a small non-zero value. No app can show real watts on a kernel that reports no current
+through either Android path; what it can do is stop pretending. One A3s screenshot of the new
+"not reported" wording is still owed — see
 [`live-guard-2.42-device-test-plan.md`](live-guard-2.42-device-test-plan.md).
 
 ### 2 — Voice A / Voice B chosen automatically, no error message

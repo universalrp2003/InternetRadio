@@ -60,12 +60,20 @@ class BatteryValuePolicyTest {
         assertNull(bothMissing.amps); assertFalse(BatteryValuePolicy.needsBroadcastFallback(0, null))
     }
 
-    /** A zero the broadcast really measured is a trickle/full reading, not a missing sensor. */
-    @Test fun aMeasuredBroadcastZeroIsKeptButAnImplausibleValueIsRefused() {
-        val trickle = BatteryValuePolicy.currentReading(0, 0)
-        assertEquals(0f, trickle.amps!!, 0f)
-        assertEquals(BatteryValuePolicy.CurrentSource.BROADCAST, trickle.source)
-        // 50 A is a sensor artefact, not a charging current: it must not be used from either source.
+    /**
+     * 2.43: the owner's OPPO A3s answers zero through BOTH paths, which is indistinguishable
+     * from an unsupported sensor — so a zero is never a measurement, from either source.
+     */
+    @Test fun aZeroFromEverySourceIsNotAMeasurementButAnImplausibleValueIsRefused() {
+        val allZero = BatteryValuePolicy.currentReading(0, 0)
+        assertNull(allZero.amps)
+        assertEquals(BatteryValuePolicy.CurrentSource.NONE, allZero.source)
+        assertFalse(allZero.isMeasured)
+        assertNull(ChargingHonestyPolicy.batterySideWatts(true, true, 4.36f, allZero.amps))
+        assertNull(BatteryValuePolicy.currentReading(null, 0).amps)
+        // A working counter reports a trickle as a small NON-zero value, which is still used.
+        assertEquals(0.02f, BatteryValuePolicy.currentReading(20_000, null).amps!!, 0.000001f)
+        // 50 A is a sensor artefact, not a charging current: refused from either source.
         assertNull(BatteryValuePolicy.currentReading(50_000_000, null).amps)
         val rescued = BatteryValuePolicy.currentReading(50_000_000, 1_000_000)
         assertEquals(1f, rescued.amps!!, 0.000001f)
