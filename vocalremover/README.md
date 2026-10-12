@@ -4,7 +4,7 @@ This module is intentionally separate from Ramesh Radio while its native audio p
 
 ## Current flow
 
-1. Optionally tap **Download model** on the model card to fetch the 28.3 MiB UVR MDX-Net 9482 model and watch download/checksum progress. Otherwise, the first processing job downloads it automatically. The verified model is installed in private app storage; failures show a retryable error.
+1. Optionally tap **Download model** on the model card to fetch the 63.7 MiB UVR MDX-Net Voc FT vocal-focused model and watch download/checksum progress. Otherwise, the first processing job downloads it automatically. The verified model is installed in private app storage; failures show a retryable error. Upgrading from v0.1.4 downloads this larger model once; the retired 9482 weight is removed only after the new file passes its checksum.
 2. Pick an MP3 with Android's document picker and choose Slow, Medium, or Fast.
 3. Android's local MP3 decoder writes temporary float PCM to app-private storage. The sherpa-onnx source-separation C API processes bounded 12-second windows, with 1-second context and overlap. Completed chunks are fsynced and retained as resumable checkpoints.
 4. The non-vocal/accompaniment stem is joined with a crossfade, written as a stereo 16-bit PCM WAV, and saved in `Music/Vocal Remover Studio`.
@@ -12,9 +12,12 @@ This module is intentionally separate from Ramesh Radio while its native audio p
 
 The input song is copied for processing; the selected original is never modified. This app contains no API that uploads selected audio. Network access is for the model download only.
 
+The Voc FT model is a vocal-focused alternative selected after user-file analysis showed the previous 9482 model barely changed one vocal track. It is a quality trial, not a promise of perfect silence: a dense mix can retain vocals, and stronger suppression can distort instruments or add artifacts. Verify results on-device before treating the change as successful.
+
 ## Long jobs and device safety
 
 - A foreground service publishes progress and pause/resume/cancel controls; a partial wake lock is held only while the job is active and released while paused, finished, or when the service is destroyed.
+- Inference checkpoints are model-version scoped. On a model update, old-version chunks are not mixed with new-model output; stale chunk and private WAV caches for that job are removed before inference resumes.
 - A pause normally takes effect when the current inference window finishes (12 seconds of audio, not a wall-clock guarantee; native inference cannot be interrupted mid-call). The native model session is closed before waiting so its large allocations can be reclaimed. Completed chunks are stored atomically and reused after a process/service restart.
 - Android's foreground-service time allowance can expire during very long background work. The service then records a resumable pause, drops its wake lock/foreground status, and keeps only the paused notification. Restart timing remains subject to Android's remaining service quota and OEM policy; completed checkpoints stay saved for a later resume.
 - Slow uses one native inference thread; Medium uses up to two; Fast uses up to four. Android thermal status can throttle or pause, and low available RAM/storage can pause. The app does **not** use a fixed battery/CPU Celsius pause threshold.

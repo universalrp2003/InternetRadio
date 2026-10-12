@@ -2,12 +2,12 @@
 
 This standalone prototype downloads its source-separation model only after the user chooses to process a song. The model is kept in private app storage. The app does not upload selected audio.
 
-## UVR MDX-Net 9482 model
+## UVR MDX-Net Voc FT model
 
-- Model: `UVR_MDXNET_9482.onnx`
+- Model: `UVR-MDX-NET-Voc_FT.onnx`
 - Model source used by this prototype: [sherpa-onnx source-separation-models release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/source-separation-models)
-- SHA-256: `9d78f8566fa8198065214ab628be1de966a500c57786695aa4b13e2b27a7727d`
-- Attribution: **UVR (Anjok07 and aufr33), UVR MDX-Net 9482**.
+- SHA-256: `e411182ce2c53541fefdcc99a8f46f2fe03978eb22038b9497c1d9d95a00fad4`
+- Attribution: **UVR (Anjok07 and aufr33), UVR MDX-Net Voc FT**.
 - The [official UVR README license section](https://github.com/Anjok07/ultimatevocalremovergui#license) says the UVR GUI code is MIT-licensed and asks third-party applications that use UVR's models to credit UVR and its developers. The model-hosting repositories do not publish a separate per-file license manifest for this weight. This prototype displays the requested attribution and links to the upstream notice; it does not represent the model weights as covered by sherpa-onnx's license. Obtain suitable legal review/confirmation before commercial redistribution.
 
 ## sherpa-onnx Android FFI runtime

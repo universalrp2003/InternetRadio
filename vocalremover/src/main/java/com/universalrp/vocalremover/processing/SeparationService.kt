@@ -324,7 +324,7 @@ class SeparationService : Service() {
         val modelRepository = ModelRepository(this)
         val model = modelRepository.installedFile() ?: run {
             awaitModelStorageHeadroom(host)
-            updateJobProgress("Downloading separation model", 0.02f, "Downloading the 28.3 MiB model over HTTPS; song audio is not uploaded.")
+            updateJobProgress("Downloading separation model", 0.02f, "Downloading the 63.7 MiB vocal-focused model over HTTPS; song audio is not uploaded.")
             modelRepository.download(
                 checkpoint = { awaitCheckpoint() },
                 onProgress = { bytes, total ->
@@ -372,6 +372,7 @@ class SeparationService : Service() {
             decoded = decoded,
             modelFile = model,
             host = host,
+            modelCacheKey = ModelRepository.MODEL_SHA256.take(16),
         )
         if (!awaitCheckpoint()) throw CancellationException("Canceled")
 
@@ -422,7 +423,7 @@ class SeparationService : Service() {
                 ?: throw IllegalStateException("Free app storage could not be measured safely; check device storage, then retry.")
             if (available >= required) return
             val shortfall = required - available
-            val message = "Downloading the 28.3 MiB model while keeping a 96 MiB safety reserve needs " +
+            val message = "Downloading the 63.7 MiB model while keeping a 96 MiB safety reserve needs " +
                 "about ${DeviceMonitor.formatBytes(required)} free; only ${DeviceMonitor.formatBytes(available)} is available. " +
                 "Free about ${DeviceMonitor.formatBytes(shortfall)} more, then resume."
             if (!host.checkpoint(PauseReason.STORAGE, message)) {

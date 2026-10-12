@@ -21,7 +21,11 @@ class ModelRepository(context: Context) {
     private val modelDir = File(appContext.filesDir, "models").apply { mkdirs() }
     private val modelFile = File(modelDir, MODEL_FILENAME)
 
-    fun installedFile(): File? = modelFile.takeIf { it.isFile && it.length() == MODEL_BYTES && sha256(it) == MODEL_SHA256 }
+    fun installedFile(): File? {
+        val installed = modelFile.takeIf { it.isFile && it.length() == MODEL_BYTES && sha256(it) == MODEL_SHA256 }
+        if (installed != null) deleteRetiredModels()
+        return installed
+    }
 
     suspend fun download(
         checkpoint: suspend () -> Boolean,
@@ -85,6 +89,7 @@ class ModelRepository(context: Context) {
                 FileOutputStreamSync.sync(part)
                 modelFile.delete()
                 check(part.renameTo(modelFile)) { "Could not install the downloaded model" }
+                deleteRetiredModels()
                 return@withContext modelFile
             } catch (t: Throwable) {
                 part.delete()
@@ -94,6 +99,12 @@ class ModelRepository(context: Context) {
             }
         }
         throw IllegalStateException(lastError?.message ?: "Model download failed", lastError)
+    }
+
+    private fun deleteRetiredModels() {
+        listOf(LEGACY_MODEL_FILENAME, "$LEGACY_MODEL_FILENAME.part").forEach { name ->
+            runCatching { File(modelDir, name).delete() }
+        }
     }
 
     private fun sha256(file: File): String {
@@ -116,10 +127,11 @@ class ModelRepository(context: Context) {
     }
 
     companion object {
-        const val MODEL_FILENAME = "uvr_mdxnet_9482.onnx"
-        const val MODEL_BYTES = 29_704_738L
-        const val MODEL_SHA256 = "9d78f8566fa8198065214ab628be1de966a500c57786695aa4b13e2b27a7727d"
-        const val MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/UVR_MDXNET_9482.onnx"
+        const val MODEL_FILENAME = "uvr_mdxnet_voc_ft.onnx"
+        const val MODEL_BYTES = 66_762_795L
+        const val MODEL_SHA256 = "e411182ce2c53541fefdcc99a8f46f2fe03978eb22038b9497c1d9d95a00fad4"
+        const val MODEL_URL = "https://github.com/k2-fsa/sherpa-onnx/releases/download/source-separation-models/UVR-MDX-NET-Voc_FT.onnx"
+        private const val LEGACY_MODEL_FILENAME = "uvr_mdxnet_9482.onnx"
         private val ALLOWED_MODEL_HOSTS = setOf("github.com", "release-assets.githubusercontent.com")
     }
 }

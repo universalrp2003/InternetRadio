@@ -54,11 +54,15 @@ class ChunkedSeparationProcessor(
         decoded: DecodedPcmInfo,
         modelFile: File,
         host: ProcessorHost,
+        modelCacheKey: String = modelFile.nameWithoutExtension,
     ): File = withContext(Dispatchers.IO) {
         check(decoded.channels in 1..2 && decoded.sampleRate > 0 && decoded.frames > 0L)
         check(inputPcmFile.isFile && modelFile.isFile) { "Local input or model file is missing" }
 
-        val chunkDir = File(workDir, "chunks").apply { mkdirs() }
+        require(modelCacheKey.matches(Regex("[A-Za-z0-9._-]{1,64}"))) { "Invalid model cache key" }
+        val chunkDir = File(workDir, "chunks-$modelCacheKey").apply { mkdirs() }
+        val wavFile = File(workDir, "instrumental-$modelCacheKey.wav")
+        removeStaleModelCaches(workDir, chunkDir, wavFile)
         val coreFrames = CORE_SECONDS.toLong() * decoded.sampleRate
         val overlapFrames = OVERLAP_SECONDS.toLong() * decoded.sampleRate
         val strideFrames = coreFrames - overlapFrames
@@ -71,7 +75,6 @@ class ChunkedSeparationProcessor(
             next += strideFrames
         }
         val totalChunks = starts.size
-        val wavFile = File(workDir, "instrumental.wav")
 
         var engine: SherpaUvrEngine? = null
         var engineThreads = -1
@@ -283,6 +286,16 @@ class ChunkedSeparationProcessor(
             wavFile
         } finally {
             runCatching { engine?.close() }
+        }
+    }
+
+    private fun removeStaleModelCaches(workDir: File, activeChunkDir: File, activeWav: File) {
+        workDir.listFiles()?.forEach { entry ->
+            val isOldChunks = entry.isDirectory &&
+                (entry.name == "chunks" || entry.name.startsWith("chunks-")) && entry != activeChunkDir
+            val isOldInstrumental = entry.isFile &&
+                entry.name.startsWith("instrumental") && entry.extension.equals("wav", ignoreCase = true) && entry != activeWav
+            if (isOldChunks || isOldInstrumental) runCatching { entry.deleteRecursively() }
         }
     }
 

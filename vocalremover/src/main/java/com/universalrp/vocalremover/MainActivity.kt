@@ -550,10 +550,10 @@ private fun ModelCard(
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(if (modelReady) "On-device model is ready" else "One-time model download", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(if (modelReady) "On-device model is ready" else "Download vocal-focused model", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text(
-                        if (modelReady) "UVR MDX-Net · stored privately on this phone · 28.3 MiB"
-                        else "UVR MDX-Net 9482 · 28.3 MiB over HTTPS · checksum verified",
+                        if (modelReady) "UVR MDX-Net Voc FT · stored privately on this phone · 63.7 MiB"
+                        else "UVR MDX-Net Voc FT · 63.7 MiB over HTTPS · checksum verified",
                         color = Muted,
                         style = MaterialTheme.typography.bodySmall,
                         lineHeight = 17.sp,
@@ -561,6 +561,12 @@ private fun ModelCard(
                     TextButtonCompact("Model credits & terms", onCredits)
                 }
             }
+            Text(
+                "Vocal separation can leave remnants or introduce musical artifacts; results depend on the mix.",
+                color = Muted,
+                style = MaterialTheme.typography.bodySmall,
+                lineHeight = 16.sp,
+            )
             if (!modelReady) {
                 if (downloadState.downloading) {
                     if (downloadState.downloadedBytes > 0L) {
@@ -600,7 +606,7 @@ private fun ModelCard(
                         androidx.compose.material3.Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            if (downloadState.errorMessage != null) "Retry model download" else "Download model · 28.3 MiB",
+                            if (downloadState.errorMessage != null) "Retry model download" else "Download model · 63.7 MiB",
                             fontWeight = FontWeight.Bold,
                         )
                     }
@@ -896,8 +902,8 @@ private fun CreditsDialog(onDismiss: () -> Unit) {
         title = { Text("Model credits & privacy", fontWeight = FontWeight.Bold, color = Ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("This standalone prototype uses the UVR MDX-Net 9482 model, downloaded on request from the sherpa-onnx source-separation-models release. Its SHA-256 is checked before installation.", color = Ink, style = MaterialTheme.typography.bodyMedium)
-                Text("Attribution: UVR (Anjok07 and aufr33), UVR_MDXNET_9482. The UVR project asks third-party apps using its models to credit UVR and its developers. The sherpa-onnx runtime is Apache-2.0; model weights are a separate asset.", color = Muted, style = MaterialTheme.typography.bodySmall)
+                Text("This standalone prototype uses the larger, vocal-focused UVR MDX-Net Voc FT model, downloaded on request from the sherpa-onnx source-separation-models release. Its SHA-256 is checked before installation.", color = Ink, style = MaterialTheme.typography.bodyMedium)
+                Text("Attribution: UVR (Anjok07 and aufr33), UVR MDX-Net Voc FT. The UVR project asks third-party apps using its models to credit UVR and its developers. The sherpa-onnx runtime is Apache-2.0; model weights are a separate asset.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 Text("The app sends no selected audio to a server. Model delivery is the only network feature. The original file is not modified; the WAV is saved separately in Music/Vocal Remover Studio.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 Text("Degree sensors are best-effort and OEM-dependent. Safety pausing uses Android thermal status, free RAM and storage; it does not use a hard-coded temperature threshold.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {

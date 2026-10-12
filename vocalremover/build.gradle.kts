@@ -298,8 +298,8 @@ android {
         // This is provisional until the native runtime and older-device behavior are verified.
         minSdk = 29
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.1.4-prototype"
+        versionCode = 6
+        versionName = "0.1.5-prototype"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
