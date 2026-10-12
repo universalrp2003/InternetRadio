@@ -1,16 +1,28 @@
 # Live Guard — Play Protect installation block (accurate advisory)
 
-**Status: the 2.39 block stands; 2.40 was published after a recorded one-phone install
-result.** This advisory continues to apply to the published Live Guard / CleanSweep
-**2.39 (versionCode 44)** APK: installing it on the affected phone can still be blocked.
+**Status: the 2.39 block stands; 2.40 and 2.41 were published after recorded one-phone
+install results.** This advisory continues to apply to the published Live Guard /
+CleanSweep **2.39 (versionCode 44)** APK: installing it on the affected phone can still be
+blocked.
+
 Core **2.40 (versionCode 45)** removed the leading suspect completely and was published
 on 11 October 2026 as `v2026.10.11-4` from the exact device-tested bytes: with Play
 Protect **on**, the recorded APK digest showed Play Protect "This app looks safe - You
 can continue to install it" and Android's installer completed on one Redmi 13 5G
-(record: `docs/live-guard-2.40-device-evidence.md`). That is one phone, one build —
-**not** Google's approval, **not** all-device certification and **not** proof that the
-removed reader caused the 2.39 block. Everything in this advisory about honest limits,
-non-workarounds and unproven causes still applies.
+(record: `docs/live-guard-2.40-device-evidence.md`).
+
+**2.41 (versionCode 46)** is the current published release (`v2026.10.12-1`, 12 October
+2026) and changed only charging/heat/AI-budget behaviour — no new permission, service or
+sensitive access. On the same phone, with Play Protect **on**, the exact recorded APK
+digest showed **"App scan recommended" → "Scanning…" → "This app looks safe / You can
+continue to install it"**, Android's installer completed, and About shows CleanSweep
+v2.41 (record: `docs/live-guard-2.41-device-evidence.md`).
+
+Those are one phone and one build each — **not** Google's approval, **not** all-device
+certification and **not** proof that the removed reader caused the 2.39 block. A different
+Play Protect result on another device, or for a future build, is entirely possible.
+Everything in this advisory about honest limits, non-workarounds and unproven causes still
+applies.
 
 ## What was actually observed
 
