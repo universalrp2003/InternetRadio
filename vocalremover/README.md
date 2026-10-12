@@ -4,11 +4,10 @@ This module is intentionally separate from Ramesh Radio while its native audio p
 
 ## Current flow
 
-1. Pick an MP3 with Android's document picker.
-2. Choose Slow, Medium, or Fast.
-3. On first use, the app downloads the 28.3 MiB UVR MDX-Net 9482 model over HTTPS and verifies its pinned SHA-256 before installing it in private app storage.
-4. Android's local MP3 decoder writes temporary float PCM to app-private storage. The sherpa-onnx source-separation C API processes bounded 12-second windows, with 1-second context and overlap. Completed chunks are fsynced and retained as resumable checkpoints.
-5. The non-vocal/accompaniment stem is joined with a crossfade, written as a stereo 16-bit PCM WAV, and saved in `Music/Vocal Remover Studio`.
+1. Optionally tap **Download model** on the model card to fetch the 28.3 MiB UVR MDX-Net 9482 model and watch download/checksum progress. Otherwise, the first processing job downloads it automatically. The verified model is installed in private app storage; failures show a retryable error.
+2. Pick an MP3 with Android's document picker and choose Slow, Medium, or Fast.
+3. Android's local MP3 decoder writes temporary float PCM to app-private storage. The sherpa-onnx source-separation C API processes bounded 12-second windows, with 1-second context and overlap. Completed chunks are fsynced and retained as resumable checkpoints.
+4. The non-vocal/accompaniment stem is joined with a crossfade, written as a stereo 16-bit PCM WAV, and saved in `Music/Vocal Remover Studio`.
 
 The input song is copied for processing; the selected original is never modified. This app contains no API that uploads selected audio. Network access is for the model download only.
 
@@ -18,7 +17,7 @@ The input song is copied for processing; the selected original is never modified
 - A pause normally takes effect when the current inference window finishes (12 seconds of audio, not a wall-clock guarantee; native inference cannot be interrupted mid-call). The native model session is closed before waiting so its large allocations can be reclaimed. Completed chunks are stored atomically and reused after a process/service restart.
 - Android's foreground-service time allowance can expire during very long background work. The service then records a resumable pause, drops its wake lock/foreground status, and keeps only the paused notification. Restart timing remains subject to Android's remaining service quota and OEM policy; completed checkpoints stay saved for a later resume.
 - Slow uses one native inference thread; Medium uses up to two; Fast uses up to four. Android thermal status can throttle or pause, and low available RAM/storage can pause. The app does **not** use a fixed battery/CPU Celsius pause threshold.
-- A user setting keeps the display awake only while the app is visible and a job is running. The visible foreground service and CPU wake lock handle background CPU work; neither can prevent the OS/OEM from terminating a process or the device from shutting down.
+- A user setting keeps the display awake only while the app is visible and a job or explicit model download is running. The visible foreground service and CPU wake lock handle background CPU work; neither can prevent the OS/OEM from terminating a process or the device from shutting down.
 - No battery-optimization exemption is requested. Android does not let an app grant and then revoke that exemption temporarily.
 - Thermal/RAM/CPU values are best effort. CPU temperature is available only on devices whose OEM exposes a clearly named CPU thermal zone. App CPU load is a process-time estimate and can exceed 100% across cores.
 
@@ -36,6 +35,6 @@ The Android Gradle module is `:vocalremover`; it currently targets API 29+ for s
 
 ## Validation status
 
-The standalone UI, service, local decoder, native binding, chunk/WAV pipeline, and unit tests are implemented as a prototype but have not been compiled or exercised on an Android device in this workspace. The local environment currently lacks a JDK and Android SDK/build tools. Do not treat separation quality, native ABI loading, real-device thermal/memory behavior, pause/restart recovery, or minimum-OS compatibility as verified until the build passes and device tests pass.
+GitHub Actions has compiled the standalone module, run its configured unit tests, verified the APKs, and uploaded the debug prototype APK. This validates compilation and packaging, not end-to-end use. Model download on a phone, native ABI loading, separation quality, real-device thermal/memory behavior, pause/restart recovery, and minimum-OS compatibility still require device testing.
 
 See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) for model/runtime attribution and licensing notes. The UVR README asks third-party applications to credit UVR and its developers; the model host does not provide a separate per-file license manifest, so commercial redistribution needs further legal confirmation.

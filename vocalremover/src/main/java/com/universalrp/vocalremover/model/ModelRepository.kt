@@ -1,6 +1,9 @@
 package com.universalrp.vocalremover.model
 
 import android.content.Context
+import android.os.StatFs
+import com.universalrp.vocalremover.health.DeviceMonitor
+import com.universalrp.vocalremover.processing.ProcessingPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -25,6 +28,12 @@ class ModelRepository(context: Context) {
         onProgress: (Long, Long) -> Unit,
     ): File = withContext(Dispatchers.IO) {
         installedFile()?.let { return@withContext it }
+        val requiredBytes = MODEL_BYTES + ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
+        val availableBytes = StatFs(modelDir.absolutePath).availableBytes
+        check(availableBytes >= requiredBytes) {
+            "The model needs about ${DeviceMonitor.formatBytes(requiredBytes)} free including a 96 MiB reserve; " +
+                "only ${DeviceMonitor.formatBytes(availableBytes)} is available."
+        }
         if (modelFile.exists()) modelFile.delete()
         modelDir.mkdirs()
         val part = File(modelDir, "$MODEL_FILENAME.part")

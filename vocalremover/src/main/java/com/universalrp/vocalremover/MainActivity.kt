@@ -71,6 +71,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -93,9 +94,14 @@ import com.universalrp.vocalremover.processing.SeparationJob
 import com.universalrp.vocalremover.processing.SeparationJobStore
 import com.universalrp.vocalremover.processing.SeparationService
 import com.universalrp.vocalremover.processing.ServiceTelemetry
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -109,6 +115,13 @@ private val SoftWhite = Color(0xFFFEFFFC)
 private val Muted = Color(0xFF637674)
 private val Amber = Color(0xFFE7A955)
 private val Coral = Color(0xFFB65046)
+
+private data class ModelDownloadUiState(
+    val downloading: Boolean = false,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = ModelRepository.MODEL_BYTES,
+    val errorMessage: String? = null,
+)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -157,6 +170,9 @@ private fun VocalRemoverScreen() {
     var keepScreenAwake by remember { mutableStateOf(AppPreferences.keepScreenAwake(context)) }
     var selectedProfile by remember { mutableStateOf(job?.profile ?: ProcessingProfile.BALANCED) }
     var modelReady by remember { mutableStateOf(false) }
+    val modelDownloadStateFlow = remember { MutableStateFlow(ModelDownloadUiState()) }
+    val modelDownloadState by modelDownloadStateFlow.collectAsState()
+    val downloadScope = rememberCoroutineScope()
     var showCredits by remember { mutableStateOf(false) }
     var isChoosingAudio by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -176,6 +192,41 @@ private fun VocalRemoverScreen() {
         }
     }
 
+    val downloadModel: () -> Unit = {
+        if (!modelReady && !modelDownloadState.downloading) {
+            modelDownloadStateFlow.value = ModelDownloadUiState(downloading = true)
+            downloadScope.launch {
+                try {
+                    val repository = ModelRepository(context.applicationContext)
+                    withContext(Dispatchers.IO) {
+                        repository.download(
+                            checkpoint = { currentCoroutineContext().isActive },
+                            onProgress = { bytes, total ->
+                                modelDownloadStateFlow.value = ModelDownloadUiState(
+                                    downloading = true,
+                                    downloadedBytes = bytes,
+                                    totalBytes = total,
+                                )
+                            },
+                        )
+                    }
+                    modelReady = true
+                    modelDownloadStateFlow.value = ModelDownloadUiState()
+                    Toast.makeText(context, "Model downloaded and checksum verified. Choose an MP3 to begin.", Toast.LENGTH_LONG).show()
+                } catch (cancelled: CancellationException) {
+                    modelDownloadStateFlow.value = ModelDownloadUiState(
+                        errorMessage = "Download was interrupted. Tap Retry to try again.",
+                    )
+                    throw cancelled
+                } catch (failure: Exception) {
+                    val detail = failure.message?.take(180)?.ifBlank { null }
+                        ?: "Check your internet connection and try again."
+                    modelDownloadStateFlow.value = ModelDownloadUiState(errorMessage = detail)
+                }
+            }
+        }
+    }
+
     LaunchedEffect(Unit) {
         while (true) {
             localSnapshot = withContext(Dispatchers.IO) { monitor.read() }
@@ -190,8 +241,8 @@ private fun VocalRemoverScreen() {
     LaunchedEffect(job?.phase, job?.status) {
         modelReady = withContext(Dispatchers.IO) { ModelRepository(context.applicationContext).installedFile() != null }
     }
-    DisposableEffect(keepScreenAwake, job?.status, activity) {
-        val active = job?.status in setOf(JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.PAUSING)
+    DisposableEffect(keepScreenAwake, job?.status, modelDownloadState.downloading, activity) {
+        val active = job?.status in setOf(JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.PAUSING) || modelDownloadState.downloading
         if (keepScreenAwake && active) {
             activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         } else {
@@ -248,7 +299,12 @@ private fun VocalRemoverScreen() {
             )
 
             if (job == null || job?.status == JobStatus.CANCELED) {
-                ModelCard(modelReady = modelReady, onCredits = { showCredits = true })
+                ModelCard(
+                    modelReady = modelReady,
+                    downloadState = modelDownloadState,
+                    onDownload = downloadModel,
+                    onCredits = { showCredits = true },
+                )
                 Button(
                     onClick = {
                         isChoosingAudio = true
@@ -260,18 +316,29 @@ private fun VocalRemoverScreen() {
                             picker.launch(arrayOf("audio/mpeg"))
                         }
                     },
-                    enabled = !isChoosingAudio,
+                    enabled = !isChoosingAudio && !modelDownloadState.downloading,
                     modifier = Modifier.fillMaxWidth().height(58.dp),
                     shape = RoundedCornerShape(18.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = TealDark),
                 ) {
-                    if (isChoosingAudio) CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
-                    else androidx.compose.material3.Icon(Icons.Default.FolderOpen, contentDescription = null)
+                    if (isChoosingAudio || modelDownloadState.downloading) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        androidx.compose.material3.Icon(Icons.Default.FolderOpen, contentDescription = null)
+                    }
                     Spacer(Modifier.width(10.dp))
-                    Text(if (isChoosingAudio) "Choose an MP3…" else "Choose an MP3", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text(
+                        when {
+                            isChoosingAudio -> "Choose an MP3…"
+                            modelDownloadState.downloading -> "Model downloading…"
+                            else -> "Choose an MP3"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                    )
                 }
                 Text(
-                    "First use downloads a 28.3 MiB model. Only the model is downloaded; your selected song is processed locally and never uploaded by this app.",
+                    "Download the model here first, or it downloads automatically when you start a song. Your selected audio stays on this phone and is never uploaded.",
                     style = MaterialTheme.typography.bodySmall,
                     color = Muted,
                     textAlign = TextAlign.Center,
@@ -421,7 +488,7 @@ private fun ScreenAwakeCard(enabled: Boolean, canToggle: Boolean, onToggle: (Boo
             Column(Modifier.weight(1f)) {
                 Text("Keep screen awake", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                 Text(
-                    "While this app is open during a job · uses more battery",
+                    "While this app is open during a job or model download · uses more battery",
                     color = Muted,
                     fontSize = 11.sp,
                     lineHeight = 15.sp,
@@ -433,28 +500,97 @@ private fun ScreenAwakeCard(enabled: Boolean, canToggle: Boolean, onToggle: (Boo
 }
 
 @Composable
-private fun ModelCard(modelReady: Boolean, onCredits: () -> Unit) {
+private fun ModelCard(
+    modelReady: Boolean,
+    downloadState: ModelDownloadUiState,
+    onDownload: () -> Unit,
+    onCredits: () -> Unit,
+) {
     Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F1ED)), shape = RoundedCornerShape(20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
-            Box(Modifier.size(36.dp).clip(CircleShape).background(SoftWhite), contentAlignment = Alignment.Center) {
-                androidx.compose.material3.Icon(
-                    if (modelReady) Icons.Default.CheckCircle else Icons.Default.Download,
-                    contentDescription = null,
-                    tint = Teal,
-                    modifier = Modifier.size(20.dp),
-                )
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.Top) {
+                Box(
+                    Modifier.size(44.dp)
+                        .clip(CircleShape)
+                        .background(SoftWhite)
+                        .clickable(enabled = !modelReady && !downloadState.downloading, onClick = onDownload),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    androidx.compose.material3.Icon(
+                        if (modelReady) Icons.Default.CheckCircle else Icons.Default.Download,
+                        contentDescription = if (modelReady) "Model ready" else "Download model",
+                        tint = Teal,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(if (modelReady) "On-device model is ready" else "One-time model download", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text(
+                        if (modelReady) "UVR MDX-Net · stored privately on this phone · 28.3 MiB"
+                        else "UVR MDX-Net 9482 · 28.3 MiB over HTTPS · checksum verified",
+                        color = Muted,
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 17.sp,
+                    )
+                    TextButtonCompact("Model credits & terms", onCredits)
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(if (modelReady) "On-device model is ready" else "One-time model download", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text(
-                    if (modelReady) "UVR MDX-Net · stored privately on this phone · 28.3 MiB"
-                    else "UVR MDX-Net 9482 · 28.3 MiB over HTTPS · checksum verified",
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                    lineHeight = 17.sp,
-                )
-                TextButtonCompact("Model credits & terms", onCredits)
+            if (!modelReady) {
+                if (downloadState.downloading) {
+                    if (downloadState.downloadedBytes > 0L) {
+                        LinearProgressIndicator(
+                            progress = {
+                                (downloadState.downloadedBytes.toFloat() / downloadState.totalBytes.coerceAtLeast(1L))
+                                    .coerceIn(0f, 1f)
+                            },
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                            color = Teal,
+                            trackColor = Paper,
+                        )
+                        Text(
+                            if (downloadState.downloadedBytes >= downloadState.totalBytes) {
+                                "Download complete · verifying checksum…"
+                            } else {
+                                "${DeviceMonitor.formatBytes(downloadState.downloadedBytes)} of ${DeviceMonitor.formatBytes(downloadState.totalBytes)} downloaded"
+                            },
+                            color = Muted,
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                            color = Teal,
+                            trackColor = Paper,
+                        )
+                        Text("Connecting securely to the model host…", color = Muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                } else {
+                    Button(
+                        onClick = onDownload,
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = TealDark),
+                    ) {
+                        androidx.compose.material3.Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (downloadState.errorMessage != null) "Retry model download" else "Download model · 28.3 MiB",
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+                downloadState.errorMessage?.let { error ->
+                    Text(
+                        "Download failed: $error. Check your internet connection, then retry.",
+                        color = Coral,
+                        style = MaterialTheme.typography.bodySmall,
+                        lineHeight = 17.sp,
+                    )
+                }
             }
         }
     }
