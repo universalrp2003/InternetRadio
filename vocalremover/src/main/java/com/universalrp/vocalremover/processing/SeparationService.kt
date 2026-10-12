@@ -14,6 +14,7 @@ import android.os.IBinder
 import android.os.PowerManager
 import android.os.StatFs
 import android.provider.OpenableColumns
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.ServiceCompat
@@ -74,7 +75,7 @@ class SeparationService : Service() {
         healthJob = scope.launch { monitorDeviceWhileActive() }
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = try {
         when (intent?.action) {
             ACTION_PAUSE -> requestUserPause()
             ACTION_RESUME -> resumeJob()
@@ -84,10 +85,32 @@ class SeparationService : Service() {
             ACTION_START, null -> restoreOrStart()
             else -> restoreOrStart()
         }
-        return START_STICKY
+        START_STICKY
+    } catch (failure: Exception) {
+        recordStartFailure(failure, startId)
+        START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    private fun recordStartFailure(failure: Exception, startId: Int) {
+        val detail = failure.message?.take(180)?.ifBlank { null } ?: failure.javaClass.simpleName
+        Log.e("VocalRemoverService", "Could not start or control the processing foreground service", failure)
+        runCatching { setCpuWakeLock(false) }
+        runCatching {
+            SeparationJobStore.update(this) { current ->
+                if (current == null || current.status in TERMINAL_STATES) current
+                else current.copy(
+                    status = JobStatus.FAILED,
+                    phase = "Could not start processing",
+                    message = "Android could not start the background service (${failure.javaClass.simpleName}): $detail",
+                    pauseReason = PauseReason.ERROR,
+                )
+            }
+        }.onFailure { Log.e("VocalRemoverService", "Could not save the service-start error", it) }
+        runCatching { stopForegroundNow() }
+        runCatching { stopSelf(startId) }
+    }
 
     /** Android 14 data-sync foreground-service time limit callback. */
     override fun onTimeout(startId: Int) {

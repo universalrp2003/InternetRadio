@@ -89,6 +89,7 @@ import com.universalrp.vocalremover.health.DeviceMonitor
 import com.universalrp.vocalremover.health.DeviceSnapshot
 import com.universalrp.vocalremover.model.ModelRepository
 import com.universalrp.vocalremover.processing.JobStatus
+import com.universalrp.vocalremover.processing.PauseReason
 import com.universalrp.vocalremover.processing.ProcessingProfile
 import com.universalrp.vocalremover.processing.SeparationJob
 import com.universalrp.vocalremover.processing.SeparationJobStore
@@ -873,7 +874,20 @@ private fun createJobFromUri(context: Context, uri: Uri, profile: ProcessingProf
     )
     SeparationJobStore.save(context, job)
     val intent = Intent(context, SeparationService::class.java).setAction(SeparationService.ACTION_START)
-    androidx.core.content.ContextCompat.startForegroundService(context, intent)
+    try {
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
+    } catch (failure: Exception) {
+        val detail = failure.message?.take(180)?.ifBlank { null } ?: failure.javaClass.simpleName
+        SeparationJobStore.update(context) { current ->
+            current?.copy(
+                status = JobStatus.FAILED,
+                phase = "Could not start processing",
+                message = "Android refused to start the background service (${failure.javaClass.simpleName}): $detail",
+                pauseReason = PauseReason.ERROR,
+            )
+        }
+        Toast.makeText(context, "Could not start processing: $detail", Toast.LENGTH_LONG).show()
+    }
 }
 
 private fun discardTerminalJob(context: Context, job: SeparationJob) {
