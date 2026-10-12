@@ -115,19 +115,21 @@ class SherpaUvrEngine(modelPath: String, threads: Int) : AutoCloseable {
         }
     }
 
+    // JNA reflects over nested Structure field types to calculate native layout. Keep these
+    // classes public so it can call their public no-argument constructors on device.
     @Structure.FieldOrder("vocals", "accompaniment")
-    private class SpleeterConfig : Structure() {
+    class SpleeterConfig : Structure() {
         @JvmField var vocals: Pointer? = null
         @JvmField var accompaniment: Pointer? = null
     }
 
     @Structure.FieldOrder("model")
-    private class UvrConfig : Structure() {
+    class UvrConfig : Structure() {
         @JvmField var model: Pointer? = null
     }
 
     @Structure.FieldOrder("spleeter", "uvr", "num_threads", "debug", "provider")
-    private class ModelConfig : Structure() {
+    class ModelConfig : Structure() {
         @JvmField var spleeter: SpleeterConfig = SpleeterConfig()
         @JvmField var uvr: UvrConfig = UvrConfig()
         @JvmField var num_threads: Int = 1
@@ -136,12 +138,12 @@ class SherpaUvrEngine(modelPath: String, threads: Int) : AutoCloseable {
     }
 
     @Structure.FieldOrder("model")
-    private class SeparationConfig : Structure() {
+    class SeparationConfig : Structure() {
         @JvmField var model: ModelConfig = ModelConfig()
     }
 
     @Structure.FieldOrder("stems", "num_stems", "sample_rate")
-    private class SourceOutput : Structure {
+    class SourceOutput : Structure {
         constructor() : super()
         constructor(pointer: Pointer) : super(pointer)
 
@@ -151,7 +153,7 @@ class SherpaUvrEngine(modelPath: String, threads: Int) : AutoCloseable {
     }
 
     @Structure.FieldOrder("samples", "num_channels", "n")
-    private class Stem : Structure {
+    class Stem : Structure {
         constructor() : super()
         constructor(pointer: Pointer) : super(pointer)
 
