@@ -522,7 +522,8 @@ jobs:
                         AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen CorePrivacyMigrationPolicy \
                         CorePrivacyMigration LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
                         LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
-                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification; do
+                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification \
+                        ChargingHonestyPolicy ThermalWarningPolicy AiOutputBudgetPolicy; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
             else
@@ -550,6 +551,25 @@ jobs:
           python3 tools/verify_cleaner_core_manifest.py --manifest "$MERGED_CLEANER" --skip-source \
             --dex "$WORK/cleaner.dex" --dex "$WORK/cleaner-release.dex" || exit 1
           echo "OK: merged CleanSweep manifest and both DEX blobs declare no retired capability"
+
+          echo "=== v2.41 honest-charging / heat-warning / AI-budget gate (debug AND release) ==="
+          # The 2.41 features must be compiled into the shipped bytes, not only present in
+          # the source tree: the battery-side policy, the owner-set heat warning and the AI
+          # output budget + provider model check must all exist in both variants.
+          for marker in batterySideWatts screenNote shouldAnnounce effectiveOutputTokens checkModel; do
+            if grep -aq "$marker" "$WORK/cleaner.dex"; then
+              echo "OK: $marker is in the CleanSweep DEBUG APK"
+            else
+              echo "FAIL: $marker is missing from the CleanSweep DEBUG APK"
+              exit 1
+            fi
+            if grep -aq "$marker" "$WORK/cleaner-release.dex"; then
+              echo "OK: $marker is in the CleanSweep RELEASE APK"
+            else
+              echo "FAIL: $marker is missing from the CleanSweep RELEASE APK"
+              exit 1
+            fi
+          done
 
           echo "=== AppForge checks ==="
           if grep -aq "AppForge" "$WORK/builder.dex"; then

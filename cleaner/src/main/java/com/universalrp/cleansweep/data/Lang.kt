@@ -1201,6 +1201,17 @@ object Lang {
         "Send current device facts to AI" to "தற்போதைய சாதனத் தகவல்களை AI-க்கு அனுப்பு",
         "Scanning the network locally…" to "வலையமைப்பு உள்ளூரில் ஆய்வு செய்யப்படுகிறது…",
         "Scanning with AI…" to "AI உடன் ஆய்வு செய்கிறது…",
+        // Live Guard 2.41 — honest charging numbers, the screen-on/off note and the 44 °C notice.
+        "Charging power measured at the battery: %s" to "பேட்டரியில் அளக்கப்பட்ட சார்ஜிங் திறன்: %s",
+        "Battery-side current: %s" to "பேட்டரிப் பக்க மின்னோட்டம்: %s",
+        "Battery voltage: %s" to "பேட்டரி மின்னழுத்தம்: %s",
+        "Battery temperature: %s" to "பேட்டரி வெப்பநிலை: %s",
+        "battery-side %s" to "பேட்டரிப் பக்கம் %s",
+        "Screen is on, so the phone itself is drawing power. The charging figure is measured at the battery and can read lower than with the screen off — it is not the charger's output." to "திரை இயக்கத்தில் உள்ளது, எனவே ஃபோனே மின்சாரத்தைப் பயன்படுத்துகிறது. சார்ஜிங் எண் பேட்டரியில் அளக்கப்படுகிறது; திரை அணைந்திருக்கும்போது கிடைப்பதைவிடக் குறைவாகத் தெரியலாம் — இது சார்ஜரின் வெளியீடு அல்ல.",
+        "Screen is off, so the phone is drawing little. The charging figure is measured at the battery, not the charger's output." to "திரை அணைந்துள்ளது, எனவே ஃபோன் மிகக் குறைவாகவே மின்சாரம் எடுக்கிறது. சார்ஜிங் எண் பேட்டரியில் அளக்கப்படுகிறது; சார்ஜரின் வெளியீடு அல்ல.",
+        "Battery temperature is at or above 44 °C (%s). Unusually warm — review charging conditions; this is a temperature notice, not a diagnosis." to "பேட்டரி வெப்பநிலை 44 °C அல்லது அதற்கு மேல் உள்ளது (%s). வழக்கத்திற்கு மாறாக வெப்பம் — சார்ஜ் செய்யும் நிலைமைகளைப் பரிசீலிக்கவும்; இது ஒரு வெப்பநிலை அறிவிப்பு, நோய் கண்டறிதல் அல்ல.",
+        "A heat sensor is at or above its warning level (%s). Let the phone cool before heavy use; this is a temperature notice, not a diagnosis." to "ஒரு வெப்ப உணரி அதன் எச்சரிக்கை அளவை எட்டியுள்ளது (%s). கனமான பயன்பாட்டுக்கு முன் ஃபோனைக் குளிரவிடவும்; இது ஒரு வெப்பநிலை அறிவிப்பு, நோய் கண்டறிதல் அல்ல.",
+        "Each reply uses a bounded output budget. When a request's own time limit is nearly spent the answer budget shrinks instead of letting one question run into a minute-long wait." to "ஒவ்வொரு பதிலும் வரையறுக்கப்பட்ட வெளியீட்டு நிலைநிதியைப் பயன்படுத்துகிறது. ஒரு கோரிக்கையின் நேர வரம்பு முடியும் தருவாயில், ஒரு கேள்வி நீண்ட நிமிடக் காத்தலாக மாறாமல் பதில் நிலைநிதி குறைக்கப்படுகிறது.",
     )
 }
 

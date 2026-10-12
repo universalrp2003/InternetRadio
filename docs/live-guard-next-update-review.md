@@ -45,6 +45,28 @@ are historical, not a substitute for actual device validation.
 - FileProvider exposes only the private verified-update cache directory. Unknown-apps access is explained and user-controlled. Android installer confirmation/signature verification and Play Protect/scanning decisions belong to Android; cannot be silently bypassed or forced.
 - Official release notes remain identified publisher text, not claimed translated/verified instructions. Metadata eligibility is not a claim that an APK has already downloaded/passed its checks.
 
+### 2.41 candidate (code46) — honest readings, heat warning, AI budgets
+
+- **Honest watts/amps** (`data/ChargingHonestyPolicy.kt`): the battery-side policy is the one
+  implementation of "may this be called charging power" (measured V_batt × I_batt, charging
+  only, 2–12 V / ≤20 A / ≤150 W plausibility, no guessed 0 W). It is wired into the battery
+  reader, the notification card and the health screen; amps are shown as their own labelled
+  magnitude and never in a watt's place.
+- **Screen-on/off note**: card and health screen state that the phone's own draw changes the
+  battery-side reading and that the reading is not the charger adapter's output.
+- **AI output budget + provider model check** (`ai/AiOutputBudgetPolicy.kt`): 32–4 000 output
+  tokens per ask (0 for the model list), shrinking when the request deadline is nearly spent;
+  a model missing from the provider's own `/models` list is rejected with the existing
+  translatable message in the connection test and after "Load models". An unavailable list is
+  never treated as evidence against a model, and no model is ever silently substituted.
+- **44 °C heat warning** (`data/ThermalWarningPolicy.kt`): one owner-set battery threshold
+  (was 45 °C in the voice path and 42 °C in one plug-in check), honest sensor naming, a
+  formatted real temperature, a 3-hour hush, and no claimed cause or diagnosis. The status
+  gate fails if `Announcer.HOT_BATTERY_C` and the policy drift apart.
+- **Published 12 October 2026** as `v2026.10.12-1` from the exact device-tested bytes after the
+  owner's Redmi 13 5G install (Play Protect ON: "App scan recommended" → "Scanning…" → "This app
+  looks safe"); record in `docs/live-guard-2.41-device-evidence.md`.
+
 ### Selective notification reader — REMOVED in the 2.40 core candidate
 
 > **Status change (2026-10-11).** Play Protect blocked installation of the published APK

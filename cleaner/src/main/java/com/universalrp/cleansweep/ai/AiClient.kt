@@ -150,17 +150,27 @@ object AiClient {
         if (config.provider == AiProvider.FREE) return@withTimeoutOrNull test(config, budget)
         if (!config.ready) return@withTimeoutOrNull Result(false, "", config.provider.label, "No key saved yet.")
         val (models, listError) = listModels(config, budget)
-        val configured = normalizeModelId(config.resolvedModel)
-        if (models.any { normalizeModelId(it).equals(configured, ignoreCase = true) })
-            Result(true, "Model listed; generation not tested.", config.provider.label, model = config.resolvedModel)
-        else {
-            val probe = test(config, budget)
-            if (probe.ok) probe else probe.copy(error = probe.error ?: listError)
+        // 2.41 provider model check: a model the provider's own list does not contain fails
+        // fast with the translatable "selected model could not be used" message instead of a
+        // doomed generation. An unavailable list is not evidence against the model, so the
+        // real probe still runs in that case.
+        when (AiOutputBudgetPolicy.checkModel(config.resolvedModel, models)) {
+            AiOutputBudgetPolicy.ModelCheck.ACCEPTED ->
+                Result(true, "Model listed; generation not tested.", config.provider.label, model = config.resolvedModel)
+            AiOutputBudgetPolicy.ModelCheck.REJECTED_UNLISTED ->
+                Result(
+                    false, "", config.provider.label,
+                    AiOutputBudgetPolicy.rejectionMessage(), model = config.resolvedModel,
+                )
+            else -> {
+                val probe = test(config, budget)
+                if (probe.ok) probe else probe.copy(error = probe.error ?: listError)
+            }
         }
     } ?: Result(false, "", config.provider.label, "The connection check timed out. Try again.")
 
-    fun normalizeModelId(raw: String): String =
-        raw.trim().removePrefix("models/").removePrefix("google/")
+    /** One documented normalisation, shared with the provider model check. */
+    fun normalizeModelId(raw: String): String = AiOutputBudgetPolicy.normalizeModelId(raw)
 
     /**
      * Asks the provider which models this key can use (GET /models, the OpenAI-standard
@@ -236,7 +246,7 @@ object AiClient {
                 "generationConfig",
                 JSONObject().apply {
                     put("temperature", 0.4)
-                    put("maxOutputTokens", budget.use.outputTokens)
+                    put("maxOutputTokens", AiOutputBudgetPolicy.effectiveOutputTokens(budget.use, budget.remainingMs()))
                 },
             )
         }.toString()
@@ -288,7 +298,8 @@ object AiClient {
         budget: RequestBudget): Pair<Boolean, String> {
         return try {
             val body = JSONObject().apply {
-                put("model", model); put("temperature", 0.4); put("max_tokens", budget.use.outputTokens)
+                put("model", model); put("temperature", 0.4)
+                put("max_tokens", AiOutputBudgetPolicy.effectiveOutputTokens(budget.use, budget.remainingMs()))
                 put("messages", JSONArray().put(JSONObject().put("role", "system").put("content", systemPrompt))
                     .put(JSONObject().put("role", "user").put("content", userPrompt)))
             }.toString()

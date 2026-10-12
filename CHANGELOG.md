@@ -1,5 +1,46 @@
 # Changelog — maintained Android apps
 
+## Live Guard 2.41/code46 — verified/published 12 October 2026: honest charging readings, 44 °C heat warning, AI budgets
+
+**Published** as stable/latest `v2026.10.12-1` after the owner installed the exact candidate
+APK on the phone with Play Protect **ON**. The published APK is the exact device-tested build:
+`CleanSweep-v2.41.apk`, **13,565,004 bytes**, SHA-256
+`f728a3435f12952370759feed743431c01179b95e84ba48259bae89a35ba7a03`, built in CI run
+**38202739572** (source `e31828f74bbe25f6c8e59c278284c06fe24826f3`). With Play Protect **on**, on
+the same Redmi 13 5G as 2.40, Play Protect showed "App scan recommended" → "Scanning…" →
+"This app looks safe — You can continue to install it", Android's installer completed and
+About shows CleanSweep v2.41, upgrading in place over 2.40 (45). That is one phone, one build —
+not Google's approval, not all-device certification and not proof of any cause. Record:
+[`docs/live-guard-2.41-device-evidence.md`](docs/live-guard-2.41-device-evidence.md). Full
+write-up: [`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md).
+
+- **Honest watts/amps** (`data/ChargingHonestyPolicy.kt`): charging power and current are
+  labelled battery-side, shown only when measured, never substituted for one another and
+  never turned into `0.00 W` when a sensor is missing. Implausible kernel values
+  (volts outside 2–12, current beyond 20 A, watts beyond 150 W, non-finite spikes) are
+  refused. The battery reader now uses the same policy, so the card, the health screen and
+  the pill cannot disagree.
+- **Screen-on/off charging note**: while charging, the card and the battery screen explain
+  that the screen's own draw changes the battery-side figure, and that it is measured at the
+  battery — not the charger adapter's output. Plain measurement note, no fault and no claim
+  about the charger.
+- **AI output-budget + provider model check** (`ai/AiOutputBudgetPolicy.kt`): every
+  generation ask is clamped to 32–4 000 output tokens (listing models keeps 0), a request
+  whose deadline is nearly spent asks for a *shorter* answer instead of timing out, and a
+  model absent from the provider's own `/models` list is rejected with the existing
+  translatable message — in the connection test and after "Load models". An unavailable list
+  is never evidence against a model.
+- **44 °C heat warning** (`data/ThermalWarningPolicy.kt`): one owner-set battery threshold
+  (44 °C; the voice path used 45 °C and one plug-in check used 42 °C), the sensor is named
+  honestly (battery vs CPU zone), the temperature text is formatted from the real reading or
+  omitted, and a repeat is hushed for 3 hours. No cause and no diagnosis are claimed.
+- Gates: **36 required suites / 321 prepared declarations** (`tools/verify_cleaner_regressions.py`
+  +3 suites, +20 declarations), 941 audited EN/TA catalog keys (931 before), the unchanged
+  core-manifest/retired-capability gate, plus a new CI DEX check that `batterySideWatts`,
+  `screenNote`, `shouldAnnounce`, `effectiveOutputTokens` and `checkModel` are compiled into
+  **both** shipped variants. Publication required the recorded device test above; the
+  device-evidence gate published the tested bytes and was not weakened.
+
 ## Live Guard 2.40/code45 — verified/published 11 October 2026: notification/message reading removed
 
 **Published** as stable/latest `v2026.10.11-4` after Google Play Protect blocked

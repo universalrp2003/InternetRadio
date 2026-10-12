@@ -40,28 +40,44 @@ are declared inside the package, so runtime OFF does not remove them.
 Full advisory, official Google references and the next steps:
 [`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
 
+## Live Guard 2.41 — published (12 October 2026)
+
+Owner-requested follow-up work on the 2.40 core is now **published as 2.41 / code46**: charging
+watts and amps are labelled and shown only as measured battery-side values (never substituted
+for each other, never guessed), a screen-on/off note explains why the same cable can read
+differently, the AI asks carry a bounded output budget with a provider `/models` check that
+fails fast instead of producing a doomed request, and the battery heat warning is one
+owner-set **44 °C** threshold with a 3-hour hush. With Play Protect **on**, the exact recorded
+APK digest installed in place over 2.40 on the owner's Redmi 13 5G; About shows CleanSweep
+v2.41 ([device evidence](docs/live-guard-2.41-device-evidence.md)) — one phone, one build, not
+Google's approval or all-device certification. Detailed notes:
+[`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md) · device test plan:
+[`docs/live-guard-2.41-device-test-plan.md`](docs/live-guard-2.41-device-test-plan.md).
+
 ## Download — release APKs
 
-**2.40 is the current published Live Guard release** (11 October 2026, unchanged
+**2.41 is the current published Live Guard release** (12 October 2026, unchanged
 package/signing key, minimumAPI26) — install it over your existing app rather than
 uninstalling, and see the advisory above. The published APK is the exact device-tested
-build (13,558,548 bytes, SHA-256 `9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`):
-on one Redmi 13 5G with Play Protect **on**, Play Protect showed "This app looks safe -
-You can continue to install it" and the installer completed
-([device evidence](docs/live-guard-2.40-device-evidence.md)) — one phone, one build, not
+build (13,565,004 bytes, SHA-256 `f728a3435f12952370759feed743431c01179b95e84ba48259bae89a35ba7a03`):
+on one Redmi 13 5G with Play Protect **on**, Play Protect showed "App scan recommended",
+scanned the app, showed "This app looks safe — You can continue to install it" and the
+installer completed, upgrading in place over 2.40
+([device evidence](docs/live-guard-2.41-device-evidence.md)) — one phone, one build, not
 Google's approval or all-device certification. Install over your existing app — do not
-uninstall and lose settings. [Previous 2.39](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-3)
+uninstall and lose settings. [Previous 2.40](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-4),
+[2.39](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-3)
 (installation may be blocked — see advisory), [2.38](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-2)
 and [2.37](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-1)
 assets remain immutable.
 
 | App | Version | Installable APK |
 |---|---|---|
-| Live Guard (CleanSweep) | 2.40 | [CleanSweep-v2.40.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/CleanSweep-v2.40.apk) |
-| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/Ramesh-Radio-v1.8.apk) |
-| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/PulseEQ-v1.2.apk) |
+| Live Guard (CleanSweep) | 2.41 | [CleanSweep-v2.41.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-1/CleanSweep-v2.41.apk) |
+| Ramesh Radio | 1.8 | [Ramesh-Radio-v1.8.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-1/Ramesh-Radio-v1.8.apk) |
+| PulseEQ | 1.2 | [PulseEQ-v1.2.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.12-1/PulseEQ-v1.2.apk) |
 
-[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.11-4)
+[Release notes and all assets](https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.12-1)
 · [All releases](https://github.com/universalrp2003/InternetRadio/releases)
 
 Install **one release APK per app**. Debug APKs are development builds; you do not

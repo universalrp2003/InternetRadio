@@ -13,6 +13,7 @@ import com.universalrp.cleansweep.ai.ChecklistAction
 import com.universalrp.cleansweep.ai.ChecklistRoute
 import com.universalrp.cleansweep.ai.AiClient
 import com.universalrp.cleansweep.ai.AiFailurePolicy
+import com.universalrp.cleansweep.ai.AiOutputBudgetPolicy
 import com.universalrp.cleansweep.ai.AiRequestPolicy
 import com.universalrp.cleansweep.ai.RequestBudget
 import com.universalrp.cleansweep.ai.ProductEvidencePolicy
@@ -2669,9 +2670,18 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             try {
                 val (models, error) = AiClient.listModels(config)
                 coroutineContext.ensureActive()
+                // 2.41 provider model check: if the provider's own list does not contain the
+                // saved model, say so here — "Test" would only produce a doomed request.
+                val modelCheck = AiOutputBudgetPolicy.checkModel(config.resolvedModel, models)
+                val rejected = modelCheck == AiOutputBudgetPolicy.ModelCheck.REJECTED_UNLISTED
                 if (revision == aiChecksRevision) mutate { it.copy(aiModels = models.distinct().sorted(),
-                    aiModelsError = error?.let { message -> tr(AiFailurePolicy.message(message)) } ?: if (models.isEmpty()) tr("The provider returned no models.") else null,
-                    message = if (models.isNotEmpty()) tr("%s models available", models.size) else null) }
+                    aiModelsError = when {
+                        error != null -> tr(AiFailurePolicy.message(error))
+                        models.isEmpty() -> tr("The provider returned no models.")
+                        rejected -> tr(AiOutputBudgetPolicy.rejectionMessage())
+                        else -> null
+                    },
+                    message = if (models.isNotEmpty() && !rejected) tr("%s models available", models.size) else null) }
             } catch (e: CancellationException) { throw e } catch (error: Exception) {
                 if (revision == aiChecksRevision) mutate { it.copy(aiModelsError = tr(AiFailurePolicy.message(null))) }
             } finally {

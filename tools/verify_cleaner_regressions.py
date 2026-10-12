@@ -40,6 +40,11 @@ EXPECTED = {
     "com.universalrp.cleansweep.data.LastUnplugPolicyTest": 8,
     "com.universalrp.cleansweep.widget.CompactWidgetPolicyTest": 8,
     "com.universalrp.cleansweep.data.FeatureSetupPolicyTest": 8,
+    # 2.41: honest battery-side watts/amps, the owner-set 44 °C warning and the AI
+    # output-budget + provider-model-check policies.
+    "com.universalrp.cleansweep.data.ChargingHonestyPolicyTest": 8,
+    "com.universalrp.cleansweep.data.ThermalWarningPolicyTest": 6,
+    "com.universalrp.cleansweep.ai.AiOutputBudgetPolicyTest": 6,
     "com.universalrp.cleansweep.ai.ArenaRatingPolicyTest": 8,
 }
 

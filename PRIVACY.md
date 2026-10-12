@@ -1,6 +1,6 @@
 # Privacy policy — CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ
 
-**Last updated: 11 October 2026** (2.40 published: notification reader removed)
+**Last updated: 12 October 2026** (2.41 published: honest charging readings, 44 °C heat warning, AI budgets; notification reader stays removed)
 **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
 ## The short version
@@ -9,6 +9,25 @@ These apps are built to work on your phone, not on a server. There is no develop
 no account to create, no advertising, no analytics, and no developer-side tracking. Optional
 user-controlled local histories stay on your phone (described below). Nothing is
 uploaded to the developer, and the developer cannot see anything on your phone.
+
+## Live Guard 2.41 (published) — no new data flow
+
+The published 2.41 does not add a data flow. In its own words:
+
+- **Honest charging numbers** are read from the same local battery broadcast and kernel
+  interfaces as before (battery-side voltage × current, temperature). Nothing new is
+  collected, nothing leaves the phone, and a value the phone does not report stays
+  "Not reported".
+- **The screen-on/off note** only compares the local screen state with the local reading.
+  It is displayed on the phone and is not transmitted anywhere.
+- **The 44 °C heat warning** is decided on the phone from the local battery/CPU temperature.
+  It is spoken/posted locally, claims no cause and no diagnosis, and repeats no faster than
+  once per three hours.
+- **The AI output budget** only limits how many tokens the app asks your chosen provider to
+  generate. **The provider model check** asks your chosen provider for its own model list
+  (the same `GET /models` call the "Load models" button already makes) and compares the saved
+  model name locally. The saved key and phone facts are unchanged by this: no new data is
+  sent, and no request is made to any additional service.
 
 ## What is collected by the developer
 

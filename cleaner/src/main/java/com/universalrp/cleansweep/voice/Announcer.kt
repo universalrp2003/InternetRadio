@@ -76,8 +76,12 @@ object Announcer {
     /** Battery below this speaks a warning while unplugged. */
     const val LOW_PERCENT = 20
 
-    /** Battery temperature (°C) that counts as too hot. */
-    const val HOT_BATTERY_C = 45.0
+    /**
+     * Battery temperature (°C) that counts as too hot. 2.41: one owner-set **44 °C**
+     * threshold, kept in step with [com.universalrp.cleansweep.data.ThermalWarningPolicy]
+     * (the static gate fails if the two drift apart).
+     */
+    const val HOT_BATTERY_C = 44.0
 
     /** Free storage below this speaks a warning. */
     const val LOW_STORAGE_BYTES = 1024L * 1024L * 1024L

@@ -10,7 +10,6 @@ import android.os.Environment
 import android.os.StatFs
 import android.os.SystemClock
 import java.io.File
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -135,13 +134,10 @@ object BatteryReader {
         // displayed as charging wattage.
         // Furthermore, power measured here is battery-side electrical power (V_batt * I_batt),
         // NOT charger adapter output wattage.
-        val powerW = if (charging && plugged != 0 && voltageV != null && currentA != null) {
-            val watts = voltageV * abs(currentA)
-            // Filter obviously wrong kernel values (spikes or absurd sensor reports).
-            if (watts.isFinite() && watts >= 0f && watts < 150f) watts else null
-        } else {
-            null
-        }
+        // 2.41: one implementation decides what may be called charging power — the
+        // battery-side policy in ChargingHonestyPolicy (measured voltage × measured current,
+        // only while charging, implausible kernel values refused).
+        val powerW = ChargingHonestyPolicy.batterySideWatts(charging, powerConnected, voltageV, currentA)
 
         val signNote = when {
             currentA == null -> "Current counter not reported on this phone"

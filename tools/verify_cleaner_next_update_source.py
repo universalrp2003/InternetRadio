@@ -57,19 +57,49 @@ def main():
     require('CURRENT_WINDOW_MS' in source('ai/ArenaRatingPolicy.kt') and '.singleOrNull()' in source('ai/ArenaRatingPolicy.kt'), 'Rating exact/freshness policy missing')
     require('rating_q025' in source('ai/ArenaRatings.kt') and 'git/blobs' in source('ai/ArenaRatings.kt'), 'Verified official rating schema missing')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
-    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 45', 'versionName = "2.40"'):
+    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 46', 'versionName = "2.41"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
     for removed in ('com.google.mlkit:translate', 'com.google.mlkit:language-id'):
         require(removed not in gradle, 'Removed reader dependency is still declared: ' + removed)
+    # 2.41 honest watts/amps: the battery-side policy must exist and be wired into the
+    # notification card and the health screen (no amp-for-watt substitution anywhere).
+    honesty = source('data/ChargingHonestyPolicy.kt')
+    require('batterySideWatts' in honesty and 'MAX_PLAUSIBLE_WATTS' in honesty and 'ScreenNote' in honesty,
+            'Honest battery-side watts/amps policy missing')
+    require('ChargingHonestyPolicy.batterySideWatts' in source('notify/ChargeNotifier.kt') and
+            'ChargingHonestyPolicy.screenNote' in source('notify/ChargeNotifier.kt') and
+            'ChargingHonestyPolicy.screenNote' in source('ui/HealthScreen.kt'),
+            'Charging honesty policy is not wired into the card and health screen')
+    # 2.41 heat warning: one owner-set 44 °C threshold, a hush window, and no invented value.
+    thermal = source('data/ThermalWarningPolicy.kt')
+    require('WARN_BATTERY_C = 44.0f' in thermal and 'HUSH_MS' in thermal and 'shouldAnnounce' in thermal,
+            '44 °C thermal warning policy missing')
+    require('HOT_BATTERY_C = 44.0' in source('voice/Announcer.kt'),
+            'The voice heat threshold and ThermalWarningPolicy.WARN_BATTERY_C are out of step')
+    require('ThermalWarningPolicy.decide' in source('work/HealthWatchWorker.kt') and
+            'ThermalWarningPolicy.shouldAnnounce' in source('work/HealthWatchWorker.kt'),
+            'Thermal warning policy not wired into the background heat watch')
+    require('ThermalWarningPolicy.decide' in source('notify/ChargeNotifier.kt') and
+            'ThermalWarningPolicy.decide' in source('ui/HealthScreen.kt'),
+            'Thermal warning policy not wired into the card and health screen')
+    # 2.41 AI output budget + provider model check, enforced in the client and reported in the UI.
+    output = source('ai/AiOutputBudgetPolicy.kt')
+    require('MAX_ANSWER_TOKENS' in output and 'checkModel' in output and 'effectiveOutputTokens' in output,
+            'AI output budget / provider model check policy missing')
+    require('AiOutputBudgetPolicy.effectiveOutputTokens' in source('ai/AiClient.kt') and
+            'AiOutputBudgetPolicy.checkModel' in source('ai/AiClient.kt'),
+            'AI output budget / provider model check not enforced in the client')
+    require('AiOutputBudgetPolicy.checkModel' in source('MainViewModel.kt'),
+            'Provider model check not surfaced after loading the model list')
     expected = runpy.run_path(str(ROOT/'tools/verify_cleaner_regressions.py'))['EXPECTED']
-    require(sum(expected.values()) == 301 and len(expected) == 33, 'Future required regression gate count differs')
+    require(sum(expected.values()) == 321 and len(expected) == 36, 'Future required regression gate count differs')
     for name, count in expected.items():
         path = ROOT/'cleaner/src/test/java'/Path(*name.split('.')).with_suffix('.kt')
         require(path.is_file() and len(re.findall(r'@Test\b', path.read_text())) == count, 'Required test source missing: ' + name)
     for xml in (ROOT/'cleaner/src/main').rglob('*.xml'):
         ET.parse(xml)
     print('PASS: Static manifest, no-notification-reading/update/rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 33 required suites / 301 prepared declarations; tests NOT executed. Candidate 2.40/code45/API26 matches.')
+    print('PASS: 36 required suites / 321 prepared declarations; tests NOT executed. Candidate 2.41/code46/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 
