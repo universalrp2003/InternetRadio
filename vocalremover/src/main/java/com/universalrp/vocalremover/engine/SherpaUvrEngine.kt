@@ -77,20 +77,15 @@ class SherpaUvrEngine(modelPath: String, threads: Int) : AutoCloseable {
         ) ?: throw IllegalStateException("Source separation failed for this chunk")
 
         try {
-            val nativeOutput = SourceOutput().apply {
-                useMemory(separated)
-                read()
-            }
+            val nativeOutput = SourceOutput(separated).apply { read() }
             check(nativeOutput.num_stems >= 2) { "The model did not return an instrumental stem" }
             check(nativeOutput.sample_rate == outputSampleRateHz && nativeOutput.sample_rate > 0) {
                 "The model returned an unexpected output sample rate"
             }
             val stemsPointer = nativeOutput.stems
                 ?: throw IllegalStateException("The model returned no stems")
-            val accompaniment = Stem().apply {
-                useMemory(stemsPointer.share(Stem().size().toLong()))
-                read()
-            }
+            val stemSize = Stem().size().toLong()
+            val accompaniment = Stem(stemsPointer.share(stemSize)).apply { read() }
             val outputChannels = accompaniment.num_channels
             val outputFrames = accompaniment.n
             check(outputChannels in 1..2 && outputFrames > 0) {
@@ -146,14 +141,20 @@ class SherpaUvrEngine(modelPath: String, threads: Int) : AutoCloseable {
     }
 
     @Structure.FieldOrder("stems", "num_stems", "sample_rate")
-    private class SourceOutput : Structure() {
+    private class SourceOutput : Structure {
+        constructor() : super()
+        constructor(pointer: Pointer) : super(pointer)
+
         @JvmField var stems: Pointer? = null
         @JvmField var num_stems: Int = 0
         @JvmField var sample_rate: Int = 0
     }
 
     @Structure.FieldOrder("samples", "num_channels", "n")
-    private class Stem : Structure() {
+    private class Stem : Structure {
+        constructor() : super()
+        constructor(pointer: Pointer) : super(pointer)
+
         @JvmField var samples: Pointer? = null
         @JvmField var num_channels: Int = 0
         @JvmField var n: Int = 0

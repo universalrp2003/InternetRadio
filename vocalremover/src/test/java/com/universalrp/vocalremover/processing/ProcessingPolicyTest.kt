@@ -14,6 +14,11 @@ class ProcessingPolicyTest {
         availableStorageBytes = 2L * 1024 * 1024 * 1024,
     )
 
+    @Test fun storageReserveMatchesTheLowStoragePauseGuardrail() {
+        assertEquals(96L * 1024L * 1024L, ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES)
+        assertEquals(ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES, ProcessingPolicy.LOW_STORAGE_PAUSE_BYTES)
+    }
+
     @Test fun profilesBoundThreadsAndNeverChangeModelQuality() {
         assertEquals(1, ProcessingPolicy.profileThreads(ProcessingProfile.SLOW, 8))
         assertEquals(2, ProcessingPolicy.profileThreads(ProcessingProfile.BALANCED, 8))

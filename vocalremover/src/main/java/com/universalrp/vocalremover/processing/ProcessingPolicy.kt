@@ -34,7 +34,8 @@ object ProcessingPolicy {
     // Conservative headroom for the native model session and short stereo inference buffers.
     // This is a guardrail, not a claim about the model's exact peak RAM requirement.
     const val LOW_MEMORY_PAUSE_BYTES = 512L * 1024L * 1024L
-    const val LOW_STORAGE_PAUSE_BYTES = 96L * 1024L * 1024L
+    const val STORAGE_SAFETY_RESERVE_BYTES = 96L * 1024L * 1024L
+    const val LOW_STORAGE_PAUSE_BYTES = STORAGE_SAFETY_RESERVE_BYTES
     private const val MEMORY_THROTTLE_BYTES = 768L * 1024L * 1024L
 
     fun profileThreads(profile: ProcessingProfile, availableCores: Int): Int {

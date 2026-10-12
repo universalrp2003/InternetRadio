@@ -392,7 +392,7 @@ class SeparationService : Service() {
     }
 
     private suspend fun awaitModelStorageHeadroom(host: ProcessorHost) {
-        val required = ModelRepository.MODEL_BYTES + STORAGE_SAFETY_RESERVE_BYTES
+        val required = ModelRepository.MODEL_BYTES + ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
         while (true) {
             if (!host.checkpoint()) throw CancellationException("Canceled before model download")
             val available = monitor.read().availableStorageBytes
@@ -448,9 +448,9 @@ class SeparationService : Service() {
                                 ?: throw IllegalStateException("Free app storage could not be measured safely; check device storage, then retry.")
                             val remainingInputBytes = expectedBytes?.let { (it - copied).coerceAtLeast(0L) }
                             val requiredBytes = remainingInputBytes?.let { remaining ->
-                                if (remaining > Long.MAX_VALUE - STORAGE_SAFETY_RESERVE_BYTES) Long.MAX_VALUE
-                                else remaining + STORAGE_SAFETY_RESERVE_BYTES
-                            } ?: STORAGE_SAFETY_RESERVE_BYTES
+                                if (remaining > Long.MAX_VALUE - ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES) Long.MAX_VALUE
+                                else remaining + ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
+                            } ?: ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
                             if (free < requiredBytes) {
                                 val shortfall = requiredBytes - free
                                 val message = "Copying the selected song while keeping a 96 MiB safety reserve needs about " +
@@ -853,7 +853,6 @@ class SeparationService : Service() {
         private const val REQUEST_RESUME = 4106
         private const val REQUEST_CANCEL = 4107
         private const val REQUEST_RETRY = 4108
-        private const val STORAGE_SAFETY_RESERVE_BYTES = 96L * 1024L * 1024L
         private val ACTIVE_STATES = setOf(JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.PAUSING, JobStatus.PAUSED)
         private val TERMINAL_STATES = setOf(JobStatus.COMPLETED, JobStatus.CANCELED, JobStatus.FAILED)
     }

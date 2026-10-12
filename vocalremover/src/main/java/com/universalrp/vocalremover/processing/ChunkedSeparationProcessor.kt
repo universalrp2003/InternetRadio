@@ -128,9 +128,10 @@ class ChunkedSeparationProcessor(
                 var decision = awaitSafeToRun(job.profile, host, ::releaseEngineForPause)
                 if (engine == null || engineThreads != decision.threads) {
                     engine?.close()
-                    engine = SherpaUvrEngine(modelFile.absolutePath, decision.threads)
+                    val loadedEngine = SherpaUvrEngine(modelFile.absolutePath, decision.threads)
+                    engine = loadedEngine
                     engineThreads = decision.threads
-                    val actualRate = engine.outputSampleRateHz
+                    val actualRate = loadedEngine.outputSampleRateHz
                     if (outputRate != 0 && outputRate != actualRate) {
                         throw IllegalStateException("The model output format changed; saved chunks cannot be mixed")
                     }
@@ -178,9 +179,10 @@ class ChunkedSeparationProcessor(
                 decision = awaitSafeToRun(job.profile, host, ::releaseEngineForPause)
                 if (decision.threads != engineThreads) {
                     engine?.close()
-                    engine = SherpaUvrEngine(modelFile.absolutePath, decision.threads)
+                    val loadedEngine = SherpaUvrEngine(modelFile.absolutePath, decision.threads)
+                    engine = loadedEngine
                     engineThreads = decision.threads
-                    val actualRate = engine.outputSampleRateHz
+                    val actualRate = loadedEngine.outputSampleRateHz
                     if (outputRate != 0 && outputRate != actualRate) {
                         throw IllegalStateException("The model output format changed; saved chunks cannot be mixed")
                     }
@@ -334,7 +336,7 @@ class ChunkedSeparationProcessor(
                 throw IllegalStateException("Could not remove an incomplete private WAV; free app storage, then retry.")
             }
             val requiredBytes = missingSegmentBytes + (if (privateWavReady) 0L else wavBytes) +
-                wavBytes + STORAGE_SAFETY_RESERVE_BYTES
+                wavBytes + ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
             val available = monitor.read().availableStorageBytes
                 ?: throw IllegalStateException("Free app storage could not be measured safely; check device storage, then retry.")
             if (available >= requiredBytes) return
