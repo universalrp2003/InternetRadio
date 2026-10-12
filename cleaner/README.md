@@ -37,6 +37,18 @@ filter are declared in the package, and runtime OFF does not remove them.
 · [2.40 preparation](../docs/live-guard-2.40-core-preparation.md)
 · [Retained-permission audit](../docs/live-guard-2.40-permission-audit.md)
 
+## v2.41 — candidate (not published, not device-tested yet)
+
+**v2.41 / code46** continues the published 2.40 core with four owner-requested changes:
+honest battery-side watts/amps (labelled, measured-only, no amp-for-watt substitution),
+a screen-on/off charging note, a bounded AI output budget with a provider model check, and
+one **44 °C** battery heat warning that names its sensor and hushes repeats for three hours.
+Every new string is paired EN + Tamil (941 audited keys). Nothing here is published: the
+candidate is published only after the owner installs the exact APK and the real Play Protect
+and installer results are recorded in `docs/live-guard-2.41-device-evidence.md`.
+Notes: [`releases/v2026.10.12-1.md`](../releases/v2026.10.12-1.md) · test plan:
+[`docs/live-guard-2.41-device-test-plan.md`](../docs/live-guard-2.41-device-test-plan.md).
+
 ## v2.40 — verified/published (current release)
 
 [Install CleanSweep-v2.40.apk](https://github.com/universalrp2003/InternetRadio/releases/download/v2026.10.11-4/CleanSweep-v2.40.apk)

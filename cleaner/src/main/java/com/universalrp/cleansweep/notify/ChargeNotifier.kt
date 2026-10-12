@@ -12,7 +12,9 @@ import com.universalrp.cleansweep.MainActivity
 import com.universalrp.cleansweep.R
 import com.universalrp.cleansweep.data.BatteryReader
 import com.universalrp.cleansweep.data.BatteryReading
+import com.universalrp.cleansweep.data.ChargingHonestyPolicy
 import com.universalrp.cleansweep.data.DataUsageTracker
+import com.universalrp.cleansweep.data.ThermalWarningPolicy
 import com.universalrp.cleansweep.data.LiveNetworkQuality
 import com.universalrp.cleansweep.data.Lang
 import com.universalrp.cleansweep.data.DisplayTime
@@ -36,6 +38,13 @@ object ChargeNotifier {
         BatteryReader.read(context).also { runCatching { com.universalrp.cleansweep.data.ChargeHistoryRepo.record(context, it) } }
     } catch (e: Exception) {
         null
+    }
+
+    /** True while the screen is on. A phone without a readable PowerManager is treated as screen-on: that is the wording that promises less. */
+    private fun screenOn(context: Context): Boolean = try {
+        (context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager)?.isInteractive ?: true
+    } catch (e: Exception) {
+        true
     }
 
     fun channel(context: Context) {
@@ -114,10 +123,28 @@ object ChargeNotifier {
             } else if (isUnlimited) appendLine(t("Unlimited 5G mode is user-set; quota display is hidden."))
             if (battery.powerConnected) {
                 append(t("Charger connected: %s", timeLine))
-                battery.powerW?.let { append(" · " + "%.2f W".format(java.util.Locale.US, it)) }
-                battery.currentA?.let { append(" · %.2f A".format(java.util.Locale.US, it)) }
-                battery.voltageV?.let { append(" · %.2f V".format(java.util.Locale.US, it)) }
-                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
+                // 2.41 honest watts/amps: each number is named for what it actually is —
+                // measured at the battery — and a sensor that reported nothing is left out
+                // instead of being replaced by a different unit or by zero.
+                val measuredWatts = ChargingHonestyPolicy.batterySideWatts(
+                    battery.charging,
+                    battery.powerConnected,
+                    battery.voltageV,
+                    battery.currentA,
+                )
+                ChargingHonestyPolicy.wattsText(measuredWatts)?.let {
+                    appendLine()
+                    append(t("Charging power measured at the battery: %s", it))
+                }
+                ChargingHonestyPolicy.ampsText(ChargingHonestyPolicy.batterySideAmps(battery.currentA))?.let {
+                    appendLine()
+                    append(t("Battery-side current: %s", it))
+                }
+                ChargingHonestyPolicy.voltsText(battery.voltageV)?.let {
+                    appendLine()
+                    append(t("Battery voltage: %s", it))
+                }
+                battery.temperatureC?.let { appendLine(); append(t("Battery temperature: %s", "%.1f °C".format(java.util.Locale.US, it))) }
             } else {
                 append(t("Battery %s · %s", percent, t(battery.statusLabel)))
                 battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
@@ -132,6 +159,31 @@ object ChargeNotifier {
             dataUsage != null -> "Mobile data usage excludes Wi-Fi and is not the carrier's official balance."
             else -> "Monitoring active. Open Live Guard for available phone readings."
         })
+        // 2.41: a 44 °C battery (owner-set threshold) gets one plain notice — no cause is
+        // claimed and no diagnosis is made — and the card never repeats it silently.
+        val thermal = ThermalWarningPolicy.decide(battery.temperatureC, null, null)
+        val heatLine = when {
+            !thermal.warn -> null
+            thermal.sensor == ThermalWarningPolicy.Sensor.CPU -> t(
+                "A heat sensor is at or above its warning level (%s). Let the phone cool before heavy use; this is a temperature notice, not a diagnosis.",
+                ThermalWarningPolicy.celsiusText(thermal.celsius) ?: "—",
+            )
+            else -> t(
+                "Battery temperature is at or above 44 °C (%s). Unusually warm — review charging conditions; this is a temperature notice, not a diagnosis.",
+                ThermalWarningPolicy.celsiusText(thermal.celsius) ?: "—",
+            )
+        }
+        // 2.41 screen-on/off note: the phone's own draw changes with the screen, the cable does not.
+        val screenLine = when (ChargingHonestyPolicy.screenNote(battery.powerConnected, screenOn(context))) {
+            ChargingHonestyPolicy.ScreenNote.SCREEN_ON_DRAWS_POWER -> t(
+                "Screen is on, so the phone itself is drawing power. The charging figure is measured at the battery and can read lower than with the screen off — it is not the charger's output.",
+            )
+            ChargingHonestyPolicy.ScreenNote.SCREEN_OFF_LOW_DRAW -> t(
+                "Screen is off, so the phone is drawing little. The charging figure is measured at the battery, not the charger's output.",
+            )
+            ChargingHonestyPolicy.ScreenNote.NOT_CHARGING -> null
+        }
+        val hintText = listOfNotNull(heatLine, hint, screenLine).joinToString("\n")
 
         val stopIntent = Intent(context, ChargeMonitorService::class.java).apply {
             action = ChargeMonitorService.ACTION_STOP_SERVICE
@@ -161,7 +213,7 @@ object ChargeNotifier {
             .setColor(netIconColor)
             .setContentTitle(title)
             .setContentText(if (battery.powerConnected) t("Battery-side charging power") else details)
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hint"))
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$details\n$hintText"))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
@@ -288,10 +340,11 @@ object ChargeNotifier {
         val battery = read(app) ?: return
         if (!battery.powerConnected) return
 
-        // 1. Overheat check on plug-in: warn immediately if battery is dangerously hot
-        val tempC = battery.temperatureC
-        if (tempC != null && tempC >= 42.0f) {
-            val tempRound = tempC.toInt()
+        // 1. Overheat check on plug-in: the single owner-set threshold (44 °C in 2.41,
+        // 42 °C before) says the battery is unusually warm — no cause is claimed.
+        val thermalAtPlug = ThermalWarningPolicy.decide(battery.temperatureC, null, null)
+        if (thermalAtPlug.warn && thermalAtPlug.sensor == ThermalWarningPolicy.Sensor.BATTERY) {
+            val tempRound = thermalAtPlug.celsius?.toInt() ?: 0
             val warnTamil = "எச்சரிக்கை! போன் மிக அதிக வெப்பமாக உள்ளது ($tempRound டிகிரி). வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும் அல்லது சார்ஜரை அகற்றவும்."
             Announcer.speakAndWait(app, "The battery is unusually warm at plug-in. Please review charging conditions.", warnTamil,
                 Announcer.Event.OVERHEAT, onStarted = { prefs.edit().putString("voice_last_spoken_connection", token).apply() },

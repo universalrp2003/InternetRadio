@@ -1,5 +1,7 @@
 package com.universalrp.cleansweep.ui
 
+import android.content.Context
+import android.os.PowerManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
@@ -52,6 +55,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.universalrp.cleansweep.Screen
 import com.universalrp.cleansweep.UiState
 import com.universalrp.cleansweep.data.BatteryReading
+import com.universalrp.cleansweep.data.ChargingHonestyPolicy
+import com.universalrp.cleansweep.data.ThermalWarningPolicy
 import com.universalrp.cleansweep.data.HealthSnapshot
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.formatBytes
@@ -67,6 +72,20 @@ import com.universalrp.cleansweep.ui.theme.TextSecondary
 import com.universalrp.cleansweep.ui.theme.WarnAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+
+/**
+ * True while the screen is on. A phone whose PowerManager cannot be read counts as
+ * screen-on, because that is the wording which promises less about the reading.
+ */
+@Composable
+private fun screenIsOn(): Boolean {
+    val context = LocalContext.current
+    return try {
+        (context.getSystemService(Context.POWER_SERVICE) as? PowerManager)?.isInteractive ?: true
+    } catch (e: Exception) {
+        true
+    }
+}
 
 /**
  * Live battery, temperature, CPU, memory and device information — the numbers the
@@ -124,7 +143,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                     }
                 }
             } else {
-                item { BatteryCard(health.battery) }
+                item { BatteryCard(health.battery, screenIsOn()) }
                 item { StatusBarPillCard(state, vm) }
                 item { ThermalCard(health) }
                 item { CpuCard(health) }
@@ -220,7 +239,7 @@ private fun StatusBarPillCard(state: UiState, vm: MainViewModel) {
 }
 
 @Composable
-private fun BatteryCard(battery: BatteryReading) {
+private fun BatteryCard(battery: BatteryReading, screenOn: Boolean) {
     PanelCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -257,9 +276,20 @@ private fun BatteryCard(battery: BatteryReading) {
                         modifier = Modifier.weight(1f),
                     )
                     if (battery.charging) {
+                        // 2.41: never substitute amps where watts belong. The battery-side
+                        // watts are shown only when they were measured; otherwise the
+                        // battery-side current is named as current.
+                        val chargingWatts = ChargingHonestyPolicy.batterySideWatts(
+                            battery.charging,
+                            battery.powerConnected,
+                            battery.voltageV,
+                            battery.currentA,
+                        )
+                        val chargingAmps = ChargingHonestyPolicy.batterySideAmps(battery.currentA)
                         Text(
-                            battery.powerW?.let { "%.1f W".format(it) }
-                                ?: battery.currentA?.let { "%.2f A".format(it) } ?: "",
+                            ChargingHonestyPolicy.wattsText(chargingWatts)
+                                ?: chargingAmps?.let { tr("battery-side %s", ChargingHonestyPolicy.ampsText(it) ?: "") }
+                                ?: tr("Not reported"),
                             style = MaterialTheme.typography.bodySmall,
                             color = GoodGreen,
                             fontWeight = FontWeight.Bold,
@@ -335,6 +365,48 @@ private fun BatteryCard(battery: BatteryReading) {
                 style = MaterialTheme.typography.labelSmall,
                 color = TextSecondary,
             )
+            // 2.41 notes: what the numbers above are (and are not), why the screen changes the
+            // battery-side reading, and one honest 44 °C notice. No cause is claimed for a warm
+            // phone and no value is invented when a sensor is missing.
+            when (ChargingHonestyPolicy.screenNote(battery.powerConnected, screenOn)) {
+                ChargingHonestyPolicy.ScreenNote.SCREEN_ON_DRAWS_POWER -> {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr(
+                            "Screen is on, so the phone itself is drawing power. The charging figure is " +
+                                "measured at the battery and can read lower than with the screen off — it is " +
+                                "not the charger's output."
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                ChargingHonestyPolicy.ScreenNote.SCREEN_OFF_LOW_DRAW -> {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr(
+                            "Screen is off, so the phone is drawing little. The charging figure is measured " +
+                                "at the battery, not the charger's output."
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                    )
+                }
+                ChargingHonestyPolicy.ScreenNote.NOT_CHARGING -> Unit
+            }
+            val thermal = ThermalWarningPolicy.decide(battery.temperatureC, null, null)
+            if (thermal.warn) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    tr(
+                        "Battery temperature is at or above 44 °C (%s). Unusually warm — review charging " +
+                            "conditions; this is a temperature notice, not a diagnosis.",
+                        ThermalWarningPolicy.celsiusText(thermal.celsius) ?: "—",
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = thermal.celsius?.let { temperatureColor(it) } ?: WarnAmber,
+                )
+            }
         }
     }
 }

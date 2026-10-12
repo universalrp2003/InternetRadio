@@ -40,6 +40,20 @@ are declared inside the package, so runtime OFF does not remove them.
 Full advisory, official Google references and the next steps:
 [`docs/live-guard-play-protect-install-block.md`](docs/live-guard-play-protect-install-block.md).
 
+## Live Guard 2.41 — candidate, not published
+
+Owner-requested follow-up work on the published 2.40 core is prepared as **2.41 / code46**:
+charging watts and amps are labelled and shown only as measured battery-side values (never
+substituted for each other, never guessed), a screen-on/off note explains why the same cable
+can read differently, the AI asks carry a bounded output budget with a provider `/models`
+check that fails fast instead of producing a doomed request, and the battery heat warning is
+one owner-set **44 °C** threshold with a 3-hour hush. **This candidate is not published and
+has not been installed on any phone yet.** It is published only after the owner installs the
+exact candidate APK and the real Play Protect wording plus installer outcome are recorded in
+`docs/live-guard-2.41-device-evidence.md` (the workflow gate refuses publication without it).
+Detailed notes: [`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md) · device test plan:
+[`docs/live-guard-2.41-device-test-plan.md`](docs/live-guard-2.41-device-test-plan.md).
+
 ## Download — release APKs
 
 **2.40 is the current published Live Guard release** (11 October 2026, unchanged

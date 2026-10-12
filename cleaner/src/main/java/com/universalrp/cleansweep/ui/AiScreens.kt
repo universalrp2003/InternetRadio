@@ -305,6 +305,14 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary,
                             )
+                            Spacer(Modifier.height(6.dp))
+                            // 2.41: the output budget is bounded, and a request that is nearly
+                            // out of time asks for a shorter answer instead of timing out.
+                            Text(
+                                tr("Each reply uses a bounded output budget. When a request's own time limit is nearly spent the answer budget shrinks instead of letting one question run into a minute-long wait."),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary,
+                            )
                             Spacer(Modifier.height(8.dp))
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Button(

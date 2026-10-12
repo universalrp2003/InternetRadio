@@ -32,6 +32,7 @@ import com.universalrp.cleansweep.data.ScanEngine
 import com.universalrp.cleansweep.data.ScanSettings
 import com.universalrp.cleansweep.data.SecurityScanner
 import com.universalrp.cleansweep.data.Severity
+import com.universalrp.cleansweep.data.ThermalWarningPolicy
 import com.universalrp.cleansweep.data.batteryTimeLabel
 import com.universalrp.cleansweep.data.batteryTimeMinutes
 import com.universalrp.cleansweep.data.formatBytes
@@ -176,14 +177,23 @@ class HealthWatchWorker(
             }
         }
 
-        // Running hot — battery or CPU.
-        val batteryHot = battery.temperatureC?.let { it >= Announcer.HOT_BATTERY_C } == true
-        val cpuHot = (health?.cpuTempC ?: 0f) >= Announcer.HOT_CPU_C
-        if (batteryHot || cpuHot) {
+        // Running hot — battery or CPU. 2.41: one owner-set policy (44 °C battery, unchanged
+        // 75 °C CPU zone) decides both the warning and its hush window, so the card, the
+        // plug-in line, the worker and the Settings text can never disagree.
+        val thermal = ThermalWarningPolicy.decide(
+            battery.temperatureC,
+            health?.batteryTempFromKernelC,
+            health?.cpuTempC,
+        )
+        val batteryHot = thermal.sensor == ThermalWarningPolicy.Sensor.BATTERY
+        val cpuHot = thermal.sensor == ThermalWarningPolicy.Sensor.CPU
+        if (thermal.warn) {
             val last = prefs.getLong(Announcer.KEY_LAST_HOT, 0L)
-            if (com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, 3 * 60 * 60 * 1000L)) {
-                val batteryText = battery.temperatureC?.let { "%.0f".format(it) } ?: "?"
-                val cpuText = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
+            val cooled = ThermalWarningPolicy.shouldAnnounce(last, now) &&
+                com.universalrp.cleansweep.voice.VoiceDeliveryPolicy.cooldownReady(now, last, ThermalWarningPolicy.HUSH_MS)
+            if (cooled) {
+                val batteryText = (if (batteryHot) thermal.celsius else battery.temperatureC)?.let { "%.0f".format(it) } ?: "?"
+                val cpuText = (if (cpuHot) thermal.celsius else health?.cpuTempC)?.let { "%.0f".format(it) } ?: "?"
                 val whichTa = if (batteryHot && cpuHot) "பேட்டரி மற்றும் செயலி" else if (batteryHot) "பேட்டரி" else "செயலி"
                 val plugWarning = if (battery.charging) " வேகமாக சார்ஜ் செய்வதைத் தவிர்க்கவும்." else ""
                 Announcer.speakAndWait(

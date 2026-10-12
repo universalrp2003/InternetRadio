@@ -68,6 +68,18 @@
   fabricate a review date just by opening the app. Keep unknown/incomplete states
   and opt-in package-specific history distinct.
 
+- **2026-10-12 owner request (Live Guard 2.41/code46):** prepare the next candidate with
+  four changes only — (1) honest watts/amps (battery-side, measured-only, labelled, no
+  amp-for-watt substitution), (2) a screen-on/off charging note, (3) a bounded AI output
+  budget plus a provider model check, (4) one owner-set **44 °C** battery heat warning with
+  an honest sensor name and a hush window. The owner did **not** authorize publication:
+  2.41 is published only after the owner installs the exact candidate APK on his phone and
+  the real Play Protect wording plus installer outcome are recorded with the tested digest
+  and run id in `docs/live-guard-2.41-device-evidence.md`. Never publish a rebuilt digest as
+  if the device test covered it; keep 2.40's published assets, the 2.39 history and the
+  install-block advisory intact, and keep `releases/latest-tag.txt` at `v2026.10.11-4` until
+  a real publication happens.
+
 ## Latest reviewed source batch — build/publication now authorized
 
 Owner choices: **reviewed_setup**, **on_device_only** notification translation,
