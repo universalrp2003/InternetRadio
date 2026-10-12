@@ -52,8 +52,9 @@ also records the owner's 2.42 install evidence: both phones, Play Protect ON, "A
 recommended" → "This app looks safe — You can continue to install it" → installed in place over
 2.41, digest matching the published asset
 ([evidence](docs/live-guard-2.42-device-evidence.md)). **No device test covered the 2.43 bytes
-before publication** (no dangerous permission was added); one A3s screenshot while charging will
-confirm the new wording — see
+before publication** (no dangerous permission was added); published as `CleanSweep-v2.43.apk`,
+13,574,748 bytes, SHA-256 `6f922f078e3561890aae13a38e4bc6387e3bed3a26da16d5a22591e8596657d7`. One A3s screenshot
+while charging will confirm the new wording — see
 [`docs/live-guard-2.42-device-test-plan.md`](docs/live-guard-2.42-device-test-plan.md).
 
 ## Live Guard 2.42 — published (12 October 2026)

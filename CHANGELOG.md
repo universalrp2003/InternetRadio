@@ -7,8 +7,9 @@ stable signing key, minSdk 26, target/compileSdk 36. Ramesh Radio 1.8 and PulseE
 **No device test covered these bytes** before publication (the owner's 12 October rule requires
 one only when a release adds a dangerous permission; this one adds none, and the gate compared
 this build's merged-manifest permissions against the published 2.42 APK). CI ran all **349**
-required cases in both variants. The A3s outcome ("not reported" instead of `0.00 W`) still needs
-one owner screenshot.
+required cases in both variants. Published asset `CleanSweep-v2.43.apk`, **13,574,748 bytes**,
+SHA-256 `6f922f078e3561890aae13a38e4bc6387e3bed3a26da16d5a22591e8596657d7` (CI run 38226682047). The A3s outcome
+("not reported" instead of `0.00 W`) still needs one owner screenshot.
 
 - **A zero is never a measurement** (`data/BatteryValuePolicy.kt`): the owner installed 2.42 on
   the OPPO A3s and reported the charging card **still showed 0.00 W** — diagnostic, because that
