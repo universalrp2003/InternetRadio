@@ -7,18 +7,36 @@ features. Verify Android 8+ compatibility and report limits of device testing.
 
 The Build APK workflow publishes only after unit tests, compilation and APK checks
 pass. A session-branch push whose final commit message contains `[publish]` explicitly
-requests publication; ordinary pushes remain test builds.
+requests publication; ordinary pushes remain test builds. The normal route is a version tag
+(`refs/tags/vYYYY.MM.DD-N`) whose commit already contains `releases/<tag>.md`.
+`releases/latest-tag.txt` is flipped **after** a publication succeeds, never before: the
+publication step reads it to find the previous release for the permission comparison, so
+pointing it at the tag being published would leave nothing to compare against.
 
-**Device-evidence gate (since the 2026-10-11 Play Protect install block).** For any
-CleanSweep version newer than 2.39/code44, publication is additionally refused unless
-`docs/live-guard-2.40-device-evidence.md` exists, records the real **Play Protect** result
-and the **installer outcome**, and carries the machine-readable `TESTED-APK-SHA256` and
-`TESTED-RUN-ID` lines. When the tested digest is recorded, the step either publishes the
-fresh build (only if it reproduces that digest byte-for-byte) or promotes the recorded
-run's `cleansweep-apk` artifact after verifying its digest — so a rebuilt APK can never
-inherit an earlier device test. Do not delete or weaken that gate to publish; the advisory
-and next steps live in `docs/live-guard-play-protect-install-block.md`, and the test
-checklist in `docs/live-guard-2.40-device-test-plan.md`. Manual dispatch also accepts
+**Device-evidence gate (added after the 2026-10-11 Play Protect install block; narrowed by
+owner decision on 2026-10-12, Live Guard 2.42).** For a CleanSweep version newer than
+2.39/code44, publication needs `docs/live-guard-<versionName>-device-evidence.md` **only when
+that release adds a dangerous permission** compared with the previously published release. The
+comparison is made on the *built artifacts*, not the source manifest, because only the merged
+manifest shows what the phone is actually asked to grant: the step runs `aapt2 dump badging` on
+the candidate APK and on the CleanSweep APK published under `releases/latest-tag.txt`, and
+`tools/verify_release_permission_delta.py` decides. Appop/signature-level declarations
+(`MANAGE_EXTERNAL_STORAGE`, `PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`,
+`REQUEST_INSTALL_PACKAGES`, `QUERY_ALL_PACKAGES`) are **not** runtime prompts and never count as
+an addition. The tool **fails closed**: if the previous release cannot be downloaded or read, or
+its report lists no permission, evidence is required rather than assumed unnecessary.
+
+When evidence *is* required, that file must record the real **Play Protect** result and the
+**installer outcome** and carry the machine-readable `TESTED-APK-SHA256` and `TESTED-RUN-ID`
+lines. When an evidence file exists at all — required or not — the step still publishes the
+**tested bytes**: the fresh build only if it reproduces that digest byte-for-byte, otherwise the
+recorded run's `cleansweep-apk` artifact after verifying its digest, so a rebuilt APK can never
+inherit an earlier device test. A release published without an install record must say so
+plainly in its own notes, in the changelog and in the README; never claim a device test that did
+not happen. Do not delete or weaken the gate to publish. The advisory and next steps live in
+`docs/live-guard-play-protect-install-block.md`; the per-version checklists in
+`docs/live-guard-2.4x-device-test-plan.md`; the 2.40 and 2.41 records, which were published
+under the older every-release rule, stay exactly as written. Manual dispatch also accepts
 `release_tag` when the GitHub connection has Actions-write permission. Published
 assets are release APKs/AABs for the three maintained apps, never debug or legacy APKs.
 A new release is assembled as a draft, then published after uploading all assets.

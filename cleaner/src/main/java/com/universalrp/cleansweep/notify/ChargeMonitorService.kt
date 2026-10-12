@@ -163,15 +163,21 @@ class ChargeMonitorService : Service() {
         var alive: Boolean = false
             private set
 
-        /** Is persistent background monitoring explicitly enabled by the user? (Defaults to false). */
+        /**
+         * Is persistent background monitoring wanted? 2.42: default ON (opt-out), and the
+         * default lives in [com.universalrp.cleansweep.data.MonitorDefaultsPolicy] so this
+         * mirror, the DataStore flow and the UI state can never disagree again.
+         */
         fun persistentEnabled(context: Context): Boolean =
             context.getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(PERSISTENT_KEY, false)
+                .getBoolean(PERSISTENT_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.PERSISTENT_MONITOR)
 
-        /** Is the charging card wanted at all? (The user's switch in Settings.) */
+        /**
+         * Is the charging card wanted at all? (The user's switch in Settings; 2.42 default ON.)
+         */
         fun cardEnabled(context: Context): Boolean =
             context.getSharedPreferences(PILL_PREFS, Context.MODE_PRIVATE)
-                .getBoolean(CARD_KEY, false)
+                .getBoolean(CARD_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.CHARGE_CARD)
 
         /**
          * Starts the service if it is wanted and the phone is on the charger. Returns true

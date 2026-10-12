@@ -26,7 +26,7 @@ class ChargerWatchWorker(
         val ctx = applicationContext
         val persistent = ChargeMonitorService.persistentEnabled(ctx)
         val pill = ctx.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
-            .getBoolean(ChargeMonitorService.PILL_KEY, false)
+            .getBoolean(ChargeMonitorService.PILL_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.STATUS_PILL)
         if (!ChargeMonitorService.cardEnabled(ctx) && !pill && !persistent) {
             // No visual monitoring requested. Voice-only events have their own short worker.
             ChargeNotifier.clear(ctx)

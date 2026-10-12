@@ -174,7 +174,9 @@ jobs:
           # the production tree or the build scripts. Historical 2.39 sources stay in
           # docs/archived-notification-reader-2.39 and are never compiled.
           python3 tools/verify_cleaner_core_manifest.py
-          python3 -m unittest discover -s tools/tests -p 'test_verify_cleaner_core_manifest.py' -v
+          # 2.42: every tools test runs here, including the permission-delta gate that now
+          # decides when a release needs a recorded device install.
+          python3 -m unittest discover -s tools/tests -p 'test_*.py' -v
           python3 tools/verify_cleaner_next_update_source.py
 
       - name: Build the APKs
@@ -847,14 +849,23 @@ jobs:
           test -f "$NOTES"
 
           # ---------------------------------------------------------------------------
-          # v2.40 device-evidence gate. DELIBERATE: do not delete this block to bypass it.
+          # Device-evidence gate. Revised by explicit owner decision on 12 October 2026
+          # (Live Guard 2.42). DELIBERATE: do not delete or weaken this block to publish.
           #
-          # A CleanSweep candidate newer than the published 2.39/code44 may only be
-          # published from the SAME APK bytes that were actually installed on the owner's
-          # phone with Play Protect ON. GitHub publication is not Play Protect approval and
-          # not all-device certification, and a rebuild produces a different digest that no
-          # device test covered. The evidence file must quote this exact APK SHA-256 plus the
-          # observed Play Protect and installer result. Without it, publication stops here.
+          # A CleanSweep candidate newer than the published 2.39/code44 needs a recorded
+          # physical-device install ONLY when it ADDS a dangerous permission compared with
+          # the previously published release APK. The comparison is made on the built
+          # artifacts with aapt2, because only the merged manifest shows what the phone is
+          # actually asked to grant; tools/verify_release_permission_delta.py decides, and
+          # it fails closed when the previous release cannot be downloaded or read.
+          #
+          # Everything else from the original rule is unchanged and still enforced below:
+          # when a device-evidence file DOES exist, publication uses exactly the tested
+          # bytes - a rebuild reproducing the recorded SHA-256, or the recorded run's
+          # promoted artifact - so a rebuilt digest can never inherit an earlier device
+          # test. GitHub publication is not Play Protect approval and not all-device
+          # certification, and release notes must never claim a device test that did not
+          # happen. Play Protect, the package name and the signing key are untouched.
           # ---------------------------------------------------------------------------
           CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk | head -1)
           CLEANER_VERSION=$(grep -m1 'versionName' cleaner/build.gradle.kts | sed -E 's/.*"([^"]+)".*/\1/')
@@ -863,91 +874,129 @@ jobs:
           AAPT2=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
           if [ "${CLEANER_CODE:-0}" -gt 44 ]; then
             EVIDENCE="docs/live-guard-${CLEANER_VERSION}-device-evidence.md"
-            if [ ! -f "$EVIDENCE" ]; then
-              echo "FAIL: CleanSweep $CLEANER_VERSION (code $CLEANER_CODE) has no recorded physical-device evidence."
+            # --- 2.42: does THIS release need a recorded device install? --------------
+            if [ -z "$AAPT2" ]; then
+              echo "FAIL: aapt2 is required to compare the released permissions; refusing to guess."
+              exit 1
+            fi
+            "$AAPT2" dump badging "$CLEANER_REL" > "$RUNNER_TEMP/candidate-badging.txt"
+            PREVIOUS_TAG=$(cat releases/latest-tag.txt)
+            PREVIOUS_DIR="$RUNNER_TEMP/previous-release"
+            PREVIOUS_BADGING=""
+            mkdir -p "$PREVIOUS_DIR"
+            if [ "$PREVIOUS_TAG" = "$TAG" ]; then
+              echo "WARN: releases/latest-tag.txt already points at $TAG; there is no earlier release to compare."
+            elif gh release download "$PREVIOUS_TAG" --dir "$PREVIOUS_DIR" --pattern 'CleanSweep-*.apk' >/dev/null 2>&1; then
+              PREVIOUS_APK=$(find "$PREVIOUS_DIR" -name 'CleanSweep-*.apk' | head -1)
+              if [ -n "$PREVIOUS_APK" ] && "$AAPT2" dump badging "$PREVIOUS_APK" > "$RUNNER_TEMP/previous-badging.txt"; then
+                PREVIOUS_BADGING="$RUNNER_TEMP/previous-badging.txt"
+                echo "Comparing against the previously published release: $PREVIOUS_TAG ($(basename "$PREVIOUS_APK"))"
+              fi
+            else
+              echo "WARN: could not download the CleanSweep APK published as $PREVIOUS_TAG."
+            fi
+            DELTA_ARGS=(--candidate-badging "$RUNNER_TEMP/candidate-badging.txt")
+            if [ -n "$PREVIOUS_BADGING" ]; then
+              DELTA_ARGS+=(--previous-badging "$PREVIOUS_BADGING")
+            else
+              # Fail closed: an unreadable previous release is never treated as "nothing added".
+              DELTA_ARGS+=(--previous-unavailable "the CleanSweep APK published as $PREVIOUS_TAG could not be read")
+            fi
+            if [ -f "$EVIDENCE" ]; then DELTA_ARGS+=(--evidence-present); fi
+            python3 tools/verify_release_permission_delta.py "${DELTA_ARGS[@]}" | tee "$RUNNER_TEMP/permission-delta.txt"
+            EVIDENCE_REQUIRED=$(sed -nE 's/^EVIDENCE-REQUIRED: (yes|no)$/\1/p' "$RUNNER_TEMP/permission-delta.txt" | head -1)
+            # Anything other than an explicit "no" is treated as "required": fail closed.
+            if [ "$EVIDENCE_REQUIRED" != "no" ] && [ ! -f "$EVIDENCE" ]; then
+              echo "FAIL: CleanSweep $CLEANER_VERSION (code $CLEANER_CODE) adds a dangerous permission and has no recorded physical-device evidence."
               echo "       Expected: $EVIDENCE"
               echo "       Install the exact candidate APK from the normal download route with Play Protect ON,"
               echo "       record the real outcome, and commit that record before publishing. Nothing was published."
               exit 1
             fi
-            if ! grep -Eqi "play protect" "$EVIDENCE" || ! grep -Eqi "installer|installation outcome" "$EVIDENCE"; then
-              echo "FAIL: $EVIDENCE must record both the actual Play Protect result and the installer outcome."
-              exit 1
-            fi
-            TESTED_SHA=$(sed -nE 's/^TESTED-APK-SHA256:[[:space:]]*([0-9a-fA-F]{64}).*/\1/p' "$EVIDENCE" | head -1 | tr 'A-F' 'a-f')
-            TESTED_RUN=$(sed -nE 's/^TESTED-RUN-ID:[[:space:]]*([0-9]+).*/\1/p' "$EVIDENCE" | head -1)
-            if [ -z "$TESTED_SHA" ]; then
-              echo "FAIL: $EVIDENCE has no machine-readable 'TESTED-APK-SHA256:' line, so the tested bytes cannot be identified."
-              echo "       Fill the evidence template's TESTED-APK-SHA256 / TESTED-RUN-ID lines. Nothing was published."
-              exit 1
-            fi
-            CANDIDATE_SHA=$(sha256sum "$CLEANER_REL" | awk '{print $1}')
-            if [ "$CANDIDATE_SHA" = "$TESTED_SHA" ]; then
-              echo "OK: this build reproduces the device-tested APK digest exactly ($TESTED_SHA); nothing to promote."
+            if [ ! -f "$EVIDENCE" ]; then
+              echo "OK: $CLEANER_VERSION adds no dangerous permission, so no device-install record is required."
+              echo "    The freshly built bytes are published. No device test is claimed for them: the"
+              echo "    release notes and CHANGELOG must say plainly that this build was not installed on a phone."
             else
-              # A rebuild does not reproduce those bytes. Promote the artifact from the run that
-              # the owner actually tested instead of publishing untested bytes.
-              if [ -z "$TESTED_RUN" ]; then
-                echo "FAIL: this build's digest differs from the device-tested digest and no TESTED-RUN-ID is recorded."
-                echo "       built:  $CANDIDATE_SHA"
-                echo "       tested: $TESTED_SHA"
-                echo "       Record the run id whose artifact was installed, or the tested bytes cannot be published. Nothing was published."
+              if ! grep -Eqi "play protect" "$EVIDENCE" || ! grep -Eqi "installer|installation outcome" "$EVIDENCE"; then
+                echo "FAIL: $EVIDENCE must record both the actual Play Protect result and the installer outcome."
                 exit 1
               fi
-              PROMOTE="$RUNNER_TEMP/promoted-cleansweep"
-              mkdir -p "$PROMOTE"
-              if ! gh run download "$TESTED_RUN" -n cleansweep-apk -D "$PROMOTE"; then
-                echo "FAIL: could not download the tested run's cleansweep-apk artifact (run $TESTED_RUN)."
-                echo "       Expired/deleted artifacts cannot be re-published; rebuild, re-test on the phone and record the new run. Nothing was published."
+              TESTED_SHA=$(sed -nE 's/^TESTED-APK-SHA256:[[:space:]]*([0-9a-fA-F]{64}).*/\1/p' "$EVIDENCE" | head -1 | tr 'A-F' 'a-f')
+              TESTED_RUN=$(sed -nE 's/^TESTED-RUN-ID:[[:space:]]*([0-9]+).*/\1/p' "$EVIDENCE" | head -1)
+              if [ -z "$TESTED_SHA" ]; then
+                echo "FAIL: $EVIDENCE has no machine-readable 'TESTED-APK-SHA256:' line, so the tested bytes cannot be identified."
+                echo "       Fill the evidence template's TESTED-APK-SHA256 / TESTED-RUN-ID lines. Nothing was published."
                 exit 1
               fi
-              PROMOTED_APK=$(find "$PROMOTE" -type f -path '*/release/*.apk' | head -1)
-              if [ -z "$PROMOTED_APK" ]; then
-                echo "FAIL: the tested run's artifact has no release APK to promote."
-                exit 1
-              fi
-              PROMOTED_SHA=$(sha256sum "$PROMOTED_APK" | awk '{print $1}')
-              if [ "$PROMOTED_SHA" != "$TESTED_SHA" ]; then
-                echo "FAIL: the promoted artifact digest does not match the recorded device-test digest."
-                echo "       artifact: $PROMOTED_SHA"
-                echo "       evidence: $TESTED_SHA"
-                exit 1
-              fi
-              # Same version/package expectations, checked on the promoted bytes themselves.
-              if [ -z "$AAPT2" ]; then
-                echo "FAIL: aapt2 is required to verify the promoted APK's version; cannot promote safely."
-                exit 1
-              fi
-              if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionCode='$CLEANER_CODE'"; then
-                echo "FAIL: the promoted APK's versionCode does not match the source version code."
-                exit 1
-              fi
-              if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionName='$CLEANER_VERSION'"; then
-                echo "FAIL: the promoted APK's versionName does not match the source version name."
-                exit 1
-              fi
-              cp "$PROMOTED_APK" "$CLEANER_REL"
-              echo "OK: promoted the device-tested artifact from run $TESTED_RUN ($PROMOTED_SHA) as the publication APK"
-              # The store bundle travels with the same tested build.
-              PROMOTE_BUNDLE="$RUNNER_TEMP/promoted-bundles"
-              mkdir -p "$PROMOTE_BUNDLE"
-              if gh run download "$TESTED_RUN" -n store-bundles -D "$PROMOTE_BUNDLE"; then
-                PROMOTED_AAB=$(find "$PROMOTE_BUNDLE" -type f -path '*/cleaner/*.aab' | head -1)
-                if [ -n "$PROMOTED_AAB" ]; then
-                  cp "$PROMOTED_AAB" cleaner/build/outputs/bundle/release/
-                  echo "OK: promoted the matching CleanSweep bundle from run $TESTED_RUN"
-                else
-                  echo "WARN: the tested run's bundle artifact has no CleanSweep .aab; the freshly built bundle is published"
-                fi
+              CANDIDATE_SHA=$(sha256sum "$CLEANER_REL" | awk '{print $1}')
+              if [ "$CANDIDATE_SHA" = "$TESTED_SHA" ]; then
+                echo "OK: this build reproduces the device-tested APK digest exactly ($TESTED_SHA); nothing to promote."
               else
-                echo "WARN: could not download the tested run's store-bundles artifact; the freshly built bundle is published"
+                # A rebuild does not reproduce those bytes. Promote the artifact from the run that
+                # the owner actually tested instead of publishing untested bytes.
+                if [ -z "$TESTED_RUN" ]; then
+                  echo "FAIL: this build's digest differs from the device-tested digest and no TESTED-RUN-ID is recorded."
+                  echo "       built:  $CANDIDATE_SHA"
+                  echo "       tested: $TESTED_SHA"
+                  echo "       Record the run id whose artifact was installed, or the tested bytes cannot be published. Nothing was published."
+                  exit 1
+                fi
+                PROMOTE="$RUNNER_TEMP/promoted-cleansweep"
+                mkdir -p "$PROMOTE"
+                if ! gh run download "$TESTED_RUN" -n cleansweep-apk -D "$PROMOTE"; then
+                  echo "FAIL: could not download the tested run's cleansweep-apk artifact (run $TESTED_RUN)."
+                  echo "       Expired/deleted artifacts cannot be re-published; rebuild, re-test on the phone and record the new run. Nothing was published."
+                  exit 1
+                fi
+                PROMOTED_APK=$(find "$PROMOTE" -type f -path '*/release/*.apk' | head -1)
+                if [ -z "$PROMOTED_APK" ]; then
+                  echo "FAIL: the tested run's artifact has no release APK to promote."
+                  exit 1
+                fi
+                PROMOTED_SHA=$(sha256sum "$PROMOTED_APK" | awk '{print $1}')
+                if [ "$PROMOTED_SHA" != "$TESTED_SHA" ]; then
+                  echo "FAIL: the promoted artifact digest does not match the recorded device-test digest."
+                  echo "       artifact: $PROMOTED_SHA"
+                  echo "       evidence: $TESTED_SHA"
+                  exit 1
+                fi
+                # Same version/package expectations, checked on the promoted bytes themselves.
+                if [ -z "$AAPT2" ]; then
+                  echo "FAIL: aapt2 is required to verify the promoted APK's version; cannot promote safely."
+                  exit 1
+                fi
+                if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionCode='$CLEANER_CODE'"; then
+                  echo "FAIL: the promoted APK's versionCode does not match the source version code."
+                  exit 1
+                fi
+                if ! "$AAPT2" dump badging "$PROMOTED_APK" | grep -Fq "versionName='$CLEANER_VERSION'"; then
+                  echo "FAIL: the promoted APK's versionName does not match the source version name."
+                  exit 1
+                fi
+                cp "$PROMOTED_APK" "$CLEANER_REL"
+                echo "OK: promoted the device-tested artifact from run $TESTED_RUN ($PROMOTED_SHA) as the publication APK"
+                # The store bundle travels with the same tested build.
+                PROMOTE_BUNDLE="$RUNNER_TEMP/promoted-bundles"
+                mkdir -p "$PROMOTE_BUNDLE"
+                if gh run download "$TESTED_RUN" -n store-bundles -D "$PROMOTE_BUNDLE"; then
+                  PROMOTED_AAB=$(find "$PROMOTE_BUNDLE" -type f -path '*/cleaner/*.aab' | head -1)
+                  if [ -n "$PROMOTED_AAB" ]; then
+                    cp "$PROMOTED_AAB" cleaner/build/outputs/bundle/release/
+                    echo "OK: promoted the matching CleanSweep bundle from run $TESTED_RUN"
+                  else
+                    echo "WARN: the tested run's bundle artifact has no CleanSweep .aab; the freshly built bundle is published"
+                  fi
+                else
+                  echo "WARN: could not download the tested run's store-bundles artifact; the freshly built bundle is published"
+                fi
               fi
+              if ! grep -Fq "$TESTED_SHA" "$EVIDENCE"; then
+                echo "FAIL: $EVIDENCE no longer contains the tested digest; refusing to publish."
+                exit 1
+              fi
+              echo "OK: device evidence in $EVIDENCE covers the published CleanSweep $CLEANER_VERSION APK ($TESTED_SHA)"
             fi
-            if ! grep -Fq "$TESTED_SHA" "$EVIDENCE"; then
-              echo "FAIL: $EVIDENCE no longer contains the tested digest; refusing to publish."
-              exit 1
-            fi
-            echo "OK: device evidence in $EVIDENCE covers the published CleanSweep $CLEANER_VERSION APK ($TESTED_SHA)"
           fi
           # Companions have no source change: reuse exact previous verified assets.
           # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.

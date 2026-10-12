@@ -7,12 +7,12 @@ import xml.etree.ElementTree as ET
 
 EXPECTED = {
     "com.universalrp.cleansweep.notify.StatusPillContentTest": 6,
-    "com.universalrp.cleansweep.data.SecuritySettingsRoutesTest": 12,
+    "com.universalrp.cleansweep.data.SecuritySettingsRoutesTest": 14,
     "com.universalrp.cleansweep.ai.SecurityAiPromptTest": 9,
     "com.universalrp.cleansweep.data.ReadingPolicyTest": 10,
     "com.universalrp.cleansweep.data.PhoneAgeEstimatorTest": 12,
     "com.universalrp.cleansweep.data.NewsPolicyTest": 14,
-    "com.universalrp.cleansweep.data.BatteryValuePolicyTest": 4,
+    "com.universalrp.cleansweep.data.BatteryValuePolicyTest": 9,
     "com.universalrp.cleansweep.ai.AssistantEvidencePolicyTest": 10,
     "com.universalrp.cleansweep.widget.WidgetReadingPolicyTest": 12,
     "com.universalrp.cleansweep.voice.VoiceDeliveryPolicyTest": 12,
@@ -31,7 +31,7 @@ EXPECTED = {
     "com.universalrp.cleansweep.data.DisplayTimeTest": 8,
     "com.universalrp.cleansweep.data.PermissionReviewSummaryTest": 8,
     "com.universalrp.cleansweep.data.LocalizedTextTest": 4,
-    "com.universalrp.cleansweep.voice.AnswerVoicePolicyTest": 8,
+    "com.universalrp.cleansweep.voice.AnswerVoicePolicyTest": 12,
     "com.universalrp.cleansweep.updates.UpdatePolicyTest": 12,
     # The reader itself is gone from production (2.40 core removal). Its historical pure
     # policy now lives in the TEST source set, so these 12 cases still run.
@@ -46,6 +46,11 @@ EXPECTED = {
     "com.universalrp.cleansweep.data.ThermalWarningPolicyTest": 6,
     "com.universalrp.cleansweep.ai.AiOutputBudgetPolicyTest": 6,
     "com.universalrp.cleansweep.ai.ArenaRatingPolicyTest": 8,
+    # 2.42: the battery-current source fallback, automatic answer voices, the default-on
+    # monitors, one language source of truth and the home-screen spacing scale.
+    "com.universalrp.cleansweep.data.LanguageSourcePolicyTest": 6,
+    "com.universalrp.cleansweep.data.MonitorDefaultsPolicyTest": 6,
+    "com.universalrp.cleansweep.ui.HomeLayoutPolicyTest": 5,
 }
 
 

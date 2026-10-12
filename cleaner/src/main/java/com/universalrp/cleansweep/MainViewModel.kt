@@ -68,6 +68,8 @@ import com.universalrp.cleansweep.data.hasAllFilesAccess
 import com.universalrp.cleansweep.notify.ChargeMonitorService
 import com.universalrp.cleansweep.notify.StatusPill
 import com.universalrp.cleansweep.voice.Announcer
+import com.universalrp.cleansweep.voice.AnswerVoicePolicy
+import com.universalrp.cleansweep.voice.AnswerVoicePreferences
 import com.universalrp.cleansweep.widget.CleanSweepWidget
 import com.universalrp.cleansweep.work.HealthWatchWorker
 import android.provider.Settings
@@ -133,7 +135,7 @@ data class UiState(
     // App cache screen
     val usageAccess: Boolean = false,
     val appsLoading: Boolean = false,
-    val includeSystemApps: Boolean = true,
+    val includeSystemApps: Boolean = MonitorDefaultsPolicy.CACHE_INCLUDE_SYSTEM,
     val appCaches: List<AppCacheInfo> = emptyList(),
     val pendingManualApps: Int = 0,
     // On-device assistant
@@ -150,7 +152,7 @@ data class UiState(
     val appFilter: String = AppFilter.ALL,
     val appQuery: String = "",
     // Security check
-    val securityIncludeSystemApps: Boolean = true,
+    val securityIncludeSystemApps: Boolean = MonitorDefaultsPolicy.SECURITY_INCLUDE_SYSTEM,
     val securityReport: SecurityReport? = null,
     val lastPermissionReview: com.universalrp.cleansweep.data.PermissionReviewSummary? = null,
     val lastPermissionReviewLoaded: Boolean = false,
@@ -187,7 +189,9 @@ data class UiState(
     val aiDeviceResult: String? = null,
     // Assistant mode + charging notification
     val assistantOnline: Boolean = false,
-    val chargeMonitor: Boolean = false,
+    // 2.42: the ongoing status-bar charging meter defaults ON (opt-out). MonitorDefaultsPolicy
+    // is the single owner of that default, shared with the DataStore flow and the prefs mirror.
+    val chargeMonitor: Boolean = MonitorDefaultsPolicy.CHARGE_CARD,
     // Status-bar watt reading: CleanSweep draws it itself (needs "Display over other apps")
     val statusPill: Boolean = false,
     val statusPillAllowed: Boolean = false,
@@ -212,7 +216,8 @@ data class UiState(
     // 0 = the user has not picked a size yet; the screen asks instead of guessing
     val speedSizeMb: Int = 0,
     val speedIncludeUpload: Boolean = false,
-    val persistentMonitor: Boolean = false,
+    // 2.42: background battery-health monitoring defaults ON (opt-out); the switch stays.
+    val persistentMonitor: Boolean = MonitorDefaultsPolicy.PERSISTENT_MONITOR,
     val speedError: String? = null,
     val usage: DataUsageReport? = null,
     val usageBusy: Boolean = false,
@@ -271,7 +276,8 @@ data class UiState(
     val malwareBusy: Boolean = false,
     val malwareProgress: Pair<Int, Int>? = null,
     val malwareReport: MalwareReport? = null,
-    val malwareIncludeSystem: Boolean = false,
+    // 2.42 owner decision: "include pre installed system application button turn on default".
+    val malwareIncludeSystem: Boolean = MonitorDefaultsPolicy.MALWARE_INCLUDE_SYSTEM,
     val vtKeySaved: Boolean = false,
     val tamilInfoItems: List<NewsHeadline> = emptyList(),
     val newsShown: Set<String> = emptySet(),
@@ -356,8 +362,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Retire exactly those, on IO, without touching any other saved choice; the marker
         // is written only after the cleanup completes, so an incomplete run is retried.
         viewModelScope.launch(Dispatchers.IO) { CorePrivacyMigration.run(ctx) }
-        mutate { it.copy(includeSystemApps = prefs.getBoolean("cache_include_system", true),
-            securityIncludeSystemApps = prefs.getBoolean("security_include_system", true)) }
+        // 2.42: resolve the language authority before anything is composed, then mirror it
+        // into the state. MainActivity already set Lang.current from the saved choice; this
+        // makes UiState.lang say the same thing, so no card can render the opposite language.
+        val resolvedLang = LanguageSourcePolicy.resolve(prefs.getString(Lang.KEY, null), Lang.current)
+        if (Lang.current != resolvedLang) Lang.set(resolvedLang)
+        mutate { it.copy(lang = resolvedLang,
+            includeSystemApps = prefs.getBoolean("cache_include_system", MonitorDefaultsPolicy.CACHE_INCLUDE_SYSTEM),
+            securityIncludeSystemApps = prefs.getBoolean("security_include_system", MonitorDefaultsPolicy.SECURITY_INCLUDE_SYSTEM)) }
         viewModelScope.launch {
             com.universalrp.cleansweep.data.PermissionReviewStore.observe(ctx).collect { previous ->
                 mutate { it.copy(lastPermissionReview = previous, lastPermissionReviewLoaded = true) }
@@ -455,7 +467,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Voice + daily watch: read the switches, and make sure the hourly worker is alive
         // whenever the user wants warnings or the daily brief.
         loadVoiceSettings()
-        if (Announcer.enabled(ctx) || Announcer.dailyScanOn(ctx)) HealthWatchWorker.schedule(ctx)
+        // 2.42: the battery-health monitor's own switch counts too, and it defaults ON, so the
+        // hourly watch is armed after an update without the owner opening Voice & daily watch.
+        if (MonitorDefaultsPolicy.healthWatchWanted(Announcer.enabled(ctx), Announcer.dailyScanOn(ctx),
+                ChargeMonitorService.persistentEnabled(ctx))) {
+            HealthWatchWorker.schedule(ctx)
+        }
         val savedVerified = prefs.getStringSet("verified_wifi_macs", emptySet()) ?: emptySet()
         val autoWifiScan = prefs.getBoolean("auto_wifi_scan_open", true)
         val bgWifiScan = prefs.getBoolean(com.universalrp.cleansweep.work.WifiScanWorker.KEY_BG_WIFI_SCAN, false)
@@ -1069,7 +1086,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun assistantSuggestions(): List<String> = Assistant.suggestionChips(assistantContext())
 
-    private fun assistantWelcome(state: UiState, tamil: Boolean = state.lang == AppLang.TA): AssistantMessage =
+    private fun assistantWelcome(state: UiState, tamil: Boolean = Lang.isTamil): AssistantMessage =
         Assistant.welcome(assistantContext(), state.assistantVerbose, state.assistantOnline, state.aiConfig.ready, tamil)
 
     private fun refreshAssistantWelcome() {
@@ -1280,11 +1297,34 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         // Read it in the language it is actually written in, not the menu language: an
         // English answer should not be handed to a Tamil voice.
         val language = languageOf(short)
-        if (!com.universalrp.cleansweep.voice.AnswerVoicePreferences.load(ctx, language).configured) {
-            mutate { it.copy(message = tr("Choose and preview two voices for this answer language in Voice & daily watch.")) }
+        // 2.42: Voice A / Voice B are chosen automatically from the phone's own installed
+        // voices instead of refusing with "choose and preview two voices". A stored choice
+        // keeps the synchronous fast path; only a missing or stale choice queries the engine.
+        if (AnswerVoicePreferences.load(ctx, language).configured) {
+            Announcer.speakAnswer(ctx, short, language, message.answerVoiceSlot, message.id, forced)
             return
         }
-        Announcer.speakAnswer(ctx, short, language, message.answerVoiceSlot, message.id, forced)
+        viewModelScope.launch {
+            ensureAnswerVoices(language)
+            Announcer.speakAnswer(ctx, short, language, message.answerVoiceSlot, message.id, forced)
+        }
+    }
+
+    /**
+     * Fills Voice A and Voice B for [language] from the engine's **real** inventory when the
+     * owner has not chosen, or when a saved voice is no longer reported, and saves the result
+     * so the Voice & daily watch card shows what will actually be used. The owner can still
+     * preview and swap both slots there, and a manual save still requires a preview.
+     *
+     * When the engine reports no usable voice for that language, nothing is saved and nothing
+     * is spoken: [Announcer] records the real delivery stage in the voice diagnostics. No
+     * error message is shown, and no voice is invented or substituted from another language.
+     */
+    private suspend fun ensureAnswerVoices(language: AppLang) {
+        val stored = AnswerVoicePreferences.load(ctx, language)
+        val inventory = runCatching { Announcer.installedAnswerVoices(ctx, language) }.getOrDefault(emptyList())
+        val resolved = AnswerVoicePolicy.effectivePair(stored.first, stored.second, inventory.map { it.name })
+        AnswerVoicePreferences.saveAutomatic(ctx, language, resolved.first, resolved.second)
     }
 
     /** True when the text is mostly Tamil script. */
@@ -1776,9 +1816,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
      * apps MalwareBazaar already flagged: the free VirusTotal quota (4/minute, 500/day)
      * would never survive a blind sweep of the whole list.
      *
-     * By default only user-installed apps are checked — preinstalled system apps live on
-     * the read-only partition and cannot be removed anyway — with a switch for the full
-     * sweep. Cancellable; progress is shown per app.
+     * 2.42: preinstalled system apps are **included by default** at the owner's request, and
+     * the switch stays so the sweep can be narrowed to user-installed apps. They live on the
+     * read-only partition and cannot be removed, so a hit there is information, not an action.
+     * Cancellable; progress is shown per app.
      */
     fun runMalwareScan() {
         if (_state.value.malwareBusy) return

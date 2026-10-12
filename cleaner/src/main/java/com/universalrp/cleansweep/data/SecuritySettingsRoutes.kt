@@ -18,6 +18,23 @@ object SecuritySettingsRoutes {
     const val DEVICE_INFO = "android.settings.DEVICE_INFO_SETTINGS"
     const val SCREEN_LOCK = "android.app.action.SET_NEW_PASSWORD"
     const val SMS_PERMISSIONS = "android.intent.action.MANAGE_APP_PERMISSIONS"
+
+    /**
+     * 2.42: the AOSP editor for **one** permission of **one** app, rather than the app's whole
+     * permission list. Candidate only — a ROM that does not expose it fails to resolve and the
+     * launcher tries the next route, which is the normal documented fallback here.
+     */
+    const val PERMISSION_EDITOR = "android.intent.action.MANAGE_APP_PERMISSION"
+    const val EXTRA_PERMISSION = "android.intent.extra.PERMISSION_NAME"
+
+    /**
+     * Routing targets only: these name *another* app's permission page that the owner is asked
+     * to review. Live Guard never declares, requests or holds an SMS permission itself, and
+     * `tools/verify_cleaner_core_manifest.py` fails the build if the manifest ever does.
+     */
+    const val PERMISSION_SMS_GROUP = "android.permission-group.SMS"
+    const val PERMISSION_READ_SMS = "android.permission.READ_SMS"
+
     const val EXTRA_PACKAGE = "android.intent.extra.PACKAGE_NAME"
     const val EXTRA_LISTENER = "android.provider.extra.NOTIFICATION_LISTENER_COMPONENT_NAME"
     const val EXTRA_HIGHLIGHT = ":settings:fragment_args_key"
@@ -36,6 +53,69 @@ object SecuritySettingsRoutes {
         listOf(manufacturer, brand).any { value ->
             listOf("xiaomi", "redmi", "poco").any { value.contains(it, ignoreCase = true) }
         }
+
+    /**
+     * ColorOS and its derivatives. 2.42: recognised so the owner's OPPO A3s gets its own
+     * wording and route order. No ColorOS component name is invented — ColorOS keeps the AOSP
+     * permission editor reachable, so its route *is* the AOSP one, and a made-up activity
+     * would only waste a fallback step before App info.
+     */
+    fun isColoros(manufacturer: String, brand: String = ""): Boolean =
+        listOf(manufacturer, brand).any { value ->
+            listOf("oppo", "realme", "oneplus", "coloros").any { value.contains(it, ignoreCase = true) }
+        }
+
+    /**
+     * Routes that open **this app's own** permission page, most specific first.
+     *
+     * The 2.42 fix: the SMS finding used to fire the generic all-permissions action first,
+     * carrying the package only as the `android.intent.extra.PACKAGE_NAME` extra. On
+     * MIUI/HyperOS that action is claimed by the security centre, which ignores the extra and
+     * shows its own "Other permissions" hub — a different window from the one promised, which
+     * is exactly what the owner's iMobile screenshot showed. So now:
+     *
+     *  1. on Xiaomi, the ROM's own *package-scoped* permission editor comes first;
+     *  2. then the AOSP editor for the exact permission, where the ROM exposes it;
+     *  3. then the AOSP per-app permission list (this is also the ColorOS/One UI route);
+     *  4. then App info, which every ROM has and whose "Permissions" row is that same page.
+     *
+     * Every candidate carries the package **both** as the `package:` data URI and as the extra,
+     * because ROMs differ in which one they read; sending only the extra is what let a ROM show
+     * an unscoped hub. A candidate the ROM does not expose simply fails to resolve and the
+     * launcher tries the next one, ending in the honest manual-path text.
+     */
+    fun appPermissionRoutes(
+        pkg: String,
+        permissionNames: List<String>,
+        manufacturer: String = "",
+        brand: String = "",
+    ): List<Destination> {
+        val result = mutableListOf<Destination>()
+        if (isXiaomi(manufacturer, brand)) {
+            // MIUI/HyperOS varies by release. These activities may be missing or non-exported:
+            // the launcher catches that and tries the next candidate.
+            for (name in listOf("PermissionsEditorActivity", "AppPermissionsEditorActivity")) {
+                result += Destination(
+                    "miui.intent.action.APP_PERM_EDITOR",
+                    dataPackage = pkg,
+                    activityPackage = "com.miui.securitycenter",
+                    activityClass = "com.miui.permcenter.permissions.$name",
+                    extras = mapOf("extra_pkgname" to pkg),
+                )
+            }
+        }
+        for (permission in permissionNames) {
+            result += Destination(
+                PERMISSION_EDITOR,
+                dataPackage = pkg,
+                extras = mapOf(EXTRA_PACKAGE to pkg, EXTRA_PERMISSION to permission),
+                direct = true,
+            )
+        }
+        result += Destination(SMS_PERMISSIONS, dataPackage = pkg, extras = mapOf(EXTRA_PACKAGE to pkg))
+        result += Destination(APP_INFO, dataPackage = pkg)
+        return result
+    }
 
     fun destinations(
         findingId: String,
@@ -94,20 +174,16 @@ object SecuritySettingsRoutes {
                 result += category(SECURITY)
             }
             "sms_readers", "banking_sms_readers" -> {
+                // 2.42: open this app's own permission page — and the SMS permission itself
+                // where the ROM exposes an editor for it — instead of an unscoped hub. See
+                // [appPermissionRoutes] for why the order changed and what each ROM does.
                 if (pkg != null) {
-                    result += Destination(SMS_PERMISSIONS, extras = mapOf(EXTRA_PACKAGE to pkg))
-                    if (isXiaomi(manufacturer, brand)) {
-                        // MIUI/HyperOS varies by release. These activities may be missing
-                        // or non-exported: the launcher catches that and tries App info.
-                        for (name in listOf("PermissionsEditorActivity", "AppPermissionsEditorActivity")) {
-                            result += Destination(
-                                "miui.intent.action.APP_PERM_EDITOR",
-                                activityPackage = "com.miui.securitycenter",
-                                activityClass = "com.miui.permcenter.permissions.$name",
-                                extras = mapOf("extra_pkgname" to pkg),
-                            )
-                        }
-                    }
+                    result += appPermissionRoutes(
+                        pkg,
+                        listOf(PERMISSION_READ_SMS, PERMISSION_SMS_GROUP),
+                        manufacturer,
+                        brand,
+                    )
                 }
             }
             "no_lock" -> {
@@ -145,7 +221,7 @@ object SecuritySettingsRoutes {
             "install_other_apps" -> "Install unknown apps → $selected → Allow from this source. Turn it off only if you do not need that installer."
             "usage_access" -> "Usage access → $selected → Permit usage access. Keep access for tools you intentionally use."
             "overlay" -> "Display over other apps → $selected. Android 11+ may open the app list; select this app. On MIUI/HyperOS it may be under Apps → Manage apps → app → Other permissions."
-            "sms_readers", "banking_sms_readers" -> "App info / App permissions → $selected → Permissions → SMS. Revoke only if unnecessary; verified messaging, banking and UPI apps may need it. On MIUI/HyperOS choose Permission management / App permissions."
+            "sms_readers", "banking_sms_readers" -> "This app's own permission page → $selected → Permissions → SMS. The button opens that app's page, not a list of other apps and not the ROM's global permission hub; if your ROM opens something else, use this manual path. Revoke only if unnecessary; verified messaging, banking and UPI apps may need it. On MIUI/HyperOS choose Apps → Manage apps → the app → App permissions. On ColorOS choose Settings → Apps → App management → the app → Permissions."
             "app_info", "sideloaded", "odd_installer", "root_tools" -> "App info → $selected. Verify its source and purpose; uninstall only if you recognise it as unwanted."
             "facebook_stubs" -> "App info → $selected → Disable, if available and you do not need it. Do not remove unrelated system components."
             "no_lock" -> "Security / Passwords and security → Screen lock → set a PIN, pattern or password."
@@ -159,7 +235,9 @@ object SecuritySettingsRoutes {
         val header = "Phone: $manufacturer $model (Android $androidVersion)\n"
         val path = when {
             isXiaomi(manufacturer, brand) ->
-                "MIUI / HyperOS: Settings → Apps → Manage apps → select the affected app → App permissions / Other permissions. Menu names vary by ROM."
+                "MIUI / HyperOS: Settings → Apps → Manage apps → select the affected app → App permissions. 'Other permissions' is a different, ROM-specific page: it lists MIUI's own extras such as autostart and pop-up windows, not the app's Android permissions. Menu names vary by ROM."
+            isColoros(manufacturer, brand) ->
+                "ColorOS / Realme UI / OxygenOS: Settings → Apps → App management → select the affected app → Permissions (or App permissions). Older ColorOS calls it Settings → Security → App permission management. Menu names vary by ROM."
             manufacturer.contains("samsung", ignoreCase = true) ->
                 "One UI: Settings → Security and privacy → Permission manager, or Apps → select the affected app → Permissions."
             else -> "Settings → Apps → select the affected app → Permissions / Special app access. Menu names vary by manufacturer."

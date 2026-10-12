@@ -70,14 +70,23 @@ class SettingsRepo(context: Context) {
     suspend fun setAssistantVerbose(value: Boolean) =
         store.edit { it[Keys.ASSISTANT_VERBOSE] = value }
 
-    /** Ongoing charging notification in the status bar. */
-    val chargeMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.CHARGE_MONITOR] ?: false }
+    /**
+     * Ongoing charging notification in the status bar. 2.42: ON unless the owner turned it
+     * off — a saved choice always wins over the default.
+     */
+    val chargeMonitor: Flow<Boolean> =
+        store.data.map { p -> p[Keys.CHARGE_MONITOR] ?: MonitorDefaultsPolicy.CHARGE_CARD }
 
     suspend fun setChargeMonitor(value: Boolean) =
         store.edit { it[Keys.CHARGE_MONITOR] = value }
 
-    /** Persistent background battery and health monitor (optional, off by default). */
-    val persistentMonitor: Flow<Boolean> = store.data.map { p -> p[Keys.PERSISTENT_MONITOR] ?: false }
+    /**
+     * Persistent background battery and health monitor. 2.42: ON by default (opt-out). It
+     * still uses an ongoing notification with a Stop control, OEM power savers still apply
+     * and no app survives an Android force-stop; switching it off is a choice, not a failure.
+     */
+    val persistentMonitor: Flow<Boolean> =
+        store.data.map { p -> p[Keys.PERSISTENT_MONITOR] ?: MonitorDefaultsPolicy.PERSISTENT_MONITOR }
 
     suspend fun setPersistentMonitor(value: Boolean) =
         store.edit { it[Keys.PERSISTENT_MONITOR] = value }

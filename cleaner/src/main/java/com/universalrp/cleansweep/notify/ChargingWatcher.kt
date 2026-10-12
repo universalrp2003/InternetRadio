@@ -35,8 +35,9 @@ class ChargingWatcher : BroadcastReceiver() {
         // Visual monitoring is independent from voice. SystemEventWatcher schedules short
         // enabled-event voice jobs even when every card/pill/monitor switch is off.
         val persistent = ChargeMonitorService.persistentEnabled(app)
-        val wanted = persistent || prefs.getBoolean(ChargeMonitorService.PILL_KEY, false) ||
-            prefs.getBoolean(ChargeMonitorService.CARD_KEY, false)
+        val wanted = persistent ||
+            prefs.getBoolean(ChargeMonitorService.PILL_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.STATUS_PILL) ||
+            prefs.getBoolean(ChargeMonitorService.CARD_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.CHARGE_CARD)
         if (!wanted) return
 
         val service = Intent(app, ChargeMonitorService::class.java)

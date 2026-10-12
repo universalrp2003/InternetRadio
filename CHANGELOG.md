@@ -1,5 +1,131 @@
 # Changelog — maintained Android apps
 
+## Live Guard 2.42/code47 — published 12 October 2026: the owner's nine-item work list
+
+**Published** as stable/latest `v2026.10.12-2`, package `com.universalrp.cleansweep`, unchanged
+stable signing key, minSdk 26, target/compileSdk 36. Ramesh Radio 1.8 and PulseEQ 1.2 are
+unchanged and travel as their previously verified bytes.
+
+> **No device test covered these bytes.** 2.42 is published without a recorded physical-device
+> install, which the owner's 12 October 2026 decision permits because the release **adds no
+> dangerous permission** (see the publication-rule change below). CI compiled the app, ran all
+> **349** required cases in **both** the debug and release variants with no skips, and passed the
+> APK/AAB, package, version, API 26, non-debuggable, stable-certificate and size gates. That
+> verifies the build; it is not a device test. Two items are **open device work**, not proven
+> fixes: the OPPO A3s charging watts and the per-ROM permission routing —
+> [`docs/live-guard-2.42-device-test-plan.md`](docs/live-guard-2.42-device-test-plan.md). The
+> published digest is recorded in the tag run's log and in
+> [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md). Scope, decisions and the
+> two judgement calls: [`docs/live-guard-2.42-scope.md`](docs/live-guard-2.42-scope.md). Full
+> notes: [`releases/v2026.10.12-2.md`](releases/v2026.10.12-2.md).
+
+- **Charging watts on phones whose current counter reports nothing** (`data/BatteryValuePolicy.kt`,
+  `data/DeviceHealth.kt`): the OPPO A3s regression — `0.00 W` / `-0.00 A` while charging, though
+  its own charge history recorded real 4.6–4.8 W sessions. The current was read only from
+  `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW`, which older/OEM kernels answer with `0` or
+  "unsupported" while the broadcast extra `BatteryManager.EXTRA_CURRENT` still carries the real
+  charge current; `4.36 V × 0 A` then looked like a measurement. One policy now decides which
+  reading may be used **and records its source**: a real non-zero property value, then the
+  broadcast extra, then a broadcast zero (a genuine trickle/full reading), otherwise nothing. A
+  bare property `0` with no broadcast corroboration is *not* reported as 0 A — an unsupported
+  sensor is still never rendered as `0.00 W`. `microAmpsToAmps` remains the single unit decider
+  (magnitude is never treated as evidence of a unit) and `ChargingHonestyPolicy` the single watts
+  decider, so the card, health screen, pill, history and voice still cannot disagree. When the
+  broadcast rescued the reading, the screen says so. A test reproduces the owner's own evidence:
+  4.36 V with a zero property and a 1 100 000 µA broadcast yields **4.80 W**.
+- **Voice A / Voice B chosen automatically** (`voice/AnswerVoicePolicy.kt`,
+  `voice/AnswerVoicePreferences.kt`, `MainViewModel.kt`): the *"Choose and preview two voices…"*
+  error is gone — the string was removed from the catalog with its Tamil pair so it cannot
+  return. With no saved choice, the first two usable installed voices for the answer's language
+  become A and B; with one, both slots use it; with none, nothing is spoken and the voice
+  diagnostics report the real stage instead of an error in the chat. Tamil and English stay
+  separate, a saved voice the engine dropped is replaced, and an empty inventory is treated as an
+  uninitialised engine rather than as evidence against the saved pair. The Voice & daily watch
+  card stays and now says A/B are automatic and can be previewed or swapped; a **manual** save
+  still needs a completed preview and two distinct voices, and each answer is still read once in
+  its assigned voice.
+- **Ongoing meter and background monitor default ON and survive an update**
+  (`data/MonitorDefaultsPolicy.kt`, `data/SettingsRepo.kt`, `notify/ChargeMonitorService.kt`,
+  `notify/BootReceiver.kt`): both are opt-out now, and `MY_PACKAGE_REPLACED` / `BOOT_COMPLETED`
+  re-arm them even when the preference was never written — previously the receiver read a
+  preference nobody had set and left the meter dark after every update. One policy object owns
+  the defaults for the DataStore flow, the plain-prefs mirror and the UI state, which used to
+  carry three separate literal `false` values and could disagree. A saved OFF is still honoured
+  and never overwritten; Settings now says turning one off is a choice, not a failure, and the
+  reviewed-setup entry keeps the OEM/force-stop caveat. The hourly health watch is armed by the
+  monitor's own switch too, not only by voice and the daily check.
+- **The floating pill deliberately stays opt-in:** Android needs "Display over other apps" before
+  anything can be drawn beside the clock and that access is never granted automatically, so
+  defaulting it ON would promise a reading the phone has not allowed. Automatic **online** daily
+  summaries also stay a separate explicit consent, default OFF — turning on local background
+  monitoring is not consent to send report facts to a provider.
+- **Security check includes preinstalled system apps by default** (`MainViewModel.kt`,
+  `data/MonitorDefaultsPolicy.kt`): the switch labelled "Include preinstalled system apps" in the
+  Security screen defaulted OFF; it is ON now, and the security review scope and app-cache scope
+  read the same policy object so the three cannot drift. Inclusion is **inspection only** — no
+  permission granted, nothing selected or removed automatically — and an unchecked or unknown
+  hash still proves nothing; a hit on a read-only preinstalled partition is information, not an
+  available action.
+- **Permission findings open that app's own permission page** (`data/SecuritySettingsRoutes.kt`):
+  **Manage** on the iMobile SMS item used to open MIUI's app-level "Other permissions" hub — a
+  different page listing MIUI extras such as autostart and pop-up windows. Two causes fixed: the
+  generic all-permissions action was fired first (MIUI claims it and ignores the package), and
+  the package travelled only as the `PACKAGE_NAME` extra, never as the intent's `package:` data
+  URI. Routes are now ROM-aware and most-specific-first — the ROM's own package-scoped editor on
+  a Xiaomi, then the editor for the **exact** permission (`MANAGE_APP_PERMISSION` +
+  `EXTRA_PERMISSION`), then the app's whole permission list, then App info as the guaranteed last
+  resort — and every candidate carries the package both ways. ColorOS is recognised with its own
+  manual path. No OEM component name was invented: a candidate the ROM does not expose fails to
+  resolve and the next is tried, ending in the existing honest manual-path text. Routing differs
+  per ROM and release, so it still needs checking on both phones.
+- **Main screen: one spacing scale, nothing clipped** (`ui/HomeLayoutPolicy.kt`,
+  `ui/HomeScreen.kt`): the home `LazyColumn` had **no top padding at all**, so the first card was
+  drawn flush against the header and LED strip; the screen also mixed four hand-picked edges
+  (14/16/14/16 dp) with card padding at 12/14/16 dp. One 4 dp-based scale now owns every edge,
+  gap and card padding — one screen edge, an even card gap raised from 14 to 16 dp so rows no
+  longer crowd, a real top inset, a bottom inset, two card-padding sizes only, and
+  `onScale`/`scaled`/`isCoherent` so a one-off number is corrected instead of shipped. This is a
+  *layout* contract: clipping at the largest font scale, on a small screen or in split screen
+  still needs a phone. Typography was left alone rather than "improved" blind.
+- **One language source of truth** (`data/LanguageSourcePolicy.kt`, `MainActivity.kt`,
+  `ui/AppRoot.kt` and six screens): cards could render the opposite language from the header.
+  `tr()` read the process-wide language while several composables read the ViewModel's copy with
+  nothing keeping them equal, and on a cold start the process default was English until the
+  settings flow emitted. Worse, a card observing no state (the update card) was skipped by Compose
+  on a toggle and kept text composed in the old language — which is why *"Verified in-app
+  download; Android confirms installation."* stayed English in **both** directions. The work list
+  reported that pair as missing from `data/Lang.kt`; it was **not** missing, it has been in the
+  catalog since the update card shipped, and a test now asserts it and the four other named cards
+  have real Tamil values — a duplicate would have failed the localization gate. There is now one
+  authority, resolved from the saved choice **before** the first composition and updated on every
+  toggle, and the screen tree is rebuilt on a toggle so every string re-reads it. All display
+  sites moved onto the authority; the state copy exists only to trigger the rebuild, and the
+  source contract fails the build if a display site reads it again. The owner's phone-age estimate
+  stays on the home dashboard, still labelled an estimate.
+- **Publication rule: device evidence only for a new dangerous permission**
+  (`.github/workflows/build-apk.yml`, `tools/verify_release_permission_delta.py`): owner decision
+  that supersedes the every-release install rule. The gate now requires
+  `docs/live-guard-<versionName>-device-evidence.md` only when the build **adds** a dangerous
+  permission versus the previously published release APK, compared on the built artifacts with
+  `aapt2 dump badging` — never on the source manifest, because only the merged manifest shows
+  what the phone is asked to grant. Appop/signature permissions are correctly not counted as
+  runtime prompts, and the tool **fails closed** when the previous release cannot be read.
+  Unchanged and still enforced: when an evidence file exists, publication publishes only the
+  tested bytes (a rebuild reproducing the recorded digest, else the recorded run's promoted
+  artifact), so a rebuilt digest can never inherit an earlier device test; Play Protect is never
+  disabled or bypassed; the package and signing key never change; and notes must never claim a
+  device test that did not happen. The policy and its reason are recorded in
+  [`AGENTS.md`](AGENTS.md) and [`PUBLISHING.md`](PUBLISHING.md). 2.40 and 2.41 were published
+  under the older, stricter rule and their records are untouched.
+- **Gates:** 349 required cases / 39 suites each variant (new suites for the battery-current
+  source, automatic answer voices, monitor defaults, language authority and home spacing; the
+  retired reader's 12 historical cases still run from test sources); **945** EN/TA catalog keys
+  with no duplicates or placeholder mismatches (five new strings with Tamil pairs, one retired
+  string removed with its pair); the retired notification-reader capability still absent from the
+  manifest, production sources, build scripts and compiled DEX; 16 `tools/tests` unit tests
+  including 8 for the new permission-delta gate. Static and JVM checks only — not
+  Kotlin/Compose rendering, not device delivery, not Play Protect.
+
 ## Live Guard 2.41/code46 — verified/published 12 October 2026: honest charging readings, 44 °C heat warning, AI budgets
 
 **Published** as stable/latest `v2026.10.12-1` after the owner installed the exact candidate

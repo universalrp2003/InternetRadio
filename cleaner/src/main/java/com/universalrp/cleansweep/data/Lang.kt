@@ -831,7 +831,9 @@ object Lang {
         "The local assistant uses built-in rules and available phone readings. Online AI and web lookup require your choice." to "உள்ளூர் உதவியாளர் உள்ளமைந்த விதிகளையும் கிடைக்கும் போன் அளவீடுகளையும் பயன்படுத்தும். ஆன்லைன் AI மற்றும் இணையத் தேடல் உங்கள் தேர்வின் பேரில் மட்டுமே இயங்கும்.",
         "Which AI answers" to "எந்த AI பதிலளிக்கிறது",
         "Clear chat" to "உரையாடலை அழி",
-        "Choose and preview two voices for this answer language in Voice & daily watch." to "இந்தப் பதிலின் மொழிக்கான இரண்டு குரல்களை ‘குரல் & தினசரி கண்காணிப்பு’ பகுதியில் கேட்டு தேர்ந்தெடுக்கவும்.",
+        // 2.42: the "Choose and preview two voices…" error was removed on purpose — Voice A
+        // and Voice B are now chosen automatically from the installed inventory, so that
+        // message must never be shown again. Its Tamil pair was retired with it.
         "Alternating assistant voices" to "மாறி மாறிப் பேசும் உதவியாளர் குரல்கள்",
         "Voice A and Voice B alternate between answers. Each answer is read once, not twice. Manual Read aloud uses that answer's assigned voice." to "குரல் A மற்றும் குரல் B ஒவ்வொரு பதிலுக்கும் மாறி மாறிப் பயன்படுத்தப்படும். ஒரு பதில் ஒருமுறை மட்டுமே வாசிக்கப்படும்; இருமுறை அல்ல. ‘வாசித்துச் சொல்’ என்பதைத் தொடும்போதும் அந்தப் பதிலுக்கான குரலே பயன்படுத்தப்படும்.",
         "Android does not reliably label voice gender. Listen to installed-voice previews and choose the two voices you prefer. Choices are saved separately for Tamil and English." to "குரல் ஆணா பெண்ணா என்பதை Android நம்பகமாகக் குறிப்பிடுவதில்லை. கிடைக்கும் குரல்களை முன்கேட்டு விரும்பும் இரண்டு குரல்களைத் தேர்ந்தெடுக்கவும். தமிழ் மற்றும் ஆங்கிலத்திற்குத் தேர்வுகள் தனித்தனியாகச் சேமிக்கப்படும்.",
@@ -1212,6 +1214,13 @@ object Lang {
         "Battery temperature is at or above 44 °C (%s). Unusually warm — review charging conditions; this is a temperature notice, not a diagnosis." to "பேட்டரி வெப்பநிலை 44 °C அல்லது அதற்கு மேல் உள்ளது (%s). வழக்கத்திற்கு மாறாக வெப்பம் — சார்ஜ் செய்யும் நிலைமைகளைப் பரிசீலிக்கவும்; இது ஒரு வெப்பநிலை அறிவிப்பு, நோய் கண்டறிதல் அல்ல.",
         "A heat sensor is at or above its warning level (%s). Let the phone cool before heavy use; this is a temperature notice, not a diagnosis." to "ஒரு வெப்ப உணரி அதன் எச்சரிக்கை அளவை எட்டியுள்ளது (%s). கனமான பயன்பாட்டுக்கு முன் ஃபோனைக் குளிரவிடவும்; இது ஒரு வெப்பநிலை அறிவிப்பு, நோய் கண்டறிதல் அல்ல.",
         "Each reply uses a bounded output budget. When a request's own time limit is nearly spent the answer budget shrinks instead of letting one question run into a minute-long wait." to "ஒவ்வொரு பதிலும் வரையறுக்கப்பட்ட வெளியீட்டு நிலைநிதியைப் பயன்படுத்துகிறது. ஒரு கோரிக்கையின் நேர வரம்பு முடியும் தருவாயில், ஒரு கேள்வி நீண்ட நிமிடக் காத்தலாக மாறாமல் பதில் நிலைநிதி குறைக்கப்படுகிறது.",
+        // Live Guard 2.42 — battery-current source, automatic answer voices, default-on
+        // monitors, permission routing and one home-screen spacing scale.
+        "Read from the battery broadcast: this phone's current counter property reports no value." to "பேட்டரி அறிவிப்பிலிருந்து பெறப்பட்டது: இந்த ஃபோனின் மின்னோட்ட எண்ணிடும் பண்பு எந்த மதிப்பையும் தெரிவிக்கவில்லை.",
+        "Voice A and Voice B are chosen automatically from your installed voices. Change or preview them here any time." to "குரல் A மற்றும் குரல் B உங்கள் நிறுவப்பட்ட குரல்களிலிருந்து தானாகவே தேர்ந்தெடுக்கப்படுகின்றன. இங்கே எப்போது வேண்டுமானாலும் அவற்றை மாற்றலாம் அல்லது கேட்கலாம்.",
+        "The engine reported no matching voice for this language, so answers cannot be spoken in it yet. Install a voice in Android TTS settings." to "இந்த மொழிக்குப் பொருந்தும் எந்தக் குரலையும் இயந்திரம் தெரிவிக்கவில்லை, எனவே இன்னும் அந்த மொழியில் பதில்களைப் பேச முடியாது. Android TTS அமைப்பில் ஒரு குரலை நிறுவவும்.",
+        "Only one matching voice was reported, so both slots use it and the two voices cannot alternate yet." to "ஒரே ஒரு பொருந்தும் குரல் மட்டுமே தெரிவிக்கப்பட்டுள்ளது, எனவே இரண்டு இடங்களிலும் அதுவே பயன்படுத்தப்படும்; இரண்டு குரல்கள் மாறி மாறி வர இயலாது.",
+        "On by default. Turning one off is your choice and is saved; it is not a failure." to "இயல்பாக இயக்கத்தில் உள்ளது. ஒன்றை முடக்குவது உங்கள் தேர்வு; அது சேமிக்கப்படும். இது ஒரு தோல்வி அல்ல.",
     )
 }
 

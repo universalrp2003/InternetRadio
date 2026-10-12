@@ -24,7 +24,10 @@ object CompatibilityCollector {
             add(id, title, if (available) CheckStatus.READY else CheckStatus.NOT_REPORTED, detail)
         val prefs = context.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
         permission("overlay_permission", "Overlay permission", runCatching { android.provider.Settings.canDrawOverlays(context) }.getOrNull(), "Required only for the floating pill. Some OEMs can still limit status-bar placement.")
-        add("pill_enabled", "Status pill switch", if (prefs.getBoolean(ChargeMonitorService.PILL_KEY, false)) CheckStatus.READY else CheckStatus.DISABLED, "Permission and the app switch are separate. The pill is still watts-only while connected.")
+        add("pill_enabled", "Status pill switch", if (prefs.getBoolean(ChargeMonitorService.PILL_KEY, MonitorDefaultsPolicy.STATUS_PILL)) CheckStatus.READY else CheckStatus.DISABLED, "Permission and the app switch are separate. The pill stays opt-in because overlay access is never granted automatically.")
+        // 2.42: these two are ON by default now, so the report says what is actually armed.
+        add("charge_card", "Ongoing charging meter", if (ChargeMonitorService.cardEnabled(context)) CheckStatus.READY else CheckStatus.DISABLED, "On by default since 2.42; the Settings switch turns it off and a saved OFF is respected.")
+        add("persistent_monitor", "Background battery-health monitor", if (ChargeMonitorService.persistentEnabled(context)) CheckStatus.READY else CheckStatus.DISABLED, "On by default since 2.42. OEM power savers and an Android force-stop still apply; OFF is a choice, not a failure.")
         val notifications = runCatching { NotificationManagerCompat.from(context).areNotificationsEnabled() }.getOrNull()
         permission("notifications", "Notifications", notifications, "On Android 13+, also check the notification permission. Notifications are not needed to read the local report.")
         val channel = runCatching { (context.getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager)?.getNotificationChannel(ChargeNotifier.CHANNEL_ID) }.getOrNull()

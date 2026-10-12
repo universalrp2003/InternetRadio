@@ -51,13 +51,15 @@ def main():
     require('AppUpdates.Control' not in source('MainActivity.kt') and 'AppUpdates.Control' not in source('ui/AboutScreen.kt'), 'Cleaner browser updater still wired')
     require('LastUnplugRepo.observe' in source('data/InsightsStore.kt') and 'explicitDisconnect' in source('data/LastUnplug.kt'), 'Genuine unplug owner missing')
     require('val selected: Boolean = false' in source('data/AppCacheRepo.kt'), 'Cache rows auto-selected')
-    require('val includeSystemApps: Boolean = true' in source('MainViewModel.kt') and 'val securityIncludeSystemApps: Boolean = true' in source('MainViewModel.kt'), 'Safe system scope defaults missing')
+    require('val includeSystemApps: Boolean = MonitorDefaultsPolicy.CACHE_INCLUDE_SYSTEM' in source('MainViewModel.kt') and
+            'val securityIncludeSystemApps: Boolean = MonitorDefaultsPolicy.SECURITY_INCLUDE_SYSTEM' in source('MainViewModel.kt'),
+            'Safe system scope defaults missing')
     require('vm.loadAppCaches()' in source('ui/AppCacheScreen.kt'), 'Cache reopening refresh missing')
     require('daily_ai", false' in source('work/HealthWatchWorker.kt'), 'Automatic online daily summaries not opt-in')
     require('CURRENT_WINDOW_MS' in source('ai/ArenaRatingPolicy.kt') and '.singleOrNull()' in source('ai/ArenaRatingPolicy.kt'), 'Rating exact/freshness policy missing')
     require('rating_q025' in source('ai/ArenaRatings.kt') and 'git/blobs' in source('ai/ArenaRatings.kt'), 'Verified official rating schema missing')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
-    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 46', 'versionName = "2.41"'):
+    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 47', 'versionName = "2.42"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
     for removed in ('com.google.mlkit:translate', 'com.google.mlkit:language-id'):
         require(removed not in gradle, 'Removed reader dependency is still declared: ' + removed)
@@ -91,15 +93,81 @@ def main():
             'AI output budget / provider model check not enforced in the client')
     require('AiOutputBudgetPolicy.checkModel' in source('MainViewModel.kt'),
             'Provider model check not surfaced after loading the model list')
+    # ---------------------------------------------------------------- 2.42 owner work list
+    # Fix 1: the battery broadcast extra rescues kernels whose current *property* reports
+    # nothing (the owner's OPPO A3s read 0.00 W / -0.00 A while its own charge history
+    # recorded real 4.6-4.8 W sessions). An unsupported sensor still never becomes "0.00 W",
+    # and BatteryValuePolicy stays the only decider of the unit.
+    battery = source('data/BatteryValuePolicy.kt')
+    require('fun currentReading' in battery and 'enum class CurrentSource' in battery and 'BROADCAST' in battery,
+            'Battery-current source policy missing')
+    require('BatteryManager.EXTRA_CURRENT' in source('data/DeviceHealth.kt') and
+            'BatteryValuePolicy.currentReading' in source('data/DeviceHealth.kt'),
+            'The battery broadcast current extra is not read')
+    require('currentSource = current.source' in source('data/DeviceHealth.kt'),
+            'The battery reading no longer records which source supplied the current')
+    # Fix 2: Voice A/B are chosen automatically from the installed inventory; the old error is gone.
+    voices = source('voice/AnswerVoicePolicy.kt')
+    require('fun automaticPair' in voices and 'fun effectivePair' in voices,
+            'Automatic answer-voice selection policy missing')
+    require('fun saveAutomatic' in source('voice/AnswerVoicePreferences.kt'),
+            'The automatic answer-voice pair cannot be saved')
+    require('Choose and preview two voices' not in source('MainViewModel.kt') and
+            'AnswerVoicePolicy.effectivePair' in source('MainViewModel.kt'),
+            'Answers still refuse with the "choose and preview two voices" error')
+    # Fixes 3-5: one owner of the default-on monitors and security scope, plus a real re-arm.
+    defaults = source('data/MonitorDefaultsPolicy.kt')
+    require('CHARGE_CARD = true' in defaults and 'PERSISTENT_MONITOR = true' in defaults and
+            'MALWARE_INCLUDE_SYSTEM = true' in defaults and 'STATUS_PILL = false' in defaults,
+            'Monitor defaults are not the 2.42 owner decision (the overlay pill must stay opt-in)')
+    require('fun rearmAfterUpdateOrBoot' in defaults and 'fun healthWatchWanted' in defaults,
+            'Monitor re-arm / health-watch policy missing')
+    require('MonitorDefaultsPolicy.CHARGE_CARD' in source('notify/ChargeMonitorService.kt') and
+            'MonitorDefaultsPolicy.PERSISTENT_MONITOR' in source('notify/ChargeMonitorService.kt'),
+            'The monitor service still reads its own literal default')
+    require('MonitorDefaultsPolicy.CHARGE_CARD' in source('data/SettingsRepo.kt') and
+            'MonitorDefaultsPolicy.PERSISTENT_MONITOR' in source('data/SettingsRepo.kt'),
+            'The DataStore flow and the prefs mirror can still disagree')
+    require('rearmAfterUpdateOrBoot' in source('notify/BootReceiver.kt'),
+            'An app update or reboot no longer re-arms the ongoing meter')
+    require('MonitorDefaultsPolicy.MALWARE_INCLUDE_SYSTEM' in source('MainViewModel.kt') and
+            'MonitorDefaultsPolicy.healthWatchWanted' in source('MainViewModel.kt'),
+            'The hash-check scope / hourly health watch no longer follow the shared defaults')
+    # Fix 6: a permission finding opens that app's own permission page, not an unscoped ROM hub.
+    routes = source('data/SecuritySettingsRoutes.kt')
+    require('fun appPermissionRoutes' in routes and 'PERMISSION_EDITOR' in routes and
+            'EXTRA_PERMISSION' in routes and 'fun isColoros' in routes,
+            'Per-app permission routing policy missing')
+    require('result += appPermissionRoutes(' in routes,
+            'The SMS finding no longer routes to that app\'s own permission page')
+    # Fix 7: one spacing scale, including the list top inset that was missing entirely.
+    layout = source('ui/HomeLayoutPolicy.kt')
+    require('LIST_TOP_DP' in layout and 'BASE_DP' in layout and 'fun onScale' in layout,
+            'Home-screen spacing scale missing')
+    require('HomeLayoutPolicy.LIST_TOP_DP' in source('ui/HomeScreen.kt') and
+            'HomeLayoutPolicy.SCREEN_HORIZONTAL_DP' in source('ui/HomeScreen.kt') and
+            'HomeLayoutPolicy.CARD_GAP_DP' in source('ui/HomeScreen.kt'),
+            'The home screen does not use the spacing scale')
+    # Fix 8: one language source of truth, resolved before the first composition.
+    require('object LanguageSourcePolicy' in source('data/LanguageSourcePolicy.kt'),
+            'Language source-of-truth policy missing')
+    require('Lang.set(Lang.languageIn(this))' in source('MainActivity.kt'),
+            'The language is not resolved before the first composition')
+    require('key(state.lang)' in source('ui/AppRoot.kt'),
+            'A language toggle no longer rebuilds screens that observe no state')
+    for display in ('ui/HomeScreen.kt', 'ui/SettingsScreen.kt', 'ui/PhoneScreens.kt',
+                    'ui/VoiceScreen.kt', 'ui/AssistantScreen.kt', 'ui/LiveGuardMetricsMatrix.kt'):
+        require('state.lang' not in source(display),
+                'A display site still reads the state mirror instead of the language authority: ' + display)
     expected = runpy.run_path(str(ROOT/'tools/verify_cleaner_regressions.py'))['EXPECTED']
-    require(sum(expected.values()) == 321 and len(expected) == 36, 'Future required regression gate count differs')
+    require(sum(expected.values()) == 349 and len(expected) == 39, 'Future required regression gate count differs')
     for name, count in expected.items():
         path = ROOT/'cleaner/src/test/java'/Path(*name.split('.')).with_suffix('.kt')
         require(path.is_file() and len(re.findall(r'@Test\b', path.read_text())) == count, 'Required test source missing: ' + name)
     for xml in (ROOT/'cleaner/src/main').rglob('*.xml'):
         ET.parse(xml)
     print('PASS: Static manifest, no-notification-reading/update/rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 36 required suites / 321 prepared declarations; tests NOT executed. Candidate 2.41/code46/API26 matches.')
+    print('PASS: 39 required suites / 349 prepared declarations; tests NOT executed. Candidate 2.42/code47/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

@@ -82,6 +82,39 @@
   install-block advisory intact, and keep `releases/latest-tag.txt` at `v2026.10.11-4` until
   a real publication happens.
 
+- **2026-10-12 owner decision (Live Guard 2.42/code47) — publication rule changed:** from now
+  on a release does **not** need a recorded physical-device install unless it **adds a dangerous
+  permission**. Owner's words: *"now from further no need to verify everytime instalation
+  verification untill dager permission we add to the application so fix build and publish."*
+  The tag release step compares this build's merged-manifest permissions with the previously
+  published release APK using `aapt2`, and `tools/verify_release_permission_delta.py` decides;
+  appop/signature permissions (`MANAGE_EXTERNAL_STORAGE`, `PACKAGE_USAGE_STATS`,
+  `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`, `QUERY_ALL_PACKAGES`) are **not** runtime
+  prompts and never count as an addition. It fails closed when the previous release cannot be
+  read. **Unchanged and still enforced:** when a device-evidence file *does* exist, publication
+  still publishes only the tested bytes (a rebuild reproducing the recorded SHA-256, or the
+  recorded run's promoted artifact), so a rebuilt digest can never inherit an earlier device
+  test; Play Protect is never disabled or bypassed; the package name and signing key never
+  change; and release notes must **never** claim a device test that did not happen. A release
+  published without one must say so in its own words — see `releases/v2026.10.12-2.md`.
+- **2026-10-12 owner request (Live Guard 2.42/code47) — the nine-item work list:** (1) restore
+  charging watts on phones whose `BATTERY_PROPERTY_CURRENT_NOW` reports nothing by falling back
+  to the `BatteryManager.EXTRA_CURRENT` broadcast extra, keeping one unit decider and one watts
+  decider and never faking `0.00 W`; (2) choose Voice A / Voice B automatically from the real
+  installed inventory and never show the "choose and preview two voices" error again; (3) the
+  ongoing status-bar charging meter defaults ON and is re-armed by an update or reboot even when
+  the preference was never written; (4) background battery-health monitoring defaults ON, keeping
+  the switch and the honest "OFF is not a failure" wording; (5) the Security screen's "Include
+  preinstalled system apps" defaults ON; (6) permission findings must open **that app's own**
+  permission page, not MIUI's "Other permissions" hub, with per-ROM ordering and the existing
+  honest text fallback; (7) one spacing scale on the main screen and no clipping under the
+  header; (8) one language source of truth, resolved before the first composition, so no card
+  renders the opposite language; (9) the publication-rule change above. The **floating pill stays
+  opt-in** (overlay access is never granted automatically) and automatic *online* daily summaries
+  stay a separate consent. Item 1 still needs the owner's OPPO A3s screenshot and item 6 still
+  needs both ROMs checked: see `docs/live-guard-2.42-device-test-plan.md`. Do not describe
+  either as proven on hardware until that happens.
+
 ## Latest reviewed source batch — build/publication now authorized
 
 Owner choices: **reviewed_setup**, **on_device_only** notification translation,
@@ -93,9 +126,11 @@ Only real observed unplug events may create its timestamp/level. System app
 inclusion is review/scope, never automatic selection or deletion.
 
 New source-only helpers/screens/services and dependency declarations are NOT
-compiled/verified APK behavior. Current gate: **301 required cases EACH variant,
-33 suites** (the retired reader's 12 historical cases now run from test sources,
-plus 6 core-cleanup cases); declaration counts are not executed tests. See
+compiled/verified APK behavior. Current gate: **349 required cases EACH variant,
+39 suites** (2.42 added the battery-current source, automatic answer voices, monitor
+defaults, language authority and home spacing suites; the retired reader's 12
+historical cases still run from test sources); declaration counts are not executed
+tests. See
 `docs/live-guard-next-update-review.md` and run the static contracts with
 `python3 tools/verify_cleaner_next_update_source.py` before any authorized build.
 Owner has now explicitly authorized commit/push/CI/build and verified publication.
@@ -109,7 +144,10 @@ saved files persist independently.
   `docs/live-guard-2.40-device-evidence.md` records the owner's real Play Protect
   and installer outcome **and quotes the exact candidate APK SHA-256**. Do not
   delete that gate, and never publish a rebuilt digest as if the device test covered
-  it. Required gate: **301 cases EACH Cleaner debug/release variant, 33 suites**,
+  it. *(Superseded on 2026-10-12 by the owner's 2.42 decision below: the evidence
+  file is now required only when a release **adds a dangerous permission**. The
+  tested-bytes rule inside the gate is unchanged, and 2.40 and 2.41 were published
+  under the old, stricter rule — their records stay exactly as written.)* Required gate: **301 cases EACH Cleaner debug/release variant, 33 suites**,
   `:radio:testDebugUnitTest`, all-module APK/AAB, package/version/API26/
   non-debuggable/stable-certificate/packaged-feature/actual-size checks and the
   retired-capability source+merged-manifest+debug/release-DEX rejection. The last
