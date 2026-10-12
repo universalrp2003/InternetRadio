@@ -14,6 +14,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.universalrp.cleansweep.data.Lang
 import com.universalrp.cleansweep.ui.AppRoot
 import com.universalrp.cleansweep.ui.theme.CleanSweepTheme
 
@@ -41,6 +42,11 @@ class MainActivity : ComponentActivity() {
         // v2.6: remember a crash on the phone itself, so the next bug report can say what
         // actually happened instead of "MIUI said it stopped".
         CrashLog.install(this)
+        // 2.42: resolve the language BEFORE the first composition. tr()/Lang.t() read the
+        // process-wide Lang.current, which starts as English, so a screen composed before this
+        // line ran could render English on a phone whose saved language is Tamil — one half of
+        // the mixed-language cards the owner reported. LanguageSourcePolicy documents the rule.
+        Lang.set(Lang.languageIn(this))
         // Sensitive permissions are explained and requested from reviewed setup, not silently on launch.
         com.universalrp.cleansweep.updates.LiveGuardUpdates.checkOnLaunch(this)
         setContent {

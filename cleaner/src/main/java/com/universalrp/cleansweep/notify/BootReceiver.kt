@@ -25,23 +25,32 @@ class BootReceiver : BroadcastReceiver() {
             // Widget refresh error ignored
         }
 
-        // 2. Ensure hourly health and intruder scan worker is active
+        // 2. Arm the hourly health and intruder scan worker. It is cheap and respects Doze,
+        //    and 2.42 arms it whenever any part of the background watch is wanted — the
+        //    battery-health monitor's own switch included, not only voice and the daily check.
         try {
             HealthWatchWorker.schedule(app)
         } catch (e: Exception) {
             // WorkManager error ignored
         }
 
-        // 3. Check if persistent monitoring is enabled by the user and restore service
-        val prefs = app.getSharedPreferences(ChargeMonitorService.PILL_PREFS, Context.MODE_PRIVATE)
-        val persistentWanted = prefs.getBoolean(ChargeMonitorService.PERSISTENT_KEY, false)
+        // 3. Re-arm the ongoing charging meter / background monitor.
+        //    2.42: both default ON, so this must also run when the owner never wrote the
+        //    preference. Before this, MY_PACKAGE_REPLACED and BOOT_COMPLETED only restored the
+        //    card when the switch had been tapped on by hand, so the status-bar meter stayed
+        //    dark after every update until the app was opened again. A saved OFF is still an
+        //    OFF: these readers resolve against MonitorDefaultsPolicy, never against a literal.
+        val cardEnabled = ChargeMonitorService.cardEnabled(app)
+        val persistentWanted = ChargeMonitorService.persistentEnabled(app)
         val battery = try {
             BatteryReader.read(app)
         } catch (e: Exception) {
             null
         }
 
-        if (persistentWanted || (battery?.powerConnected == true && ChargeMonitorService.cardEnabled(app))) {
+        if (com.universalrp.cleansweep.data.MonitorDefaultsPolicy.rearmAfterUpdateOrBoot(cardEnabled, persistentWanted) ||
+            (battery?.powerConnected == true && cardEnabled)
+        ) {
             try {
                 if (!ChargeMonitorService.start(app)) {
                     com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)

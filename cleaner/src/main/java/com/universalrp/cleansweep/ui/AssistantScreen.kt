@@ -154,7 +154,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             putExtra(android.speech.RecognizerIntent.EXTRA_PROMPT, tr("Ask Live Guard…"))
             putExtra(
                 android.speech.RecognizerIntent.EXTRA_LANGUAGE,
-                if (state.lang == com.universalrp.cleansweep.data.AppLang.TA) "ta-IN" else "en-IN",
+                if (com.universalrp.cleansweep.data.Lang.isTamil) "ta-IN" else "en-IN",
             )
             putExtra(android.speech.RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }

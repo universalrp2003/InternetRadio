@@ -148,11 +148,18 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             .fillMaxSize()
             .statusBarsPadding()
     ) {
-        // Top bar - neat and compact header, prevents wrapping on small screens
+        // Top bar - neat and compact header, prevents wrapping on small screens.
+        // 2.42: every inset comes from HomeLayoutPolicy, so the header, the LED strip, the
+        // news strip and the card list all share one edge instead of 14/16/14/16.
         Row(
             Modifier
                 .fillMaxWidth()
-                .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
+                .padding(
+                    start = HomeLayoutPolicy.SCREEN_HORIZONTAL_DP.dp,
+                    end = HomeLayoutPolicy.HEADER_TRAILING_DP.dp,
+                    top = HomeLayoutPolicy.HEADER_VERTICAL_DP.dp,
+                    bottom = HomeLayoutPolicy.HEADER_VERTICAL_DP.dp,
+                ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
@@ -169,7 +176,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                     modifier = Modifier.size(19.dp),
                 )
             }
-            Spacer(Modifier.width(10.dp))
+            Spacer(Modifier.width(HomeLayoutPolicy.HEADER_ICON_GAP_DP.dp))
             Column(Modifier.weight(1f)) {
                 Text(
                     tr(Lang.appName()),
@@ -182,11 +189,11 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             // One tap between தமிழ் and English, right where the eye already is. The full
             // choice (and the note about the launcher name) stays in Settings → Language.
             TextButton(
-                onClick = { vm.setLanguage(if (state.lang == AppLang.TA) AppLang.EN else AppLang.TA) },
+                onClick = { vm.setLanguage(if (Lang.isTamil) AppLang.EN else AppLang.TA) },
                 contentPadding = PaddingValues(horizontal = 6.dp, vertical = 2.dp),
             ) {
                 Text(
-                    if (state.lang == AppLang.TA) "EN" else "த",
+                    if (Lang.isTamil) "EN" else "த",
                     color = AccentCyan,
                     fontWeight = FontWeight.Bold,
                     style = MaterialTheme.typography.titleMedium,
@@ -227,7 +234,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             }
         }
 
-        LedBar(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+        LedBar(Modifier.fillMaxWidth().padding(horizontal = HomeLayoutPolicy.SCREEN_HORIZONTAL_DP.dp))
 
         if (state.tamilInfoVisible) {
             TamilInfoStrip(
@@ -243,14 +250,25 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                 onSpeak = { text -> vm.speakTamilText(text) },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
+                    .padding(
+                        horizontal = HomeLayoutPolicy.SCREEN_HORIZONTAL_DP.dp,
+                        vertical = HomeLayoutPolicy.HEADER_VERTICAL_DP.dp,
+                    ),
             )
         }
 
         LazyColumn(
             state = listState,
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            // 2.42: the top inset used to be missing, so the first card was drawn flush
+            // against the header and the LED strip — the clipping the owner reported. The
+            // card gap is now the same 16 dp as the screen edge, on one scale.
+            contentPadding = PaddingValues(
+                start = HomeLayoutPolicy.SCREEN_HORIZONTAL_DP.dp,
+                top = HomeLayoutPolicy.LIST_TOP_DP.dp,
+                end = HomeLayoutPolicy.SCREEN_HORIZONTAL_DP.dp,
+                bottom = HomeLayoutPolicy.LIST_BOTTOM_DP.dp,
+            ),
+            verticalArrangement = Arrangement.spacedBy(HomeLayoutPolicy.CARD_GAP_DP.dp),
         ) {
             // Every section is keyed, so the restored scroll position still points at the
             // same card when a conditional card (setup prompt, health, last clean) appears
@@ -286,7 +304,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             state.health?.let { health ->
                 item(key = "health") {
                     PanelCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(16.dp)) {
+                        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
                                     Icons.Outlined.BatteryFull,
@@ -475,7 +493,7 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
     var quickQuestion by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf("") }
 
     PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -576,7 +594,7 @@ private fun SetupCard(vm: MainViewModel) {
             .fillMaxWidth()
             .border(1.dp, WarnAmber.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
     ) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
@@ -659,7 +677,9 @@ private fun StorageCard(state: UiState) {
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.height(6.dp))
-                val isTa = state.lang == AppLang.TA
+                // 2.42: the authority, not the state mirror — the owner's phone-age estimate
+                // stays exactly where it is, only the language it is written in is unified.
+                val isTa = Lang.isTamil
                 val phoneAge = state.phoneAge
                 Text(
                     (if (isTa) "போன் வயது: " else "Est. phone age: ") + (phoneAge?.displayString(isTa) ?: tr("Calculating age estimate…")),
@@ -698,7 +718,7 @@ private fun QuickCard(
     modifier: Modifier = Modifier,
 ) {
     SurfaceHighCard(modifier.clickable(onClick = onClick)) {
-        Column(Modifier.padding(14.dp)) {
+        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
             Icon(icon, contentDescription = null, tint = AccentCyan)
             Spacer(Modifier.height(10.dp))
             Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
@@ -808,7 +828,7 @@ private fun LegacyStorageCard(vm: MainViewModel) {
     ) { vm.refresh() }
 
     PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Outlined.Warning, contentDescription = null, tint = WarnAmber)
                 Spacer(Modifier.width(10.dp))
@@ -845,7 +865,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
     var showResetDialog by remember { mutableStateOf(false) }
 
     PanelCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(16.dp)) {
+        Column(Modifier.padding(HomeLayoutPolicy.CARD_PADDING_DP.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Outlined.SignalCellularAlt,

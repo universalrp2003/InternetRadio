@@ -61,9 +61,15 @@ fun AnswerVoicesCard(appLanguage: AppLang, vm: MainViewModel) {
             }
             when {
                 loading -> Text(tr("Loading installed voices…"), style = MaterialTheme.typography.bodySmall)
-                inventory.size < 2 -> Text(tr("Fewer than two matching voices were reported by the engine. Two-voice alternation is unavailable until you install/select suitable voices."),
+                inventory.isEmpty() -> Text(tr("The engine reported no matching voice for this language, so answers cannot be spoken in it yet. Install a voice in Android TTS settings."),
                     style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 else -> {
+                    // 2.42: A/B are filled in automatically, so the card always shows the two
+                    // slots that will actually be used; the owner can still preview and swap.
+                    Text(tr("Voice A and Voice B are chosen automatically from your installed voices. Change or preview them here any time."),
+                        style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    if (inventory.size < 2) Text(tr("Only one matching voice was reported, so both slots use it and the two voices cannot alternate yet."),
+                        style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     AnswerVoiceChoice(language, 0, pair, inventory, previewBusy, { previewBusy = it }) { pair = AnswerVoicePreferences.load(context, language) }
                     AnswerVoiceChoice(language, 1, pair, inventory, previewBusy, { previewBusy = it }) { pair = AnswerVoicePreferences.load(context, language) }
                 }

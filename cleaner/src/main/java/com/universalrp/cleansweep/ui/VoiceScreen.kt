@@ -152,7 +152,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
                     Text(tr("Last request: %s", voiceStageLabel(delivery.stage)), style = MaterialTheme.typography.bodySmall)
                     Text(tr("Last automatic event: %s", automatic.event.ifEmpty { tr("Not observed yet") }), style = MaterialTheme.typography.bodySmall)
                     Text(voiceStageLabel(automatic.stage), style = MaterialTheme.typography.bodySmall, color = AccentCyan)
-                    if (automatic.atMs > 0) Text(com.universalrp.cleansweep.data.DisplayTime.dated(automatic.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA, seconds = true), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    if (automatic.atMs > 0) Text(com.universalrp.cleansweep.data.DisplayTime.dated(automatic.atMs, com.universalrp.cleansweep.data.Lang.isTamil, seconds = true), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                     delivery.tamilAvailable?.let { Text(tr(if (it) "Tamil language reported available" else "Tamil language not available; install voice data"),
                         style = MaterialTheme.typography.labelSmall, color = if (it) TextSecondary else WarnAmber) }
                     delivery.mediaVolume?.let { Text(tr("Media volume step: %s", it), style = MaterialTheme.typography.labelSmall, color = if (it == 0) WarnAmber else TextSecondary) }
@@ -386,7 +386,7 @@ fun VoiceScreen(state: UiState, vm: MainViewModel) {
               }
             }
 
-            AnswerVoicesCard(state.lang, vm)
+            AnswerVoicesCard(com.universalrp.cleansweep.data.Lang.current, vm)
 
             // ------------------------------------------------------------ the daily check
             PanelCard(Modifier.fillMaxWidth()) {

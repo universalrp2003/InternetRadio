@@ -159,12 +159,12 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         ModeChip(
                             label = "English",
-                            selected = state.lang == AppLang.EN,
+                            selected = !Lang.isTamil,
                             onClick = { vm.setLanguage(AppLang.EN) },
                         )
                         ModeChip(
                             label = "தமிழ்",
-                            selected = state.lang == AppLang.TA,
+                            selected = Lang.isTamil,
                             onClick = { vm.setLanguage(AppLang.TA) },
                         )
                     }
@@ -322,6 +322,14 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                         ),
                         checked = state.persistentMonitor,
                         onCheckedChange = { vm.setPersistentMonitor(it) },
+                    )
+                    // 2.42: both of these now default ON, so the screen says so plainly and
+                    // keeps the honest note that switching one off is a choice, not a failure.
+                    Text(
+                        tr("On by default. Turning one off is your choice and is saved; it is not a failure."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
                     )
                 }
             }

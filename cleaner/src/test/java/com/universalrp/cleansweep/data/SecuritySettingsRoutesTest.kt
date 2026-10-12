@@ -66,16 +66,62 @@ class SecuritySettingsRoutesTest {
         assertEquals(second.packageName, route.dataPackage)
     }
 
-    @Test fun smsHasPerAppPermissionAndXiaomiFallbacks() {
+    /**
+     * 2.42: the owner's iMobile "Manage" button opened MIUI's unscoped "Other permissions" hub
+     * instead of that app's permission page, because the generic all-permissions action was
+     * fired first and MIUI claims it while ignoring the package extra.
+     */
+    @Test fun smsOpensTheAppsOwnPermissionPageNotAnUnscopedRomHub() {
         val routes = SecuritySettingsRoutes.destinations("sms_readers", second, 36, "Xiaomi", "POCO")
-        assertEquals(SecuritySettingsRoutes.SMS_PERMISSIONS, routes.first().action)
-        assertEquals(second.packageName, routes.first().extras[SecuritySettingsRoutes.EXTRA_PACKAGE])
-        val miui = routes.first { it.activityPackage == "com.miui.securitycenter" }
+        val miui = routes.first()
+        assertEquals("miui.intent.action.APP_PERM_EDITOR", miui.action)
+        assertEquals("com.miui.securitycenter", miui.activityPackage)
         assertEquals(second.packageName, miui.extras["extra_pkgname"])
+        assertEquals(second.packageName, miui.dataPackage)
+        // Then the exact permission, then the app's whole permission list, then App info.
+        val specific = routes.first { it.action == SecuritySettingsRoutes.PERMISSION_EDITOR }
+        assertEquals(SecuritySettingsRoutes.PERMISSION_READ_SMS, specific.extras[SecuritySettingsRoutes.EXTRA_PERMISSION])
+        assertEquals(second.packageName, specific.extras[SecuritySettingsRoutes.EXTRA_PACKAGE])
+        assertTrue(specific.direct)
+        assertTrue(routes.any { it.extras[SecuritySettingsRoutes.EXTRA_PERMISSION] == SecuritySettingsRoutes.PERMISSION_SMS_GROUP })
+        assertTrue(routes.indexOfFirst { it.action == SecuritySettingsRoutes.SMS_PERMISSIONS } >
+            routes.indexOfFirst { it.action == SecuritySettingsRoutes.PERMISSION_EDITOR })
         assertEquals(SecuritySettingsRoutes.APP_INFO, routes.last().action)
         assertEquals(second.packageName, routes.last().dataPackage)
         assertTrue(SecuritySettingsRoutes.destinations("banking_sms_readers", second, 26, "samsung")
             .none { it.activityPackage == "com.miui.securitycenter" })
+    }
+
+    /** The other half of the root cause: the package travelled only as an extra, never as data. */
+    @Test fun everyAppPermissionRouteCarriesThePackageAsDataUriAndExtra() {
+        for ((manufacturer, brand) in listOf("Xiaomi" to "Redmi", "OPPO" to "realme", "samsung" to "", "Google" to "")) {
+            val routes = SecuritySettingsRoutes.destinations("sms_readers", second, 36, manufacturer, brand)
+            assertTrue(routes.isNotEmpty())
+            for (route in routes) {
+                assertEquals("${manufacturer}/${route.action}", second.packageName, route.dataPackage)
+                if (route.extras.containsKey(SecuritySettingsRoutes.EXTRA_PACKAGE)) {
+                    assertEquals(second.packageName, route.extras[SecuritySettingsRoutes.EXTRA_PACKAGE])
+                }
+            }
+            assertTrue(routes.none { it.action == "android.settings.SETTINGS" })
+        }
+    }
+
+    @Test fun colorosIsRecognisedAndStillReachesTheAppsOwnPermissionPage() {
+        assertTrue(SecuritySettingsRoutes.isColoros("OPPO"))
+        assertTrue(SecuritySettingsRoutes.isColoros("unknown", "realme"))
+        assertTrue(SecuritySettingsRoutes.isColoros("OnePlus"))
+        assertFalse(SecuritySettingsRoutes.isColoros("Xiaomi", "Redmi"))
+        val routes = SecuritySettingsRoutes.destinations("sms_readers", second, 26, "OPPO", "OPPO")
+        // No ColorOS component name is invented: ColorOS keeps the AOSP editor reachable, so a
+        // made-up activity would only waste a fallback step before App info.
+        assertTrue(routes.none { (it.activityPackage ?: "").let { pkg -> pkg.contains("coloros") || pkg.contains("oppo") } })
+        assertEquals(SecuritySettingsRoutes.PERMISSION_EDITOR, routes.first().action)
+        assertEquals(SecuritySettingsRoutes.APP_INFO, routes.last().action)
+        val guide = SecuritySettingsRoutes.deviceGuidance("OPPO", "OPPO", "A3s", "8.1.0")
+        assertTrue(guide.contains("ColorOS"))
+        assertTrue(guide.contains("not proof"))
+        assertTrue(SecuritySettingsRoutes.instructions("sms_readers", second).contains("permission page", ignoreCase = true))
     }
 
     @Test fun appReviewFindingsOpenSelectedAppInfoNotGlobalSettings() {

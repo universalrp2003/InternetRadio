@@ -482,7 +482,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                         androidx.compose.material3.Switch(checked = state.securityIncludeSystemApps, onCheckedChange = { vm.setSecurityIncludeSystemApps(it) })
                     }
                     state.lastPermissionReview?.let { previous ->
-                        Text(tr("Last checked %s", com.universalrp.cleansweep.data.DisplayTime.dated(previous.atMs, state.lang == com.universalrp.cleansweep.data.AppLang.TA)),
+                        Text(tr("Last checked %s", com.universalrp.cleansweep.data.DisplayTime.dated(previous.atMs, com.universalrp.cleansweep.data.Lang.isTamil)),
                             color = TextSecondary, style = MaterialTheme.typography.bodySmall)
                         Text(tr("Saved last review only; not current findings or a safety verdict."), color = TextSecondary, style = MaterialTheme.typography.labelSmall)
                         if (previous.incomplete) Text(tr("Previous review incomplete"), color = WarnAmber, style = MaterialTheme.typography.labelSmall)

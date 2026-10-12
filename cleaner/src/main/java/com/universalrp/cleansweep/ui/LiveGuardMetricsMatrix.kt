@@ -47,7 +47,7 @@ fun LiveGuardMetricsMatrix(state: UiState, vm: MainViewModel) {
             FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(tr("Live Guard readings"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold,
                     modifier = Modifier.align(Alignment.CenterVertically))
-                PhoneAgeBadge(state.phoneAge, state.lang == AppLang.TA)
+                PhoneAgeBadge(state.phoneAge, LanguageSourcePolicy.isTamil(Lang.current))
             }
             Text(device?.let { "Android ${it.androidVersion} / API ${it.sdk}" } ?: tr("Device not read yet"),
                 style = MaterialTheme.typography.labelSmall, color = TextSecondary)

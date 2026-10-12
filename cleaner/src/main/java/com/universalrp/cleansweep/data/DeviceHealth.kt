@@ -42,6 +42,12 @@ data class BatteryReading(
     /** Original broadcast resolution, not a calculated/learned-capacity percentage. */
     val reportedLevel: Int? = null,
     val reportedScale: Int? = null,
+    /**
+     * 2.42: where [currentA] actually came from, so the UI can say so instead of implying
+     * that every phone reports the documented BatteryManager counter. Appended last on
+     * purpose — older positional constructions of this class stay valid.
+     */
+    val currentSource: BatteryValuePolicy.CurrentSource = BatteryValuePolicy.CurrentSource.NONE,
 )
 
 data class DeviceDetails(
@@ -90,6 +96,22 @@ object BatteryReader {
 
     private const val UNKNOWN = Int.MIN_VALUE
 
+    /**
+     * Keys of the sticky `ACTION_BATTERY_CHANGED` broadcast's current readings, in microamps.
+     *
+     * Android only exposed these as `BatteryManager.EXTRA_CURRENT_NOW` /
+     * `EXTRA_CURRENT_AVERAGE` in **API 34**; the keys themselves have been in the broadcast
+     * long before minSdk 26, and reading them is the way to get a current on kernels whose
+     * `getIntProperty` answers `0` or "unsupported" — the owner's OPPO A3s among them. The
+     * literals are used deliberately: referencing the API 34 constants would trip NewApi lint
+     * on API 26-33, even though String constants are inlined at compile time.
+     *
+     * If a kernel does not put the key in the broadcast at all, [UNKNOWN] comes back and the
+     * reading is reported as *not measured* — never as a fake `0.00 W`.
+     */
+    private const val EXTRA_CURRENT_NOW = "current_now"
+    private const val EXTRA_CURRENT_AVERAGE = "current_average"
+
     fun read(context: Context): BatteryReading {
         val intent: Intent? = try {
             context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
@@ -121,8 +143,21 @@ object BatteryReader {
         val health = intent?.getIntExtra(BatteryManager.EXTRA_HEALTH, -1) ?: -1
         val tech = intent?.getStringExtra(BatteryManager.EXTRA_TECHNOLOGY) ?: ""
 
-        val currentA = BatteryValuePolicy.microAmpsToAmps(property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_NOW))
-        val averageCurrentA = BatteryValuePolicy.microAmpsToAmps(property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE))
+        // 2.42: the documented counter first, then the battery broadcast extra. Many older
+        // and OEM kernels (ColorOS on Android 8.1 — the owner's OPPO A3s) answer
+        // BATTERY_PROPERTY_CURRENT_NOW with 0 or "unsupported" while ACTION_BATTERY_CHANGED
+        // still carries the real charge current. BatteryValuePolicy stays the single decider
+        // of which reading may be used and of the unit: a magnitude is never treated as
+        // evidence of a different unit, and an unsupported sensor never becomes "0.00 W".
+        val current = BatteryValuePolicy.currentReading(
+            propertyMicroAmps = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_NOW),
+            broadcastMicroAmps = intent?.getIntExtra(EXTRA_CURRENT_NOW, UNKNOWN),
+        )
+        val currentA = current.amps
+        val averageCurrentA = BatteryValuePolicy.currentReading(
+            propertyMicroAmps = property(bm, BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE),
+            broadcastMicroAmps = intent?.getIntExtra(EXTRA_CURRENT_AVERAGE, UNKNOWN),
+        ).amps
         val chargeCounter = property(bm, BatteryManager.BATTERY_PROPERTY_CHARGE_COUNTER)
             ?.let { it / 1000f } // µAh -> mAh
 
@@ -139,12 +174,20 @@ object BatteryReader {
         // only while charging, implausible kernel values refused).
         val powerW = ChargingHonestyPolicy.batterySideWatts(charging, powerConnected, voltageV, currentA)
 
-        val signNote = when {
+        val signExplanation = when {
             currentA == null -> "Current counter not reported on this phone"
             charging && currentA > 0.05f -> "Positive = current flowing into the battery (battery-side)"
             charging -> "Trickle / full"
             currentA < -0.05f -> "Negative = current drawn out of battery"
             else -> "Near zero right now"
+        }
+        // 2.42: say which Android source actually supplied the number. On a phone whose
+        // current property reports nothing, the broadcast extra did — that is worth stating
+        // instead of implying every phone exposes the documented counter.
+        val signNote = if (current.source == BatteryValuePolicy.CurrentSource.BROADCAST) {
+            signExplanation + " " + tr("Read from the battery broadcast: this phone's current counter property reports no value.")
+        } else {
+            signExplanation
         }
 
         val capacity = if (chargeCounter != null && percent in 5..100) {
@@ -171,6 +214,7 @@ object BatteryReader {
             powerConnected = powerConnected,
             reportedLevel = level.takeIf { scale > 0 && it in 0..scale },
             reportedScale = scale.takeIf { it > 0 && level in 0..it },
+            currentSource = current.source,
         )
     }
 

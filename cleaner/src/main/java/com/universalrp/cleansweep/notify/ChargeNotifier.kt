@@ -281,7 +281,7 @@ object ChargeNotifier {
     /** Charger connected = watts only; unplugged = restore the configured data + D/U view. */
     fun updatePill(context: Context, battery: BatteryReading, stillCurrent: () -> Boolean = { true }) {
         val wanted = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getBoolean(ChargeMonitorService.PILL_KEY, false)
+            .getBoolean(ChargeMonitorService.PILL_KEY, com.universalrp.cleansweep.data.MonitorDefaultsPolicy.STATUS_PILL)
         if (!stillCurrent()) return
         if (!wanted || !StatusPill.canDraw(context)) {
             StatusPill.remove()
