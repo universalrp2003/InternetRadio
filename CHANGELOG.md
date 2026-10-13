@@ -1,5 +1,9 @@
 # Changelog — maintained Android apps
 
+## Live Guard 2.44/code49 — release candidate (13 October 2026)
+
+The 2.44 APK candidate updates the Tamil-first interface, About credits and verified GitHub updater. These exact candidate bytes were not installed on a phone, so no device-test claim is made. The publication workflow retains the permission-delta gate and will publish only after its CI and release checks pass. See [`releases/live-guard-v2.44.md`](releases/live-guard-v2.44.md).
+
 ## Live Guard 2.43/code48 — published 12 October 2026: a zero is never a measurement
 
 **Published** as stable/latest `v2026.10.12-3`, package `com.universalrp.cleansweep`, unchanged

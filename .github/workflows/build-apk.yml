@@ -1172,22 +1172,30 @@ jobs:
           expected_url = f"https://github.com/universalrp2003/InternetRadio/releases/download/{tag}/{name}"
           expected_page = f"https://github.com/universalrp2003/InternetRadio/releases/tag/{tag}"
           expected_digest = "sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest()
+          is_draft = expected_draft == "true"
           assert release.get("tag_name") == tag, f"wrong tag in release API response: {tag}"
-          assert release.get("html_url") == expected_page, f"non-canonical release page: {release.get('html_url')}"
-          assert release.get("draft") is (expected_draft == "true"), f"unexpected draft state: {release.get('draft')}"
+          assert release.get("draft") is is_draft, f"unexpected draft state: {release.get('draft')}"
           assert release.get("prerelease") is False, "release is marked prerelease"
+          if is_draft:
+              # GitHub assigns an untagged-<id> URL to drafts until the tag is published.
+              assert release.get("html_url", "").startswith("https://github.com/universalrp2003/InternetRadio/releases/tag/")
+          else:
+              assert release.get("html_url") == expected_page, f"non-canonical release page: {release.get('html_url')}"
           assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
           assert len(assets) == 1, f"expected exactly one {name} asset"
           asset = assets[0]
           assert asset.get("state") == "uploaded", f"asset is not uploaded: {asset.get('state')}"
-          assert asset.get("size") == apk.stat().st_size, "published asset size differs from the locally verified APK"
+          assert asset.get("size") == apk.stat().st_size, "release asset size differs from the locally verified APK"
           assert asset.get("digest") == expected_digest, f"GitHub SHA-256 differs: {asset.get('digest')} != {expected_digest}"
-          assert asset.get("browser_download_url") == expected_url, f"non-canonical download URL: {asset.get('browser_download_url')}"
-          print(f"VERIFIED {'DRAFT' if expected_draft == 'true' else 'PUBLIC'} {tag}: {name}, {asset['size']} bytes, {expected_digest}")
+          download_url = asset.get("browser_download_url", "")
+          assert download_url.startswith("https://github.com/universalrp2003/InternetRadio/releases/download/") and download_url.endswith("/" + name), f"non-canonical download host or asset: {download_url}"
+          if not is_draft:
+              assert download_url == expected_url, f"published download URL is not canonical: {download_url}"
+          print(f"VERIFIED {'DRAFT' if is_draft else 'PUBLIC'} {tag}: {name}, {asset['size']} bytes, {expected_digest}")
           PY
           }
 
-          # Verify each draft's updater-facing digest and canonical URL before publishing any.
+          # Verify each draft's updater-facing size/digest before publication; GitHub assigns canonical tag URLs on promotion.
           for i in "${!RELEASE_TAGS[@]}"; do
             verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
           done
