@@ -9,7 +9,7 @@ Ramesh Radio is a Tamil-first radio and local-audio player with an in-app Englis
 ## Features
 
 - Tamil and international station presets, with local favorites and search.
-- The built-in station list is available offline; the public Radio-Browser directory is contacted only when the user starts a search.
+- The bundled station list is available offline and refreshed periodically from public station sources; the public Radio-Browser directory is contacted in the app only when the user starts a search.
 - Play local audio files, with app-scoped equalization and playback controls.
 - Stable GitHub release checks, with APK verification before installation is handed off to Android.
 
