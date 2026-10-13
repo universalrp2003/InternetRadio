@@ -383,7 +383,9 @@ class ChunkedSeparationProcessor(
             if (!decision.pause) return decision
             val detail = when (decision.reason) {
                 PauseReason.THERMAL -> "Android reports severe thermal status. Let the device cool, then resume."
-                PauseReason.LOW_MEMORY -> "Available system RAM is low. Close other apps, then resume."
+                PauseReason.LOW_MEMORY -> "Low RAM; saved chunks are safe. Will auto-resume after at least " +
+                    "${DeviceMonitor.formatBytes(ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_BYTES)} is free for " +
+                    "${ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_STABLE_MS / 1_000L} seconds, once other safety checks are clear."
                 PauseReason.STORAGE -> "Free storage is low. Make space, then resume."
                 else -> "Processing paused for device safety."
             }

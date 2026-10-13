@@ -799,7 +799,7 @@ private fun JobCard(
                 isCanceled -> OutlinedButton(onClick = onNewSong, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Text("Choose another song") }
             }
             if (job.status in setOf(JobStatus.RUNNING, JobStatus.PAUSING, JobStatus.PAUSED)) {
-                Text("A foreground notification keeps controls available. Android/OEMs can still stop apps or shut down a device; saved chunks are used when you resume.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
+                Text("Low-RAM pauses auto-resume when memory recovers and other safety checks are clear; other pauses need Resume. Saved chunks survive interruptions, but Android/OEMs can still stop apps or shut down a device.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
             }
         }
     }

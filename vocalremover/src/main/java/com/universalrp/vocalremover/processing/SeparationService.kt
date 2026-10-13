@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
 import android.os.StatFs
+import android.os.SystemClock
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -60,6 +61,7 @@ class SeparationService : Service() {
     private val cancelRequested = MutableStateFlow(false)
     private var worker: Job? = null
     private var healthJob: Job? = null
+    private val lowMemoryAutoResumeGate = LowMemoryAutoResumeGate()
     private var partialWakeLock: PowerManager.WakeLock? = null
     private var foregroundStarted = false
     @Volatile private var pauseMessage: String = "Paused by you. Resume when ready."
@@ -177,8 +179,18 @@ class SeparationService : Service() {
             JobStatus.PAUSED, JobStatus.PAUSING -> {
                 pauseRequested.value = true
                 requestedPauseReason = job.pauseReason
-                pauseMessage = job.message.ifBlank { "Paused. Resume when ready." }
-                if (job.status == JobStatus.PAUSING) enterPausedState() else updateNotification(job)
+                pauseMessage = if (job.pauseReason == PauseReason.LOW_MEMORY) {
+                    lowMemoryPauseMessage()
+                } else {
+                    job.message.ifBlank { "Paused. Resume when ready." }
+                }
+                SeparationJobStore.update(this) { current ->
+                    if (current != null && current.id == job.id && current.pauseReason == PauseReason.LOW_MEMORY) {
+                        current.copy(message = pauseMessage)
+                    } else current
+                }
+                val restored = SeparationJobStore.current(this) ?: job
+                if (job.status == JobStatus.PAUSING) enterPausedState() else updateNotification(restored)
             }
             else -> {
                 pauseRequested.value = false
@@ -615,11 +627,48 @@ class SeparationService : Service() {
     private suspend fun monitorDeviceWhileActive() {
         while (scope.isActive) {
             delay(2_000)
-            val job = SeparationJobStore.current(this) ?: continue
-            if (job.status !in ACTIVE_STATES) continue
-            val snapshot = runCatching { monitor.read() }.getOrNull() ?: continue
+            val job = SeparationJobStore.current(this)
+            if (job == null || job.status !in ACTIVE_STATES) {
+                lowMemoryAutoResumeGate.reset()
+                continue
+            }
+            val snapshot = runCatching { monitor.read() }.getOrNull()
+            if (snapshot == null) {
+                lowMemoryAutoResumeGate.reset()
+                continue
+            }
             ServiceTelemetry.publish(snapshot)
+
+            if (job.status == JobStatus.PAUSED &&
+                job.pauseReason == PauseReason.LOW_MEMORY &&
+                pauseRequested.value && !cancelRequested.value
+            ) {
+                val resumeSafety = ProcessingPolicy.decide(
+                    profile = job.profile,
+                    availableCores = Runtime.getRuntime().availableProcessors(),
+                    snapshot = snapshot.toSafetySnapshot(),
+                )
+                val safeExceptForMemory = !resumeSafety.pause || resumeSafety.reason == PauseReason.LOW_MEMORY
+                val ready = lowMemoryAutoResumeGate.shouldResume(
+                    nowElapsedMs = SystemClock.elapsedRealtime(),
+                    reason = if (safeExceptForMemory) job.pauseReason else null,
+                    availableRamBytes = snapshot.availableRamBytes,
+                )
+                if (ready) {
+                    val current = SeparationJobStore.current(this)
+                    val stillWaitingForRam = current != null &&
+                        current.id == job.id &&
+                        current.status == JobStatus.PAUSED &&
+                        current.pauseReason == PauseReason.LOW_MEMORY &&
+                        pauseRequested.value && !cancelRequested.value
+                    lowMemoryAutoResumeGate.reset()
+                    if (stillWaitingForRam) resumeJob()
+                }
+                continue
+            }
+            lowMemoryAutoResumeGate.reset()
             if (job.status != JobStatus.RUNNING || pauseRequested.value) continue
+
             val decision = ProcessingPolicy.decide(
                 profile = job.profile,
                 availableCores = Runtime.getRuntime().availableProcessors(),
@@ -628,7 +677,7 @@ class SeparationService : Service() {
             if (decision.pause) {
                 val text = when (decision.reason) {
                     PauseReason.THERMAL -> "Android reports severe thermal status. Let the device cool, then resume."
-                    PauseReason.LOW_MEMORY -> "Available system RAM is low. Close other apps, then resume."
+                    PauseReason.LOW_MEMORY -> lowMemoryPauseMessage()
                     PauseReason.STORAGE -> "Free storage is low. Make space, then resume."
                     else -> "Processing paused for device safety."
                 }
@@ -636,6 +685,11 @@ class SeparationService : Service() {
             }
         }
     }
+
+    private fun lowMemoryPauseMessage(): String =
+        "Low RAM; saved chunks are safe. Will auto-resume after Android reports at least " +
+            "${DeviceMonitor.formatBytes(ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_BYTES)} free for " +
+            "${ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_STABLE_MS / 1_000L} seconds, once other safety checks are clear."
 
     private fun DeviceSnapshot.toSafetySnapshot() = SafetySnapshot(
         thermal = thermal,
@@ -856,7 +910,7 @@ class SeparationService : Service() {
 
     private fun safetyPauseMessage(reason: PauseReason): String = when (reason) {
         PauseReason.THERMAL -> "Android reports severe thermal status. Let the device cool, then resume."
-        PauseReason.LOW_MEMORY -> "Available system RAM is low. Close other apps, then resume."
+        PauseReason.LOW_MEMORY -> lowMemoryPauseMessage()
         PauseReason.STORAGE -> "Free storage is low. Make space, then resume."
         PauseReason.SERVICE_LIMIT -> "Android's foreground-processing time allowance ended. Your work is saved; resume when Android allows."
         PauseReason.USER -> "Paused by you. Resume when ready."

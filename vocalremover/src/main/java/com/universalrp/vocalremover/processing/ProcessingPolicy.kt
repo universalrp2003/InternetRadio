@@ -34,6 +34,8 @@ object ProcessingPolicy {
     // Conservative headroom for the native model session and short stereo inference buffers.
     // This is a guardrail, not a claim about the model's exact peak RAM requirement.
     const val LOW_MEMORY_PAUSE_BYTES = 512L * 1024L * 1024L
+    const val LOW_MEMORY_AUTO_RESUME_BYTES = 1536L * 1024L * 1024L
+    const val LOW_MEMORY_AUTO_RESUME_STABLE_MS = 15_000L
     const val STORAGE_SAFETY_RESERVE_BYTES = 96L * 1024L * 1024L
     const val LOW_STORAGE_PAUSE_BYTES = STORAGE_SAFETY_RESERVE_BYTES
     private const val MEMORY_THROTTLE_BYTES = 768L * 1024L * 1024L
@@ -77,5 +79,36 @@ object ProcessingPolicy {
             else -> 0L
         }
         return WorkDecision(false, null, effectiveThreads, delay)
+    }
+}
+
+/** Requires sustained memory headroom so a pause does not immediately oscillate into another. */
+internal class LowMemoryAutoResumeGate(
+    private val requiredBytes: Long = ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_BYTES,
+    private val stableDurationMs: Long = ProcessingPolicy.LOW_MEMORY_AUTO_RESUME_STABLE_MS,
+    private val maxSampleGapMs: Long = 6_000L,
+) {
+    private var headroomSinceMs: Long? = null
+    private var lastSampleMs: Long? = null
+
+    fun shouldResume(nowElapsedMs: Long, reason: PauseReason?, availableRamBytes: Long?): Boolean {
+        val hasHeadroom = reason == PauseReason.LOW_MEMORY &&
+            availableRamBytes != null && availableRamBytes >= requiredBytes
+        if (!hasHeadroom) {
+            reset()
+            return false
+        }
+        val last = lastSampleMs
+        if (last != null && (nowElapsedMs < last || nowElapsedMs - last > maxSampleGapMs)) {
+            headroomSinceMs = null
+        }
+        lastSampleMs = nowElapsedMs
+        val since = headroomSinceMs ?: nowElapsedMs.also { headroomSinceMs = it }
+        return nowElapsedMs >= since && nowElapsedMs - since >= stableDurationMs
+    }
+
+    fun reset() {
+        headroomSinceMs = null
+        lastSampleMs = null
     }
 }

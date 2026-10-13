@@ -118,4 +118,36 @@ class ProcessingPolicyTest {
         assertFalse(decision.pause)
         assertEquals(1, decision.threads)
     }
+
+    @Test fun lowMemoryAutoResumeRequiresSustainedHeadroomAndTheLowMemoryReason() {
+        val gate = LowMemoryAutoResumeGate(requiredBytes = 100L, stableDurationMs = 15L)
+        assertFalse(gate.shouldResume(0L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(14L, PauseReason.LOW_MEMORY, 100L))
+        assertTrue(gate.shouldResume(15L, PauseReason.LOW_MEMORY, 100L))
+
+        gate.reset()
+        assertFalse(gate.shouldResume(20L, PauseReason.USER, 100L))
+        assertFalse(gate.shouldResume(40L, PauseReason.LOW_MEMORY, null))
+    }
+
+    @Test fun lowMemoryAutoResumeTimerResetsWhenHeadroomDrops() {
+        val gate = LowMemoryAutoResumeGate(requiredBytes = 100L, stableDurationMs = 15L)
+        assertFalse(gate.shouldResume(0L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(10L, PauseReason.LOW_MEMORY, 99L))
+        assertFalse(gate.shouldResume(20L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(34L, PauseReason.LOW_MEMORY, 100L))
+        assertTrue(gate.shouldResume(35L, PauseReason.LOW_MEMORY, 100L))
+    }
+
+    @Test fun lowMemoryAutoResumeTimerResetsAfterMonitoringGap() {
+        val gate = LowMemoryAutoResumeGate(requiredBytes = 100L, stableDurationMs = 15L, maxSampleGapMs = 5L)
+        assertFalse(gate.shouldResume(0L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(4L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(8L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(12L, PauseReason.LOW_MEMORY, 100L))
+        assertTrue(gate.shouldResume(16L, PauseReason.LOW_MEMORY, 100L))
+        gate.reset()
+        assertFalse(gate.shouldResume(20L, PauseReason.LOW_MEMORY, 100L))
+        assertFalse(gate.shouldResume(30L, PauseReason.LOW_MEMORY, 100L))
+    }
 }
