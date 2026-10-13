@@ -42,12 +42,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
-import java.net.URI
 import java.net.URL
 import java.security.MessageDigest
 import java.time.Instant
@@ -59,8 +59,6 @@ import java.util.UUID
  * confirmation and Play Protect remain in control.
  */
 object AppUpdates {
-    private const val REPO_PATH = "/universalrp2003/InternetRadio"
-    private const val RELEASES_API = "https://api.github.com/repos/universalrp2003/InternetRadio/releases?per_page=30"
     private const val MAX_APK_BYTES = 128L * 1024 * 1024
     private const val EXPECTED_SIGNER_SHA256 = "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55"
     private val DOWNLOAD_HOSTS = setOf("github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com")
@@ -78,6 +76,7 @@ object AppUpdates {
         val size: Long,
         val sha256: String,
         val publishedAt: Long,
+        val repository: String,
     )
 
     private fun identity(prefix: String): AppIdentity = when (prefix) {
@@ -116,88 +115,112 @@ object AppUpdates {
         }
     }
 
-    private fun isOfficialAsset(url: String, tag: String, name: String): Boolean = runCatching {
-        val uri = URI(url)
-        uri.scheme == "https" && uri.host == "github.com" && uri.port == -1 &&
-            uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
-            uri.path == "$REPO_PATH/releases/download/$tag/$name" &&
-            uri.path.substringAfter("/releases/download/").split('/').size == 2
-    }.getOrDefault(false)
+    private fun isOfficialAsset(
+        url: String,
+        source: ReleaseRepositorySources.Source,
+        tag: String,
+        name: String,
+    ): Boolean = ReleaseRepositorySources.isOfficialAsset(url, source, tag, name)
 
     private suspend fun fetch(prefix: String, installedVersion: String): Release? = withContext(Dispatchers.IO) {
         val app = identity(prefix)
-        val connection = URL(RELEASES_API).openConnection() as HttpURLConnection
-        try {
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/vnd.github+json")
-            connection.setRequestProperty("User-Agent", "$prefix-verified-updater")
-            check(connection.responseCode == HttpURLConnection.HTTP_OK) {
-                "GitHub release check returned HTTP ${connection.responseCode}"
-            }
-            val raw = connection.inputStream.use { input ->
-                val output = ByteArrayOutputStream()
-                val buffer = ByteArray(16 * 1024)
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    check(output.size() + count <= 4 * 1024 * 1024) { "Release metadata is too large" }
-                    output.write(buffer, 0, count)
-                }
-                String(output.toByteArray(), Charsets.UTF_8)
-            }
-            val releases = JSONArray(raw)
-            var best: Release? = null
-            for (i in 0 until releases.length()) {
-                val release = releases.getJSONObject(i)
-                if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue
-                val tag = release.optString("tag_name")
-                if (!tag.matches(Regex("[A-Za-z0-9._-]{1,120}"))) continue
-                val releasePage = release.optString("html_url")
-                if (!isOfficialReleasePage(releasePage, tag)) continue
-                val publishedAt = runCatching {
-                    Instant.parse(release.optString("published_at")).toEpochMilli()
-                }.getOrNull() ?: 0L
-                val assets = release.optJSONArray("assets") ?: continue
-                for (j in 0 until assets.length()) {
-                    val asset = assets.getJSONObject(j)
-                    if (asset.optString("state") != "uploaded") continue
-                    val name = asset.optString("name")
-                    val version = app.assetPattern.matchEntire(name)?.groupValues?.get(1) ?: continue
-                    if (!newer(version, installedVersion)) continue
-                    val hash = digest(asset.optString("digest")) ?: continue
-                    val size = asset.optLong("size", -1L)
-                    val url = asset.optString("browser_download_url")
-                    if (!validSize(size) || !isOfficialAsset(url, tag, name)) continue
-                    val candidate = Release(
-                        version = version,
-                        notes = release.optString("body").take(12_000),
-                        tag = tag,
-                        assetName = name,
-                        assetUrl = url,
-                        size = size,
-                        sha256 = hash,
-                        publishedAt = publishedAt,
-                    )
-                    val old = best
-                    if (old == null || newer(candidate.version, old.version) ||
-                        (candidate.version == old.version && candidate.publishedAt > old.publishedAt)
-                    ) best = candidate
-                }
-            }
-            best
-        } finally {
-            connection.disconnect()
-        }
-    }
+        var best: Release? = null
+        var reachableRepositories = 0
+        var lastFailure: Exception? = null
 
-    private fun isOfficialReleasePage(page: String, tag: String): Boolean = runCatching {
-        val uri = URI(page)
-        uri.scheme == "https" && uri.host == "github.com" && uri.port == -1 &&
-            uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
-            uri.path == "$REPO_PATH/releases/tag/$tag"
-    }.getOrDefault(false)
+        fun isBetter(candidate: Release, current: Release): Boolean {
+            if (newer(candidate.version, current.version)) return true
+            if (newer(current.version, candidate.version)) return false
+            val candidateRank = ReleaseRepositorySources.ordered.indexOfFirst { it.slug == candidate.repository }
+            val currentRank = ReleaseRepositorySources.ordered.indexOfFirst { it.slug == current.repository }
+            return if (candidateRank != currentRank) candidateRank < currentRank
+            else candidate.publishedAt > current.publishedAt
+        }
+
+        // Check both official repositories. A missing/not-yet-created destination is an
+        // expected migration state; it must not prevent updates from the still-live old repo.
+        for (source in ReleaseRepositorySources.ordered) {
+            for (page in 1..ReleaseRepositorySources.MAX_RELEASE_PAGES) {
+                coroutineContext.ensureActive()
+                var connection: HttpURLConnection? = null
+                try {
+                    connection = URL(source.releasesPage(page)).openConnection() as HttpURLConnection
+                    connection.connectTimeout = 15_000
+                    connection.readTimeout = 15_000
+                    connection.instanceFollowRedirects = false
+                    connection.setRequestProperty("Accept", "application/vnd.github+json")
+                    connection.setRequestProperty("User-Agent", "$prefix-verified-updater")
+                    val responseCode = connection.responseCode
+                    if (responseCode != HttpURLConnection.HTTP_OK) {
+                        lastFailure = IOException("${source.slug} release check returned HTTP $responseCode")
+                        break
+                    }
+                    if (page == 1) reachableRepositories++
+                    val raw = connection.inputStream.use { input ->
+                        val output = ByteArrayOutputStream()
+                        val buffer = ByteArray(16 * 1024)
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val count = input.read(buffer)
+                            if (count < 0) break
+                            check(output.size() + count <= 4 * 1024 * 1024) { "Release metadata is too large" }
+                            output.write(buffer, 0, count)
+                        }
+                        String(output.toByteArray(), Charsets.UTF_8)
+                    }
+                    val releases = JSONArray(raw)
+                    for (i in 0 until releases.length()) {
+                        coroutineContext.ensureActive()
+                        val release = releases.getJSONObject(i)
+                        if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue
+                        val tag = release.optString("tag_name")
+                        if (!tag.matches(Regex("[A-Za-z0-9._-]{1,120}"))) continue
+                        if (!ReleaseRepositorySources.isOfficialReleasePage(release.optString("html_url"), source, tag)) continue
+                        val publishedAt = runCatching {
+                            Instant.parse(release.optString("published_at")).toEpochMilli()
+                        }.getOrNull() ?: 0L
+                        val assets = release.optJSONArray("assets") ?: continue
+                        for (j in 0 until assets.length()) {
+                            val asset = assets.getJSONObject(j)
+                            if (asset.optString("state") != "uploaded") continue
+                            val name = asset.optString("name")
+                            val version = app.assetPattern.matchEntire(name)?.groupValues?.get(1) ?: continue
+                            if (!newer(version, installedVersion)) continue
+                            val hash = digest(asset.optString("digest")) ?: continue
+                            val size = asset.optLong("size", -1L)
+                            val url = asset.optString("browser_download_url")
+                            if (!validSize(size) || !isOfficialAsset(url, source, tag, name)) continue
+                            val candidate = Release(
+                                version = version,
+                                notes = release.optString("body").take(12_000),
+                                tag = tag,
+                                assetName = name,
+                                assetUrl = url,
+                                size = size,
+                                sha256 = hash,
+                                publishedAt = publishedAt,
+                                repository = source.slug,
+                            )
+                            val old = best
+                            if (old == null || isBetter(candidate, old)) best = candidate
+                        }
+                    }
+                    if (releases.length() < ReleaseRepositorySources.PAGE_SIZE) break
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    lastFailure = failure
+                    break
+                } finally {
+                    connection?.disconnect()
+                }
+            }
+        }
+        if (reachableRepositories == 0) {
+            throw IOException("Could not check either official release repository", lastFailure)
+        }
+        best
+    }
 
     private suspend fun download(release: Release, destination: File, onProgress: (Long) -> Unit) = withContext(Dispatchers.IO) {
         check(validSize(release.size) && digest(release.sha256) != null)

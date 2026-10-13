@@ -31,15 +31,32 @@ class ChargingHonestyPolicyTest {
         assertNull(ChargingHonestyPolicy.wattsText(null))
         assertNull(ChargingHonestyPolicy.ampsText(null))
         assertNull(ChargingHonestyPolicy.voltsText(null))
-        assertEquals("0.00 W", ChargingHonestyPolicy.wattsText(0f))
+        assertNull(ChargingHonestyPolicy.wattsText(0f))
+        assertNull(ChargingHonestyPolicy.wattsText(0.02f))
+        assertNull(ChargingHonestyPolicy.wattsText(151f))
     }
     @Test fun valuesAreFormattedWithTheirOwnUnitOnly() {
         assertEquals("8.42 W", ChargingHonestyPolicy.wattsText(8.421f))
         assertEquals("1.51 A", ChargingHonestyPolicy.ampsText(1.507f))
         assertEquals("4.35 V", ChargingHonestyPolicy.voltsText(4.351f))
+        assertEquals("25.0 °C", ChargingHonestyPolicy.temperatureText(25f))
+    }
+
+    @Test fun voltageAndTemperatureSentinelsAreNotDisplayedAsMeasurements() {
+        for (voltage in listOf(null, Float.NaN, 0f, 1.9f, 12.1f, Float.POSITIVE_INFINITY)) {
+            assertNull(ChargingHonestyPolicy.validatedBatteryVoltage(voltage))
+            assertNull(ChargingHonestyPolicy.voltsText(voltage))
+        }
+        for (temperature in listOf(null, Float.NaN, -30.1f, 90.1f, Float.POSITIVE_INFINITY)) {
+            assertNull(ChargingHonestyPolicy.validatedBatteryTemperature(temperature))
+            assertNull(ChargingHonestyPolicy.temperatureText(temperature))
+        }
+        assertEquals(0f, ChargingHonestyPolicy.validatedBatteryTemperature(0f)!!, 0f)
     }
     @Test fun measuredFlagDistinguishesARealReadingFromAnAbsentSensor() {
-        assertTrue(ChargingHonestyPolicy.isMeasured(0f))
+        assertTrue(ChargingHonestyPolicy.isMeasured(8.4f))
+        assertFalse(ChargingHonestyPolicy.isMeasured(0f))
+        assertFalse(ChargingHonestyPolicy.isMeasured(0.02f))
         assertFalse(ChargingHonestyPolicy.isMeasured(null))
     }
     @Test fun screenNoteFollowsTheCableAndTheScreenNotTheCharger() {

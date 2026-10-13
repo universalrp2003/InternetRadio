@@ -21,6 +21,12 @@ import kotlin.math.roundToInt
  * is not available on this phone (many Oppo/Vivo/Realme kernels hide the current
  * counter) the field stays null and the UI says "not reported".
  */
+enum class BatteryMeasurementSource {
+    ANDROID_BATTERY_BROADCAST,
+    KERNEL_THERMAL_ZONE,
+    UNAVAILABLE,
+}
+
 data class BatteryReading(
     val percent: Int,
     val temperatureC: Float?,
@@ -48,7 +54,15 @@ data class BatteryReading(
      * purpose — older positional constructions of this class stay valid.
      */
     val currentSource: BatteryValuePolicy.CurrentSource = BatteryValuePolicy.CurrentSource.NONE,
-)
+) {
+    /** Voltage is read only from Android's battery-changed broadcast in this implementation. */
+    val voltageSource: BatteryMeasurementSource
+        get() = if (voltageV != null) BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST else BatteryMeasurementSource.UNAVAILABLE
+
+    /** Temperature is read only from Android's battery-changed broadcast in this implementation. */
+    val temperatureSource: BatteryMeasurementSource
+        get() = if (temperatureC != null) BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST else BatteryMeasurementSource.UNAVAILABLE
+}
 
 data class DeviceDetails(
     val manufacturer: String,
@@ -80,6 +94,13 @@ data class HealthSnapshot(
     val storage: StorageInfo,
     val capturedAtMs: Long,
 ) {
+    val batteryTemperatureSource: BatteryMeasurementSource
+        get() = when {
+            battery.temperatureC != null -> BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST
+            batteryTempFromKernelC != null -> BatteryMeasurementSource.KERNEL_THERMAL_ZONE
+            else -> BatteryMeasurementSource.UNAVAILABLE
+        }
+
     /** Rough thermal state from CPU temperature, used for colour + wording. */
     val thermalState: String
         get() = when {
@@ -132,11 +153,11 @@ object BatteryReader {
             }
         }
 
-        val tempRaw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1) ?: -1
-        val temperatureC = if (tempRaw > 0) tempRaw / 10f else null
+        val tempRaw = intent?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, -1)
+        val temperatureC = BatteryValuePolicy.temperatureTenthsToCelsius(tempRaw)
 
-        val voltsRaw = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1) ?: -1
-        val voltageV = if (voltsRaw > 0) voltsRaw / 1000f else null
+        val voltsRaw = intent?.getIntExtra(BatteryManager.EXTRA_VOLTAGE, -1)
+        val voltageV = BatteryValuePolicy.voltageMillivoltsToVolts(voltsRaw)
 
         val status = intent?.getIntExtra(BatteryManager.EXTRA_STATUS, -1) ?: -1
         val plugged = intent?.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) ?: 0
@@ -196,7 +217,7 @@ object BatteryReader {
             null
         }
 
-        return BatteryReading(
+        val reading = BatteryReading(
             percent = percent.coerceIn(if (percent < 0) -1 else 0, 100),
             temperatureC = temperatureC,
             voltageV = voltageV,
@@ -216,6 +237,8 @@ object BatteryReader {
             reportedScale = scale.takeIf { it > 0 && level in 0..it },
             currentSource = current.source,
         )
+        LiveChargingEta.observe(reading)
+        return reading
     }
 
     private fun property(bm: BatteryManager?, id: Int): Int? {
@@ -448,45 +471,34 @@ object DeviceHealthReader {
 }
 
 fun batteryTimeMinutes(battery: BatteryReading): Int? {
-    val current = battery.currentA ?: return null
-    if (battery.percent < 0 || battery.percent >= 100) return null
-    val capacity = battery.estimatedCapacityMah ?: return null
-    val remainingMah = capacity * (1f - battery.percent / 100f)
-    if (battery.charging && current > 0.05f) {
-        return (remainingMah / (current * 1000f) * 60f).toInt().coerceIn(1, 14 * 60)
-    }
-    return null
+    if (battery.percent !in 0..100 || !battery.charging || battery.percent >= 100) return null
+    return LiveChargingEta.estimate(battery)?.minutesToFull
 }
 
 /**
- * "About 42 min to full" / "About 4 h 10 m left", computed from the *real* current
- * instead of a guess. Returns null when the phone does not report enough data.
+ * A charging ETA is shown only after several recent observations demonstrate a real rise in
+ * state of charge. A phone without that evidence says it is still estimating; it never invents
+ * a time from a missing current, guessed capacity, or a single reading.
  */
 fun batteryTimeLabel(battery: BatteryReading): String? {
-    val current = battery.currentA ?: return null
-    if (battery.percent < 0) return null
-    val capacity = battery.estimatedCapacityMah ?: return null
-    val remainingMah = capacity * (1f - battery.percent / 100f)
+    if (battery.percent !in 0..100) return null
     if (battery.charging) {
-        if (battery.percent >= 100) return "Full — unplug when convenient"
-        if (current <= 0.05f) return "Charging slowly right now"
-        val minutes = (remainingMah / (current * 1000f) * 60f).toInt().coerceIn(1, 14 * 60)
-        return "About ${formatMinutes(minutes)} to full"
-    } else {
-        if (current >= -0.05f) return "Not drawing power right now"
-        val minutes = (capacity * (battery.percent / 100f) / (-current * 1000f) * 60f)
-            .toInt().coerceIn(1, 48 * 60)
-        return "About ${formatMinutes(minutes)} left at this rate"
+        if (battery.percent >= 100) return tr("Full — unplug when convenient")
+        val minutes = batteryTimeMinutes(battery)
+            ?: return tr("Estimating charging time; more observations are needed.")
+        return tr("Estimated to 100% from recent charging: %s", formatMinutes(minutes))
     }
+    if (battery.powerConnected) return tr("Charging time unavailable while the battery is not charging.")
+    return tr("Time-to-empty estimate unavailable")
 }
 
 fun formatMinutes(minutes: Int): String {
     val hours = minutes / 60
     val mins = minutes % 60
     return when {
-        hours <= 0 -> "$mins min"
-        mins == 0 -> "$hours h"
-        else -> "$hours h $mins min"
+        hours <= 0 -> tr("%s min", mins)
+        mins == 0 -> tr("%s h", hours)
+        else -> tr("%s h %s min", hours, mins)
     }
 }
 

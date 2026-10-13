@@ -21,6 +21,8 @@ import java.net.InetAddress
  */
 object AppNetworkTracker {
 
+    enum class EvidenceSource { LIVE_ESTABLISHED_TCP, NETWORK_STATS_LAST_24_HOURS }
+
     data class ActiveConnection(
         val appName: String,
         val packageName: String,
@@ -31,16 +33,35 @@ object AppNetworkTracker {
         val destinationHost: String?,
         val orgOrCompany: String,
         val isTracker: Boolean,
-        val category: String, // "Telemetry / Tracker", "Web Browsing (HTTPS)", "Streaming / Video CDN", "Cloud Services"
+        val category: String, // Heuristic label; not proof of endpoint identity.
+        val evidenceSource: EvidenceSource,
     )
 
     data class TrackerReport(
         val timestamp: Long,
         val connections: List<ActiveConnection>,
         val trackerCount: Int,
-        val appsWithActiveNet: Int,
+        val liveSocketVisibilityAvailable: Boolean,
+        val networkStatsHistoryAvailable: Boolean,
         val mode: String,
-    )
+    ) {
+        private val liveConnections: List<ActiveConnection>
+            get() = connections.filter { it.evidenceSource == EvidenceSource.LIVE_ESTABLISHED_TCP }
+
+        val visibleEstablishedConnectionCount: Int get() = liveConnections.size
+        val visibleEstablishedAppCount: Int
+            get() = liveConnections.asSequence()
+                .map { it.packageName }
+                .filterNot { it.startsWith("uid:") }
+                .distinct()
+                .count()
+        val historicalTrafficAppCount: Int
+            get() = connections.asSequence()
+                .filter { it.evidenceSource == EvidenceSource.NETWORK_STATS_LAST_24_HOURS }
+                .map { it.packageName }
+                .distinct()
+                .count()
+    }
 
     private val KNOWN_TRACKERS = listOf(
         "google-analytics.com", "analytics.google.com", "crashlytics.com",
@@ -74,27 +95,25 @@ object AppNetworkTracker {
     suspend fun inspectConnections(context: Context): TrackerReport = withContext(Dispatchers.IO) {
         val pm = context.packageManager
         val uidMap = getUidAppMap(pm)
-
         val results = mutableListOf<ActiveConnection>()
 
-        // 1. Passive /proc/net sockets
-        val rawConnections = parseProcNetSockets()
-        for (conn in rawConnections) {
+        // These are currently visible ESTABLISHED TCP sockets only. Android/OEM kernels may
+        // hide some or all rows; a read with no rows is not proof that no app is connected.
+        val sockets = parseProcNetSockets()
+        for (conn in sockets.connections) {
             val appInfo = uidMap[conn.uid]
             val pkg = appInfo?.first ?: ("uid:" + conn.uid)
             val label = appInfo?.second ?: ("App " + conn.uid)
-
             val remoteHost = resolveHostFast(conn.remoteIp)
             val isTracker = isKnownTracker(remoteHost)
             val org = identifyOrg(conn.remoteIp, remoteHost)
             val cat = when {
                 isTracker -> "Telemetry / Tracker"
-                conn.remotePort == 443 || conn.remotePort == 80 -> "Secure Web (HTTPS)"
+                conn.remotePort == 443 || conn.remotePort == 80 -> "Web / HTTP(S)"
                 conn.remotePort == 853 -> "Encrypted DNS"
                 conn.remotePort in 5228..5230 -> "Google Push Notifications"
                 else -> "App Server"
             }
-
             results.add(
                 ActiveConnection(
                     appName = label,
@@ -107,44 +126,52 @@ object AppNetworkTracker {
                     orgOrCompany = org,
                     isTracker = isTracker,
                     category = cat,
+                    evidenceSource = EvidenceSource.LIVE_ESTABLISHED_TCP,
                 )
             )
         }
 
-        // 2. Query active app transfers today via NetworkStatsManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val statsApps = getActiveDataApps(context, uidMap)
-            for ((uid, pkg, label, bytes) in statsApps) {
-                val formattedMb = "%.1f MB transferred today".format(bytes / 1024.0 / 1024.0)
-                val org = identifyOrgForPackage(pkg)
-                val cat = categorizeAppTraffic(pkg)
-                results.add(
-                    ActiveConnection(
-                        appName = label,
-                        packageName = pkg,
-                        uid = uid,
-                        localPort = 0,
-                        remoteIp = org,
-                        remotePort = 443,
-                        destinationHost = formattedMb,
-                        orgOrCompany = org,
-                        isTracker = false,
-                        category = cat,
-                    )
+        // NetworkStatsManager is a separate, historical byte counter. It cannot establish
+        // that an app currently has an open connection, so keep its entries and count apart.
+        val stats = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            getRecentTrafficApps(context, uidMap)
+        } else {
+            NetworkStatsRead(available = false, apps = emptyList())
+        }
+        for ((uid, pkg, label, bytes) in stats.apps) {
+            val formattedMb = "%.1f MB transferred in the last 24 h".format(bytes / 1024.0 / 1024.0)
+            val org = identifyOrgForPackage(pkg)
+            results.add(
+                ActiveConnection(
+                    appName = label,
+                    packageName = pkg,
+                    uid = uid,
+                    localPort = 0,
+                    remoteIp = org,
+                    remotePort = 0,
+                    destinationHost = formattedMb,
+                    orgOrCompany = org,
+                    isTracker = false,
+                    category = categorizeAppTraffic(pkg),
+                    evidenceSource = EvidenceSource.NETWORK_STATS_LAST_24_HOURS,
                 )
-            }
+            )
         }
 
-        val distinct = results.distinctBy { "${it.packageName}:${it.remoteIp}" }
-        val trackerCount = distinct.count { it.isTracker }
-        val appsCount = distinct.map { it.packageName }.distinct().size
-
+        val distinct = results.distinctBy {
+            listOf(it.evidenceSource.name, it.packageName, it.localPort.toString(), it.remoteIp, it.remotePort.toString())
+                .joinToString(":")
+        }
+        val trackerCount = distinct.count {
+            it.evidenceSource == EvidenceSource.LIVE_ESTABLISHED_TCP && it.isTracker
+        }
         TrackerReport(
             timestamp = System.currentTimeMillis(),
             connections = distinct,
             trackerCount = trackerCount,
-            appsWithActiveNet = appsCount,
-            mode = "On-Device Passive Inspector",
+            liveSocketVisibilityAvailable = sockets.readable,
+            networkStatsHistoryAvailable = stats.available,
+            mode = "Best-effort local visibility",
         )
     }
 
@@ -177,40 +204,44 @@ object AppNetworkTracker {
     }
 
     private data class AppTransfer(val uid: Int, val pkg: String, val label: String, val bytes: Long)
+    private data class NetworkStatsRead(val available: Boolean, val apps: List<AppTransfer>)
 
-    private fun getActiveDataApps(context: Context, uidMap: Map<Int, Pair<String, String>>): List<AppTransfer> {
+    private fun getRecentTrafficApps(context: Context, uidMap: Map<Int, Pair<String, String>>): NetworkStatsRead {
         val list = mutableListOf<AppTransfer>()
-        val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager ?: return list
-        try {
-            val start = System.currentTimeMillis() - 24 * 3600 * 1000L
-            val end = System.currentTimeMillis()
+        val manager = context.getSystemService(Context.NETWORK_STATS_SERVICE) as? NetworkStatsManager
+            ?: return NetworkStatsRead(available = false, apps = emptyList())
+        var available = false
+        val end = System.currentTimeMillis()
+        val start = end - 24L * 3600L * 1000L
 
-            fun tally(networkType: Int) {
-                val stats = manager.querySummary(networkType, null, start, end)
+        fun tally(networkType: Int) {
+            var stats: NetworkStats? = null
+            try {
+                stats = manager.querySummary(networkType, null, start, end)
+                available = true
                 val bucket = NetworkStats.Bucket()
                 while (stats.hasNextBucket()) {
                     stats.getNextBucket(bucket)
-                    val total = bucket.rxBytes + bucket.txBytes
-                    if (total > 500 * 1024L && bucket.uid > 10000) { // UID > 10000 is installed apps
+                    val total = bucket.rxBytes.coerceAtLeast(0L) + bucket.txBytes.coerceAtLeast(0L)
+                    if (total > 500 * 1024L && bucket.uid > 10_000) {
                         val info = uidMap[bucket.uid]
-                        if (info != null) {
-                            list.add(AppTransfer(bucket.uid, info.first, info.second, total))
-                        }
+                        if (info != null) list.add(AppTransfer(bucket.uid, info.first, info.second, total))
                     }
                 }
-                stats.close()
+            } catch (_: Exception) {
+                // Per-app NetworkStats can require Usage Access or be restricted by the OEM.
+            } finally {
+                try { stats?.close() } catch (_: Exception) { }
             }
-
-            tally(ConnectivityManager.TYPE_WIFI)
-            tally(ConnectivityManager.TYPE_MOBILE)
-        } catch (e: Exception) {
-            // Ignored
         }
-        return list.groupBy { it.uid }.map { (uid, items) ->
+
+        tally(ConnectivityManager.TYPE_WIFI)
+        tally(ConnectivityManager.TYPE_MOBILE)
+        val grouped = list.groupBy { it.uid }.map { (uid, items) ->
             val first = items.first()
-            val totalBytes = items.sumOf { it.bytes }
-            AppTransfer(uid, first.pkg, first.label, totalBytes)
+            AppTransfer(uid, first.pkg, first.label, items.sumOf { it.bytes })
         }.sortedByDescending { it.bytes }
+        return NetworkStatsRead(available, grouped)
     }
 
     private data class RawSocket(
@@ -220,42 +251,42 @@ object AppNetworkTracker {
         val uid: Int,
     )
 
-    private fun parseProcNetSockets(): List<RawSocket> {
-        val list = mutableListOf<RawSocket>()
-        list.addAll(parseSocketFile("/proc/net/tcp"))
-        list.addAll(parseSocketFile("/proc/net/tcp6"))
-        return list
+    private data class SocketReadResult(val connections: List<RawSocket>, val readable: Boolean)
+    private data class SocketFileResult(val connections: List<RawSocket>, val readable: Boolean)
+
+    private fun parseProcNetSockets(): SocketReadResult {
+        val files = listOf(parseSocketFile("/proc/net/tcp"), parseSocketFile("/proc/net/tcp6"))
+        return SocketReadResult(
+            connections = files.flatMap { it.connections },
+            readable = files.any { it.readable },
+        )
     }
 
-    private fun parseSocketFile(path: String): List<RawSocket> {
+    private fun parseSocketFile(path: String): SocketFileResult {
         val file = File(path)
-        if (!file.exists() || !file.canRead()) return emptyList()
+        if (!file.exists() || !file.canRead()) return SocketFileResult(emptyList(), readable = false)
         val sockets = mutableListOf<RawSocket>()
+        var readable = false
         try {
             BufferedReader(FileReader(file)).use { reader ->
-                var line = reader.readLine() // Skip header
-                while (reader.readLine().also { line = it } != null) {
-                    val parts = line!!.trim().split(Regex("\\s+"))
-                    if (parts.size >= 10) {
-                        val state = parts[3]
-                        if (state == "01") { // TCP_ESTABLISHED
-                            val local = parts[1]
-                            val remote = parts[2]
-                            val uid = parts[7].toIntOrNull() ?: continue
-
-                            val localPort = parseHexPort(local)
-                            val (remoteIp, remotePort) = parseHexEndpoint(remote) ?: continue
-                            if (remoteIp != "0.0.0.0" && remoteIp != "127.0.0.1" && !remoteIp.startsWith("fe80")) {
-                                sockets.add(RawSocket(localPort, remoteIp, remotePort, uid))
-                            }
-                        }
+                readable = true // The file was opened; an empty result still does not prove no sockets exist.
+                reader.readLine() // Skip header.
+                while (true) {
+                    val line = reader.readLine() ?: break
+                    val parts = line.trim().split(Regex("\\s+"))
+                    if (parts.size < 10 || parts[3] != "01") continue // TCP_ESTABLISHED only.
+                    val uid = parts[7].toIntOrNull() ?: continue
+                    val localPort = parseHexPort(parts[1])
+                    val (remoteIp, remotePort) = parseHexEndpoint(parts[2]) ?: continue
+                    if (remoteIp != "0.0.0.0" && remoteIp != "127.0.0.1" && !remoteIp.startsWith("fe80")) {
+                        sockets.add(RawSocket(localPort, remoteIp, remotePort, uid))
                     }
                 }
             }
-        } catch (e: Exception) {
-            // Ignore access errors on some locked OEM kernels
+        } catch (_: Exception) {
+            // Some OEM kernels deny access or stop a partial read; visibility remains best-effort.
         }
-        return sockets
+        return SocketFileResult(sockets, readable)
     }
 
     private fun parseHexPort(endpoint: String): Int {

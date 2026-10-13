@@ -705,7 +705,7 @@ class SeparationService : Service() {
         }
 
         job = SeparationJobStore.current(this) ?: job
-        val processor = ChunkedSeparationProcessor(monitor)
+        val processor = ChunkedSeparationProcessor(monitor::read)
         val baseModelKey = ModelRepository.MODEL_SHA256.take(16)
         val modelCacheKey = if (isExtraPass) "$baseModelKey-extra" else baseModelKey
         val privateWav = processor.process(
@@ -896,9 +896,7 @@ class SeparationService : Service() {
         host: ProcessorHost,
     ): File {
         val destination = File(workDir, "source.mp3")
-        val currentPath = job.sourceFilePath.takeIf { it.isNotBlank() }?.let(::File)
-        currentPath?.takeIf { it.isFile && it.length() > 0L }?.let { return it }
-        if (destination.isFile && destination.length() > 0L) return destination
+        PrivateSourceCopyRecovery.findExisting(job.sourceFilePath, workDir)?.let { return it }
 
         val uri = runCatching { Uri.parse(job.sourceUri) }.getOrElse {
             throw IllegalStateException("The selected song cannot be opened")

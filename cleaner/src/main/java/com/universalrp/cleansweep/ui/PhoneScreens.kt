@@ -849,17 +849,24 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
             }
             Spacer(Modifier.height(10.dp))
             VirusTotalKeyHelp()
-            if (state.vtKeySaved) {
+            if (state.vtKeyStored) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "VirusTotal key saved — flagged apps get a second opinion there.",
+                        tr(if (state.vtKeySaved) "VirusTotal key saved — flagged apps now get a second opinion." else "Saved VirusTotal key cannot be read. Remove it before entering a new key."),
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
+                        color = if (state.vtKeySaved) TextSecondary else DangerRed,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { vm.saveVtKey("") }) {
                         Text(tr("Remove"), color = TextSecondary)
                     }
+                }
+                if (!state.vtKeyStorageProtected) {
+                    Text(
+                        tr("Secure key storage is unavailable. This key is not confirmed encrypted at rest; remove it or retry after secure storage is available."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DangerRed,
+                    )
                 }
             } else {
                 Text(

@@ -181,6 +181,8 @@ data class AiConfig(
      * the busy ones every time.
      */
     val freeEndpointUrl: String = "",
+    /** Runtime-only status; no API key is copied into diagnostics or UI state text. */
+    val keyStorageProtected: Boolean = true,
 ) {
     val resolvedModel: String get() = model.trim().ifBlank { provider.defaultModel }
     val resolvedBaseUrl: String get() = baseUrl.trim().ifBlank { provider.baseUrl }.trimEnd('/')
@@ -225,6 +227,13 @@ data class AiConfig(
             val base = resolvedBaseUrl.removeSuffix("/openai").trimEnd('/')
             return base.ifBlank { null }
         }
+
+    /** Avoid accidental credential disclosure if a config is included in a diagnostic. */
+    override fun toString(): String =
+        "AiConfig(provider=$provider, apiKey=${if (apiKey.isBlank()) "<empty>" else "<redacted>"}, " +
+            "model=$model, baseUrl=${if (baseUrl.isBlank()) "<empty>" else "<redacted>"}, " +
+            "includeAppNames=$includeAppNames, includeNetwork=$includeNetwork, " +
+            "freeEndpointUrl=$freeEndpointUrl, keyStorageProtected=$keyStorageProtected)"
 }
 
 object AiSettings {
@@ -250,22 +259,39 @@ object AiSettings {
     }
 
     /**
-     * v2.7: the user's own free VirusTotal API key, stored exactly like the AI keys —
-     * private to this app, sent only to virustotal.com, and only for hashes the user
-     * asked about (flagged apps, or one app checked by hand). Blank when not set, in
-     * which case the malware check uses MalwareBazaar alone.
+     * Optional VirusTotal credential. It is encrypted at rest and used only when the user
+     * starts a hash lookup; the file itself is never uploaded.
      */
     const val KEY_VIRUSTOTAL = "virustotal_key"
 
-    fun vtKey(context: Context): String =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(KEY_VIRUSTOTAL, "").orEmpty()
-
-    fun setVtKey(context: Context, key: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(KEY_VIRUSTOTAL, key.trim())
-            .apply()
+    fun vtKey(context: Context): String {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return AiSecretStorage.read(context, prefs, KEY_VIRUSTOTAL).value
     }
+
+    fun hasSavedVtKey(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return AiSecretStorage.read(context, prefs, KEY_VIRUSTOTAL).value.isNotBlank()
+    }
+
+    fun hasStoredVtCredential(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return AiSecretStorage.read(context, prefs, KEY_VIRUSTOTAL).hadStoredValue
+    }
+
+    fun vtKeyStorageProtected(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stored = AiSecretStorage.read(context, prefs, KEY_VIRUSTOTAL)
+        return stored.protectedAtRest || !stored.hadStoredValue
+    }
+
+    fun setVtKey(context: Context, key: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return AiSecretStorage.write(prefs, KEY_VIRUSTOTAL, key.trim())
+    }
+
+    fun forgetVtKey(context: Context): Boolean =
+        AiSecretStorage.remove(context.getSharedPreferences(PREFS, Context.MODE_PRIVATE), KEY_VIRUSTOTAL)
 
     /** Separate from the menu language: the user may read the menu in English and want Tamil
      *  answers, or the other way round. */
@@ -307,14 +333,37 @@ object AiSettings {
 
     fun load(context: Context): AiConfig {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val provider = AiProvider.fromId(prefs.getString("provider", "") ?: "")
+        val saved = readSavedFor(context, provider)
+        val legacyActive = AiSecretStorage.read(context, prefs, "api_key")
+        val legacyModel = prefs.getString("model", "") ?: ""
+        var apiKey = saved.apiKey
+        var model = saved.model.ifBlank { legacyModel }
+        var protected = saved.protectedAtRest
+
+        // Older releases also kept a duplicate active-provider key in `api_key`. Move it to
+        // the per-provider encrypted slot, then remove the obsolete duplicate. This makes
+        // subsequent reads use one encrypted credential source per provider.
+        if (apiKey.isBlank() && legacyActive.value.isNotBlank()) {
+            apiKey = legacyActive.value
+            // This write replaces any missing/unreadable per-provider value; a second
+            // successful attempt after legacy migration failure restores accurate status.
+            protected = saveFor(context, provider, apiKey, model)
+        }
+        if (legacyActive.hadStoredValue) {
+            val removedLegacy = AiSecretStorage.remove(prefs, "api_key")
+            if (!removedLegacy && !legacyActive.protectedAtRest) protected = false
+        }
+
         return AiConfig(
-            provider = AiProvider.fromId(prefs.getString("provider", "") ?: ""),
-            apiKey = prefs.getString("api_key", "") ?: "",
-            model = prefs.getString("model", "") ?: "",
+            provider = provider,
+            apiKey = apiKey,
+            model = model,
             baseUrl = prefs.getString("base_url", "") ?: "",
             includeAppNames = prefs.getBoolean("include_app_names", true),
             includeNetwork = prefs.getBoolean("include_network", true),
             freeEndpointUrl = prefs.getString("free_endpoint_url", "") ?: "",
+            keyStorageProtected = protected,
         )
     }
 
@@ -344,71 +393,99 @@ object AiSettings {
      * provider later never asks for the key again — the exact complaint that came with the
      * v2.2 screenshots ("after switching it asks for the key and model again").
      */
-    fun save(context: Context, config: AiConfig) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+    fun save(context: Context, config: AiConfig): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val keySaved = saveFor(context, config.provider, config.apiKey.trim(), config.model.trim())
+        val legacyRemoved = AiSecretStorage.remove(prefs, "api_key")
+        prefs.edit()
             .putString("provider", config.provider.id)
-            .putString("api_key", config.apiKey.trim())
             .putString("model", config.model.trim())
             .putString("base_url", config.baseUrl.trim())
             .putBoolean("include_app_names", config.includeAppNames)
             .putBoolean("include_network", config.includeNetwork)
             .putString("free_endpoint_url", config.freeEndpointUrl.trim())
             .apply()
-        if (config.apiKey.isNotBlank() || config.model.isNotBlank()) {
-            saveFor(context, config.provider, config.apiKey.trim(), config.model.trim())
-        }
+        return keySaved && legacyRemoved
     }
 
     // ------------------------------------------------- per-provider saved credentials
 
-    /**
-     * One line per provider inside the same private prefs file:
-     * "geminiAIza…gemini-2.5-flash". Plain text on purpose — it can be read by eye
-     * when debugging, and it never leaves the app's private storage.
-     */
+    /** The key and model are encrypted together to preserve per-provider settings. */
     private fun keyName(provider: AiProvider) = "saved_" + provider.id
 
-    fun saveFor(context: Context, provider: AiProvider, apiKey: String, model: String) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putString(keyName(provider), apiKey + SEP + model)
-            .apply()
+    private data class SavedCredential(
+        val apiKey: String,
+        val model: String,
+        val protectedAtRest: Boolean,
+        val hadStoredValue: Boolean,
+    )
+
+    private fun readSavedFor(context: Context, provider: AiProvider): SavedCredential {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val stored = AiSecretStorage.read(context, prefs, keyName(provider))
+        if (stored.value.isBlank()) {
+            return SavedCredential("", "", stored.protectedAtRest, stored.hadStoredValue)
+        }
+        val parts = stored.value.split(SEP, limit = 2)
+        return SavedCredential(
+            apiKey = parts.getOrElse(0) { "" },
+            model = parts.getOrElse(1) { "" },
+            protectedAtRest = stored.protectedAtRest,
+            hadStoredValue = stored.hadStoredValue,
+        )
+    }
+
+    fun saveFor(context: Context, provider: AiProvider, apiKey: String, model: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val serialized = if (apiKey.isBlank() && model.isBlank()) "" else apiKey.trim() + SEP + model.trim()
+        return AiSecretStorage.write(prefs, keyName(provider), serialized)
     }
 
     /** What was saved for this provider, if anything: key to model. */
     fun savedFor(context: Context, provider: AiProvider): Pair<String, String> {
-        val raw = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getString(keyName(provider), "") ?: ""
-        if (raw.isBlank()) return "" to ""
-        val parts = raw.split(SEP)
-        return parts.getOrElse(0) { "" } to parts.getOrElse(1) { "" }
+        val saved = readSavedFor(context, provider)
+        return saved.apiKey to saved.model
     }
 
     /** True when a key for this provider is already stored (shown as a badge in the UI). */
-    fun hasSavedKey(context: Context, provider: AiProvider): Boolean =
-        savedFor(context, provider).first.isNotBlank()
+    fun hasSavedKey(context: Context, provider: AiProvider): Boolean {
+        val saved = readSavedFor(context, provider)
+        // An unreadable encrypted blob still needs to remain removable from the settings UI.
+        return saved.apiKey.isNotBlank() || !saved.protectedAtRest
+    }
+
+    /** Permanently removes one provider's key without exposing or displaying its value. */
+    fun forgetKey(context: Context, provider: AiProvider): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        val removedProvider = AiSecretStorage.remove(prefs, keyName(provider))
+        val activeProvider = AiProvider.fromId(prefs.getString("provider", "") ?: "")
+        val removedLegacy = if (activeProvider == provider) AiSecretStorage.remove(prefs, "api_key") else true
+        return removedProvider && removedLegacy
+    }
 
     /** Restores the provider's own key/model into the live config when the user switches. */
     fun applySaved(context: Context, provider: AiProvider): AiConfig {
-        val (key, model) = savedFor(context, provider)
+        val saved = readSavedFor(context, provider)
         val current = load(context)
         return current.copy(
             provider = provider,
-            apiKey = key,
-            model = model.ifBlank {
+            apiKey = saved.apiKey,
+            model = saved.model.ifBlank {
                 if (provider.needsKey) provider.defaultModel else ""
             },
+            keyStorageProtected = saved.protectedAtRest,
         )
     }
 
     private const val SEP = "\u0001"
 
     /**
-     * The key never leaves the phone except towards the provider you chose. It is
-     * stored in the app's own private preferences file, which other apps cannot read.
+     * The API key is encrypted with an Android Keystore key before it is written to private
+     * preferences. Use “Forget key” to remove a saved credential.
      */
-    fun keyStorageNote(): String =
-        "Saved keys live only inside CleanSweep's private storage on this phone, one per " +
-            "provider, so switching between Gemini, Groq or the free option never asks you to " +
-            "paste the same key twice. A key is sent to the provider you picked and nowhere " +
-            "else. Uninstall the app (or clear the field and save) to remove them."
+    fun keyStorageNote(protectedAtRest: Boolean = true): String = if (protectedAtRest) {
+        "Saved API keys are encrypted with Android Keystore before being written to CleanSweep's private storage. Each provider has its own key; use Forget key to remove it. The key is sent only to the provider you chose."
+    } else {
+        "Secure key storage is currently unavailable. The key could not be saved encrypted; check the device and re-enter it only after secure storage is available."
+    }
 }

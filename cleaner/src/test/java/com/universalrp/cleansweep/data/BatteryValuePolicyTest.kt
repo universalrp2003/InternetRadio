@@ -13,6 +13,31 @@ class BatteryValuePolicyTest {
         assertNull(BatteryValuePolicy.microAmpsToAmps(null)); assertNull(BatteryValuePolicy.microAmpsToAmps(Int.MIN_VALUE))
         assertNull(BatteryValuePolicy.microAmpsToAmps(Int.MAX_VALUE)); assertEquals(0f, BatteryValuePolicy.microAmpsToAmps(0)!!, 0f)
     }
+
+    @Test fun batteryVoltageAndTemperatureUseDocumentedAndroidBroadcastUnitsAndBounds() {
+        assertEquals(4.36f, BatteryValuePolicy.voltageMillivoltsToVolts(4_360)!!, 0.0001f)
+        assertNull(BatteryValuePolicy.voltageMillivoltsToVolts(null))
+        assertNull(BatteryValuePolicy.voltageMillivoltsToVolts(-1))
+        assertNull(BatteryValuePolicy.voltageMillivoltsToVolts(999_999))
+        assertEquals(0f, BatteryValuePolicy.temperatureTenthsToCelsius(0)!!, 0f)
+        assertEquals(-5f, BatteryValuePolicy.temperatureTenthsToCelsius(-50)!!, 0f)
+        assertNull(BatteryValuePolicy.temperatureTenthsToCelsius(-1_000))
+        assertNull(BatteryValuePolicy.temperatureTenthsToCelsius(9_999))
+    }
+
+    @Test fun batterySensorProvenanceMatchesReportedValues() {
+        val reading = BatteryReading(
+            percent = 50, temperatureC = 32f, voltageV = 4.1f, currentA = null,
+            averageCurrentA = null, powerW = null, charging = false,
+            pluggedLabel = "Not plugged in", statusLabel = "Discharging", healthLabel = "Good",
+            technology = "Li-ion", chargeCounterMah = null, estimatedCapacityMah = null,
+            currentSignNote = "Not reported",
+        )
+        assertEquals(BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST, reading.temperatureSource)
+        assertEquals(BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST, reading.voltageSource)
+        assertEquals(BatteryMeasurementSource.UNAVAILABLE, reading.copy(temperatureC = null).temperatureSource)
+        assertEquals(BatteryMeasurementSource.UNAVAILABLE, reading.copy(voltageV = null).voltageSource)
+    }
     @Test fun fractionalReportsCannotClaimExactTwentyOrEightyThresholds() {
         assertNull(BatteryValuePolicy.exactWholePercent(20, 20_789, 100_000))
         assertNull(BatteryValuePolicy.exactWholePercent(80, 80_999, 100_000))

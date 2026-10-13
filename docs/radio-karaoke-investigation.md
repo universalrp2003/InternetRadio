@@ -92,16 +92,20 @@ in `vocalremover/THIRD_PARTY_NOTICES.md`. The model host does not provide a
 separate per-file license manifest; do not claim the weights are licensed by the
 runtime, and confirm model terms before commercial redistribution.
 
-CI is configured to build/upload only a clearly named Vocal Remover **debug
-prototype APK**. Release APKs and Google Play AABs are explicitly limited to the
-maintained apps; the standalone prototype is not store-facing.
+## Current publication and verification status (2026-10-14)
 
-**Not verified:** this workspace has no JDK or Android SDK/build tools, so neither
-the Gradle task, unit tests, APK, JNA/native ABI loading, audio output, nor device
-thermal/memory behavior has been tested. The build wiring now detects the former
-JNI/C-API mismatch, but that does not substitute for a successful build and
-runtime validation. Do not represent the prototype as working/production-ready
-until the build passes and real-device tests validate mono/stereo decoding, stem
-selection, output sample rate, chunk seams, long-job recovery, background handling,
-and thermal/memory behavior. Keep it standalone; merge into `:radio` only after
+RP Vocal Remover Studio remains a **standalone app** and is now included in the
+release workflow as its own signed, versioned GitHub APK. It is not bundled into
+Ramesh Radio and is not part of the Play Store AAB set. Publication is gated on
+module tests, signed-APK/package/version/digest checks, and the normal Android
+installer confirmation. The old published APK and tag remain unchanged.
+
+Reliability tests now cover durable-chunk restart recovery, recovery from a lost
+picker grant when an app-private source copy exists, detection that a missing
+private copy requires reopening the source, and WAV export cancellation/temporary-file cleanup. A pure-JVM seam
+lets the restart test confirm a committed checkpoint is stitched without loading
+the native model. These tests are source additions only: this workspace has no
+JDK/Android SDK, so no Gradle build or JVM test has run here. Do not represent
+this candidate as built, verified, or released until CI passes and output/runtime
+behavior is confirmed. Keep the app standalone; merge into `:radio` only after
 the owner judges the output useful.

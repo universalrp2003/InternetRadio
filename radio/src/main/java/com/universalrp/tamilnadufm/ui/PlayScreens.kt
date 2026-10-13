@@ -744,6 +744,11 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                    Text(
+                        AppStrings.translate("Prefer HTTPS when a station offers it. Legacy HTTP streams remain supported but are not encrypted in transit."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Warn,
+                    )
                     Spacer(Modifier.height(8.dp))
                     OutlinedTextField(
                         value = name,
@@ -757,7 +762,7 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                     OutlinedTextField(
                         value = url,
                         onValueChange = { url = it },
-                        label = { Text("Stream link (http:// or https://)") },
+                        label = { Text(AppStrings.translate("Stream link (HTTPS preferred; legacy HTTP supported)")) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth(),
                         colors = fieldColors(),
@@ -861,7 +866,7 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         }) { Text(label, color = Teal) }
                     }
                     Text("Privacy & permissions", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Text("Internet access is needed for live streams and directory searches. Local audio is selected on your phone. Notifications and the foreground playback service keep audio controls available while listening. Favourites and settings stay on this device. Stream and directory servers receive your requests; offline station listings do not make streams playable offline.", color = TextSecondary)
+                    Text(AppStrings.translate("Internet access is needed for live streams and directory searches. Local audio is selected on your phone. Notifications and the foreground playback service keep audio controls available while listening. Favourites and settings stay on this device. Stream and directory servers receive your requests; offline station listings do not make streams playable offline. HTTPS is preferred when a station offers it. Some legacy stations use unencrypted HTTP, which can expose or allow changes to stream traffic on the network."), color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
                     Row {
                         IconChip(Icons.Filled.Share, "Share app") { vm.shareApp() }
@@ -932,6 +937,16 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth(),
                 )
+                if (station.url.trim().startsWith("http://", ignoreCase = true)) {
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        AppStrings.translate("This station uses unencrypted HTTP. Others on the network may be able to observe or alter the stream. Prefer its HTTPS stream if available; HTTP is kept for legacy stations."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Warn,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(
                     Modifier.fillMaxWidth(),

@@ -52,6 +52,7 @@ class SettingsRepo(context: Context) {
         val EXCLUDED = stringSetPreferencesKey("excluded_paths")
         val DEFAULT_SELECTED = stringSetPreferencesKey("default_selected_kinds")
         val STATUS_PILL = booleanPreferencesKey("status_pill")
+        val FLOATING_VOLUME_BUTTON = booleanPreferencesKey("floating_volume_button")
         val LANG = stringPreferencesKey("app_lang")
         val SPEED_MB = intPreferencesKey("speed_size_mb")
     }
@@ -128,6 +129,13 @@ class SettingsRepo(context: Context) {
 
     suspend fun setStatusPill(value: Boolean) =
         store.edit { it[Keys.STATUS_PILL] = value }
+
+    /** Optional floating button that opens Android's native media-volume panel; off by default. */
+    val floatingVolumeButton: Flow<Boolean> =
+        store.data.map { p -> p[Keys.FLOATING_VOLUME_BUTTON] ?: false }
+
+    suspend fun setFloatingVolumeButton(value: Boolean) =
+        store.edit { it[Keys.FLOATING_VOLUME_BUTTON] = value }
 
     /** Menu language: "en" or "ta". */
     val lang: Flow<String> = store.data.map { p -> p[Keys.LANG] ?: "en" }

@@ -395,6 +395,44 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             }
 
             PanelCard(Modifier.fillMaxWidth()) {
+                Column {
+                    SettingSwitch(
+                        title = tr("Floating volume button"),
+                        subtitle = tr("Optional separate overlay button. Tap it to open Android's native media-volume panel; it does not change volume by itself."),
+                        checked = state.floatingVolumeButton,
+                        onCheckedChange = { vm.setFloatingVolumeButton(it) },
+                    )
+                    if (state.floatingVolumeButton && !state.statusPillAllowed) {
+                        Column(Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp)) {
+                            Text(
+                                tr("This button is separate from the charging/data pill but uses the same Android overlay permission."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = WarnAmber,
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Button(
+                                onClick = { vm.openOverlaySettings() },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = WarnAmber,
+                                    contentColor = Color(0xFF2B1D02),
+                                ),
+                            ) {
+                                Text(tr("Allow display over other apps"), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                    if (state.floatingVolumeButton && state.statusPillAllowed) {
+                        Text(
+                            tr("On. The separate floating button opens Android's media-volume panel; turning it off leaves the charging/data pill unchanged."),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
+                        )
+                    }
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
                 SettingSwitch(
                     title = tr("Detailed assistant answers"),
                     subtitle = tr("Off = the on-device assistant replies in one short line"),

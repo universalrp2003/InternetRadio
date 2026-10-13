@@ -14,7 +14,7 @@ import com.universalrp.cleansweep.voice.Announcer
 
 object SetupGuides {
     const val API = "Open the official provider link and sign in. If your account allows API access, create a key, paste it here, save, and run the generation test. Never share the key. Chat subscriptions and API billing are separate; limits or charges may apply."
-    const val FREE = "This shared endpoint mode does not need your key. Availability and quotas can change; free access is not guaranteed. A routed model may have no exact LM Arena rating. You must explicitly choose another provider if this one is unavailable."
+    const val FREE = "This shared endpoint mode does not need your key. Availability and quotas can change; free access is not guaranteed. You must explicitly choose another provider if this one is unavailable."
     const val CUSTOM = "Use only a trusted OpenAI-compatible endpoint and its own API key instructions. There is no universal signup link for custom servers. Check who operates it before sending questions or reports. Never share your key."
     const val VIRUSTOTAL = "Open the official VirusTotal site, sign in, and find API key in your account menu. Paste it in Live Guard only if you choose the second-opinion hash check. Quotas and terms vary. Live Guard sends a file hash, not the APK file. Never share the key."
     const val CORE = "Core Live Guard does not read other apps' notifications or messages. There is no notification-listener service, no SMS, Contacts or call-log access, no Accessibility service and no device-admin capability in this app. Ordinary Live Guard alerts about your own phone (battery, charging, storage and the daily brief) remain and follow your switches."

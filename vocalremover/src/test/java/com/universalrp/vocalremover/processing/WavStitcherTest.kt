@@ -52,6 +52,21 @@ class WavStitcherTest {
         assertFalse(WavStitcher.isValid(output, 44_100, 2))
     }
 
+    @Test fun canceledWavExportRemovesPartialFileAndPreservesExistingOutput() = runBlocking {
+        val segment = segment("cancelled.f32", floatArrayOf(0.1f, -0.1f, 0.2f, -0.2f))
+        val output = File(temp.root, "published.wav").apply { writeBytes(byteArrayOf(9, 8, 7, 6)) }
+        val originalOutput = output.readBytes()
+        val part = File(temp.root, "published.wav.part").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+
+        val failure = runCatching {
+            WavStitcher.write(listOf(segment), output, 44_100, 0, TestHost(continueOnCheckpoint = false), 1, 1)
+        }.exceptionOrNull()
+
+        assertTrue(failure is kotlinx.coroutines.CancellationException)
+        assertTrue(originalOutput.contentEquals(output.readBytes()))
+        assertFalse("Canceled export must discard its temporary file", part.exists())
+    }
+
     @Test fun rejectsMalformedPcmHeadersEvenWhenTheFileLengthMatches() = runBlocking {
         val segment = segment("header-check.f32", floatArrayOf(0.1f, -0.1f))
         val output = File(temp.root, "header-check.wav")
@@ -109,12 +124,12 @@ class WavStitcherTest {
         assertTrue("Expected $expected but got $actual", abs(expected - actual) <= tolerance)
     }
 
-    private class TestHost : ProcessorHost {
+    private class TestHost(private val continueOnCheckpoint: Boolean = true) : ProcessorHost {
         override suspend fun checkpoint(
             reason: PauseReason?,
             message: String,
             beforePause: () -> Unit,
-        ) = true
+        ) = continueOnCheckpoint
         override fun isCanceled() = false
         override fun update(
             phase: String,

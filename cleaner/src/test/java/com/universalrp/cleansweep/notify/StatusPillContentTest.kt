@@ -18,14 +18,21 @@ class StatusPillContentTest {
         assertFalse(view.text.contains("%"))
     }
 
-    @Test fun unavailableOrInvalidPowerDoesNotFallBackToAmpsDataOrBattery() {
-        for (watts in listOf(null, Float.NaN, Float.POSITIVE_INFINITY, -3f)) {
-            val view = StatusPillContent.resolve(true, watts, "200 MB", batteryPercent = 100)
-            assertEquals("— W", view.text)
+    @Test fun unavailableOrInvalidPowerNeverBecomesZeroOrAnEmptyWattReading() {
+        for (watts in listOf(null, Float.NaN, Float.POSITIVE_INFINITY, -3f, 0f, 0.05f)) {
+            val view = StatusPillContent.resolve(true, watts, "200 MB", batteryPercent = 100, charging = true)
+            assertEquals("Estimating", view.text)
             assertFalse(view.showNetworkMeter)
             assertNull(view.packPercent)
+            assertFalse(view.text.contains("W"))
         }
-        assertEquals("0.0 W", StatusPillContent.resolve(true, 0f).text)
+        assertEquals("Unavailable", StatusPillContent.resolve(true, null).text)
+    }
+
+    @Test fun aRecentObservedEstimateHasAnExplicitEtaLabel() {
+        val view = StatusPillContent.resolve(true, null, charging = true, chargeStatusText = "ETA 1 h 24 min")
+        assertEquals("ETA 1 h 24 min", view.text)
+        assertFalse(view.showNetworkMeter)
     }
 
     @Test fun unplugRestoresTheNormalViewWithoutChangingPreferences() {

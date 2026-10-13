@@ -111,6 +111,15 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     style = MaterialTheme.typography.displayLarge,
                 )
                 Spacer(Modifier.height(12.dp))
+                if (report?.duplicateScanCapped == true) {
+                    Text(
+                        tr("Duplicate scan hit the 1,500-candidate limit. There may be more duplicates than shown."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = WarnAmber,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(tr("Nothing to clean!"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
@@ -150,6 +159,14 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                             color = TextSecondary,
                         )
                     }
+                }
+                if (report.duplicateScanCapped) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Duplicate scan hit the 1,500-candidate limit. There may be more duplicates than shown."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarnAmber,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 // Nothing is ticked automatically any more: you pick, then Clean.

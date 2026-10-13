@@ -48,6 +48,29 @@ def main():
     require('SHA-256' in source('updates/LiveGuardUpdates.kt') and 'getPackageArchiveInfo' in source('updates/LiveGuardUpdates.kt') and 'trustedSigner' in source('updates/LiveGuardUpdates.kt'), 'APK identity/signing checks missing')
     require('180_000' in source('updates/VerifiedApkDownload.kt') and 'instanceFollowRedirects = false' in source('updates/VerifiedApkDownload.kt'), 'Download deadline/redirect controls missing')
     require('officialAsset' in source('updates/LiveGuardUpdates.kt') and 'release.optBoolean("prerelease")' in source('updates/LiveGuardUpdates.kt'), 'Release trust/stability gate missing')
+    release_sources = (ROOT/'shared/src/main/java/com/universalrp/updates/ReleaseRepositorySources.kt').read_text()
+    require('PAGE_SIZE = 100' in release_sources and 'MAX_RELEASE_PAGES = 20' in release_sources,
+            'Updater pagination no longer covers up to 2,000 releases per repository')
+    require('Source("universalrp2003", "RP-Android-Apps")' in release_sources and
+            'Source("universalrp2003", "InternetRadio")' in release_sources,
+            'Dual-repository migration source order or old endpoint fallback changed')
+    liveguard_updater = source('updates/LiveGuardUpdates.kt')
+    shared_updater = (ROOT/'shared/src/main/java/com/universalrp/updates/AppUpdates.kt').read_text()
+    for updater in (liveguard_updater, shared_updater):
+        require('MAX_RELEASE_PAGES' in updater and 'releasesPage(page)' in updater and
+                'isOfficialReleasePage' in updater and
+                ('isOfficialAsset' in updater or 'officialAsset' in updater),
+                'One of the four app updater paths is missing scalable pagination or canonical URL checks')
+    require('versionCode(candidate) > versionCode(installed)' in shared_updater and
+            'signerDigests(candidate) == expected' in shared_updater and
+            'actualHash == release.sha256' in shared_updater and
+            shared_updater.index('ensureApkMatches(context, file, app, release)', shared_updater.index('fun installUpdate()')) <
+            shared_updater.index('launchInstaller(context, file)', shared_updater.index('fun installUpdate()')),
+            'Shared updater does not recheck digest/package/version/signer before Android installer handoff')
+    require('code(apk) > code(installed)' in liveguard_updater and
+            'UpdatePolicy.trustedSigner(signers(apk), signers(installed))' in liveguard_updater and
+            'verify(app, file, release) // Recheck private-cache bytes/installed version immediately before handing off.' in liveguard_updater,
+            'Live Guard updater does not recheck APK identity and signer before Android installer handoff')
     require('AppUpdates.Control' not in source('MainActivity.kt') and 'AppUpdates.Control' not in source('ui/AboutScreen.kt'), 'Cleaner browser updater still wired')
     require('LastUnplugRepo.observe' in source('data/InsightsStore.kt') and 'explicitDisconnect' in source('data/LastUnplug.kt'), 'Genuine unplug owner missing')
     require('val selected: Boolean = false' in source('data/AppCacheRepo.kt'), 'Cache rows auto-selected')
@@ -56,8 +79,7 @@ def main():
             'Safe system scope defaults missing')
     require('vm.loadAppCaches()' in source('ui/AppCacheScreen.kt'), 'Cache reopening refresh missing')
     require('daily_ai", false' in source('work/HealthWatchWorker.kt'), 'Automatic online daily summaries not opt-in')
-    require('CURRENT_WINDOW_MS' in source('ai/ArenaRatingPolicy.kt') and '.singleOrNull()' in source('ai/ArenaRatingPolicy.kt'), 'Rating exact/freshness policy missing')
-    require('rating_q025' in source('ai/ArenaRatings.kt') and 'git/blobs' in source('ai/ArenaRatings.kt'), 'Verified official rating schema missing')
+    require('ArenaRatingCard' not in source('ui/AiScreens.kt') and not (ROOT/'cleaner/src/main/java/com/universalrp/cleansweep/ai/ArenaRatings.kt').exists(), 'Arena model-rating card/data source must remain removed')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
     for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 49', 'versionName = "2.44"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
@@ -168,14 +190,34 @@ def main():
         require('state.lang' not in source(display),
                 'A display site still reads the state mirror instead of the language authority: ' + display)
     expected = runpy.run_path(str(ROOT/'tools/verify_cleaner_regressions.py'))['EXPECTED']
-    require(sum(expected.values()) == 349 and len(expected) == 39, 'Future required regression gate count differs')
+    require(sum(expected.values()) == 365 and len(expected) == 42, 'Future required regression gate count differs')
     for name, count in expected.items():
         path = ROOT/'cleaner/src/test/java'/Path(*name.split('.')).with_suffix('.kt')
         require(path.is_file() and len(re.findall(r'@Test\b', path.read_text())) == count, 'Required test source missing: ' + name)
     for xml in (ROOT/'cleaner/src/main').rglob('*.xml'):
         ET.parse(xml)
-    print('PASS: Static manifest, no-notification-reading/update/rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 39 required suites / 349 prepared declarations; tests NOT executed. Candidate 2.44/code49/API26 matches.')
+    for module in ('cleaner', 'radio', 'equalizer', 'vocalremover'):
+        module_root = ROOT / module / 'src/main'
+        app_manifest = ET.parse(module_root / 'AndroidManifest.xml').getroot().find('application')
+        require(app_manifest is not None and app_manifest.get(ANDROID + 'allowBackup') == 'false' and
+                app_manifest.get(ANDROID + 'fullBackupContent') == '@xml/backup_rules' and
+                app_manifest.get(ANDROID + 'dataExtractionRules') == '@xml/data_extraction_rules',
+                f'{module}: local-only policy is missing explicit backup/device-transfer controls')
+        for rules_path in (module_root / 'res/xml/backup_rules.xml', module_root / 'res/xml/data_extraction_rules.xml'):
+            rules = ET.parse(rules_path).getroot()
+            excluded_domains = {node.get('domain') for node in rules.iter('exclude') if node.get('path') == '.'}
+            require({'root', 'file', 'database', 'sharedpref', 'external'} <= excluded_domains,
+                    f'{module}: backup rules no longer exclude app-private data')
+    require('Time-to-empty estimate unavailable' in source('data/DeviceHealth.kt') and
+            'LiveChargingEta.estimate(battery)?.minutesToFull' in source('data/DeviceHealth.kt') and
+            'in-memory battery-level observations while charging' in source('ui/AiScreens.kt'),
+            'A battery ETA no longer requires recent observed charging evidence')
+    vocal_service = (ROOT/'vocalremover/src/main/java/com/universalrp/vocalremover/processing/SeparationService.kt').read_text()
+    require('PrivateSourceCopyRecovery.findExisting' in vocal_service and
+            'sameContents' in source('data/DuplicateContentHash.kt'),
+            'Private-source recovery or full-content duplicate confirmation was removed')
+    print('PASS: Static manifest, privacy/backup, updater, charging, duplicate, rating/widget/scope contracts and XML well-formedness.')
+    print('PASS: 42 required suites / 365 prepared declarations; tests NOT executed. Candidate 2.44/code49/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

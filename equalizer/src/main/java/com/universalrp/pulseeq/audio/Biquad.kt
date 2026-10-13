@@ -128,4 +128,8 @@ class BandPassFilter(freqHz: Float, q: Float = 1.3f, sampleRate: Float = 48000f)
         y1 = y
         return y
     }
+
+    fun reset() {
+        x1 = 0f; x2 = 0f; y1 = 0f; y2 = 0f
+    }
 }

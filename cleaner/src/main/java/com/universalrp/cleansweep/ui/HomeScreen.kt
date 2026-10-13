@@ -323,7 +323,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                                     Text(
                                         buildString {
                                             append(health.battery.statusLabel)
-                                            health.battery.powerW?.let { append(" • ${"%.1f".format(it)} W") }
+                                            com.universalrp.cleansweep.data.ChargingHonestyPolicy.wattsText(health.battery.powerW)
+                                                ?.let { append(" • $it") }
                                             health.cpuTempC?.let { append(" • CPU ${"%.0f".format(it)} °C") }
                                             append(" • uptime ${formatUptime(health.device.uptimeMs)}")
                                         },

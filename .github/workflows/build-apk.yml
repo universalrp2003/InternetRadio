@@ -220,6 +220,9 @@ jobs:
       - name: Verify required CleanSweep regression suites
         run: python3 tools/verify_cleaner_regressions.py
 
+      - name: Verify Vocal Remover recovery and export regression suites
+        run: python3 tools/verify_vocalremover_reliability.py
+
       - name: Upload unit-test reports
         if: always()
         uses: actions/upload-artifact@v4

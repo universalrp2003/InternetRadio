@@ -17,6 +17,11 @@ class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context?, intent: Intent?) {
         val app = context?.applicationContext ?: return
+        FloatingVolumeControl.sync(
+            app,
+            app.getSharedPreferences(FloatingVolumeControl.PREFS, Context.MODE_PRIVATE)
+                .getBoolean(FloatingVolumeControl.KEY_ENABLED, false),
+        )
 
         // 1. Refresh widget immediately on startup
         try {

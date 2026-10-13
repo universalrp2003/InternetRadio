@@ -4,7 +4,7 @@
 
 - Maintain exactly these four active Android modules: `cleaner` (Live Guard / CleanSweep), `radio` (Ramesh Radio), `equalizer` (PulseEQ) and `vocalremover` (RP Vocal Remover Studio).
 - Retired standalone app modules have been removed from the active build, CI and store metadata at the owner's request. Preserve their already-published GitHub Releases, tags and APK assets as historical records; do not rebuild or publish them.
-- The owner chose **RP Ideas** as the umbrella brand and `RP-Android-Apps` as the future repository slug. Keep the existing `InternetRadio` repository URL for now: current installed update clients require it and do not follow repository-rename redirects. Follow `docs/repository-migration.md`; do not rename or delete the current repository before bridge updates for all four apps are installed and verified.
+- The owner chose **RP Ideas** as the umbrella brand and `RP-Android-Apps` as the destination repository slug. The bridge clients check `RP-Android-Apps` first and keep `InternetRadio` as a verified fallback during the grace period; older installed clients still require the exact `InternetRadio` URL and reject redirects. Follow `docs/repository-migration.md`; do not rename, archive or delete the old repository until all four bridge updates and the later updater-only transition are confirmed.
 - On 13 October 2026 the owner reported installing all four current apps and that they worked on their phone. This is owner-reported device feedback, not a certification for every device or Android version.
 
 ## Shared app and release requirements

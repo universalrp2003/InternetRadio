@@ -63,7 +63,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.universalrp.cleansweep.MainViewModel
 import com.universalrp.cleansweep.data.tr
@@ -85,13 +84,12 @@ import com.universalrp.cleansweep.ui.theme.WarnAmber
 @Composable
 fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
     val context = LocalContext.current
-    var keyVisible by remember { mutableStateOf(false) }
-    var keyDraft by remember(state.aiConfig) { mutableStateOf(state.aiConfig.apiKey) }
+    val provider = state.aiConfig.provider
+    var keyDraft by remember(provider) { mutableStateOf("") }
     var modelDraft by remember(state.aiConfig) { mutableStateOf(state.aiConfig.model) }
     var baseDraft by remember(state.aiConfig) { mutableStateOf(state.aiConfig.baseUrl) }
     var showModels by remember { mutableStateOf(false) }
 
-    val provider = state.aiConfig.provider
     val availableModels = (state.aiModels + provider.suggestedModels).distinct()
 
     Column(
@@ -197,9 +195,6 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                 }
             }
 
-            item(key = "lmarena_rating") {
-                ArenaRatingCard(state.aiConfig.resolvedModel, ambiguous = state.aiConfig.provider == com.universalrp.cleansweep.ai.AiProvider.FREE)
-            }
             // --------------------------------------------------- 2. key and model
             item {
                 // ---- the language the AI answers in (separate from the menu language) ----
@@ -246,29 +241,43 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
                         ProviderKeyHelp(provider)
                         if (provider.needsKey) {
                             Spacer(Modifier.height(8.dp))
+                            val keyConfigured = AiSettings.hasSavedKey(context, provider) ||
+                                (state.aiConfig.provider == provider && state.aiConfig.apiKey.isNotBlank())
+                            Text(
+                                tr(if (keyConfigured) "API key configured for %s." else "No API key configured for %s.", provider.shortLabel),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (keyConfigured) GoodGreen else TextSecondary,
+                            )
+                            Spacer(Modifier.height(6.dp))
                             OutlinedTextField(
                                 value = keyDraft,
                                 onValueChange = { keyDraft = it },
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true,
-                                label = { Text("API key") },
-                                visualTransformation = if (keyVisible) {
-                                    VisualTransformation.None
-                                } else {
-                                    PasswordVisualTransformation()
+                                label = { Text(tr("API key")) },
+                                placeholder = {
+                                    if (keyConfigured) Text(tr("Saved key is hidden. Enter a new key only to replace it."))
+                                    else Text(tr("Paste API key"))
                                 },
-                                trailingIcon = {
-                                    TextButton(onClick = { keyVisible = !keyVisible }) {
-                                        Text(if (keyVisible) "Hide" else "Show", color = AccentCyan)
-                                    }
-                                },
+                                visualTransformation = PasswordVisualTransformation(),
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
-                                AiSettings.keyStorageNote(),
+                                tr(AiSettings.keyStorageNote(state.aiConfig.keyStorageProtected)),
                                 style = MaterialTheme.typography.labelSmall,
-                                color = TextSecondary,
+                                color = if (state.aiConfig.keyStorageProtected) TextSecondary else DangerRed,
                             )
+                            if (keyConfigured) {
+                                TextButton(
+                                    onClick = {
+                                        vm.forgetAiKey(provider)
+                                        keyDraft = ""
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+                                ) {
+                                    Text(tr("Forget saved key"), color = DangerRed, fontWeight = FontWeight.Bold)
+                                }
+                            }
                         } else {
                             Spacer(Modifier.height(8.dp))
                             Text(
@@ -976,7 +985,7 @@ private fun VitalsGrid(
             )
             VitalBox(
                 if (battery.charging) "Charging power" else "Power draw",
-                battery.powerW?.let { "%.2f W".format(it) } ?: "Not reported",
+                com.universalrp.cleansweep.data.ChargingHonestyPolicy.wattsText(battery.powerW) ?: "Not reported",
                 healthGuide("power", battery.powerW),
                 if (battery.charging) GoodGreen else AccentCyan,
                 Modifier.weight(cell),
@@ -1024,12 +1033,22 @@ private fun VitalsGrid(
                 },
                 Modifier.weight(cell),
             )
+            val chargingMinutes = com.universalrp.cleansweep.data.batteryTimeMinutes(battery)
+            val etaValue = when {
+                battery.charging && battery.percent >= 100 -> tr("Full")
+                battery.charging -> chargingMinutes?.let { com.universalrp.cleansweep.data.formatMinutes(it) }
+                    ?: tr("Estimating")
+                battery.powerConnected -> tr("Connected · not charging")
+                else -> tr("Unavailable")
+            }
             VitalBox(
-                "Time ${if (battery.charging) "to full" else "left"}",
-                com.universalrp.cleansweep.data.batteryTimeLabel(battery)?.replace("About ", "")
-                    ?: "Not enough data",
-                "Computed from the current flowing in or out right now, so it changes as you use " +
-                    "or charge the phone.",
+                tr(if (battery.charging && battery.percent < 100) "Estimated to 100%" else "Battery timing"),
+                etaValue,
+                tr(if (battery.charging) {
+                    "Estimate uses recent in-memory battery-level observations while charging; it is unavailable until enough readings exist. It is not a measured watt reading."
+                } else {
+                    "A time-to-empty estimate is not inferred from one current reading or a guessed battery capacity."
+                }),
                 AccentCyan,
                 Modifier.weight(cell),
             )
