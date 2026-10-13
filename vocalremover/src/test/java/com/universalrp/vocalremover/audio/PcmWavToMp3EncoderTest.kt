@@ -59,9 +59,14 @@ class PcmWavToMp3EncoderTest {
         return buffer.array()
     }
 
-    private fun ByteArray.hasMpegAudioFrameSync(): Boolean =
-        indices.dropLast(1).any { index ->
-            (this[index].toInt() and 0xff) == 0xff &&
+    private fun ByteArray.hasMpegAudioFrameSync(): Boolean {
+        for (index in 0 until (size - 1)) {
+            if ((this[index].toInt() and 0xff) == 0xff &&
                 (this[index + 1].toInt() and 0xe0) == 0xe0
+            ) {
+                return true
+            }
         }
+        return false
+    }
 }
