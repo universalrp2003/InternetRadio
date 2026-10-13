@@ -13,9 +13,9 @@ RepoType: git
 Repo: https://github.com/universalrp2003/InternetRadio.git
 
 Builds:
-  - versionName: '1.2'
-    versionCode: 3
-    commit: v2026.10.06
+  - versionName: '1.3'
+    versionCode: 4
+    commit: pulseeq-v1.3
     subdir: equalizer
     sudo:
       - apt-get update
@@ -25,10 +25,11 @@ Builds:
       - yes
 
 MaintainerNotes: >
-  One of five apps in this Gradle project. PulseEQ uses INTERNET only for optional GitHub release checks. Audio is processed locally.
-  It is an audio tool, not a music downloader.
+  PulseEQ is one of four actively maintained apps. INTERNET is used for optional
+  GitHub release checks; audio processing stays on-device. This recipe builds the
+  current :equalizer module.
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
-CurrentVersion: '1.2'
-CurrentVersionCode: 3
+CurrentVersion: '1.3'
+CurrentVersionCode: 4

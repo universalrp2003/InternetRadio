@@ -86,8 +86,6 @@ sub_of() { tr -d '\n' < "$1/fastlane/metadata/android/en-US/short_description.tx
 
 build cleaner   "CleanSweep"     "#070D1A" "#22D3EE"
 build radio     "Ramesh Radio"   "#0B0713" "#FF8A3D"
-build app       "Internet Radio" "#08111F" "#22D3EE"
-build builder   "AppForge"       "#0B0F1E" "#A78BFA"
 build equalizer "PulseEQ"        "#05070F" "#34D399"
 
 echo

@@ -1,10 +1,8 @@
-# GitHub Actions workflow: builds the Android APKs in the cloud, for free.
-# - Internet Radio  (:app)
-# - CleanSweep junk cleaner + on-device assistant (:cleaner)
-# - AppForge offline app builder (:builder)
-# - PulseEQ 20-band equalizer (:equalizer)
-# - Ramesh Radio (Tamilnadu FM Radio) — Tamil FM + world news + local audio + 10-band EQ (:radio)
-# - RP VOCAL REMOVER STUDIO — standalone on-device app, released as a direct-download APK (:vocalremover)
+# GitHub Actions workflow: builds and verifies the four actively maintained Android apps.
+# - Live Guard / CleanSweep (:cleaner)
+# - Ramesh Radio (:radio)
+# - PulseEQ (:equalizer)
+# - RP VOCAL REMOVER STUDIO (:vocalremover; direct-download APK)
 name: Build APK
 
 on:
@@ -130,7 +128,7 @@ jobs:
             echo ""
             echo "How to apply this licence to these apps"
             echo ""
-            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge, PulseEQ and Vocal Remover Studio"
+            echo "Live Guard (CleanSweep), Ramesh Radio, PulseEQ and RP Vocal Remover Studio"
             echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
             echo ""
             echo "This program is free software: you can redistribute it and/or modify it under"
@@ -217,7 +215,7 @@ jobs:
           set -o pipefail
           # The four requested apps get release APKs. Vocal Remover is standalone and
           # distributed by direct APK download, so it deliberately has no Play bundle here.
-          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :radio:testReleaseUnitTest :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest assembleDebug :app:assembleRelease :cleaner:assembleRelease :builder:assembleRelease :equalizer:assembleRelease :radio:assembleRelease :vocalremover:assembleRelease :app:bundleRelease :cleaner:bundleRelease :builder:bundleRelease :equalizer:bundleRelease :radio:bundleRelease --no-daemon 2>&1 | tee build.log
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :radio:testReleaseUnitTest :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest assembleDebug :cleaner:assembleRelease :radio:assembleRelease :equalizer:assembleRelease :vocalremover:assembleRelease :cleaner:bundleRelease :radio:bundleRelease :equalizer:bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify required CleanSweep regression suites
         run: python3 tools/verify_cleaner_regressions.py
@@ -240,12 +238,11 @@ jobs:
           WORK=$(mktemp -d)
 
           echo "=== APK files ==="
-          for m in app cleaner builder equalizer radio vocalremover; do
+          for m in cleaner equalizer radio vocalremover; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
 
           CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
-          BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
           RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
           VOCAL_REMOVER=$(ls vocalremover/build/outputs/apk/debug/*.apk | head -1)
@@ -258,15 +255,13 @@ jobs:
           fi
           echo "OK: standalone Vocal Remover debug + release APKs: $VOCAL_REMOVER / $VOCAL_REMOVER_REL"
 
-          # The release APKs are verified for package delivery; the user-facing updater uses these exact signed bytes.
-          APP_REL=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          # The user-facing updaters use these exact signed release APKs.
           CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
-          BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           EQ_REL=$(ls equalizer/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           RADIO_REL=$(ls radio/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           VOCAL_REMOVER_REL=$(ls vocalremover/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
-          echo "=== Google Play bundles (.aab) ==="
-          for b in "app|Internet-Radio" "cleaner|CleanSweep" "builder|AppForge" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
+          echo "=== Google Play bundles (.aab) for the three store-packaged apps ==="
+          for b in "cleaner|CleanSweep" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
             mod="${b%%|*}"; pretty="${b##*|}"
             aab=$(ls "$mod"/build/outputs/bundle/release/*.aab 2>/dev/null | head -1 || true)
             if [ -z "$aab" ]; then
@@ -278,8 +273,8 @@ jobs:
             echo "OK: ${pretty}-v${ver}.aab inside the build"
           done
 
-          echo "=== release APKs (what the stores take) ==="
-          for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL" "$VOCAL_REMOVER_REL"; do
+          echo "=== signed release APKs ==="
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             if [ -z "$rel" ]; then
               echo "FAIL: a release APK was not produced - stores cannot use the debug build"
               exit 1
@@ -288,18 +283,14 @@ jobs:
           done
 
           echo "=== App icons inside the built APKs ==="
-          # The Internet Radio module used to borrow Android's stock play icon; a store listing
-          # cannot ship that, so every APK must now carry its own icon resource.
-          #
-          # This is checked through aapt2 badging and not by looking for a file name: release
-          # builds run Android's resource optimisations, which rename resource paths inside the
-          # APK, so `res/.../ic_launcher` legitimately disappears from the zip listing.
+          # Check the active APKs through aapt2 badging, not by looking for a file name:
+          # Android resource optimisation can rename paths inside a release APK.
           AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
           if [ -z "$AAPT" ]; then
             echo "FAIL: aapt2 not found, cannot verify the app icons"
             exit 1
           fi
-          for rel in "$CLEANER_REL" "$RADIO_REL" "$APP_REL" "$BUILDER_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             bad=$("$AAPT" dump badging "$rel" || true)
             icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)
             dens=$(printf '%s\n' "$bad" | grep -c "^application-icon-" || true)
@@ -313,17 +304,11 @@ jobs:
             fi
             echo "OK: $rel icon=$icon ($dens density entries)"
           done
-          # And the stock icon must be gone from the source, which is where it used to live.
-          if grep -q "android:drawable/ic_media_play" app/src/main/AndroidManifest.xml; then
-            echo "FAIL: the app module still points at Android's stock play icon"
-            exit 1
-          fi
-          echo "OK: no module borrows a platform icon any more"
+          echo "OK: every active module declares its own launcher icon"
 
           echo "=== Package info ==="
           if [ -n "$AAPT" ]; then
             "$AAPT" dump badging "$CLEANER" | head -1 || true
-            "$AAPT" dump badging "$BUILDER" | head -1 || true
             "$AAPT" dump badging "$EQ" | head -1 || true
             "$AAPT" dump badging "$RADIO" | head -1 || true
             # The installed name must be the one the user asked for.
@@ -347,7 +332,7 @@ jobs:
               *) echo "FAIL: Vocal Remover release label is unexpected ($VOCAL_LABEL)"; exit 1 ;;
             esac
             # A store will not accept a debuggable APK (IzzyOnDroid says so explicitly).
-            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL" "$VOCAL_REMOVER_REL"; do
+            for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
               if "$AAPT" dump badging "$rel" | grep -q "application-debuggable"; then
                 echo "FAIL: $rel carries the debuggable flag - app stores reject that"
                 exit 1
@@ -365,7 +350,7 @@ jobs:
             if [ "$EXPECTED_CERT" != "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55" ]; then
               echo "FAIL: stable signing identity differs from previously published releases"; exit 1
             fi
-            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL" "$VOCAL_REMOVER_REL"; do
+            for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
               # Do not mask signature failures with a pipeline or || true.
               "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
               cat "$WORK/signature.txt"
@@ -470,7 +455,6 @@ jobs:
           # v2.40: the release variant gets its own DEX blob so the retired reader classes
           # are rejected in BOTH shipped variants, not only in debug.
           unzip -p "$CLEANER_REL" "classes*.dex" > "$WORK/cleaner-release.dex"
-          unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
           unzip -p "$VOCAL_REMOVER" "classes*.dex" > "$WORK/vocal-remover-debug.dex"
@@ -651,20 +635,6 @@ jobs:
             fi
           done
 
-          echo "=== AppForge checks ==="
-          if grep -aq "AppForge" "$WORK/builder.dex"; then
-            echo "OK: AppForge APK contains its code"
-          else
-            echo "FAIL: AppForge APK looks empty"
-            exit 1
-          fi
-          if grep -aq "AndroidCodeGen" "$WORK/builder.dex"; then
-            echo "OK: the Android project generator is present"
-          else
-            echo "FAIL: the code generator is missing"
-            exit 1
-          fi
-
           echo "=== PulseEQ checks ==="
           if [ -n "$MERGED_EQ" ]; then
             if ! grep -q "android.permission.INTERNET" "$MERGED_EQ"; then
@@ -820,7 +790,7 @@ jobs:
           # screenshots, it simply looks bare, and a missing icon is a polish problem, not a
           # broken build. Printed every run so the gap is always visible.
           echo "=== Store listing inventory (warnings) ==="
-          for m in app cleaner builder equalizer radio; do
+          for m in cleaner equalizer radio; do
             d="$m/fastlane/metadata/android"
             if [ ! -d "$d" ]; then
               echo "WARN: $m has no fastlane listing at all"
@@ -865,14 +835,10 @@ jobs:
           }
           rename_apk cleaner   CleanSweep      release ""
           rename_apk radio     Ramesh-Radio    release ""
-          rename_apk app       Internet-Radio  release ""
-          rename_apk builder   AppForge        release ""
           rename_apk equalizer PulseEQ         release ""
           rename_apk vocalremover RP-Vocal-Remover-Studio release ""
           rename_apk cleaner   CleanSweep      debug   "-debug"
           rename_apk radio     Ramesh-Radio    debug   "-debug"
-          rename_apk app       Internet-Radio  debug   "-debug"
-          rename_apk builder   AppForge        debug   "-debug"
           rename_apk equalizer PulseEQ         debug   "-debug"
           rename_apk vocalremover RP-Vocal-Remover-Studio debug "-debug"
           echo "=== APK file names ==="
@@ -1341,17 +1307,9 @@ jobs:
         with:
           name: store-bundles
           path: |
-            app/build/outputs/bundle/release/*.aab
             cleaner/build/outputs/bundle/release/*.aab
-            builder/build/outputs/bundle/release/*.aab
             equalizer/build/outputs/bundle/release/*.aab
             radio/build/outputs/bundle/release/*.aab
-
-      - name: Upload Internet Radio APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: internet-radio-apk
-          path: app/build/outputs/apk/*/*.apk
 
       - name: Upload CleanSweep APK
         uses: actions/upload-artifact@v4
@@ -1360,12 +1318,6 @@ jobs:
           path: |
             cleaner/build/outputs/apk/*/*.apk
             cleaner/build/outputs/apk/*/*.apk.sha256
-
-      - name: Upload AppForge APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: appforge-apk
-          path: builder/build/outputs/apk/*/*.apk
 
       - name: Upload PulseEQ APK
         uses: actions/upload-artifact@v4

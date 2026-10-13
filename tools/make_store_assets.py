@@ -7,8 +7,8 @@ build them has neither librsvg nor Pillow, so this script parses the Android vec
 rasterises the paths (including elliptical arcs) with 4x supersampling for smooth edges, and
 writes PNGs with zlib. The result is the same artwork the phones show, at store sizes.
 
-  python3 tools/make_store_assets.py icons     # icon.png for every app + launcher fallbacks
-  python3 tools/make_store_assets.py check     # report what exists, change nothing
+  python3 tools/make_store_assets.py icons     # icon.png for maintained store-listed modules
+  python3 tools/make_store_assets.py check     # report store-listing artwork, change nothing
 
 `icon.png` lands in every fastlane locale's images folder:
   <module>/fastlane/metadata/android/<locale>/images/icon.png
@@ -327,19 +327,15 @@ def render_icon(vector_path, size, bg, window=(18.0, 18.0, 90.0, 90.0), ss=4):
 
 # ---------------------------------------------------------------------------------------- plan
 
+# The store-art pipeline is for modules with maintained fastlane listings. RP Vocal Remover
+# Studio remains a direct GitHub APK release and is not part of these store graphics.
 APPS = [
-    dict(module="cleaner", name="CleanSweep", accent="#22D3EE", bg="#070D1A",
+    dict(module="cleaner", name="Live Guard", accent="#22D3EE", bg="#070D1A",
          vector="cleaner/src/main/res/drawable/ic_launcher_foreground.xml",
          locales=["en-US", "ta-IN"], legacy_pngs=False),
     dict(module="radio", name="Ramesh Radio", accent="#FF8A3D", bg="#0B0713",
          vector="radio/src/main/res/drawable/ic_launcher_foreground.xml",
          locales=["en-US", "ta-IN"], legacy_pngs=False),
-    dict(module="app", name="Internet Radio", accent="#22D3EE", bg="#08111F",
-         vector="app/src/main/res/drawable/ic_launcher_foreground.xml",
-         locales=["en-US"], legacy_pngs=True),
-    dict(module="builder", name="AppForge", accent="#22D3EE", bg="#0B0F1E",
-         vector="builder/src/main/res/drawable/ic_launcher_foreground.xml",
-         locales=["en-US"], legacy_pngs=False),
     dict(module="equalizer", name="PulseEQ", accent="#34D399", bg="#05070F",
          vector="equalizer/src/main/res/drawable/ic_launcher_foreground.xml",
          locales=["en-US"], legacy_pngs=False),

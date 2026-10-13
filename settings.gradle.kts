@@ -12,10 +12,8 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "InternetRadio"
-include(":app")
+rootProject.name = "RP-Ideas"
 include(":cleaner")
-include(":builder")
 include(":equalizer")
 include(":radio")
 include(":vocalremover")

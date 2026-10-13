@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Builds stations_seed.json for the Tamilnadu FM Radio app.
+Builds stations_seed.json for Ramesh Radio.
 
 Two sources, merged:
 
@@ -43,7 +43,7 @@ MIRRORS = [
     "https://fi1.api.radio-browser.info",
 ]
 
-UA = "TamilnaduFMRadio/1.3 (+https://github.com/universalrp2003/InternetRadio)"
+UA = "RameshRadio (+https://github.com/universalrp2003/InternetRadio)"
 
 # (category, query parameters, max kept, keep_unverified)
 # keep_unverified=True is only used for Tamil, where the directory is genuinely

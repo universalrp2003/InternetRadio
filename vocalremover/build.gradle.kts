@@ -99,7 +99,7 @@ abstract class DownloadSherpaRuntime : DefaultTask() {
         connection.instanceFollowRedirects = true
         connection.connectTimeout = 20_000
         connection.readTimeout = 120_000
-        connection.setRequestProperty("User-Agent", "InternetRadio-VocalRemover-build/0.1")
+        connection.setRequestProperty("User-Agent", "RP-Ideas-VocalRemover-build/0.1")
         try {
             connection.connect()
             check(connection.responseCode in 200..299) {

@@ -38,7 +38,8 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODULES = ("app", "cleaner", "builder", "equalizer", "radio")
+# Only modules with maintained store fastlane metadata. Vocal Remover is direct-release only.
+MODULES = ("cleaner", "equalizer", "radio")
 MIN_WIDTH = 720
 ASPECT = (1.6, 2.4)
 BAR_COLOUR = "#0F1620"   # the card colour the apps use, so a bar reads as deliberate

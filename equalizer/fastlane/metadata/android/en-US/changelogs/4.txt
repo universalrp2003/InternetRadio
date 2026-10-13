@@ -1,0 +1,4 @@
+PulseEQ 1.3
+• Tamil-first interface with an in-app English switch.
+• Verified GitHub update checks and APK hand-off to Android.
+• About page includes contributor credits and links to all four app releases.

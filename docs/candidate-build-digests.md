@@ -1,4 +1,6 @@
-# Candidate build digests
+# Archived candidate build digests
+
+> Historical workflow output from 13 October 2026, captured before the active-module cleanup. This is a checksum ledger, not an active build-artifact inventory or a public release record. It includes candidate paths for source modules that are no longer active. Current public APK hashes are maintained in [`published-release-digests.md`](published-release-digests.md).
 
 - Workflow run: 38381769210
 - Source commit: 76442680d5e32c57a07627555c97e50d2174e89e
