@@ -1,8 +1,13 @@
 # Changelog — maintained Android apps
 
-## Live Guard 2.44/code49 — release candidate (13 October 2026)
+## Four-app stable releases — published 13 October 2026
 
-The 2.44 APK candidate updates the Tamil-first interface, About credits and verified GitHub updater. These exact candidate bytes were not installed on a phone, so no device-test claim is made. The publication workflow retains the permission-delta gate and will publish only after its CI and release checks pass. See [`releases/live-guard-v2.44.md`](releases/live-guard-v2.44.md).
+Live Guard 2.44/code49, Ramesh Radio 1.9, PulseEQ 1.3 and RP Vocal Remover Studio 0.1.9 were published as separate stable GitHub releases by CI run **38380663566** (source `e4742129f338ee2ae930945cf619a356abac1583`). The APK build, CleanSweep regression suite, APK checks, and GitHub release-asset size/SHA-256 comparisons all passed. See the [published APK digest ledger](docs/published-release-digests.md).
+
+The Live Guard permission-delta gate found no newly added dangerous permission relative to 2.43, so a physical-device evidence record was not required. These exact CI release bytes were not installed on a phone; no device-test claim is made. CI/release verification is not Play Protect approval or a claim of compatibility with every device.
+
+- [Live Guard 2.44](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44) · [Ramesh Radio 1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9) · [PulseEQ 1.3](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3) · [RP Vocal Remover Studio 0.1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9).
+
 
 ## Live Guard 2.43/code48 — published 12 October 2026: a zero is never a measurement
 
