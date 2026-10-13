@@ -944,6 +944,7 @@ jobs:
           REQUESTED_TAG: ${{ inputs.release_tag }}
         run: |
           set -euo pipefail
+          exec > >(tee -a "$RUNNER_TEMP/release-publication.log") 2>&1
           if [[ -n "${REQUESTED_TAG:-}" ]]; then BATCH_TAG="$REQUESTED_TAG"
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then BATCH_TAG="$GITHUB_REF_NAME"
           else BATCH_TAG="v$(date -u +%Y.%m.%d)"; fi
@@ -1161,12 +1162,21 @@ jobs:
             release_tag="$1"
             apk="$2"
             expected_draft="$3"
-            response="$RUNNER_TEMP/release-${release_tag}.json"
-            gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" > "$response"
-            python3 - "$response" "$release_tag" "$apk" "$expected_draft" <<'PY'
+            response_pages="$RUNNER_TEMP/release-${release_tag}-pages.json"
+            # GitHub's release-by-tag endpoint intentionally hides draft releases (404).
+            # The authenticated release list includes drafts, so resolve the unique tag there.
+            if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$response_pages"; then
+              echo "FAIL: could not list GitHub releases while verifying $release_tag"
+              return 1
+            fi
+            python3 - "$response_pages" "$release_tag" "$apk" "$expected_draft" <<'PY'
           import hashlib, json, pathlib, sys
           response_path, tag, apk_path, expected_draft = sys.argv[1:]
-          release = json.loads(pathlib.Path(response_path).read_text())
+          pages = [json.loads(line) for line in pathlib.Path(response_path).read_text().splitlines() if line.strip()]
+          releases = [release for page in pages for release in page]
+          matches = [item for item in releases if item.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one release for {tag}, found {len(matches)}"
+          release = matches[0]
           apk = pathlib.Path(apk_path)
           name = apk.name
           expected_url = f"https://github.com/universalrp2003/InternetRadio/releases/download/{tag}/{name}"
@@ -1283,6 +1293,13 @@ jobs:
               echo "## Store artwork step"
               echo '```'
               tail -60 store-art.log || true
+              echo '```'
+            fi
+            if [ -f "$RUNNER_TEMP/release-publication.log" ]; then
+              echo ""
+              echo "## Release publication step"
+              echo '```'
+              tail -160 "$RUNNER_TEMP/release-publication.log" || true
               echo '```'
             fi
           } > ci-build-failure.md
