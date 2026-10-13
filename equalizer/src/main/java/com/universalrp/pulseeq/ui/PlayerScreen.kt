@@ -25,7 +25,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +37,7 @@ import com.universalrp.pulseeq.EqUiState
 import com.universalrp.pulseeq.EqViewModel
 import com.universalrp.pulseeq.audio.PlayerEngine
 import com.universalrp.pulseeq.audio.EqCore
+import com.universalrp.updates.AppStrings
 
 @Composable
 fun PlayerScreen(state: EqUiState, vm: EqViewModel) {
@@ -154,7 +154,7 @@ fun PlayerScreen(state: EqUiState, vm: EqViewModel) {
                                 contentColor = TextPrimary,
                             ),
                         ) {
-                            Icon(Icons.Outlined.Stop, contentDescription = null)
+                            Icon(Icons.Outlined.Stop, contentDescription = AppStrings.translate("Stop"))
                         }
                     }
                     Spacer(Modifier.height(8.dp))

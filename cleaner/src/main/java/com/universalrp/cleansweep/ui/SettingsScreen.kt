@@ -85,7 +85,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Settings"),
                 style = MaterialTheme.typography.titleLarge,
@@ -600,7 +600,7 @@ fun SettingsScreen(state: UiState, vm: MainViewModel) {
                                     Spacer(Modifier.width(6.dp))
                                     Icon(
                                         Icons.Outlined.Close,
-                                        contentDescription = "Remove",
+                                        contentDescription = tr("Remove"),
                                         tint = TextSecondary,
                                         modifier = Modifier.size(14.dp),
                                     )

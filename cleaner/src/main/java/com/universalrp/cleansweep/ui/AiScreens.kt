@@ -107,7 +107,7 @@ fun AiSettingsScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Back"), tint = TextSecondary)
             }
             Text(
                 "AI analysis settings",
@@ -608,7 +608,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Back", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Back"), tint = TextSecondary)
             }
             Text(
                 if (state.aiSecurityFocus) "Security AI review" else "AI analysis",
@@ -617,7 +617,7 @@ fun AiReportScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.runAiAnalysis(state.aiSecurityFocus) }, enabled = !state.aiBusy) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Analyse again", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Analyse again"), tint = TextSecondary)
             }
         }
 

@@ -19,7 +19,7 @@ enum class AppLang(val id: String, val label: String) {
 
     companion object {
         fun fromId(id: String?): AppLang =
-            entries.firstOrNull { it.id == id } ?: EN
+            entries.firstOrNull { it.id == id } ?: TA
     }
 }
 
@@ -34,7 +34,7 @@ object Lang {
     private const val APP_NAME_TA = "லைவ் கார்டு"
 
     @Volatile
-    var current: AppLang = AppLang.EN
+    var current: AppLang = AppLang.TA
         private set
 
     val isTamil: Boolean get() = current == AppLang.TA
@@ -55,7 +55,7 @@ object Lang {
                 .getString(KEY, null)
         )
     } catch (e: Exception) {
-        AppLang.EN
+        AppLang.TA
     }
 
     fun appName(): String = if (isTamil) APP_NAME_TA else APP_NAME_EN
@@ -493,7 +493,7 @@ object Lang {
         "Installing & updating (Play Protect)" to "நிறுவல் & புதுப்பித்தல் (Play Protect)",
         "Why some things can't be cleaned" to "சிலவற்றை ஏன் சுத்தம் செய்ய முடியாது",
         "Suggested routine" to "பரிந்துரைக்கப்பட்ட வழக்கம்",
-        "Author" to "எழுத்தாளர்",
+        "Contributors" to "பங்களிப்பாளர்கள்",
         "App name" to "ஆப் பெயர்",
 
         // ------------------------------------------------- mobile & data screen
@@ -903,6 +903,19 @@ object Lang {
         "Home" to "முகப்பு",
         "Back" to "பின்செல்",
         "Refresh" to "புதுப்பி",
+        "Analyse again" to "மீண்டும் பகுப்பாய்வு",
+        "Refresh now" to "இப்போது புதுப்பி",
+        "Send" to "அனுப்பு",
+        "Voice" to "குரல்",
+        "Ask" to "கேள்",
+        "Inspect" to "ஆய்வு",
+        "Reload" to "மீளேற்று",
+        "Rescan" to "மீண்டும் ஸ்கேன் செய்",
+        "Name device" to "சாதனத்திற்குப் பெயரிடு",
+        "Known device" to "அறிந்த சாதனம்",
+        "Expand" to "விரிவாக்கு",
+        "Collapse" to "சுருக்கு",
+        "Scan again" to "மீண்டும் ஸ்கேன் செய்",
         "Copy" to "நகலெடு",
         "Tamil" to "தமிழ்",
         "English" to "ஆங்கிலம்",
@@ -1061,6 +1074,13 @@ object Lang {
         "Clear observed last unplug" to "கவனித்த கடைசி சார்ஜர் நீக்கத்தை அழி",
         "Observed last-unplug record cleared." to "கவனித்த கடைசி சார்ஜர் நீக்கப் பதிவு அழிக்கப்பட்டது.",
         "App updates" to "ஆப் புதுப்பிப்புகள்",
+        "Live Guard update available" to "லைவ் கார்டு புதுப்பிப்பு உள்ளது",
+        "Version %s is available (installed: %s)." to "பதிப்பு %s கிடைக்கிறது (நிறுவியது: %s).",
+        "This stable APK is downloaded inside Live Guard and verified against its SHA-256, package, newer version and installed signing certificate." to "இந்த நிலையான APK லைவ் கார்டிற்குள் பதிவிறக்கப்பட்டு SHA-256, தொகுப்பு, புதிய பதிப்பு மற்றும் நிறுவிய கையொப்பச் சான்றிதழுடன் சரிபார்க்கப்படும்.",
+        "Android requires per-app Install unknown apps access and shows its own confirmation. Play Protect remains enabled and is not bypassed." to "ஒவ்வொரு ஆப்பிற்கும் ‘தெரியாத ஆப்களை நிறுவு’ அணுகலை Android தேவைப்படுத்தி, தனியாக உறுதிப்படுத்தும். Play Protect இயக்கத்திலேயே இருக்கும்; தவிர்க்கப்படாது.",
+        "Installation access is not granted. Android Settings will open; allow Live Guard only if you trust this update." to "நிறுவல் அணுகல் வழங்கப்படவில்லை. Android அமைப்புகள் திறக்கும்; இந்தப் புதுப்பிப்பை நம்பினால் மட்டுமே லைவ் கார்டை அனுமதிக்கவும்.",
+        "What’s new" to "புதியவை",
+        "Later" to "பிறகு",
         "Verified in-app download; Android confirms installation." to "ஆப்பிற்குள் சரிபார்த்த பதிவிறக்கம்; நிறுவலை Android உறுதிப்படுத்தும்.",
         "Downloading %s of %s" to "%s / %s பதிவிறங்குகிறது",
         "Installed version: %s" to "நிறுவிய பதிப்பு: %s",
@@ -1221,6 +1241,14 @@ object Lang {
         "The engine reported no matching voice for this language, so answers cannot be spoken in it yet. Install a voice in Android TTS settings." to "இந்த மொழிக்குப் பொருந்தும் எந்தக் குரலையும் இயந்திரம் தெரிவிக்கவில்லை, எனவே இன்னும் அந்த மொழியில் பதில்களைப் பேச முடியாது. Android TTS அமைப்பில் ஒரு குரலை நிறுவவும்.",
         "Only one matching voice was reported, so both slots use it and the two voices cannot alternate yet." to "ஒரே ஒரு பொருந்தும் குரல் மட்டுமே தெரிவிக்கப்பட்டுள்ளது, எனவே இரண்டு இடங்களிலும் அதுவே பயன்படுத்தப்படும்; இரண்டு குரல்கள் மாறி மாறி வர இயலாது.",
         "On by default. Turning one off is your choice and is saved; it is not a failure." to "இயல்பாக இயக்கத்தில் உள்ளது. ஒன்றை முடக்குவது உங்கள் தேர்வு; அது சேமிக்கப்படும். இது ஒரு தோல்வி அல்ல.",
+        "Project development contributor: Ramesh prathap .R" to "திட்ட உருவாக்கப் பங்களிப்பாளர்: Ramesh prathap .R",
+        "AI software-assistance contributor: Arena.ai Agent Mode" to "AI மென்பொருள் உதவிப் பங்களிப்பாளர்: Arena.ai Agent Mode",
+        "App releases" to "பயன்பாட்டு வெளியீடுகள்",
+        "Check for updates on app launch" to "பயன்பாட்டைத் திறக்கும்போது புதுப்பிப்புகளைச் சரிபார்",
+        "Live Guard — GitHub release" to "Live Guard — GitHub வெளியீடு",
+        "Ramesh Radio — GitHub release" to "Ramesh Radio — GitHub வெளியீடு",
+        "PulseEQ — GitHub release" to "PulseEQ — GitHub வெளியீடு",
+        "RP VOCAL REMOVER STUDIO — GitHub release" to "RP VOCAL REMOVER STUDIO — GitHub வெளியீடு",
     )
 }
 

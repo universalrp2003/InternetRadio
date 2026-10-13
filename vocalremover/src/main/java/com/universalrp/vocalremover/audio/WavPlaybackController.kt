@@ -13,6 +13,7 @@ enum class WavPlaybackStatus { STOPPED, PREPARING, PLAYING, PAUSED }
 data class WavPlaybackState(
     val status: WavPlaybackStatus = WavPlaybackStatus.STOPPED,
     val errorMessage: String? = null,
+    val volume: Float = 1f,
 )
 
 class WavPlaybackController(context: Context) {
@@ -21,17 +22,24 @@ class WavPlaybackController(context: Context) {
     val state = mutableState.asStateFlow()
 
     private var player: MediaPlayer? = null
+    private var playbackVolume: Float = 1f
+
+    fun setVolume(value: Float) {
+        playbackVolume = value.coerceIn(0f, 1f)
+        runCatching { player?.setVolume(playbackVolume, playbackVolume) }
+        mutableState.value = mutableState.value.copy(volume = playbackVolume)
+    }
 
     fun play(uriString: String) {
         stop()
         if (uriString.isBlank()) {
-            mutableState.value = WavPlaybackState(errorMessage = "The saved audio location is missing.")
+            mutableState.value = WavPlaybackState(errorMessage = "The saved audio location is missing.", volume = playbackVolume)
             return
         }
 
         val candidate = MediaPlayer()
         player = candidate
-        mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PREPARING)
+        mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PREPARING, volume = playbackVolume)
         try {
             candidate.setAudioAttributes(
                 AudioAttributes.Builder()
@@ -42,8 +50,9 @@ class WavPlaybackController(context: Context) {
             candidate.setOnPreparedListener { prepared ->
                 if (player !== prepared) return@setOnPreparedListener
                 try {
+                    prepared.setVolume(playbackVolume, playbackVolume)
                     prepared.start()
-                    mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PLAYING)
+                    mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PLAYING, volume = playbackVolume)
                 } catch (failure: RuntimeException) {
                     fail(prepared, failure)
                 }
@@ -51,7 +60,7 @@ class WavPlaybackController(context: Context) {
             candidate.setOnCompletionListener { completed ->
                 if (player === completed) {
                     releaseCurrentPlayer()
-                    mutableState.value = WavPlaybackState()
+                    mutableState.value = WavPlaybackState(volume = playbackVolume)
                 }
             }
             candidate.setOnErrorListener { failedPlayer, what, extra ->
@@ -59,6 +68,7 @@ class WavPlaybackController(context: Context) {
                     releaseCurrentPlayer()
                     mutableState.value = WavPlaybackState(
                         errorMessage = "Android could not play this audio (player error $what/$extra).",
+                        volume = playbackVolume,
                     )
                 }
                 true
@@ -75,7 +85,7 @@ class WavPlaybackController(context: Context) {
         if (mutableState.value.status != WavPlaybackStatus.PLAYING) return
         try {
             current.pause()
-            mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PAUSED)
+            mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PAUSED, volume = playbackVolume)
         } catch (failure: RuntimeException) {
             fail(current, failure)
         }
@@ -86,7 +96,7 @@ class WavPlaybackController(context: Context) {
         if (mutableState.value.status != WavPlaybackStatus.PAUSED) return
         try {
             current.start()
-            mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PLAYING)
+            mutableState.value = WavPlaybackState(status = WavPlaybackStatus.PLAYING, volume = playbackVolume)
         } catch (failure: RuntimeException) {
             fail(current, failure)
         }
@@ -103,7 +113,7 @@ class WavPlaybackController(context: Context) {
             runCatching { current.stop() }
             runCatching { current.release() }
         }
-        mutableState.value = WavPlaybackState()
+        mutableState.value = WavPlaybackState(volume = playbackVolume)
     }
 
     fun release() = stop()
@@ -114,6 +124,7 @@ class WavPlaybackController(context: Context) {
         mutableState.value = WavPlaybackState(
             errorMessage = failure.message?.take(160)?.let { "Could not play the audio: $it" }
                 ?: "Could not play the saved audio.",
+            volume = playbackVolume,
         )
     }
 

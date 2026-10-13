@@ -115,7 +115,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Phone health"),
                 style = MaterialTheme.typography.titleLarge,
@@ -123,7 +123,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.refreshHealth() }) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh now", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh now"), tint = TextSecondary)
             }
         }
 

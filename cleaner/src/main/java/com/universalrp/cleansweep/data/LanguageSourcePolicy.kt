@@ -26,7 +26,7 @@ object LanguageSourcePolicy {
 
     /** The language to use: a saved choice wins, then whatever the process already resolved. */
     fun resolve(savedId: String?, processCurrent: AppLang?): AppLang =
-        savedId?.takeIf { it.isNotBlank() }?.let { AppLang.fromId(it) } ?: processCurrent ?: AppLang.EN
+        savedId?.takeIf { it.isNotBlank() }?.let { AppLang.fromId(it) } ?: processCurrent ?: AppLang.TA
 
     /**
      * True when the saved choice, the authority and the mirror all name the same language —

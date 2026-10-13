@@ -289,17 +289,18 @@ val sherpaRuntime = tasks.register<DownloadSherpaRuntime>("downloadSherpaRuntime
 }
 
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.universalrp.vocalremover"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.universalrp.vocalremover"
-        // API 29 gives the prototype public thermal-status APIs and scoped MediaStore output.
-        // This is provisional until the native runtime and older-device behavior are verified.
+        // API 29 is the current supported floor: scoped MediaStore output and Android thermal
+        // status are used directly. Lower Android versions are not claimed as verified.
         minSdk = 29
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.1.8-prototype"
+        versionCode = 10
+        versionName = "0.1.9"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 
@@ -350,6 +351,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
     implementation(platform("androidx.compose:compose-bom:2025.08.00"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

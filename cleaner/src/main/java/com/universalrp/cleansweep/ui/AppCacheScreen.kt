@@ -80,7 +80,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("App cache cleaner"),
                 style = MaterialTheme.typography.titleLarge,
@@ -88,7 +88,7 @@ fun AppCacheScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.loadAppCaches() }) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary)
             }
         }
 

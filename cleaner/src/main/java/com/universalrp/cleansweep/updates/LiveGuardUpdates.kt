@@ -19,7 +19,7 @@ import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
-/** Cleaner-only updater. Radio/PulseEQ keep their shared updater; no silent install, browser download or CI asset. */
+/** Live Guard updater. The other three apps use the shared updater; no silent install, browser download or CI asset. */
 object LiveGuardUpdates {
     data class Release(val version: String, val notes: String, val tag: String, val assetUrl: String, val bytes: Long,
         val sha256: String, val publishedAt: Long)
@@ -34,10 +34,15 @@ object LiveGuardUpdates {
     private fun prefs(context: Context) = context.getSharedPreferences("app_updates", Context.MODE_PRIVATE)
     fun automatic(context: Context) = prefs(context).getBoolean("automatic", true) // Preserve the existing saved OFF choice.
     fun setAutomatic(context: Context, value: Boolean) { prefs(context).edit().putBoolean("automatic", value).apply() }
+    fun isDismissed(context: Context, version: String): Boolean =
+        prefs(context).getString("liveguard_dismissed_version", null) == version
+    fun dismiss(context: Context, version: String) {
+        prefs(context).edit().putString("liveguard_dismissed_version", version).apply()
+    }
     fun checkOnLaunch(context: Context) {
         if (!automatic(context)) return
-        val age = System.currentTimeMillis() - prefs(context).getLong("liveguard_checked", 0)
-        if (age in 0 until 86_400_000L) return
+        // The owner asked for a launch check, not a daily cache window. The prompt itself is
+        // suppressed for a version the user already dismissed until a newer APK is published.
         check(context)
     }
     fun check(context: Context) {

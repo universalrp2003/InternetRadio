@@ -29,6 +29,8 @@ import com.universalrp.vocalremover.audio.PublicWavExporter
 import com.universalrp.vocalremover.health.DeviceMonitor
 import com.universalrp.vocalremover.health.DeviceSnapshot
 import com.universalrp.vocalremover.model.ModelRepository
+import com.universalrp.updates.AppLanguageState
+import com.universalrp.updates.AppStrings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -77,6 +79,7 @@ class SeparationService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        AppLanguageState.initialize(this)
         scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         monitor = DeviceMonitor(this)
         SeparationJobStore.initialize(this)
@@ -1329,26 +1332,26 @@ class SeparationService : Service() {
         if (job.status == JobStatus.PAUSED) {
             builder.addAction(
                 android.R.drawable.ic_media_play,
-                "Resume",
+                AppStrings.translate("Resume"),
                 servicePendingIntent(ACTION_RESUME, REQUEST_RESUME),
             )
         } else if (job.status == JobStatus.FAILED) {
             builder.addAction(
                 android.R.drawable.ic_menu_rotate,
-                "Retry",
+                AppStrings.translate("Retry"),
                 servicePendingIntent(ACTION_RETRY, REQUEST_RETRY),
             )
         } else if (job.status == JobStatus.RUNNING || job.status == JobStatus.QUEUED) {
             builder.addAction(
                 android.R.drawable.ic_media_pause,
-                "Pause",
+                AppStrings.translate("Pause"),
                 servicePendingIntent(ACTION_PAUSE, REQUEST_PAUSE),
             )
         }
         if (job.status !in TERMINAL_STATES) {
             builder.addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
-                "Cancel",
+                AppStrings.translate("Cancel"),
                 servicePendingIntent(ACTION_CANCEL, REQUEST_CANCEL),
             )
         }
@@ -1369,7 +1372,8 @@ class SeparationService : Service() {
             else -> "${job.phase} · ${(job.progress * 100).roundToInt()}%"
         }
         val waiting = ProcessingQueueStore.current(this).count { it.status == AudioQueueStatus.WAITING }
-        return if (waiting > 0) "$base · $waiting waiting".take(180) else base.take(180)
+        val status = if (waiting > 0) "$base · $waiting waiting".take(180) else base.take(180)
+        return AppStrings.translate(status)
     }
 
     private fun servicePendingIntent(action: String, requestCode: Int): PendingIntent {
@@ -1384,8 +1388,8 @@ class SeparationService : Service() {
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= 26) {
-            val channel = NotificationChannel(CHANNEL_ID, "Vocal separation", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Visible progress and pause/resume controls for local song processing"
+            val channel = NotificationChannel(CHANNEL_ID, AppStrings.translate("Vocal separation"), NotificationManager.IMPORTANCE_LOW).apply {
+                description = AppStrings.translate("Visible progress and pause/resume controls for local song processing")
                 setShowBadge(false)
             }
             (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(channel)

@@ -90,4 +90,5 @@ fun AppRoot(vm: MainViewModel) {
             )
         }
     }
+    LiveGuardUpdatePrompt()
 }

@@ -40,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +51,7 @@ import com.universalrp.tamilnadufm.MainViewModel
 import com.universalrp.tamilnadufm.UiState
 import com.universalrp.tamilnadufm.data.Category
 import com.universalrp.tamilnadufm.data.RadioStation
+import com.universalrp.updates.AppStrings
 
 // --------------------------------------------------------------------- radio
 
@@ -347,7 +347,7 @@ fun StationRow(
             if (station.isCustom) {
                 Icon(
                     Icons.Filled.Delete,
-                    contentDescription = "Remove",
+                    contentDescription = AppStrings.translate("Remove"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(18.dp)
@@ -358,7 +358,7 @@ fun StationRow(
 
             Icon(
                 if (favourite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                contentDescription = if (favourite) "Remove favourite" else "Add favourite",
+                contentDescription = AppStrings.translate(if (favourite) "Remove favourite" else "Add favourite"),
                 tint = if (favourite) Gold else TextSecondary,
                 modifier = Modifier
                     .size(24.dp)
@@ -522,7 +522,7 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                 }
                 Icon(
                     Icons.Filled.Close,
-                    contentDescription = "Close",
+                    contentDescription = AppStrings.translate("Close"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(24.dp)
@@ -575,7 +575,7 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                             Spacer(Modifier.width(6.dp))
                             Icon(
                                 Icons.Filled.Add,
-                                contentDescription = "Save",
+                                contentDescription = AppStrings.translate("Save"),
                                 tint = Teal,
                                 modifier = Modifier
                                     .size(22.dp)

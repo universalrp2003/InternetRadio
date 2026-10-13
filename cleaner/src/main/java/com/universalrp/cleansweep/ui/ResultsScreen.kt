@@ -86,7 +86,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.navigate(com.universalrp.cleansweep.Screen.HOME) }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Scan results"),
                 style = MaterialTheme.typography.titleLarge,
@@ -94,7 +94,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.startScan() }) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Scan again", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Scan again"), tint = TextSecondary)
             }
         }
 
@@ -375,7 +375,7 @@ private fun CategoryCard(category: CategoryResult, revision: Long, vm: MainViewM
                 }
                 Icon(
                     if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ChevronRight,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = tr(if (expanded) "Collapse" else "Expand"),
                     tint = TextSecondary,
                 )
             }

@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.universalrp.pulseeq.ui.EqRoot
 import com.universalrp.pulseeq.ui.PulseTheme
+import com.universalrp.updates.AppLanguageState
 
 class MainActivity : ComponentActivity() {
 
@@ -19,6 +20,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLanguageState.initialize(this)
 
         // Android 13+: the background equalizer needs to show its notification.
         if (Build.VERSION.SDK_INT >= 33 &&

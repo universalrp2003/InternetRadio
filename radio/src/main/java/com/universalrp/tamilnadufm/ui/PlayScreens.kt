@@ -63,7 +63,6 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -86,6 +85,8 @@ import com.universalrp.tamilnadufm.UiState
 import com.universalrp.tamilnadufm.audio.Bands
 import com.universalrp.tamilnadufm.data.LocalTrack
 import com.universalrp.tamilnadufm.player.PlayerBus
+import com.universalrp.updates.AppLanguageToggle
+import com.universalrp.updates.AppStrings
 
 // --------------------------------------------------------------------- local
 
@@ -136,10 +137,10 @@ fun LocalScreen(vm: MainViewModel, state: UiState) {
                     Spacer(Modifier.height(8.dp))
                     Text(if (state.localLoading) "Reading your music folder…" else "Only audio in your chosen folder and subfolders is listed.", color = TextSecondary)
                     Row {
-                        IconButton(onClick = { vm.previous() }) { Icon(Icons.Filled.SkipPrevious, "Previous song", tint = Saffron) }
-                        IconButton(onClick = { vm.togglePlayPause() }) { Icon(if (localPlayback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, "Play or pause", tint = Saffron) }
-                        IconButton(onClick = { vm.next() }) { Icon(Icons.Filled.SkipNext, "Next song", tint = Saffron) }
-                        IconButton(onClick = { vm.refreshMusicFolder() }) { Icon(Icons.Filled.Refresh, "Refresh folder", tint = Saffron) }
+                        IconButton(onClick = { vm.previous() }) { Icon(Icons.Filled.SkipPrevious, AppStrings.translate("Previous song"), tint = Saffron) }
+                        IconButton(onClick = { vm.togglePlayPause() }) { Icon(if (localPlayback.isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow, AppStrings.translate("Play or pause"), tint = Saffron) }
+                        IconButton(onClick = { vm.next() }) { Icon(Icons.Filled.SkipNext, AppStrings.translate("Next song"), tint = Saffron) }
+                        IconButton(onClick = { vm.refreshMusicFolder() }) { Icon(Icons.Filled.Refresh, AppStrings.translate("Refresh folder"), tint = Saffron) }
                     }
                     if (state.localTracks.isEmpty()) {
                         Spacer(Modifier.height(10.dp))
@@ -215,7 +216,7 @@ private fun LocalTrackRow(track: LocalTrack, current: Boolean, onPlay: () -> Uni
             }
             Icon(
                 Icons.Filled.PlayArrow,
-                contentDescription = "Play",
+                contentDescription = AppStrings.translate("Play"),
                 tint = TextSecondary,
                 modifier = Modifier.size(22.dp),
             )
@@ -662,6 +663,22 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
             }
         }
 
+        // Language is an app setting and is persisted independently of the phone's system language.
+        item {
+            PanelCard(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("App language", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                        Text(if (com.universalrp.updates.AppLanguageState.current == com.universalrp.updates.AppLanguage.TAMIL) "தமிழ்" else "English", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    }
+                    AppLanguageToggle()
+                }
+            }
+        }
+
         // Sleep timer
         item {
             PanelCard(Modifier.fillMaxWidth()) {
@@ -771,7 +788,7 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                             )
                             Icon(
                                 Icons.Filled.Delete,
-                                contentDescription = "Remove",
+                                contentDescription = AppStrings.translate("Remove"),
                                 tint = TextSecondary,
                                 modifier = Modifier
                                     .size(18.dp)
@@ -800,13 +817,11 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         color = TextSecondary,
                     )
                     Spacer(Modifier.height(10.dp))
-                    Text(
-                        "Author: ரமேஷ் பிரதாப் • Ramesh prathap .R",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Spacer(Modifier.height(10.dp))
+                    Text("Contributors", style = MaterialTheme.typography.labelLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Project development: Ramesh prathap .R", style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("AI software-assistance contributor: Arena.ai Agent Mode", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         "What is inside: thousands of Tamil FM stations from India, Sri Lanka, " +
                             "Malaysia and Singapore plus the Tamil diaspora, Tamil and English news " +
@@ -834,6 +849,17 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                         runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO,
                             android.net.Uri.parse("mailto:universalrp2003@gmail.com"))) }
                     }) { Text("universalrp2003@gmail.com", color = Teal) }
+                    Text("App releases", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    listOf(
+                        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44",
+                        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9",
+                        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3",
+                        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9",
+                    ).forEach { (label, url) ->
+                        androidx.compose.material3.TextButton(onClick = {
+                            runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        }) { Text(label, color = Teal) }
+                    }
                     Text("Privacy & permissions", fontWeight = FontWeight.Bold, color = TextPrimary)
                     Text("Internet access is needed for live streams and directory searches. Local audio is selected on your phone. Notifications and the foreground playback service keep audio controls available while listening. Favourites and settings stay on this device. Stream and directory servers receive your requests; offline station listings do not make streams playable offline.", color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
@@ -868,7 +894,7 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     Icons.Filled.Close,
-                    contentDescription = "Close",
+                    contentDescription = AppStrings.translate("Close"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(22.dp)
@@ -957,7 +983,7 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                         .clickable { vm.previous() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.SkipPrevious, contentDescription = "Previous", tint = TextSecondary)
+                    Icon(Icons.Filled.SkipPrevious, contentDescription = AppStrings.translate("Previous"), tint = TextSecondary)
                 }
                 Spacer(Modifier.width(16.dp))
                 Box(
@@ -984,7 +1010,7 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                         .clickable { vm.next() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = TextSecondary)
+                    Icon(Icons.Filled.SkipNext, contentDescription = AppStrings.translate("Next"), tint = TextSecondary)
                 }
                 Spacer(Modifier.width(16.dp))
                 Box(
@@ -995,7 +1021,7 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                         .clickable { vm.stop() },
                     contentAlignment = Alignment.Center,
                 ) {
-                    Icon(Icons.Filled.Stop, contentDescription = "Stop", tint = TextSecondary)
+                    Icon(Icons.Filled.Stop, contentDescription = AppStrings.translate("Stop"), tint = TextSecondary)
                 }
             }
 

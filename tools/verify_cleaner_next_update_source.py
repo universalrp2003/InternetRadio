@@ -59,7 +59,7 @@ def main():
     require('CURRENT_WINDOW_MS' in source('ai/ArenaRatingPolicy.kt') and '.singleOrNull()' in source('ai/ArenaRatingPolicy.kt'), 'Rating exact/freshness policy missing')
     require('rating_q025' in source('ai/ArenaRatings.kt') and 'git/blobs' in source('ai/ArenaRatings.kt'), 'Verified official rating schema missing')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
-    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 48', 'versionName = "2.43"'):
+    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 49', 'versionName = "2.44"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
     for removed in ('com.google.mlkit:translate', 'com.google.mlkit:language-id'):
         require(removed not in gradle, 'Removed reader dependency is still declared: ' + removed)
@@ -175,7 +175,7 @@ def main():
     for xml in (ROOT/'cleaner/src/main').rglob('*.xml'):
         ET.parse(xml)
     print('PASS: Static manifest, no-notification-reading/update/rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 39 required suites / 349 prepared declarations; tests NOT executed. Candidate 2.43/code48/API26 matches.')
+    print('PASS: 39 required suites / 349 prepared declarations; tests NOT executed. Candidate 2.44/code49/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

@@ -43,8 +43,8 @@ class MainActivity : ComponentActivity() {
         // actually happened instead of "MIUI said it stopped".
         CrashLog.install(this)
         // 2.42: resolve the language BEFORE the first composition. tr()/Lang.t() read the
-        // process-wide Lang.current, which starts as English, so a screen composed before this
-        // line ran could render English on a phone whose saved language is Tamil — one half of
+        // process-wide Lang.current, which defaults to Tamil, so a screen composed before this
+        // line ran could render Tamil on a phone whose saved language is English — one half of
         // the mixed-language cards the owner reported. LanguageSourcePolicy documents the rule.
         Lang.set(Lang.languageIn(this))
         // Sensitive permissions are explained and requested from reviewed setup, not silently on launch.

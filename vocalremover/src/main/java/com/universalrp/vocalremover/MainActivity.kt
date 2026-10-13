@@ -3,11 +3,14 @@ package com.universalrp.vocalremover
 import android.Manifest
 import android.app.Activity
 import android.content.Context
+import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.view.WindowManager
 import android.widget.Toast
@@ -44,7 +47,6 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
@@ -55,12 +57,15 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
+import androidx.compose.material3.Slider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
+import androidx.compose.material3.Text as MaterialText
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -78,9 +83,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -101,6 +112,10 @@ import com.universalrp.vocalremover.processing.SeparationJobStore
 import com.universalrp.vocalremover.processing.SeparationPass
 import com.universalrp.vocalremover.processing.SeparationService
 import com.universalrp.vocalremover.processing.ServiceTelemetry
+import com.universalrp.updates.AppLanguageState
+import com.universalrp.updates.AppLanguageToggle
+import com.universalrp.updates.AppStrings
+import com.universalrp.updates.AppUpdates
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -130,11 +145,19 @@ private data class ModelDownloadUiState(
     val errorMessage: String? = null,
 )
 
+private data class SavedAudioOutput(
+    val uri: Uri,
+    val name: String,
+    val mimeType: String,
+    val sizeBytes: Long,
+)
+
 class MainActivity : ComponentActivity() {
     private lateinit var wavPlaybackController: WavPlaybackController
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLanguageState.initialize(this)
         wavPlaybackController = WavPlaybackController(applicationContext)
         SeparationJobStore.initialize(applicationContext)
         ProcessingQueueStore.initialize(applicationContext)
@@ -172,6 +195,7 @@ class MainActivity : ComponentActivity() {
                     error = Coral,
                 ),
             ) {
+                AppUpdates.Control("RP-Vocal-Remover-Studio", automatic = true)
                 VocalRemoverScreen(wavPlaybackController)
             }
         }
@@ -205,6 +229,10 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
     val modelDownloadState by modelDownloadStateFlow.collectAsState()
     val downloadScope = rememberCoroutineScope()
     var showCredits by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
+    var showSavedOutputs by remember { mutableStateOf(false) }
+    var savedOutputs by remember { mutableStateOf<List<SavedAudioOutput>>(emptyList()) }
+    var savedOutputsLoading by remember { mutableStateOf(false) }
     var showExtraPassConfirmation by remember { mutableStateOf(false) }
     var showMp3Confirmation by remember { mutableStateOf(false) }
     var isChoosingAudio by remember { mutableStateOf(false) }
@@ -218,17 +246,14 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
         isChoosingAudio = false
         if (uris.isNotEmpty()) enqueueAudioUris(context, uris, selectedProfile)
     }
+    val savedFolderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { }
     val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         isChoosingAudio = false
         if (granted) {
             if (chooseMultipleAfterPermission) multiplePicker.launch(arrayOf("audio/mpeg"))
             else picker.launch(arrayOf("audio/mpeg"))
         } else {
-            Toast.makeText(
-                context,
-                "Allow notifications so the long-running foreground queue stays visible and controllable.",
-                Toast.LENGTH_LONG,
-            ).show()
+            showToast(context, "Allow notifications so the long-running foreground queue stays visible and controllable.")
         }
     }
     val launchAudioPicker: (Boolean) -> Unit = { multiple ->
@@ -241,6 +266,13 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
         } else {
             isChoosingAudio = true
             if (multiple) multiplePicker.launch(arrayOf("audio/mpeg")) else picker.launch(arrayOf("audio/mpeg"))
+        }
+    }
+    val refreshSavedOutputs: () -> Unit = {
+        savedOutputsLoading = true
+        downloadScope.launch {
+            savedOutputs = withContext(Dispatchers.IO) { querySavedAudioOutputs(context.applicationContext) }
+            savedOutputsLoading = false
         }
     }
 
@@ -264,7 +296,7 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                     }
                     modelReady = true
                     modelDownloadStateFlow.value = ModelDownloadUiState()
-                    Toast.makeText(context, "Model downloaded and checksum verified. Choose an MP3 to begin.", Toast.LENGTH_LONG).show()
+                    showToast(context, "Model downloaded and checksum verified. Choose an MP3 to begin.")
                 } catch (cancelled: CancellationException) {
                     modelDownloadStateFlow.value = ModelDownloadUiState(
                         errorMessage = "Download was interrupted. Tap Retry to try again.",
@@ -272,8 +304,12 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                     throw cancelled
                 } catch (failure: Exception) {
                     val detail = failure.message?.take(180)?.ifBlank { null }
-                        ?: "Check your internet connection and try again."
-                    modelDownloadStateFlow.value = ModelDownloadUiState(errorMessage = detail)
+                    val message = if (detail == null) {
+                        AppStrings.translate("Model download failed. Check your connection and try again.", AppLanguageState.current)
+                    } else {
+                        AppStrings.translate("Download failed: $detail. Check your internet connection, then retry.", AppLanguageState.current)
+                    }
+                    modelDownloadStateFlow.value = ModelDownloadUiState(errorMessage = message)
                 }
             }
         }
@@ -317,9 +353,22 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp)
                 .padding(top = 10.dp, bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Header(modelReady = modelReady)
+            Header(modelReady = modelReady, onAbout = { showAbout = true })
+            DeviceHealthCard(currentSnapshot, job, queueItems)
+            OutlinedButton(
+                onClick = {
+                    showSavedOutputs = true
+                    refreshSavedOutputs()
+                },
+                modifier = Modifier.fillMaxWidth().heightIn(min = 46.dp),
+                shape = RoundedCornerShape(14.dp),
+            ) {
+                androidx.compose.material3.Icon(Icons.Default.FolderOpen, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Browse saved WAV / MP3", fontWeight = FontWeight.SemiBold)
+            }
             HeroCard()
 
             if (job != null && job!!.status != JobStatus.CANCELED) {
@@ -338,6 +387,7 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                     onPausePlayback = { wavPlaybackController.pause() },
                     onResumePlayback = { wavPlaybackController.resume() },
                     onStopPlayback = { wavPlaybackController.stop() },
+                    onVolumeChange = { wavPlaybackController.setVolume(it) },
                     onNewSong = {
                         wavPlaybackController.stop()
                         launchAudioPicker(true)
@@ -366,7 +416,7 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                     onPlay = { item -> wavPlaybackController.play(item.outputUri) },
                     onSelect = { item ->
                         if (active || queueItems.any { it.status == AudioQueueStatus.WAITING }) {
-                            Toast.makeText(context, "Wait until the queue is idle before opening an earlier result.", Toast.LENGTH_LONG).show()
+                            showToast(context, "Wait until the queue is idle before opening an earlier result.")
                         } else {
                             selectCompletedQueueItem(context, item)
                         }
@@ -452,28 +502,33 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
                         fontSize = 16.sp,
                     )
                 }
-                Text(
-                    "Download the model here first, or it downloads automatically when you start a song. Your selected audio stays on this phone and is never uploaded.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Muted,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                )
             }
-
-            DeviceHealthCard(currentSnapshot)
-            PrivacyCard(onCredits = { showCredits = true })
-            Text(
-                "Vocal Remover Studio · standalone prototype · batch queue, WAV, extra pass & MP3 export",
-                style = MaterialTheme.typography.labelSmall,
-                color = Muted,
-                modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
-                textAlign = TextAlign.Center,
-            )
         }
     }
 
     if (showCredits) CreditsDialog(onDismiss = { showCredits = false })
+    if (showAbout) {
+        AboutDialog(
+            onDismiss = { showAbout = false },
+            onModelCredits = { showAbout = false; showCredits = true },
+        )
+    }
+    if (showSavedOutputs) {
+        SavedAudioDialog(
+            items = savedOutputs,
+            loading = savedOutputsLoading,
+            playbackState = playbackState,
+            onDismiss = { showSavedOutputs = false },
+            onRefresh = refreshSavedOutputs,
+            onBrowseFolder = { savedFolderPicker.launch(savedAudioFolderUri()) },
+            onPlay = { wavPlaybackController.play(it.uri.toString()) },
+            onPause = { wavPlaybackController.pause() },
+            onResume = { wavPlaybackController.resume() },
+            onStop = { wavPlaybackController.stop() },
+            onVolumeChange = { wavPlaybackController.setVolume(it) },
+            onOpen = { openSavedOutput(context, it) },
+        )
+    }
     if (showExtraPassConfirmation) {
         AlertDialog(
             onDismissRequest = { showExtraPassConfirmation = false },
@@ -522,24 +577,37 @@ private fun VocalRemoverScreen(wavPlaybackController: WavPlaybackController) {
 }
 
 @Composable
-private fun Header(modelReady: Boolean) {
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-        Box(
-            modifier = Modifier.size(46.dp).clip(RoundedCornerShape(15.dp)).background(Mint),
-            contentAlignment = Alignment.Center,
-        ) {
-            androidx.compose.material3.Icon(Icons.Default.Audiotrack, contentDescription = null, tint = TealDark, modifier = Modifier.size(26.dp))
+private fun Header(modelReady: Boolean, onAbout: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Box(
+                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(14.dp)).background(Mint),
+                contentAlignment = Alignment.Center,
+            ) {
+                androidx.compose.material3.Icon(Icons.Default.Audiotrack, contentDescription = null, tint = TealDark, modifier = Modifier.size(24.dp))
+            }
+            Spacer(Modifier.width(9.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("RP VOCAL REMOVER", fontSize = 11.sp, fontWeight = FontWeight.ExtraBold, color = Teal, letterSpacing = 1.1.sp)
+                Text("STUDIO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Ink, lineHeight = 23.sp)
+            }
+            AppLanguageToggle()
+            IconButton(onClick = onAbout, modifier = Modifier.size(36.dp)) {
+                androidx.compose.material3.Icon(
+                    Icons.Default.Info,
+                    contentDescription = AppStrings.translate("About"),
+                    tint = TealDark,
+                    modifier = Modifier.size(21.dp),
+                )
+            }
         }
-        Spacer(Modifier.width(12.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text("VOCAL REMOVER", fontSize = 12.sp, fontWeight = FontWeight.ExtraBold, color = Teal, letterSpacing = 1.5.sp)
-            Text("Studio", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Ink, lineHeight = 26.sp)
-        }
-        Surface(color = if (modelReady) Mint else Color(0xFFFFF0D8), shape = CircleShape) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 11.dp, vertical = 8.dp)) {
-                Box(Modifier.size(7.dp).clip(CircleShape).background(if (modelReady) Teal else Amber))
-                Spacer(Modifier.width(7.dp))
-                Text(if (modelReady) "MODEL READY" else "MODEL NEEDED", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Ink, letterSpacing = .5.sp)
+        Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+            Surface(color = if (modelReady) Mint else Color(0xFFFFF0D8), shape = CircleShape) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) {
+                    Box(Modifier.size(6.dp).clip(CircleShape).background(if (modelReady) Teal else Amber))
+                    Spacer(Modifier.width(6.dp))
+                    Text(if (modelReady) "MODEL READY" else "MODEL NEEDED", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Ink, letterSpacing = .4.sp)
+                }
             }
         }
     }
@@ -549,36 +617,18 @@ private fun Header(modelReady: Boolean) {
 private fun HeroCard() {
     Card(
         colors = CardDefaults.cardColors(containerColor = Ink),
-        shape = RoundedCornerShape(26.dp),
+        shape = RoundedCornerShape(22.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(Brush.linearGradient(listOf(Color(0xFF183B39), Color(0xFF235C55))))
-                .padding(22.dp),
+                .padding(horizontal = 18.dp, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Surface(color = Color.White.copy(alpha = .12f), shape = CircleShape) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-                        androidx.compose.material3.Icon(Icons.Default.Security, contentDescription = null, tint = Color(0xFFBFE7D7), modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("PRIVATE BY DESIGN", color = Color(0xFFBFE7D7), fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-                    }
-                }
-                Text("Keep the music.\nLose the lead vocals.", fontSize = 27.sp, lineHeight = 32.sp, color = Color.White, fontWeight = FontWeight.Bold)
-                Text(
-                    "AI separation runs offline on your phone. Your source stays untouched; the first export is an instrumental WAV.",
-                    color = Color(0xFFD3E4DD),
-                    fontSize = 14.sp,
-                    lineHeight = 20.sp,
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    androidx.compose.material3.Icon(Icons.Default.Download, contentDescription = null, tint = Color(0xFFBFE7D7), modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("One-time model download · no song uploads", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
+            Text("FIRST PASS · WAV", color = Color(0xFFBFE7D7), fontSize = 9.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+            Text("Keep the music.\nLose the lead vocals.", fontSize = 23.sp, lineHeight = 27.sp, color = Color.White, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -620,16 +670,6 @@ private fun ProfileCard(selected: ProcessingProfile, enabled: Boolean, onSelect:
                     }
                 }
             }
-            Text(
-                when (selected) {
-                    ProcessingProfile.SLOW -> "One inference thread with longer cool-downs. Best when battery and heat matter most."
-                    ProcessingProfile.BALANCED -> "A moderate thread count with device-safety back-off. Recommended for most phones."
-                    ProcessingProfile.FAST -> "Uses up to four inference threads when Android reports normal thermal status."
-                },
-                color = Muted,
-                style = MaterialTheme.typography.bodySmall,
-                lineHeight = 17.sp,
-            )
         }
     }
 }
@@ -681,7 +721,7 @@ private fun ModelCard(
                 ) {
                     androidx.compose.material3.Icon(
                         if (modelReady) Icons.Default.CheckCircle else Icons.Default.Download,
-                        contentDescription = if (modelReady) "Model ready" else "Download model",
+                        contentDescription = AppStrings.translate(if (modelReady) "Model ready" else "Download model"),
                         tint = Teal,
                         modifier = Modifier.size(20.dp),
                     )
@@ -699,12 +739,6 @@ private fun ModelCard(
                     TextButtonCompact("Model credits & terms", onCredits)
                 }
             }
-            Text(
-                "Vocal separation can leave remnants or introduce musical artifacts; results depend on the mix.",
-                color = Muted,
-                style = MaterialTheme.typography.bodySmall,
-                lineHeight = 16.sp,
-            )
             if (!modelReady) {
                 if (downloadState.downloading) {
                     if (downloadState.downloadedBytes > 0L) {
@@ -863,12 +897,6 @@ private fun ProcessingQueueCard(
                     }
                 }
             }
-            Text(
-                "Songs run one at a time, in order. The queue is saved across app restarts; Android or device safety limits may pause very long runs, and paused work can be resumed.",
-                color = Muted,
-                fontSize = 10.sp,
-                lineHeight = 14.sp,
-            )
         }
     }
 }
@@ -889,6 +917,7 @@ private fun JobCard(
     onPausePlayback: () -> Unit,
     onResumePlayback: () -> Unit,
     onStopPlayback: () -> Unit,
+    onVolumeChange: (Float) -> Unit,
     onNewSong: () -> Unit,
     onDiscard: () -> Unit,
 ) {
@@ -1041,16 +1070,21 @@ private fun JobCard(
                             }
                         }
                     }
+                    if (playbackState.status != WavPlaybackStatus.STOPPED) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Playback volume", fontSize = 11.sp, color = Muted, fontWeight = FontWeight.SemiBold)
+                            Spacer(Modifier.weight(1f))
+                            Text("${(playbackState.volume * 100).roundToInt()}%", fontSize = 11.sp, color = Ink, fontWeight = FontWeight.Bold)
+                        }
+                        Slider(
+                            value = playbackState.volume,
+                            onValueChange = onVolumeChange,
+                            valueRange = 0f..1f,
+                            modifier = Modifier.fillMaxWidth().height(28.dp),
+                        )
+                    }
                     playbackState.errorMessage?.let { message ->
                         Text(message, color = Coral, style = MaterialTheme.typography.bodySmall)
-                    }
-                    if (playbackState.status != WavPlaybackStatus.STOPPED) {
-                        Text(
-                            "Playback stays in this app and stops when you leave it.",
-                            color = Muted,
-                            fontSize = 10.sp,
-                            lineHeight = 14.sp,
-                        )
                     }
                     if (job.separationPass == SeparationPass.FIRST) {
                         Text(
@@ -1109,53 +1143,56 @@ private fun JobCard(
                 }
                 isCanceled -> OutlinedButton(onClick = onNewSong, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(13.dp)) { Text("Add more songs") }
             }
-            if (job.status in setOf(JobStatus.RUNNING, JobStatus.PAUSING, JobStatus.PAUSED)) {
-                Text("Low-RAM pauses auto-resume when memory recovers and other safety checks are clear; other pauses need Resume. Saved chunks survive interruptions, but Android/OEMs can still stop apps or shut down a device.", color = Muted, fontSize = 10.sp, lineHeight = 14.sp)
-            }
         }
     }
 }
 
 @Composable
-private fun DeviceHealthCard(snapshot: DeviceSnapshot?) {
-    Card(colors = CardDefaults.cardColors(containerColor = SoftWhite), shape = RoundedCornerShape(22.dp)) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun DeviceHealthCard(
+    snapshot: DeviceSnapshot?,
+    job: SeparationJob?,
+    queueItems: List<AudioQueueItem>,
+) {
+    val busyJob = job?.takeIf {
+        it.status in setOf(JobStatus.QUEUED, JobStatus.RUNNING, JobStatus.PAUSING, JobStatus.PAUSED)
+    }
+    val waitingCount = queueItems.count { it.status == AudioQueueStatus.WAITING }
+    Card(colors = CardDefaults.cardColors(containerColor = SoftWhite), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                androidx.compose.material3.Icon(Icons.Default.Thermostat, null, tint = Teal, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Device check", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Ink)
+                androidx.compose.material3.Icon(Icons.Default.Thermostat, null, tint = Teal, modifier = Modifier.size(17.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("System watch", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = Ink)
                 Spacer(Modifier.weight(1f))
-                Text("BEST EFFORT", fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Muted, letterSpacing = .8.sp)
+                Text("DEVICE STATUS", fontSize = 8.sp, fontWeight = FontWeight.Bold, color = Muted, letterSpacing = .45.sp)
             }
-            if (snapshot == null) {
-                Text("Reading system memory and available thermal sensors…", color = Muted, style = MaterialTheme.typography.bodySmall)
-            } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricPill("Android thermal", snapshot.thermalLabel, Modifier.weight(1f))
-                    MetricPill("Free RAM", DeviceMonitor.formatBytes(snapshot.availableRamBytes), Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricPill("Battery temp", snapshot.batteryTemperatureC?.let { "%.1f °C".format(it) } ?: "Not reported", Modifier.weight(1f))
-                    MetricPill(
-                        snapshot.cpuSensorLabel?.let { "CPU · $it" } ?: "CPU temperature",
-                        snapshot.cpuTemperatureC?.let { "%.1f °C".format(it) } ?: "Not reported",
-                        Modifier.weight(1f),
+            when {
+                busyJob != null -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("⚙ ${busyJob.phase}", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        Text("${(busyJob.progress * 100).roundToInt()}%", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = TealDark)
+                    }
+                    LinearProgressIndicator(
+                        progress = { busyJob.progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(CircleShape),
+                        color = Teal,
+                        trackColor = Paper,
                     )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricPill("App RAM (PSS)", DeviceMonitor.formatBytes(snapshot.appPssBytes), Modifier.weight(1f))
-                    MetricPill("App CPU load", snapshot.appCpuPercent?.let { "%.0f%%".format(it) } ?: "Measuring…", Modifier.weight(1f))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(9.dp), modifier = Modifier.fillMaxWidth()) {
-                    MetricPill("Native heap", DeviceMonitor.formatBytes(snapshot.appNativeHeapBytes), Modifier.weight(1f))
-                    MetricPill("App storage free", DeviceMonitor.formatBytes(snapshot.availableStorageBytes), Modifier.weight(1f))
-                }
-                Text(
-                    "CPU temperature depends on OEM-exposed thermal zones; ‘Not reported’ is normal. RAM and app CPU are system estimates. Battery/CPU degrees are informational—automatic thermal pause follows Android’s severe thermal status, not a fixed Celsius threshold.",
-                    color = Muted,
-                    fontSize = 10.sp,
-                    lineHeight = 14.sp,
-                )
+                waitingCount > 0 -> Text("⌛ $waitingCount queued", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
+                else -> Text("● Ready", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = TealDark)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricPill("🌡 Thermal", snapshot?.thermalLabel ?: "Reading…", Modifier.weight(1f))
+                MetricPill("▦ Free RAM", snapshot?.let { DeviceMonitor.formatBytes(it.availableRamBytes) } ?: "Reading…", Modifier.weight(1f))
+                MetricPill("♨ CPU temp", snapshot?.cpuTemperatureC?.let { "%.1f °C".format(it) } ?: if (snapshot == null) "Reading…" else "Not reported", Modifier.weight(1f))
+                MetricPill("🔋 Battery", snapshot?.batteryTemperatureC?.let { "%.1f °C".format(it) } ?: if (snapshot == null) "Reading…" else "Not reported", Modifier.weight(1f))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricPill("▣ App RAM", snapshot?.let { DeviceMonitor.formatBytes(it.appPssBytes) } ?: "Reading…", Modifier.weight(1f))
+                MetricPill("◌ CPU load", snapshot?.appCpuPercent?.let { "%.0f%%".format(it) } ?: if (snapshot == null) "Reading…" else "Not reported", Modifier.weight(1f))
+                MetricPill("◈ Native heap", snapshot?.let { DeviceMonitor.formatBytes(it.appNativeHeapBytes) } ?: "Reading…", Modifier.weight(1f))
+                MetricPill("▧ Storage free", snapshot?.let { DeviceMonitor.formatBytes(it.availableStorageBytes) } ?: "Reading…", Modifier.weight(1f))
             }
         }
     }
@@ -1163,31 +1200,11 @@ private fun DeviceHealthCard(snapshot: DeviceSnapshot?) {
 
 @Composable
 private fun MetricPill(label: String, value: String, modifier: Modifier = Modifier) {
-    Surface(color = Paper, shape = RoundedCornerShape(13.dp), modifier = modifier) {
-        Column(Modifier.padding(horizontal = 11.dp, vertical = 10.dp)) {
-            Text(label.uppercase(), fontSize = 8.sp, color = Muted, fontWeight = FontWeight.Bold, letterSpacing = .55.sp, maxLines = 1)
-            Spacer(Modifier.height(4.dp))
-            Text(value, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun PrivacyCard(onCredits: () -> Unit) {
-    Card(colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF2E1)), shape = RoundedCornerShape(20.dp)) {
-        Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.Top) {
-            androidx.compose.material3.Icon(Icons.Default.Security, null, tint = Color(0xFF9C6421), modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text("No audio upload. No account.", color = Ink, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                Text(
-                    "Internet is used only for the checksum-verified model download. Selected audio is copied to private app storage and separated on-device.",
-                    color = Muted,
-                    style = MaterialTheme.typography.bodySmall,
-                    lineHeight = 17.sp,
-                )
-                TextButtonCompact("Privacy, model credits & open-source notices", onCredits)
-            }
+    Surface(color = Paper, shape = RoundedCornerShape(10.dp), modifier = modifier) {
+        Column(Modifier.padding(horizontal = 5.dp, vertical = 6.dp)) {
+            Text(label, fontSize = 7.sp, color = Muted, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Clip)
+            Spacer(Modifier.height(2.dp))
+            Text(value, color = Ink, fontSize = 9.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -1197,6 +1214,197 @@ private fun TextButtonCompact(text: String, onClick: () -> Unit) {
     TextButton(onClick = onClick, contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 0.dp, vertical = 3.dp)) {
         Text(text, color = TealDark, fontSize = 12.sp, fontWeight = FontWeight.Bold)
     }
+}
+
+@Composable
+private fun AboutDialog(onDismiss: () -> Unit, onModelCredits: () -> Unit) {
+    val context = LocalContext.current
+    val releaseLinks = listOf(
+        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44",
+        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9",
+        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3",
+        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SoftWhite,
+        title = { Text("About RP VOCAL REMOVER STUDIO", fontWeight = FontWeight.Bold, color = Ink) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 590.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(9.dp),
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("App language", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Spacer(Modifier.weight(1f))
+                    AppLanguageToggle()
+                }
+                Text("Contributors", fontWeight = FontWeight.Bold, color = Ink)
+                Text("Project development: Ramesh prathap .R · universalrp2003@gmail.com", color = Muted)
+                Text("AI software-assistance contributor: Arena.ai Agent Mode", color = Muted)
+                Text("Processing and privacy", fontWeight = FontWeight.Bold, color = Ink)
+                Text(
+                    "Selected audio is processed on this device and is not uploaded. Internet access is used to download the separation model and check app updates. The original file is preserved. The first pass saves a separate instrumental stereo WAV; the second reduction pass is optional and starts only when you tap it. A separate 320 kb/s CBR MP3 export is available; MP3 is lossy and the WAV is retained. Separation quality varies by mix; residual vocals or musical artifacts are possible.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text("Performance and sensors", fontWeight = FontWeight.Bold, color = Ink)
+                Text(
+                    "Low-memory pauses may resume automatically after memory recovers and safety checks clear. User, thermal, storage and other safety pauses require a user action. Temperature readings depend on Android and OEM sensor availability; ‘Not reported’ means no usable reading was exposed. CPU load and RAM values are system estimates, not precision instrumentation. Slow uses one inference thread and longer cool-downs; Medium balances CPU use; Fast can use up to four threads while Android reports normal thermal status.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                Text("Queue and playback", fontWeight = FontWeight.Bold, color = Ink)
+                Text(
+                    "Songs in the queue run one at a time; queue state and work checkpoints are saved across restarts. Playback is in-app and stops when the app is left. Android or OEM restrictions can interrupt long work. Minimum supported Android version: Android 10.",
+                    color = Muted,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+                TextButton(onClick = onModelCredits) { Text("Model credits, licences and notices") }
+                Text("App releases", fontWeight = FontWeight.Bold, color = Ink)
+                releaseLinks.forEach { (label, url) ->
+                    TextButton(onClick = {
+                        runCatching {
+                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }.onFailure {
+                            showToast(context, "Could not open the release page.")
+                        }
+                    }) { Text(label) }
+                }
+                AppUpdates.Control("RP-Vocal-Remover-Studio")
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+@Composable
+private fun SavedAudioDialog(
+    items: List<SavedAudioOutput>,
+    loading: Boolean,
+    playbackState: WavPlaybackState,
+    onDismiss: () -> Unit,
+    onRefresh: () -> Unit,
+    onBrowseFolder: () -> Unit,
+    onPlay: (SavedAudioOutput) -> Unit,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onStop: () -> Unit,
+    onVolumeChange: (Float) -> Unit,
+    onOpen: (SavedAudioOutput) -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = SoftWhite,
+        title = { Text("Saved WAV and MP3", fontWeight = FontWeight.Bold, color = Ink) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 580.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text("Music/Vocal Remover Studio", style = MaterialTheme.typography.labelMedium, color = Muted)
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    TextButton(onClick = onRefresh) { Text(if (loading) "Refreshing…" else "Refresh") }
+                    TextButton(onClick = onBrowseFolder) { Text("Browse in Files") }
+                }
+                when {
+                    loading -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = Teal)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Loading saved audio…", color = Muted)
+                    }
+                    items.isEmpty() -> Text("No WAV or MP3 outputs found yet.", color = Muted)
+                }
+                items.forEach { item ->
+                    Surface(color = Paper, shape = RoundedCornerShape(13.dp), modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(item.name, color = Ink, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text("${if (item.mimeType == "audio/wav") "WAV" else "MP3"} · ${DeviceMonitor.formatBytes(item.sizeBytes)}", color = Muted, fontSize = 11.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { onPlay(item) }) { Text("Play") }
+                                TextButton(onClick = { onOpen(item) }) { Text("Open") }
+                            }
+                        }
+                    }
+                }
+                if (playbackState.status != WavPlaybackStatus.STOPPED) {
+                    Text("Playback volume", fontWeight = FontWeight.SemiBold, color = Ink)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Slider(value = playbackState.volume, onValueChange = onVolumeChange, valueRange = 0f..1f, modifier = Modifier.weight(1f))
+                        Text("${(playbackState.volume * 100).roundToInt()}%", fontWeight = FontWeight.Bold, color = Ink)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        when (playbackState.status) {
+                            WavPlaybackStatus.PLAYING -> TextButton(onClick = onPause) { Text("Pause") }
+                            WavPlaybackStatus.PAUSED -> TextButton(onClick = onResume) { Text("Resume") }
+                            WavPlaybackStatus.PREPARING -> Text("Preparing playback…", color = Muted)
+                            WavPlaybackStatus.STOPPED -> Unit
+                        }
+                        TextButton(onClick = onStop) { Text("Stop") }
+                    }
+                    playbackState.errorMessage?.let { Text(it, color = Coral, style = MaterialTheme.typography.bodySmall) }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },
+    )
+}
+
+private fun querySavedAudioOutputs(context: Context): List<SavedAudioOutput> = runCatching {
+    val projection = arrayOf(
+        MediaStore.Audio.Media._ID,
+        MediaStore.MediaColumns.DISPLAY_NAME,
+        MediaStore.MediaColumns.MIME_TYPE,
+        MediaStore.MediaColumns.SIZE,
+    )
+    context.contentResolver.query(
+        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+        projection,
+        "${MediaStore.MediaColumns.RELATIVE_PATH} = ?",
+        arrayOf("Music/Vocal Remover Studio/"),
+        "${MediaStore.MediaColumns.DATE_ADDED} DESC",
+    )?.use { cursor ->
+        val idIndex = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+        val nameIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+        val mimeIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.MIME_TYPE)
+        val sizeIndex = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+        buildList {
+            while (cursor.moveToNext()) {
+                val name = cursor.getString(nameIndex).orEmpty()
+                val lower = name.lowercase()
+                val mime = when {
+                    lower.endsWith(".wav") -> "audio/wav"
+                    lower.endsWith(".mp3") -> "audio/mpeg"
+                    else -> continue
+                }
+                val id = cursor.getLong(idIndex)
+                add(
+                    SavedAudioOutput(
+                        uri = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id),
+                        name = name,
+                        mimeType = mime,
+                        sizeBytes = cursor.getLong(sizeIndex).coerceAtLeast(0L),
+                    ),
+                )
+            }
+        }
+    } ?: emptyList()
+}.getOrDefault(emptyList())
+
+private fun savedAudioFolderUri(): Uri = DocumentsContract.buildDocumentUri(
+    "com.android.externalstorage.documents",
+    "primary:Music/Vocal Remover Studio",
+)
+
+private fun openSavedOutput(context: Context, item: SavedAudioOutput) {
+    val view = Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(item.uri, item.mimeType)
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+    }
+    runCatching { context.startActivity(Intent.createChooser(view, item.name)) }
+        .onFailure {
+            showToast(context, "No installed audio app could open this file.")
+        }
 }
 
 @Composable
@@ -1210,13 +1418,11 @@ private fun CreditsDialog(onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SoftWhite,
-        title = { Text("Model credits & privacy", fontWeight = FontWeight.Bold, color = Ink) },
+        title = { Text("Model credits & licences", fontWeight = FontWeight.Bold, color = Ink) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("This standalone prototype uses the larger, vocal-focused UVR MDX-Net Voc FT model, downloaded on request from the sherpa-onnx source-separation-models release. Its SHA-256 is checked before installation.", color = Ink, style = MaterialTheme.typography.bodyMedium)
+                Text("RP Vocal Remover Studio uses the larger, vocal-focused UVR MDX-Net Voc FT model, downloaded on request from the sherpa-onnx source-separation-models release. Its SHA-256 is checked before installation.", color = Ink, style = MaterialTheme.typography.bodyMedium)
                 Text("Attribution: UVR (Anjok07 and aufr33), UVR MDX-Net Voc FT. The UVR project asks third-party apps using its models to credit UVR and its developers. The sherpa-onnx runtime is Apache-2.0; model weights are a separate asset.", color = Muted, style = MaterialTheme.typography.bodySmall)
-                Text("The app sends no selected audio to a server. Model delivery is the only network feature. The original file is not modified; the WAV is saved separately in Music/Vocal Remover Studio.", color = Muted, style = MaterialTheme.typography.bodySmall)
-                Text("Degree sensors are best-effort and OEM-dependent. Safety pausing uses Android thermal status, free RAM and storage; it does not use a hard-coded temperature threshold.", color = Muted, style = MaterialTheme.typography.bodySmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     TextButton(onClick = { openExternal(context, UVR_LICENSE_URL) }) { Text("Official UVR notice", fontSize = 11.sp) }
                     TextButton(onClick = { showNotices = true }) { Text("Bundled notices", fontSize = 11.sp) }
@@ -1247,7 +1453,7 @@ private const val UVR_LICENSE_URL = "https://github.com/Anjok07/ultimatevocalrem
 
 private fun openExternal(context: Context, url: String) {
     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-        .onFailure { Toast.makeText(context, "Could not open the link.", Toast.LENGTH_SHORT).show() }
+        .onFailure { showToast(context, "Could not open the link.", Toast.LENGTH_SHORT) }
 }
 
 private fun releaseQueueUriIfUnused(context: Context, sourceUri: String) {
@@ -1272,7 +1478,7 @@ private fun selectCompletedQueueItem(context: Context, item: AudioQueueItem) {
     if (item.status != AudioQueueStatus.COMPLETED || item.outputUri.isBlank()) return
     val current = SeparationJobStore.current(context)
     if (current?.status in setOf(JobStatus.RUNNING, JobStatus.QUEUED, JobStatus.PAUSING, JobStatus.PAUSED)) {
-        Toast.makeText(context, "Wait for the active queue to finish before opening an earlier result.", Toast.LENGTH_LONG).show()
+        showToast(context, "Wait for the active queue to finish before opening an earlier result.")
         return
     }
     SeparationJobStore.save(
@@ -1337,7 +1543,7 @@ private fun enqueueAudioUris(context: Context, uris: List<Uri>, profile: Process
         if (result.queueFull > 0) append(" ${result.queueFull} skipped: the queue supports up to 100 pending songs.")
         if (permissionFailures > 0) append(" $permissionFailures file${if (permissionFailures == 1) " could" else "s could"} not be kept accessible after restart.")
     }
-    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+    showToast(context, message)
 }
 
 private fun discardTerminalJob(context: Context, job: SeparationJob) {
@@ -1353,11 +1559,57 @@ private fun discardTerminalJob(context: Context, job: SeparationJob) {
     androidx.core.app.NotificationManagerCompat.from(context).cancel(SeparationService.NOTIFICATION_ID)
 }
 
+private fun showToast(context: Context, message: String, duration: Int = Toast.LENGTH_LONG) {
+    Toast.makeText(context, AppStrings.translate(message, AppLanguageState.current), duration).show()
+}
+
 private fun startServiceAction(context: Context, action: String) {
     val intent = Intent(context, SeparationService::class.java).setAction(action)
     runCatching { androidx.core.content.ContextCompat.startForegroundService(context, intent) }
         .onFailure { failure ->
             val detail = failure.message?.take(180)?.ifBlank { null } ?: failure.javaClass.simpleName
-            Toast.makeText(context, "Could not control the background queue: $detail", Toast.LENGTH_LONG).show()
+            showToast(context, "Could not control the background queue: $detail")
         }
+}
+
+/** Routes every Compose label through the saved Tamil/English catalog. */
+@Composable
+private fun Text(
+    text: String,
+    modifier: Modifier = Modifier,
+    color: Color = Color.Unspecified,
+    fontSize: TextUnit = TextUnit.Unspecified,
+    fontStyle: FontStyle? = null,
+    fontWeight: FontWeight? = null,
+    fontFamily: FontFamily? = null,
+    letterSpacing: TextUnit = TextUnit.Unspecified,
+    textDecoration: TextDecoration? = null,
+    textAlign: TextAlign? = null,
+    lineHeight: TextUnit = TextUnit.Unspecified,
+    overflow: TextOverflow = TextOverflow.Clip,
+    softWrap: Boolean = true,
+    maxLines: Int = Int.MAX_VALUE,
+    minLines: Int = 1,
+    onTextLayout: (TextLayoutResult) -> Unit = {},
+    style: TextStyle = LocalTextStyle.current,
+) {
+    MaterialText(
+        text = AppStrings.translate(text, AppLanguageState.current),
+        modifier = modifier,
+        color = color,
+        fontSize = fontSize,
+        fontStyle = fontStyle,
+        fontWeight = fontWeight,
+        fontFamily = fontFamily,
+        letterSpacing = letterSpacing,
+        textDecoration = textDecoration,
+        textAlign = textAlign,
+        lineHeight = lineHeight,
+        overflow = overflow,
+        softWrap = softWrap,
+        maxLines = maxLines,
+        minLines = minLines,
+        onTextLayout = onTextLayout,
+        style = style,
+    )
 }

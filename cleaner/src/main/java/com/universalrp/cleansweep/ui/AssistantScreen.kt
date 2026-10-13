@@ -379,7 +379,7 @@ fun AssistantScreen(state: UiState, vm: MainViewModel) {
             ) {
                 Icon(
                     Icons.Outlined.Send,
-                    contentDescription = "Send",
+                    contentDescription = tr("Send"),
                     tint = if (canSend) AccentCyan else TextSecondary.copy(alpha = 0.5f),
                 )
             }

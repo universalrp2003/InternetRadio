@@ -107,7 +107,7 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { vm.goBack() }) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
                 }
                 Text(
                     tr("Mobile & data"),
@@ -116,7 +116,7 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = { vm.loadMobile() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary)
                 }
             }
         }
@@ -752,7 +752,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                     )
                 }
                 IconButton(onClick = { vm.scanAppTrackers() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Inspect", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Inspect"), tint = TextSecondary)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -883,7 +883,7 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                     )
                 }
                 IconButton(onClick = { vm.loadUsage() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary)
                 }
             }
             Spacer(Modifier.height(8.dp))

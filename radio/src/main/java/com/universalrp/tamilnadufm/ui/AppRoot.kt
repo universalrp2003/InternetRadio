@@ -36,7 +36,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -53,6 +52,7 @@ import androidx.media3.session.MediaController
 import com.universalrp.tamilnadufm.MainViewModel
 import com.universalrp.tamilnadufm.Tab
 import com.universalrp.tamilnadufm.player.PlayerBus
+import com.universalrp.updates.AppStrings
 
 @Composable
 fun AppRoot(vm: MainViewModel, controller: MediaController?) {
@@ -130,7 +130,7 @@ private fun MessageBar(text: String, onClose: () -> Unit) {
             )
             Icon(
                 Icons.Filled.Close,
-                contentDescription = "Dismiss",
+                contentDescription = AppStrings.translate("Dismiss"),
                 tint = TextSecondary,
                 modifier = Modifier
                     .size(18.dp)
@@ -222,7 +222,7 @@ private fun TransportBar(
 
                 Icon(
                     Icons.Filled.SkipPrevious,
-                    contentDescription = "Previous",
+                    contentDescription = AppStrings.translate("Previous"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(26.dp)
@@ -239,14 +239,14 @@ private fun TransportBar(
                 ) {
                     Icon(
                         if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        contentDescription = AppStrings.translate(if (isPlaying) "Pause" else "Play"),
                         tint = Color(0xFF2A1200),
                     )
                 }
                 Spacer(Modifier.width(10.dp))
                 Icon(
                     Icons.Filled.SkipNext,
-                    contentDescription = "Next",
+                    contentDescription = AppStrings.translate("Next"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(26.dp)
@@ -255,7 +255,7 @@ private fun TransportBar(
                 Spacer(Modifier.width(10.dp))
                 Icon(
                     Icons.Filled.Stop,
-                    contentDescription = "Stop",
+                    contentDescription = AppStrings.translate("Stop"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(22.dp)
@@ -290,7 +290,7 @@ private fun RowScope.NavItem(label: String, icon: ImageVector, selected: Boolean
     ) {
         Icon(
             icon,
-            contentDescription = label,
+            contentDescription = AppStrings.translate(label),
             tint = if (selected) Saffron else TextSecondary,
             modifier = Modifier.size(24.dp),
         )

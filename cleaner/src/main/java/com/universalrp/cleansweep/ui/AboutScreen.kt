@@ -65,7 +65,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(
                 tr("About") + " " + tr(Lang.appName()),
@@ -90,7 +90,7 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(
-                        tr("Author"),
+                        tr("Contributors"),
                         style = MaterialTheme.typography.labelLarge,
                         color = TextSecondary,
                         fontWeight = FontWeight.SemiBold,
@@ -115,8 +115,8 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                         }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            // Always both scripts, so the author is recognisable whichever
-                            // language the menu is in.
+                            // Always both scripts so the project contributor is recognisable
+                            // whichever language the menu is in.
                             Text(
                                 "ரமேஷ் பிரதாப்",
                                 style = MaterialTheme.typography.titleMedium,
@@ -159,6 +159,16 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                             fontWeight = FontWeight.Bold,
                         )
                     }
+                    Text(
+                        tr("Project development contributor: Ramesh prathap .R"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
+                    Text(
+                        tr("AI software-assistance contributor: Arena.ai Agent Mode"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary,
+                    )
                     TextButton(
                         onClick = {
                             try {
@@ -200,6 +210,22 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
                         style = MaterialTheme.typography.labelSmall,
                         color = TextSecondary,
                     )
+                }
+            }
+
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(tr("App releases"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    listOf(
+                        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44",
+                        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9",
+                        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3",
+                        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9",
+                    ).forEach { (label, url) ->
+                        TextButton(onClick = {
+                            runCatching { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        }) { Text(tr(label), color = AccentCyan) }
+                    }
                 }
             }
 
