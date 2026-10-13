@@ -233,7 +233,8 @@ data class AiConfig(
         "AiConfig(provider=$provider, apiKey=${if (apiKey.isBlank()) "<empty>" else "<redacted>"}, " +
             "model=$model, baseUrl=${if (baseUrl.isBlank()) "<empty>" else "<redacted>"}, " +
             "includeAppNames=$includeAppNames, includeNetwork=$includeNetwork, " +
-            "freeEndpointUrl=$freeEndpointUrl, keyStorageProtected=$keyStorageProtected)"
+            "freeEndpointUrl=${if (freeEndpointUrl.isBlank()) "<empty>" else "<redacted>"}, " +
+            "keyStorageProtected=$keyStorageProtected)"
 }
 
 object AiSettings {

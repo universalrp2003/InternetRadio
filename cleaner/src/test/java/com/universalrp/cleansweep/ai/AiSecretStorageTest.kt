@@ -32,11 +32,20 @@ class AiSecretStorageTest {
 
     @Test fun diagnosticStringsRedactApiKeysAndCustomUrlCredentials() {
         val secret = "sk-proj-only-test-secret"
-        val config = AiConfig(apiKey = secret, baseUrl = "https://user:password@example.invalid/v1")
+        val endpoint = "https://free-user:free-password@free.example/v1?api_key=free-endpoint-token"
+        val config = AiConfig(
+            apiKey = secret,
+            baseUrl = "https://user:password@example.invalid/v1",
+            freeEndpointUrl = endpoint,
+        )
         val storageResult = AiSecretStorage.ReadResult(secret, protectedAtRest = true, hadStoredValue = true)
+        val diagnostic = config.toString()
 
-        assertFalse(config.toString().contains(secret))
-        assertFalse(config.toString().contains("password"))
+        assertFalse(diagnostic.contains(secret))
+        assertFalse(diagnostic.contains("password"))
+        assertFalse(diagnostic.contains("free-endpoint-token"))
+        assertFalse(diagnostic.contains(endpoint))
+        assertTrue(diagnostic.contains("freeEndpointUrl=<redacted>"))
         assertFalse(storageResult.toString().contains(secret))
     }
 
