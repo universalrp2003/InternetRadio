@@ -6,18 +6,14 @@
 
 #[cfg(feature = "spike-harness")]
 pub mod spike_harness {
-    use openmls::{
-        prelude::{
-            tls_codec::{Deserialize, Serialize},
-            *,
-        },
-        storage::OpenMlsProvider,
+    use openmls::prelude::{
+        tls_codec::{Deserialize, Serialize},
+        *,
     };
     use openmls_basic_credential::{BasicCredential, SignatureKeyPair};
     use openmls_rust_crypto::OpenMlsRustCrypto;
 
-    const TEST_CIPHERSUITE: Ciphersuite =
-        Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
+    const TEST_CIPHERSUITE: Ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
     const ALICE_TEXT: &[u8] = b"MLS-SPIKE-ALICE-TO-BOB-TEST-PLAINTEXT-4bc91a";
     const BOB_TEXT: &[u8] = b"MLS-SPIKE-BOB-TO-ALICE-TEST-PLAINTEXT-a63fd2";
 
@@ -74,12 +70,7 @@ pub mod spike_harness {
 
         // Bob creates a one-use KeyPackage; Alice receives only its serialized public bytes.
         let bob_key_package = KeyPackage::builder()
-            .build(
-                TEST_CIPHERSUITE,
-                &bob_provider,
-                &bob_signer,
-                bob_credential,
-            )
+            .build(TEST_CIPHERSUITE, &bob_provider, &bob_signer, bob_credential)
             .expect("create Bob's test KeyPackage");
         let key_package_wire = bob_key_package
             .key_package()
@@ -119,8 +110,8 @@ pub mod spike_harness {
         let welcome_wire = welcome_out
             .tls_serialize_detached()
             .expect("serialize MLS Welcome");
-        let welcome_in = MlsMessageIn::tls_deserialize_exact(&welcome_wire)
-            .expect("deserialize MLS Welcome");
+        let welcome_in =
+            MlsMessageIn::tls_deserialize_exact(&welcome_wire).expect("deserialize MLS Welcome");
         let welcome = match welcome_in.extract() {
             MlsMessageBodyIn::Welcome(welcome) => welcome,
             _ => panic!("expected an MLS Welcome"),
