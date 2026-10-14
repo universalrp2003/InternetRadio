@@ -8,3 +8,6 @@ __pycache__/
 local.properties
 *.apk
 *.aab
+
+# Rust compiler outputs; only Cargo manifests and Cargo.lock are source.
+**/target/

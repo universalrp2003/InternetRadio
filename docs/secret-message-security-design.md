@@ -1,0 +1,87 @@
+# Secret Message — security and product design
+
+**Status:** implementation foundation only; the Android app contains a local chat UI preview plus an optional empty WebRTC DataChannel connectivity diagnostic. The diagnostic can connect only when a WSS service is configured; it carries no chat content and does not authenticate peers or implement application-level E2EE. The WebRTC dependency and transport code still require compilation, provenance/security review and two-phone tests. Never use this build for sensitive communication or publish it as a secure app.
+
+## Owner-selected product direction
+
+- App title: **Secret Message**.
+- One-to-one conversations; the two devices must be online at the same time. Do not queue messages for offline recipients.
+- Direct peer connection when possible, with a short-lived signaling path and encrypted relay fallback when NAT/firewalls prevent direct connection.
+- Pairing/identity check by QR or a human-compared safety phrase. The code verifies a cryptographic device identity, not a legal name or a biological human.
+- Custom in-app English QWERTY plus a freehand canvas. The canvas transmits strokes, not recognized words; it is language-flexible but cannot guarantee communication without any language barrier. Any future handwriting-to-text must run locally, without uploading text or images.
+- Six original bundled notification-tone choices. Notifications must not reveal message text.
+- Message content should live only in memory and expire within 60 seconds of authenticated delivery/display on both phones. The current preview starts its local timer at Send and expires its local echo; production must start the receiver's timer only after successful authenticated delivery.
+- No chat history, message database, message backups, advertisements, analytics, content logs, third-party keyboard, clipboard export or message content in notifications.
+- Enable Android `FLAG_SECURE` on sensitive screens, as a deterrent only. It cannot prevent a second-device camera, every OEM/OS capture path, a rooted phone, or a compromised operating system.
+- Optional Android biometric/device-credential app lock is local to that phone. Do not transmit biometric data.
+
+## Threat model and honest limits
+
+Protect message contents against network observers, an untrusted signaling/relay service, and accidental local retention. Authenticate the peer's public key so an attacker cannot silently substitute a device during rendezvous. Minimize connection metadata and keep signaling/session state short-lived.
+
+This does not prove a verified name or real-world identity. A QR/safety-code comparison confirms that both parties have the same public key; the parties still need to check who they are meeting. A local biometric confirms local device access, not the remote user's identity. No Android app can guarantee a recipient will not photograph the screen with another device or use a modified/compromised phone. Network peers and relays may learn IP addresses, timing, and traffic volume even when they cannot decrypt content.
+
+## Protocol research and current gate
+
+### Selected library for an integration spike (not production approval)
+
+The candidate selected for the next feasibility spike is **OpenMLS 0.9.0**, pinned to the `openmls-v0.9.0` release. An isolated crate in `secretmessage/native/` now contains a two-member, in-memory smoke harness using the RustCrypto provider and a finalized RFC 9420 ciphersuite. The provider itself is not covered by SRLabs' audit and is not approved for production. The spike is not linked to the Android application, has not yet passed CI/Android compilation, does not verify real identities, and is not permission to claim the app is secure or publish a production chat.
+
+Reasons for the spike: OpenMLS implements the IETF Messaging Layer Security protocol (RFC 9420) and is MIT-licensed. SRLabs performed an independent audit sponsored by the Sovereign Tech Agency, but it is important not to overstate what that means: the reviewed OpenMLS commit was `a3402f2` from 2025-10-22, not the later 0.9.0 release, and the report explicitly excludes both crypto providers, storage providers, and delivery-service/client examples. The report lists eight findings: the High MAC-authentication issue and three Medium issues are marked mitigated; one Low issue is marked acknowledged; one informational DoS issue is risk-accepted; the other Low and informational findings are marked mitigated. The audit announcement says one Low fix was still in progress. Verify the current state of that finding and review changes since the audited commit before relying on 0.9.0. The chosen RustCrypto provider is outside that audit and requires separate scrutiny; also review the full resolved Rust dependency/license tree.
+
+The important integration risk remains: OpenMLS lists Android architectures as “unsupported, but built on CI,” not tested/supported. There is no official OpenMLS Kotlin/Android SDK. The spike must therefore include our own minimal Rust-to-Kotlin bridge (JNI or a reviewed binding layer), native builds for the actual supported Android ABIs, and real Android-device tests. Keep the bridge limited to calling OpenMLS; do not implement protocol, key derivation, signing, or encryption ourselves. OpenMLS 0.9.0 requires Rust 1.91 or newer, so pin and reproduce the toolchain. Its upstream workspace lock also includes Libcrux-provider-only packages with newer RustSec advisories (including `libcrux-hmac-drbg` 0.0.1 and `libcrux-kem` 0.0.9); those entries may not be in this app's normal RustCrypto feature graph. Generate and inspect the app's own lockfile, run `cargo tree` for the exact Android target/features and `cargo audit`/`cargo deny`, and do not suppress findings or enable the Libcrux provider until the affected dependency path is understood and cleared. Retain all upstream notices and reject draft protocol features/ciphersuites. Start with the RFC 9420 mandatory-to-implement X25519/AES-128-GCM/SHA-256/Ed25519 ciphersuite, subject to verification against the pinned OpenMLS API.
+
+For the product shape, test a two-member MLS group only: the online device that creates the room sends setup messages to the other through the WebRTC DataChannel; only MLS application ciphertext may carry chat content. The signaling/TURN services must never receive MLS secrets or plaintext. The room is memory-only and is discarded when the session ends; no offline key-package, welcome, message or history queue is added. MLS membership/authentication must be explicitly bound to the QR/safety-code-verified device key—an invite code or WebRTC DTLS connection alone is not identity verification. Identity-key persistence/protection and peer-key-change handling remain separate work and release gates.
+
+Alternatives considered and not selected for this spike:
+
+- **Signal `libsignal`:** its official project says use outside Signal is unsupported; its Android artifact is AGPLv3. Although technically relevant, those support and licensing constraints make it a poorer fit for this GPL-3.0-only project without a separate legal/maintenance plan. The old `libsignal-protocol-java` repository is archived and is not an alternative.
+- **`mls-rs`:** it offers a Rust/UniFFI Kotlin route and permissive licensing, but its project states it has not received a full third-party security audit. It is not preferred over audited OpenMLS for this security-sensitive spike.
+
+No custom cryptographic handshake, ratchet, cipher, or static shared-key scheme is acceptable. If OpenMLS cannot pass the Android native-build, two-device, identity-binding, dependency, audit-status and license gates, stop and reassess rather than weakening the security requirements or quietly swapping in another library.
+
+Sources:
+
+- OpenMLS 0.9.0 release and pinned source: <https://github.com/openmls/openmls/releases/tag/openmls-v0.9.0>
+- OpenMLS platform status and API documentation: <https://docs.rs/openmls/0.9.0/openmls/>
+- OpenMLS license: <https://github.com/openmls/openmls/blob/openmls-v0.9.0/LICENSE>
+- SRLabs audit summary and full-report link: <https://blog.openmls.tech/posts/2026-05-27-independent-audit/>
+- RustSec advisories for Libcrux dependencies: <https://rustsec.org/advisories/RUSTSEC-2026-0329.html>, <https://rustsec.org/advisories/RUSTSEC-2026-0330.html>, <https://rustsec.org/advisories/RUSTSEC-2026-0331.html>
+- Signal project and license/support statement: <https://github.com/signalapp/libsignal>
+- `mls-rs` project/security statement: <https://github.com/awslabs/mls-rs>
+
+### Candidate transport
+
+Use WebRTC DataChannels for direct device-to-device traffic, with ICE/STUN and a self-controlled TURN service as a fallback. WebRTC provides transport encryption (DTLS) for DataChannel packets, but transport protection alone does not verify that the connected peer is the intended human/device. Keep an application-layer authenticated E2EE session bound to the QR-verified identity. A TURN relay should forward ciphertext only and discard it immediately; the signaling service may hold only ephemeral invitations, public connection descriptions and ICE candidates in memory. No server-side message queue or history.
+
+A first Node.js signaling-service foundation is in `secretmessage/server/`. It forwards only SDP/ICE setup messages, keeps rooms in memory, rejects chat payloads and does not queue setup data for offline peers. It can pass configured STUN URLs and coturn REST-style credentials to both peers when their room is paired, assigning the first participant as offerer and the second as answerer. TURN passwords are HMAC-SHA1 over an expiring username, derived from a server-side shared secret; this is coturn's authentication format, not message encryption. The current default lifetime is five minutes (configurable from 60–900 seconds). Configure `TURN_URLS` and a high-entropy `TURN_SHARED_SECRET` only for a coturn deployment using the same secret, and terminate TLS before exposing WebSockets to the internet. Neither signaling nor TURN is deployed. The Android client has an opt-in empty DataChannel diagnostic using the setup service, but this is not chat transport; service and client still need operational hardening, abuse/privacy review and deployment testing.
+
+- WebRTC protocol stack reference: <https://github.com/webrtc-rs/rtc>
+- Android WebRTC package candidate: <https://github.com/webrtc-sdk/android>
+
+The transport diagnostic currently pins `io.github.webrtc-sdk:android:150.7871.01` plus OkHttp for WSS signaling. The upstream Android wrapper states that releases are published to Maven Central and its repository is MIT-licensed; that alone does not establish the exact native AAR's build provenance, bundled third-party notices, maintenance/security backports, or runtime quality. Treat it as an experiment, not an approved production dependency, until those checks and Android/device tests pass. Do not ship with a random public STUN/TURN service as a hidden dependency. The service operator, retention, IP/metadata exposure, abuse controls and costs must be decided and disclosed. If the owner later chooses strict direct-only mode, explain that CGNAT, carrier networks and restrictive Wi-Fi can prevent connection.
+
+## Key and message lifecycle (planned)
+
+1. Create a per-install identity key and protect private key material using Android Keystore where supported. Keep keys and minimum ratchet/session state separate from message content; device identity must not silently change after app restart.
+2. Pair by scanning a QR code or comparing a safety phrase in person/over a trusted separate channel. Show a persistent warning if the peer key changes; never auto-accept a changed key.
+3. Authenticate a fresh session handshake, then encrypt text/drawing before it enters the data channel. Test replay, reordering, duplicate, truncation, reconnect, stale invite and peer-key-substitution cases.
+4. Send only while both users have an established authenticated session. No offline queue. Begin the recipient's 60-second expiry on successful receive/display, and clear both views on timer expiry, chat close or session end. Sender should also discard its copy on the same delivery-based TTL.
+5. Keep message bodies/strokes out of disk, saved instance state, clipboard, notification preview, logs, crash reports and backups. Clear mutable buffers on a best-effort basis; JVM/Android memory wiping cannot be guaranteed.
+6. The chat preview implements only local UI/timer behavior. A separate opt-in transport diagnostic uses normal `INTERNET` and `ACCESS_NETWORK_STATE` permissions for WSS signaling and WebRTC ICE; it creates an empty DataChannel and sends no application payloads. The app still has no camera, microphone, contacts or notification permission and does not create identity keys or QR codes.
+
+## App module and staged acceptance
+
+`secretmessage/` is an independent Android application module inside the existing RP Ideas source build. The owner intends this to become a fifth, continuously developed application. Its current version is an unsigned, non-publishable `0.1.0-preview`; its debug application ID carries `.preview`. Once security and device-test gates pass, publish it as a separately versioned app to both `RP-Android-Apps` and `InternetRadio`, with identical verified APK bytes and its own release notes. Do not include this preview in the four-app production batch or publish it as secure.
+
+Before any real release:
+
+1. Complete the OpenMLS 0.9.0 integration spike: inspect the full audit report, its unresolved/acknowledged Low finding and the code changes since its audited commit; select a crypto provider only after checking the exact RustSec dependency graph and licenses; pin Rust 1.91+; cross-compile the minimal bridge for supported Android ABIs; and prove a two-device group setup plus ciphertext round-trip. Reassess if any gate fails; obtain an independent security threat model/review before production.
+2. Implement identity-key lifecycle, QR/safety-code verification, key-change warnings, secure storage and app-lock policy.
+3. Complete operational/security review of the short-lived signaling-service foundation; integrate a direct-first WebRTC DataChannel client with controlled TURN relay, strict no-message-retention behavior, abuse controls, rate limits and documented metadata handling.
+4. Add authenticated, forward-secret message encryption; never rely on WebRTC DTLS alone or claim a peer's real-world identity from a QR code.
+5. Add delivery acknowledgment, expiry synchronization, reconnect/cancellation handling and tests proving no offline queue or disk persistence.
+6. Complete dependency/license review, vulnerability review, static/unit/instrumentation tests and independent cryptographic/security review. Test on two physical devices across Wi-Fi, mobile data, carrier NAT and router changes.
+7. Audit notifications, screenshots, recording, accessibility, keyboard, recents, backups, logging and app-switch behavior. Use honest privacy claims and disclose all server/network metadata.
+
+No step in this preview is a substitute for a professional security review. Until all release gates pass, keep the app clearly labelled **prototype/not secure** and do not trigger publication.
