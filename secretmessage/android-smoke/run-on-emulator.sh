@@ -5,6 +5,11 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 AVD_NAME="${ANDROID_AVD_NAME:-secretmessage-mls-smoke}"
 ANDROID_EMULATOR_IMAGE="${ANDROID_EMULATOR_IMAGE:-system-images;android-35;google_apis;x86_64}"
+ANDROID_USER_HOME="${ANDROID_USER_HOME:-$HOME/.android}"
+ANDROID_SDK_HOME="${ANDROID_SDK_HOME:-$ANDROID_USER_HOME}"
+ANDROID_AVD_HOME="${ANDROID_AVD_HOME:-$ANDROID_USER_HOME/avd}"
+ANDROID_EMULATOR_HOME="${ANDROID_EMULATOR_HOME:-$ANDROID_USER_HOME}"
+export ANDROID_USER_HOME ANDROID_SDK_HOME ANDROID_AVD_HOME ANDROID_EMULATOR_HOME
 APK="$SCRIPT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 EMULATOR_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-android-emulator.log"
 
@@ -71,11 +76,24 @@ fi
 sudo chmod 666 /dev/kvm
 
 AVD_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-android-avd.log"
+mkdir -p "$ANDROID_AVD_HOME"
 if ! printf 'no\n' | "$AVDMANAGER" create avd --force \
   --name "$AVD_NAME" \
   --package "$ANDROID_EMULATOR_IMAGE" \
-  --device "pixel_2" > "$AVD_LOG" 2>&1; then
+  --device "pixel_2" \
+  --path "$ANDROID_AVD_HOME/$AVD_NAME.avd" > "$AVD_LOG" 2>&1; then
   emit_failure "Android AVD creation failed" "$(cat "$AVD_LOG")"
+  exit 1
+fi
+if [[ ! -f "$ANDROID_AVD_HOME/$AVD_NAME.ini" ]]; then
+  locations="$(find "$ANDROID_USER_HOME" -maxdepth 4 -type f -name "$AVD_NAME.ini" -print 2>/dev/null || true)"
+  diagnostics=$'AVD manager returned success but did not create the expected AVD registration file.\n'
+  diagnostics+="Expected: $ANDROID_AVD_HOME/$AVD_NAME.ini"
+  diagnostics+=$'\nFound: '
+  diagnostics+="${locations:-none}"
+  diagnostics+=$'\nAVD manager output:\n'
+  diagnostics+="$(cat "$AVD_LOG")"
+  emit_failure "Android AVD registration is missing" "$diagnostics"
   exit 1
 fi
 
