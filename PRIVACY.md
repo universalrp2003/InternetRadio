@@ -2,7 +2,7 @@
 
 **Last updated: 14 October 2026** · **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
-This policy covers the four actively maintained Android apps and their current stable releases: **Live Guard (CleanSweep) 2.46**, **Ramesh Radio 1.11**, **PulseEQ 1.5**, and **RP Vocal Remover Studio 0.1.11**. Older app versions may behave differently.
+This policy covers the four actively maintained Android apps and their latest published releases: **Live Guard (CleanSweep) 2.45**, **Ramesh Radio 1.10**, **PulseEQ 1.4**, and **RP Vocal Remover Studio 0.1.10**. Newer code on the development branch is not available as an APK until its release is published. Older app versions may behave differently.
 
 ## The short version
 

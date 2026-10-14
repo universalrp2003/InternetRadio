@@ -6,10 +6,12 @@ This file is a checklist, not evidence that any app is listed, submitted, accept
 
 | App | Module | Current release | Google Play bundle built by CI | F-Droid recipe |
 |---|---|---:|---|---|
-| Live Guard (CleanSweep) | `cleaner` | 2.46 / code 51 | Yes | `com.universalrp.cleansweep.yml` |
-| Ramesh Radio | `radio` | 1.11 / code 11 | Yes | `com.universalrp.tamilnadufm.yml` |
-| PulseEQ | `equalizer` | 1.5 / code 6 | Yes | `com.universalrp.pulseeq.yml` |
-| RP Vocal Remover Studio | `vocalremover` | 0.1.11 / code 12 | No; direct APK distribution | No recipe in this store-art pipeline |
+| Live Guard (CleanSweep) | `cleaner` | 2.45 / code 50 | Yes | `com.universalrp.cleansweep.yml` |
+| Ramesh Radio | `radio` | 1.10 / code 10 | Yes | `com.universalrp.tamilnadufm.yml` |
+| PulseEQ | `equalizer` | 1.4 / code 5 | Yes | `com.universalrp.pulseeq.yml` |
+| RP Vocal Remover Studio | `vocalremover` | 0.1.10 / code 11 | No; direct APK distribution | No recipe in this store-art pipeline |
+
+Candidate versions 2.46 / 1.11 / 1.5 / 0.1.11 passed CI build and verification in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but no releases or public APK assets were created: the required destination write secret is not configured. These remain candidates and are not store-ready artifacts.
 
 All four have stable direct-download APKs in GitHub Releases. An AAB produced by CI, fastlane metadata, or an F-Droid recipe does not establish store acceptance or availability. See [`../PUBLISHING.md`](../PUBLISHING.md) and [`../docs/published-release-digests.md`](../docs/published-release-digests.md).
 

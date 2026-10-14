@@ -2,14 +2,16 @@
 
 This guide covers the four active modules in the current repository. GitHub Releases are the verified direct-download channel. A successful CI build is required before publication; CI success is not Play Protect approval or a device-compatibility certification.
 
-## Current modules and releases
+## Release candidates awaiting publication
 
-| App | Gradle module | Current version | Release tag | APK |
+| App | Gradle module | Candidate version | Intended release tag | Expected APK |
 |---|---|---:|---|---|
 | Live Guard / CleanSweep | `cleaner` | 2.46 | `live-guard-v2.46` | `CleanSweep-v2.46.apk` |
 | Ramesh Radio | `radio` | 1.11 | `ramesh-radio-v1.11` | `Ramesh-Radio-v1.11.apk` |
 | PulseEQ | `equalizer` | 1.5 | `pulseeq-v1.5` | `PulseEQ-v1.5.apk` |
 | RP Vocal Remover Studio | `vocalremover` | 0.1.11 | `rp-vocal-remover-studio-v0.1.11` | `RP-Vocal-Remover-Studio-v0.1.11.apk` |
+
+These four are candidates, not published releases. CI run [38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483) passed the build, unit/regression, package, signer and APK checks, but publication failed before any drafts were created because the `RP_ANDROID_APPS_RELEASE_TOKEN` Actions secret is missing. The latest published versions remain Live Guard 2.45, Ramesh Radio 1.10, PulseEQ 1.4 and RP Vocal Remover Studio 0.1.10. After configuring the secret, manually dispatch **Build APK** on `arena/a56e1b40-internetradio` with `release_tag=v2026.10.14` to build and publish this candidate batch.
 
 The previously published releases, tags and assets for retired modules are retained as history. They are not built or included in new release batches.
 

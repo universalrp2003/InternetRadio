@@ -11,7 +11,7 @@ This file indexes the four actively maintained apps. App-specific details, insta
 | PulseEQ | 1.5 / code 6 | [`releases/pulseeq-v1.5.md`](releases/pulseeq-v1.5.md) | [pulseeq-v1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) |
 | RP Vocal Remover Studio | 0.1.11 / code 12 | [`releases/rp-vocal-remover-studio-v0.1.11.md`](releases/rp-vocal-remover-studio-v0.1.11.md) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) |
 
-These versions are release candidates until the new GitHub Actions run passes the build, regression, permission, signing and asset checks. Publication results, exact run link, destinations and SHA-256 values will be added after verification. The workflow keeps `InternetRadio` as the bridge endpoint and publishes the same verified APK bytes to `RP-Android-Apps`. If its scoped Actions write secret is absent or invalid, publication fails before any release draft is created.
+These versions remain release candidates: GitHub Actions run [38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483) passed the build, unit/regression, permission, package, signer and APK verification gates, but its publication step stopped before creating any draft because the required `RP_ANDROID_APPS_RELEASE_TOKEN` secret is not configured. No candidate APK release or public asset was created, and no candidate digest is claimed. The workflow keeps `InternetRadio` as the bridge endpoint and publishes the same verified APK bytes to `RP-Android-Apps` after its scoped Actions write secret is configured.
 
 ## Previous stable bridge releases — 14 October 2026
 
