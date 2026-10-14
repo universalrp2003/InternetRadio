@@ -3,7 +3,7 @@
 Live Guard is an Android phone-care and device-monitoring app. Its latest published APK is **2.45 / code 50**, package `com.universalrp.cleansweep`, minimum Android 8.0 (API 26).
 
 - [Download CleanSweep-v2.45.apk](https://github.com/universalrp2003/InternetRadio/releases/download/live-guard-v2.45/CleanSweep-v2.45.apk) · [release notes](../releases/live-guard-v2.45.md)
-- **Candidate 2.46 / code 51:** build, regression, permission-delta and APK checks passed in [CI run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but the workflow stopped before creating any release draft because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It is not yet available for download; no APK digest or device test is claimed.
+- **Candidate 2.46 / code 51:** build, regression, permission-delta and APK checks passed in [CI run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but the workflow stopped before creating any release draft because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It is not yet available as a public APK; its CI build hash is in [`../docs/candidate-build-digests.md`](../docs/candidate-build-digests.md), but no public-release digest or device test is claimed.
 - [Release-asset size and SHA-256](../docs/published-release-digests.md)
 - [Privacy policy](../PRIVACY.md) · [installation advisory](../docs/live-guard-play-protect-install-block.md)
 

@@ -3,7 +3,7 @@
 RP Vocal Remover Studio is a local-first Android vocal-reduction tool. Its latest published direct-download release is **0.1.10 / code 11**, package `com.universalrp.vocalremover`, minimum Android 10 (API 29). The app is distributed as a standalone APK from GitHub Releases; it is not included in the store-art pipeline.
 
 - [Download RP-Vocal-Remover-Studio-v0.1.10.apk](https://github.com/universalrp2003/InternetRadio/releases/download/rp-vocal-remover-studio-v0.1.10/RP-Vocal-Remover-Studio-v0.1.10.apk) · [release notes](../releases/rp-vocal-remover-studio-v0.1.10.md)
-- **Candidate 0.1.11 / code 12:** the CI build, reliability/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It remains standalone and has no candidate APK available to download.
+- **Candidate 0.1.11 / code 12:** the CI build, reliability/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It remains standalone and has no public candidate APK available to download; its CI build hashes are in [`../docs/candidate-build-digests.md`](../docs/candidate-build-digests.md).
 - [Release-asset size and SHA-256](../docs/published-release-digests.md)
 - [Privacy policy](../PRIVACY.md)
 

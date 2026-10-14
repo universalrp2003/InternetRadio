@@ -3,7 +3,7 @@
 PulseEQ is a Tamil-first audio player and 20-band equalizer with an in-app English option. Its latest published release is **1.4 / code 5**, package `com.universalrp.pulseeq`, minimum Android 8.0 (API 26).
 
 - [Download PulseEQ-v1.4.apk](https://github.com/universalrp2003/InternetRadio/releases/download/pulseeq-v1.4/PulseEQ-v1.4.apk) · [release notes](../releases/pulseeq-v1.4.md)
-- **Candidate 1.5 / code 6:** the CI build, unit/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It is not yet available as an APK; candidate updater-source display and new-source routing remain unreleased.
+- **Candidate 1.5 / code 6:** the CI build, unit/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. It is not yet available as a public APK; candidate build hashes are recorded in [`../docs/candidate-build-digests.md`](../docs/candidate-build-digests.md), and updater-source display/new-source routing remain unreleased.
 - [Release-asset size and SHA-256](../docs/published-release-digests.md)
 - [Privacy policy](../PRIVACY.md)
 

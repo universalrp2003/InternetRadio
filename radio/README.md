@@ -3,7 +3,7 @@
 Ramesh Radio is a Tamil-first radio and local-audio player with an in-app English option. Its latest published release is **1.10 / code 10**, package `com.universalrp.tamilnadufm`, minimum Android 8.0 (API 26).
 
 - [Download Ramesh-Radio-v1.10.apk](https://github.com/universalrp2003/InternetRadio/releases/download/ramesh-radio-v1.10/Ramesh-Radio-v1.10.apk) · [release notes](../releases/ramesh-radio-v1.10.md)
-- **Candidate 1.11 / code 11:** the CI build, unit/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. This candidate's boost fix, Tamil-first popularity ordering and update-source display are not yet available in a public APK.
+- **Candidate 1.11 / code 11:** the CI build, unit/regression and APK checks passed in [run 38513305483](https://github.com/universalrp2003/InternetRadio/actions/runs/38513305483), but release publication stopped before draft creation because `RP_ANDROID_APPS_RELEASE_TOKEN` is not configured. This candidate's boost fix, Tamil-first popularity ordering and update-source display are not yet available in a public APK; its CI hashes are recorded in [`../docs/candidate-build-digests.md`](../docs/candidate-build-digests.md).
 - [Release-asset size and SHA-256](../docs/published-release-digests.md)
 - [Privacy policy](../PRIVACY.md)
 
