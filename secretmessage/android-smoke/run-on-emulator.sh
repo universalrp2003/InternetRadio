@@ -45,6 +45,11 @@ printf 'no\n' | "$AVDMANAGER" create avd --force \
   --package "$ANDROID_EMULATOR_IMAGE" \
   --device "pixel_2"
 
+"$ADB" kill-server >/dev/null 2>&1 || true
+"$ADB" start-server
+"$EMULATOR" -accel-check
+
+echo "Starting Android emulator AVD $AVD_NAME from $ANDROID_EMULATOR_IMAGE."
 emulator_pid=""
 cleanup() {
   if [[ -n "$emulator_pid" ]]; then
@@ -54,13 +59,24 @@ cleanup() {
 }
 trap cleanup EXIT
 
-"$EMULATOR" -avd "$AVD_NAME" \
+"$EMULATOR" -avd "$AVD_NAME" -port 5554 -accel on \
   -no-window -gpu swiftshader_indirect -no-audio -no-boot-anim \
-  -no-snapshot-load -no-snapshot-save -camera-back none -wipe-data \
+  -no-snapshot-load -no-snapshot-save -camera-back none -wipe-data -verbose \
   > "$EMULATOR_LOG" 2>&1 &
 emulator_pid=$!
+sleep 5
+if ! kill -0 "$emulator_pid" 2>/dev/null; then
+  echo "Android emulator exited before creating an ADB device. Emulator log tail:" >&2
+  tail -n 160 "$EMULATOR_LOG" >&2 || true
+  exit 1
+fi
 
-timeout 180 "$ADB" wait-for-device
+if ! timeout 90 "$ADB" wait-for-device; then
+  echo "ADB did not detect the Android emulator. Devices and emulator log tail:" >&2
+  "$ADB" devices -l >&2 || true
+  tail -n 160 "$EMULATOR_LOG" >&2 || true
+  exit 1
+fi
 booted=false
 for attempt in $(seq 1 90); do
   boot_complete="$("$ADB" shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
