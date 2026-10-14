@@ -1,1 +1,1 @@
-live-guard-v2.44
+live-guard-v2.45
