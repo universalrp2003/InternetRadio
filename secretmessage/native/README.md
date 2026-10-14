@@ -1,6 +1,6 @@
 # Isolated OpenMLS Android feasibility spike
 
-**Not production code. This crate is not yet linked to the Android app, does not expose a JNI/Kotlin API, and does not establish verified identities. Do not use it for real messages.**
+**Not production code. A minimal JNI entry point is enabled only for the separate test APK in `../android-smoke/`; this crate is not linked to the Android product app and does not establish verified identities. The test APK is local-only feasibility scaffolding. Do not use it for real messages.**
 
 The crate pins OpenMLS 0.9.0 and exercises one narrowly scoped flow using the RFC 9420 mandatory-to-implement X25519/AES-128-GCM/SHA-256/Ed25519 ciphersuite:
 
@@ -26,6 +26,6 @@ For the Android native-link smoke build, install Android NDK 27.2.12479018, set 
 bash build-android.sh
 ```
 
-The script builds arm64-v8a, armeabi-v7a, x86, and x86_64 targets at API 26. It is also run in `.github/workflows/secret-message-mls-spike.yml`. Generated `target/` files and shared libraries are build outputs and must not be committed.
+The script builds the JNI-enabled test library for arm64-v8a, armeabi-v7a, x86, and x86_64 at API 26. If `Cargo.lock` is absent, it first generates a feasibility lockfile and leaves it for review; that does not clear RustSec or imply security approval. It is also run in `.github/workflows/secret-message-mls-spike.yml`. To package the separate local-only debug APK, run `bash ../android-smoke/build-android-smoke.sh` from this directory. That app invokes only the fixed in-memory smoke test; its manifest requests no network permission and it is not part of the product app or release workflow. Generated `target/` files, copied `.so` libraries, and APKs are build outputs and must not be committed.
 
 CI records the resolved dependency graph and runs RustSec auditing. The repository-level OpenMLS audit did not cover either crypto provider; an Android build passing is only an integration result, not security approval. Do not enable draft features or the Libcrux provider in this spike. Before considering production use, review the exact generated lockfile, active Android dependency graph, RustSec results, licenses/notices, audit-version delta, identity binding, and independent security review as required by `../../docs/secret-message-security-design.md`.

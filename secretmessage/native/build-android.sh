@@ -19,6 +19,10 @@ if [[ ! -x "$TOOLCHAIN/aarch64-linux-android${API_LEVEL}-clang" ]]; then
 fi
 
 cd "$SCRIPT_DIR"
+if [[ ! -f Cargo.lock ]]; then
+  echo "Generating a Cargo.lock for this feasibility-only build; this is not security approval."
+  cargo generate-lockfile
+fi
 
 build_target() {
   local target="$1"
@@ -31,8 +35,8 @@ build_target() {
     exit 2
   fi
   export "CARGO_TARGET_${target_env}_LINKER=$linker"
-  echo "Building OpenMLS spike for $target (Android API $API_LEVEL)"
-  cargo build --locked --release --features spike-harness --target "$target"
+  echo "Building test-only JNI-enabled OpenMLS smoke library for $target (Android API $API_LEVEL)"
+  cargo build --locked --release --features android-jni --target "$target"
 }
 
 build_target aarch64-linux-android "aarch64-linux-android${API_LEVEL}-clang"

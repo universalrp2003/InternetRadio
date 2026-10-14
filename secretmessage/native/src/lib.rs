@@ -1,4 +1,4 @@
-#![forbid(unsafe_code)]
+#![deny(unsafe_code)]
 
 //! Experimental OpenMLS integration spike only. This crate is not linked to
 //! the Android application and does not provide application-level identity
@@ -177,3 +177,9 @@ pub mod spike_harness {
         }
     }
 }
+
+// The single JNI symbol is isolated in a tiny module and is enabled only for the
+// separate test APK. The MLS core continues to deny unsafe Rust code.
+#[cfg(feature = "android-jni")]
+#[allow(unsafe_code)]
+mod android_jni;

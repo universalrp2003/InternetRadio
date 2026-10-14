@@ -1,0 +1,21 @@
+plugins {
+    id("com.android.application") version "8.13.0"
+}
+
+android {
+    namespace = "com.rpideas.secretmessage.smoke"
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = "com.rpideas.secretmessage.smoke"
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 1
+        versionName = "0.1.0-test"
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
