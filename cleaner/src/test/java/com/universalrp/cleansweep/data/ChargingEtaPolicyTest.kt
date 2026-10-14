@@ -26,7 +26,14 @@ class ChargingEtaPolicyTest {
 
     @Test fun stableRecentChargeRiseProducesLabeledEstimateData() {
         val estimate = ChargingEtaPolicy.estimate(
-            observations = listOf(point(0, 40.0), point(5, 42.0), point(10, 44.0)),
+            observations = listOf(
+                point(0, 40.0),
+                point(2, 40.8),
+                point(4, 41.6),
+                point(6, 42.4),
+                point(8, 43.2),
+                point(10, 44.0),
+            ),
             nowElapsedMs = 10 * 60_000L,
             currentPercent = 44.0,
             powerConnected = true,
