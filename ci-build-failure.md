@@ -2,8 +2,14 @@
 
 ## Kotlin / resource errors
 ```
-e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/SeparationService.kt:708:61 Inapplicable candidate(s): fun read(): DeviceSnapshot
-e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/SeparationService.kt:708:61 Inapplicable candidate(s): fun read(): DeviceSnapshot
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:357:51 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:358:25 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:359:27 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:386:24 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:357:51 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:358:25 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:359:27 Unresolved reference 'DeviceMonitor'.
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/ChunkedSeparationProcessor.kt:386:24 Unresolved reference 'DeviceMonitor'.
 ```
 
 ## Gradle summary
