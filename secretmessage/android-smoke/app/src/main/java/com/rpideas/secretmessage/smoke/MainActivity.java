@@ -2,6 +2,7 @@ package com.rpideas.secretmessage.smoke;
 
 import android.app.Activity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -82,11 +83,17 @@ public final class MainActivity extends Activity {
                 final String displayResult = result;
                 runOnUiThread(() -> {
                     status.setText(displayResult);
+                    Log.i("MLS_SMOKE", displayResult);
                     run.setEnabled(true);
                 });
             }, "secretmessage-mls-smoke");
             worker.start();
         });
+
+        // The hosted emulator uses this test-only extra to exercise the same button path.
+        if (getIntent().getBooleanExtra("run_mls_smoke", false)) {
+            run.post(() -> run.performClick());
+        }
     }
 
     private int dp(int value) {
