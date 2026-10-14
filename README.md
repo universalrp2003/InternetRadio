@@ -9,7 +9,7 @@ Four actively maintained, open-source Android apps developed by **Ramesh prathap
 | **PulseEQ** | `equalizer` | [1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
 | **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 
-**Published release batch (14 October 2026):** all four versions above passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Each stable APK is published on both `RP-Android-Apps` and `InternetRadio`; the release pages and SHA-256 digests are listed in [`docs/published-release-digests.md`](docs/published-release-digests.md). Earlier candidate-run hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are not the published asset hashes.
+**Published release batch (14 October 2026):** all four versions above passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Each stable APK is published on both `RP-Android-Apps` and `InternetRadio`; the release pages and SHA-256 digests are listed in [`docs/published-release-digests.md`](docs/published-release-digests.md). Build-only candidate hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are not the published asset hashes.
 
 ## Install and update
 

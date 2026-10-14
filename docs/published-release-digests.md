@@ -13,7 +13,7 @@ The latest stable batch was built, verified and published by GitHub Actions run 
 
 The post-publication GitHub API check confirmed that all eight release records are public, stable (not drafts or prereleases), and have canonical release-page and APK-download URLs. For each app, the destination release is newer than the bridge version, and its asset name, byte size and SHA-256 digest match the `InternetRadio` copy exactly. The APK updaters check `RP-Android-Apps` first and `InternetRadio` second; when an otherwise-valid version is present in both, the new repository has priority. This validates public API discovery and the source-selection logic for all four apps. It does **not** claim an on-device download or installation of these exact APK bytes; keep that end-to-end check in the migration grace-period checklist.
 
-The earlier build-only run [38514595315](https://github.com/universalrp2003/InternetRadio/actions/runs/38514595315) produced different candidate APK hashes. Those candidate-build records remain in [`candidate-build-digests.md`](candidate-build-digests.md) and must not be substituted for the published digests above.
+Build-only runs [38514595315](https://github.com/universalrp2003/InternetRadio/actions/runs/38514595315) and [38523346072](https://github.com/universalrp2003/InternetRadio/actions/runs/38523346072) produced candidate APK hashes that differ from the published bytes. [`candidate-build-digests.md`](candidate-build-digests.md) records the latest non-public run; older candidate records remain in Git history. Do not substitute candidate hashes for the published digests above.
 
 ## Previous stable bridge releases — 14 October 2026
 

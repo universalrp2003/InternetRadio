@@ -4,7 +4,7 @@
 - Source commit: 06d828ae2a9c512ea6cc50077adfe7e61b5bb93c
 - Ref: refs/heads/arena/a56e1b40-internetradio
 - Built (UTC): 2026-10-14T06:43:16Z
-- Note: candidate build output only. GitHub publication is not Play Protect approval.
+- Note: candidate build output only; these are not the APK bytes published by run [38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Use [`published-release-digests.md`](published-release-digests.md) for the public asset hashes. GitHub publication is not Play Protect approval or an exact-build device test.
 
 | File | Bytes | SHA-256 |
 | --- | --- | --- |
