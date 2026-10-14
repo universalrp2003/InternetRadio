@@ -1,6 +1,14 @@
 # CI build failure excerpt
 
-_No Gradle build log: the failure happened before or after the build._
+## Kotlin / resource errors
+```
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/SeparationService.kt:708:61 Inapplicable candidate(s): fun read(): DeviceSnapshot
+e: vocalremover/src/main/java/com/universalrp/vocalremover/processing/SeparationService.kt:708:61 Inapplicable candidate(s): fun read(): DeviceSnapshot
+```
+
+## Gradle summary
+```
+```
 
 ## Store artwork step
 ```
