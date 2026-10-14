@@ -299,8 +299,8 @@ android {
         // status are used directly. Lower Android versions are not claimed as verified.
         minSdk = 29
         targetSdk = 36
-        versionCode = 11
-        versionName = "0.1.10"
+        versionCode = 12
+        versionName = "0.1.11"
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
 

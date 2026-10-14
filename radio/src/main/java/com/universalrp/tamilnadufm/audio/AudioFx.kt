@@ -21,7 +21,8 @@ import kotlin.math.ln
  *  - **Hiss cut** trims the top octave that low-bitrate streams fill with hiss.
  *  - **Clear sound** adds gentle multiband compression plus a limiter, so quiet
  *    parts stay audible and loud parts (ads, jingles) stop distorting.
- *  - **Volume boost** is a loudness enhancer, kept modest on purpose.
+ *  - **Volume boost** is a session input gain before the limiter on modern Android;
+ *    older devices use the matching LoudnessEnhancer fallback.
  *
  * On Android 9+ the chain is built on `DynamicsProcessing`, which gives a real
  * multi-band EQ, a multiband compressor and a limiter. On Android 8 the app falls
@@ -94,7 +95,7 @@ object AudioFx {
             clearSound = prefs.getBoolean("clear_sound", true),
             rumbleCut = prefs.getBoolean("rumble_cut", true),
             hissCut = prefs.getBoolean("hiss_cut", false),
-            boostDb = prefs.getFloat("boost", 0f),
+            boostDb = VolumeBoostPolicy.clamp(prefs.getFloat("boost", 0f)),
             balance = prefs.getFloat("balance", 0f).coerceIn(-1f, 1f),
         )
     }
@@ -188,8 +189,9 @@ object AudioFx {
         runCatching { applyDynamics(gains, s) }
         runCatching { applyLegacy(gains, s) }
         runCatching {
-            if (s.boostDb > 0.05f && s.enabled) {
-                loudness?.setTargetGain((s.boostDb * 100f).toInt())
+            val boostDb = VolumeBoostPolicy.clamp(s.boostDb)
+            if (dynamic == null && VolumeBoostPolicy.isActive(boostDb) && loudness != null) {
+                loudness?.setTargetGain(VolumeBoostPolicy.toMillibels(boostDb))
                 loudness?.enabled = true
             } else {
                 loudness?.enabled = false
@@ -204,6 +206,9 @@ object AudioFx {
         val preEqBands = config.preEqBandCount
         val mbcBands = config.mbcBandCount
         val channels = effect.channelCount
+        // DynamicsProcessing exposes input gain in dB on API 28+. This is the modern
+        // path for the slider; LoudnessEnhancer is only used if the device falls back.
+        effect.setInputGainAllChannelsTo(VolumeBoostPolicy.clamp(s.boostDb))
 
         for (channelIndex in 0 until channels) {
             // ---- 10-band equalizer: our curve, evaluated at this device's bands
@@ -241,7 +246,7 @@ object AudioFx {
             }
         }
 
-        effect.enabled = s.enabled || s.clearSound
+        effect.enabled = s.enabled || s.clearSound || VolumeBoostPolicy.isActive(s.boostDb)
         return true
     }
 
@@ -345,9 +350,9 @@ object AudioFx {
 
     fun setHissCut(on: Boolean) = update { it.copy(hissCut = on) }
 
-    fun setBoost(db: Float) = update { it.copy(boostDb = db.coerceIn(0f, 10f)) }
+    fun setBoost(db: Float) = update { it.copy(boostDb = VolumeBoostPolicy.clamp(db)) }
 
-    /** Keeps the loudest band at 0 dB — the reason boosts never clip. */
+    /** Keeps the EQ curve's highest band at 0 dB; session boost is a separate user control. */
     private fun autoPreamp(gains: List<Float>): Float {
         val max = gains.maxOrNull() ?: 0f
         return (-max).coerceIn(-12f, 0f)

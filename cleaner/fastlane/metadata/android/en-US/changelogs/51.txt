@@ -1,0 +1,1 @@
+Floating volume control is smaller, fades when idle, can be dragged to a corner and remembers its position. Update details identify the release source.

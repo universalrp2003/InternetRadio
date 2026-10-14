@@ -548,6 +548,8 @@ def main():
         time.sleep(0.6)
 
     # ------------------------------------------------------------------ order
+    # The app re-ranks its Tamil/All views across category boundaries; within this
+    # generated JSON keep each category together, verified streams first, then votes.
     category_order = {
         "tamil": 0,
         "tamil_fm": 1,
@@ -562,8 +564,8 @@ def main():
         key=lambda s: (
             category_order.get(s["category"], 9),
             0 if s["verified"] else 1,
+            -max(0, s["votes"]),
             -s["order"],
-            -s["votes"],
             s["name"].lower(),
         ),
     )

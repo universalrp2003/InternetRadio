@@ -1,8 +1,8 @@
 # RP Vocal Remover Studio
 
-RP Vocal Remover Studio is a local-first Android vocal-reduction tool. Its current stable direct-download release is **0.1.9 / code 10**, package `com.universalrp.vocalremover`, minimum Android 10 (API 29). The app is distributed as a standalone APK from GitHub Releases; it is not included in the store-art pipeline.
+RP Vocal Remover Studio is a local-first Android vocal-reduction tool. Its current stable direct-download release is **0.1.11 / code 12**, package `com.universalrp.vocalremover`, minimum Android 10 (API 29). The app is distributed as a standalone APK from GitHub Releases; it is not included in the store-art pipeline.
 
-- [Download RP-Vocal-Remover-Studio-v0.1.9.apk](https://github.com/universalrp2003/InternetRadio/releases/download/rp-vocal-remover-studio-v0.1.9/RP-Vocal-Remover-Studio-v0.1.9.apk)
+- [Download RP-Vocal-Remover-Studio-v0.1.11.apk](https://github.com/universalrp2003/InternetRadio/releases/download/rp-vocal-remover-studio-v0.1.11/RP-Vocal-Remover-Studio-v0.1.11.apk) · [release notes](../releases/rp-vocal-remover-studio-v0.1.11.md)
 - [Release-asset size and SHA-256](../docs/published-release-digests.md)
 - [Privacy policy](../PRIVACY.md)
 
@@ -24,4 +24,4 @@ The main screen retains the Slow / Medium / Fast selector. Processing supports p
 ./gradlew :vocalremover:assembleRelease
 ```
 
-The GitHub Actions workflow verifies the APK, package and version, merged manifest, signing identity, native runtime assets and release digest. There is no Android App Bundle target for this app in the current publishing pipeline.
+The updater checks RP-Android-Apps first and InternetRadio as fallback and displays the source of an available release. The GitHub Actions workflow verifies the APK, package and version, merged manifest, signing identity, native runtime assets and release digest. There is no Android App Bundle target for this app in the current publishing pipeline.

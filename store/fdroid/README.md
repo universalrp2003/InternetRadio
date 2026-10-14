@@ -4,19 +4,19 @@ This directory contains source-build recipes for the three apps currently prepar
 
 Prepared recipes:
 
-| App | Metadata file | Source module | Current tag |
+| App | Metadata file | Source module | Last recipe tag |
 |---|---|---|---|
 | Live Guard (CleanSweep) | `metadata/com.universalrp.cleansweep.yml` | `cleaner` | `live-guard-v2.44` |
 | Ramesh Radio | `metadata/com.universalrp.tamilnadufm.yml` | `radio` | `ramesh-radio-v1.9` |
 | PulseEQ | `metadata/com.universalrp.pulseeq.yml` | `equalizer` | `pulseeq-v1.3` |
 
-RP Vocal Remover Studio is currently a standalone GitHub-release APK and has no recipe here. Recipe presence means only that metadata is prepared; verify the F-Droid issue/merge-request status before stating that an app is accepted or available.
+These prepared recipes still reference the preceding versions (2.44, 1.9 and 1.3), not the 14 October bridge releases. F-Droid recipe metadata has not yet been advanced for those releases. The current GitHub APK versions and published hashes are recorded in [`../../docs/published-release-digests.md`](../../docs/published-release-digests.md). RP Vocal Remover Studio is currently a standalone GitHub-release APK and has no recipe here. Recipe presence means only that metadata is prepared; verify the F-Droid issue/merge-request status before stating that an app is accepted or available.
 
 ## Build and signing notes
 
 F-Droid builds source and distributes APKs signed with its signing identity. Those APKs are not normally install-over updates for copies signed with this project's key. Anyone switching an installed direct-download app to a separately signed store build may need to uninstall the former copy first; warn users about potential local-data loss and follow the store's current installation guidance. Do not promise signature continuity between channels.
 
-The recipe's `commit` is the app's current release tag. Keep its `versionName` and `versionCode` aligned with the module's Gradle configuration and the tagged source. Before opening or updating a request, validate the current metadata with F-Droid's current tools and policies; do not assume a prior submission state remains current.
+The recipe's `commit` is the source tag for the version declared by that recipe; it can lag the latest GitHub release. When preparing a recipe update, keep its `versionName` and `versionCode` aligned with the module's Gradle configuration and tagged source. Before opening or updating a request, validate the metadata with F-Droid's current tools and policies; do not assume a prior submission state remains current.
 
 ## When preparing a recipe update
 

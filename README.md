@@ -4,10 +4,10 @@ Four actively maintained, open-source Android apps developed by **Ramesh prathap
 
 | App | Module | Current release | Android | Purpose |
 |---|---|---:|---:|---|
-| **Live Guard (CleanSweep)** | `cleaner` | [2.44](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44) | 8.0+ (API 26) | Phone cleanup, health and security review, network tools, and optional assistance. |
-| **Ramesh Radio** | `radio` | [1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9) | 8.0+ (API 26) | Tamil and world radio, local playback, and app-scoped equalization. |
-| **PulseEQ** | `equalizer` | [1.3](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
-| **RP Vocal Remover Studio** | `vocalremover` | [0.1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
+| **Live Guard (CleanSweep)** | `cleaner` | [2.46](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46) | 8.0+ (API 26) | Phone cleanup, health and security review, network tools, and optional assistance. |
+| **Ramesh Radio** | `radio` | [1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11) | 8.0+ (API 26) | Tamil and world radio, vote-ranked station lists, local playback, and session boost. |
+| **PulseEQ** | `equalizer` | [1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
+| **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 
 ## Install and update
 
@@ -15,7 +15,7 @@ Download each signed APK from its linked GitHub Release page. The apps check for
 
 For download filenames, sizes and verified SHA-256 values, see [`docs/published-release-digests.md`](docs/published-release-digests.md). Release pages are the authoritative source for current APKs and release notes.
 
-> **Live Guard note:** the release permission-delta gate found no newly added dangerous permission for 2.44, so a physical-device evidence record was not required for that release. The exact CI release bytes were not installed during that publication run. See the [installation advisory](docs/live-guard-play-protect-install-block.md) and [release notes](releases/live-guard-v2.44.md).
+> **Live Guard note:** the 2.46 permission-delta gate found no newly added dangerous permission, so a physical-device evidence record was not required. These exact CI-generated APK bytes were not installed on a phone during publication; no device test is claimed for them. See the [installation advisory](docs/live-guard-play-protect-install-block.md) and [release notes](releases/live-guard-v2.46.md).
 
 ## Privacy and audio
 
@@ -46,7 +46,7 @@ GitHub Actions performs the full build, localization/source checks, CleanSweep r
 
 The active Gradle build, CI, store metadata and documentation cover the four apps above. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
 
-The repository URL is intentionally still `github.com/universalrp2003/InternetRadio`: the currently installed app versions use that URL for update checks and do not follow repository-rename redirects. A staged migration plan is recorded in [`docs/repository-migration.md`](docs/repository-migration.md). Do not rename or delete the current repository until bridge updates for all four apps have been installed and verified.
+The repository URL is intentionally still `github.com/universalrp2003/InternetRadio`: already-installed apps use that endpoint and do not follow repository-rename redirects. The 2.45 / 1.10 / 1.4 / 0.1.10 bridge releases are published there so those installations can update. On 14 October, the owner confirmed that all four bridge apps work and manual update checks complete without errors; the one-to-two-month grace period is in progress. The clients query the new public `RP-Android-Apps` repository first and then `InternetRadio`, but the new repository has no app releases yet, so retrieval from that source remains to be demonstrated. Keep both repositories and the old release assets available until grace-period and new-source validation are complete. See [`docs/repository-migration.md`](docs/repository-migration.md).
 
 ## Project documents
 

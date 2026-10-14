@@ -195,6 +195,16 @@ fun RadioScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
             }
         }
 
+        if (state.query.isBlank() && state.category in setOf(Category.ALL, Category.TAMIL, Category.TAMIL_FM)) {
+            item {
+                Text(
+                    "Verified streams stay first; the all-stations list prioritizes Tamil, and Radio Browser votes sort each group.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+            }
+        }
+
         if (state.visible.isEmpty()) {
             item {
                 PanelCard(Modifier.fillMaxWidth()) {

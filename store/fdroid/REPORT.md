@@ -1,4 +1,4 @@
-# Store-channel status — 13 October 2026
+# Store-channel status — 14 October 2026
 
 This report describes repository artifacts, not external store acceptance.
 
@@ -9,16 +9,16 @@ This report describes repository artifacts, not external store acceptance.
 - **F-Droid:** the `metadata/` directory contains prepared recipes for Live Guard, Ramesh Radio and PulseEQ. Recipe files are not proof of an accepted request or live listing. Check the current F-Droid tracker and repository before reporting external status. RP Vocal Remover Studio has no recipe here.
 - **Other third-party stores:** no inclusion or approval claim is made by this repository. Check each store's current policy and listing before referring users there.
 
-## Current F-Droid recipes
+## Versions currently referenced by prepared F-Droid recipes
 
-| App | Package | Module | Version / code | Source tag |
+| App | Package | Module | Last recipe version / code | Last recipe source tag |
 |---|---|---|---:|---|
 | Live Guard (CleanSweep) | `com.universalrp.cleansweep` | `cleaner` | 2.44 / 49 | `live-guard-v2.44` |
 | Ramesh Radio | `com.universalrp.tamilnadufm` | `radio` | 1.9 / 9 | `ramesh-radio-v1.9` |
 | PulseEQ | `com.universalrp.pulseeq` | `equalizer` | 1.3 / 4 | `pulseeq-v1.3` |
 
-F-Droid builds and signs its own APKs, which may not update a GitHub-signed installation in place. Explain signing-key differences and potential local-data consequences before recommending a channel switch.
+These prepared recipes have not yet been advanced to the 14 October bridge releases listed under Current distribution; they are not evidence that F-Droid has built or published any version. F-Droid builds and signs its own APKs, which may not update a GitHub-signed installation in place. Explain signing-key differences and potential local-data consequences before recommending a channel switch.
 
 ## Repository and migration
 
-All current APK updaters and store recipes intentionally use `github.com/universalrp2003/InternetRadio`. Do not change or redirect this repository URL yet. After bridge updates for all four apps have been installed and verified on devices, follow the staged migration in [`../../docs/repository-migration.md`](../../docs/repository-migration.md). Preserve the old release archive and do not delete, replace or rewrite published release assets.
+The bridge APK updaters query `RP-Android-Apps` first and `InternetRadio` second; the prepared F-Droid source recipes still point to the old repository. The owner confirmed on 14 October that all four bridge apps work and manual checks complete without errors, so the one-to-two-month grace period is in progress. The updater UI does not display per-repository status, and fetching a release from the new repository remains to be demonstrated because it has no app releases yet. Keep the old repository and all release assets intact; follow [`../../docs/repository-migration.md`](../../docs/repository-migration.md) before making any repository-URL change.

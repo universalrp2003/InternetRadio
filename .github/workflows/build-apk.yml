@@ -14,9 +14,14 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Publish four separate verified app releases (e.g. v2026.10.13); blank builds only'
+        description: 'New-release batch tag (e.g. v2026.10.13); blank for build-only or mirror_existing runs'
         required: false
         type: string
+      mirror_existing:
+        description: 'Mirror the current public InternetRadio APK releases to RP-Android-Apps without changing the old releases (requires the destination write secret)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -861,7 +866,7 @@ jobs:
       # candidate branches; a published release carries GitHub's own asset digests.
       - name: Record candidate APK digests
         env:
-          RELEASE_REQUESTED: ${{ (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish]')) }}
+          RELEASE_REQUESTED: ${{ (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.mirror_existing)) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish]')) }}
         run: |
           set -e
           RECORD=docs/candidate-build-digests.md
@@ -914,12 +919,14 @@ jobs:
           fi
 
       # Publishing: after all checks pass, publish one stable, version-specific APK release
-      # for each requested app. All releases are staged as drafts before any become public.
-      - name: Publish separate verified releases for four apps
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
+      # for each app, or mirror the exact existing bridge APKs without altering old releases.
+      - name: Publish or mirror verified releases for four apps
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.mirror_existing)) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
         env:
           GH_TOKEN: ${{ github.token }}
+          RP_ANDROID_APPS_RELEASE_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
           REQUESTED_TAG: ${{ inputs.release_tag }}
+          MIRROR_EXISTING: ${{ inputs.mirror_existing }}
         run: |
           set -euo pipefail
           exec > >(tee -a "$RUNNER_TEMP/release-publication.log") 2>&1
@@ -928,10 +935,9 @@ jobs:
           else BATCH_TAG="v$(date -u +%Y.%m.%d)"; fi
           [[ "$BATCH_TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release batch tag"; exit 1; }
 
-          # The bridge release remains on InternetRadio so already-installed clients can find it.
-          # Before any draft is created, fail closed unless the new-first updater destination is
-          # public and its releases API is reachable. This read-only preflight needs no cross-repo
-          # write secret; the target receives post-bridge releases after the migration checks.
+          # Preserve the old endpoint for installed clients and publish the same verified APK
+          # bytes to the new-first destination. Destination access and its scoped write secret are
+          # checked before any draft is created; fail closed rather than publish old-source only.
           DESTINATION_REPO="universalrp2003/RP-Android-Apps"
           if ! DESTINATION_INFO=$(gh api "repos/${DESTINATION_REPO}" --jq '[.private, .default_branch, .archived] | @tsv'); then
             echo "FAIL: RP-Android-Apps is not reachable; refusing to publish bridge releases."
@@ -946,7 +952,26 @@ jobs:
             echo "FAIL: RP-Android-Apps release API is not readable; refusing to publish bridge releases."
             exit 1
           fi
-          echo "OK: public RP-Android-Apps repository and releases API are reachable; bridge assets will remain on InternetRadio."
+          TARGET_PUBLISH_ENABLED=false
+          if [[ -n "${RP_ANDROID_APPS_RELEASE_TOKEN:-}" ]]; then
+            TARGET_PUSH=$(GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api "repos/${DESTINATION_REPO}" --jq '.permissions.push // false') || {
+              echo "FAIL: the RP-Android-Apps release token cannot read its destination repository."
+              exit 1
+            }
+            if [[ "$TARGET_PUSH" != "true" ]]; then
+              echo "FAIL: RP-ANDROID_APPS_RELEASE_TOKEN must have contents:write access to RP-Android-Apps."
+              exit 1
+            fi
+            TARGET_PUBLISH_ENABLED=true
+            echo "OK: target release mirroring is enabled with write access."
+          else
+            echo "::error::Dual-repository release is blocked. Configure the InternetRadio Actions secret RP_ANDROID_APPS_RELEASE_TOKEN with contents:write access to RP-Android-Apps; no release drafts have been created. Do not paste the secret into chat."
+            exit 1
+          fi
+          if [[ "${MIRROR_EXISTING:-false}" == "true" && "$TARGET_PUBLISH_ENABLED" != "true" ]]; then
+            echo "FAIL: mirror_existing requires RP_ANDROID_APPS_RELEASE_TOKEN with RP-Android-Apps contents:write access."
+            exit 1
+          fi
 
           # Never publish a stale branch candidate after a newer fix has been pushed.
           if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
@@ -1009,7 +1034,7 @@ jobs:
           CLEANER_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
           # This is a separate step from "Verify built APKs", so its tools are not inherited.
           AAPT2=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
-          if [ "${CLEANER_CODE:-0}" -gt 44 ]; then
+          if [ "${CLEANER_CODE:-0}" -gt 44 ] && [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
             EVIDENCE="docs/live-guard-${CLEANER_VERSION}-device-evidence.md"
             # --- 2.42: does THIS release need a recorded device install? --------------
             if [ -z "$AAPT2" ]; then
@@ -1134,27 +1159,52 @@ jobs:
               fi
               echo "OK: device evidence in $EVIDENCE covers the published CleanSweep $CLEANER_VERSION APK ($TESTED_SHA)"
             fi
+          elif [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+            echo "Mirror-only mode: the freshly built candidate is not being released. The already-public InternetRadio APK must pass its own size and SHA-256 checks before copying."
           fi
           RELEASE_TAGS=("$LIVE_GUARD_TAG" "$RADIO_TAG" "$EQ_TAG" "$VOCAL_TAG")
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              if GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release view "$release_tag" --repo "$DESTINATION_REPO" >/dev/null 2>&1 || \
+                 GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api "repos/${DESTINATION_REPO}/git/ref/tags/${release_tag}" >/dev/null 2>&1; then
+                echo "Target release tag already exists: $release_tag; refusing to overwrite it."
+                exit 1
+              fi
+            done
+          fi
           for release_tag in "${RELEASE_TAGS[@]}"; do
-            if gh release view "$release_tag" >/dev/null 2>&1; then
-              echo "Release already exists: $release_tag; use new app versions/tags instead of overwriting it."; exit 1
-            fi
-            if git ls-remote --exit-code origin "refs/tags/$release_tag" >/dev/null 2>&1; then
-              echo "Git tag already exists without a release: $release_tag; refusing to repurpose it."; exit 1
+            if [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+              if ! SOURCE_RELEASE_STATUS=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" --jq '[.draft, .prerelease] | @tsv'); then
+                echo "Mirror source release is missing on InternetRadio: $release_tag"; exit 1
+              fi
+              IFS=$'\t' read -r SOURCE_IS_DRAFT SOURCE_IS_PRERELEASE <<< "$SOURCE_RELEASE_STATUS"
+              if [[ "$SOURCE_IS_DRAFT" != "false" || "$SOURCE_IS_PRERELEASE" != "false" ]]; then
+                echo "Mirror source release must be stable and public: $release_tag"; exit 1
+              fi
+            else
+              if gh release view "$release_tag" >/dev/null 2>&1; then
+                echo "Release already exists: $release_tag; use new app versions/tags instead of overwriting it."; exit 1
+              fi
+              if git ls-remote --exit-code origin "refs/tags/$release_tag" >/dev/null 2>&1; then
+                echo "Git tag already exists without a release: $release_tag; refusing to repurpose it."; exit 1
+              fi
             fi
           done
 
           RELEASE_APKS=("$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REL")
           RELEASE_NOTES=("$LIVE_NOTES" "$RADIO_NOTES" "$EQ_NOTES" "$VOCAL_NOTES")
           RELEASE_TITLES=("Live Guard $CLEANER_VERSION" "Ramesh Radio $RADIO_VERSION" "PulseEQ $EQ_VERSION" "RP VOCAL REMOVER STUDIO $VOCAL_VERSION")
-          for i in "${!RELEASE_TAGS[@]}"; do
-            release_tag="${RELEASE_TAGS[$i]}"
-            echo "Creating private draft: $release_tag (${RELEASE_APKS[$i]})"
-            gh release create "$release_tag" --target "$GITHUB_SHA" --draft \
-              --title "${RELEASE_TITLES[$i]}" --notes-file "${RELEASE_NOTES[$i]}"
-            gh release upload "$release_tag" "${RELEASE_APKS[$i]}"
-          done
+          if [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              echo "Creating private draft: $release_tag (${RELEASE_APKS[$i]})"
+              gh release create "$release_tag" --target "$GITHUB_SHA" --draft \
+                --title "${RELEASE_TITLES[$i]}" --notes-file "${RELEASE_NOTES[$i]}"
+              gh release upload "$release_tag" "${RELEASE_APKS[$i]}"
+            done
+          else
+            echo "Mirror mode: leaving all existing InternetRadio releases, tags and assets unchanged."
+          fi
 
           verify_release_asset() {
             release_tag="$1"
@@ -1203,17 +1253,108 @@ jobs:
           PY
           }
 
-          # Verify each draft's updater-facing size/digest before publication; GitHub assigns canonical tag URLs on promotion.
-          for i in "${!RELEASE_TAGS[@]}"; do
-            verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
-          done
+          # Verify all old-source publication inputs. In mirror mode, download and validate the
+          # existing public release assets first, then mirror those exact bytes without editing
+          # any old release, tag or asset.
+          if [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              source_dir="$RUNNER_TEMP/mirror-source-${release_tag}"
+              mkdir -p "$source_dir"
+              apk_name=$(basename "${RELEASE_APKS[$i]}")
+              gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+                --dir "$source_dir" --pattern "$apk_name"
+              source_apk="$source_dir/$apk_name"
+              test -s "$source_apk" || { echo "Missing existing source asset: $release_tag/$apk_name"; exit 1; }
+              RELEASE_APKS[$i]="$source_apk"
+              verify_release_asset "$release_tag" "$source_apk" false
+            done
+          else
+            # Verify each old-source draft before publication; GitHub assigns canonical tag URLs on promotion.
+            for i in "${!RELEASE_TAGS[@]}"; do
+              verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
+            done
+          fi
 
-          # Only publish after every app's notes and APK have uploaded and passed API checks.
-          for release_tag in "${RELEASE_TAGS[@]}"; do
-            gh release edit "$release_tag" --draft=false
-          done
+          verify_target_release_asset() {
+            release_tag="$1"
+            apk="$2"
+            expected_draft="$3"
+            response_pages="$RUNNER_TEMP/target-release-${release_tag}-pages.json"
+            if ! GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api --paginate "repos/${DESTINATION_REPO}/releases?per_page=100" > "$response_pages"; then
+              echo "FAIL: could not list RP-Android-Apps releases while verifying $release_tag"
+              return 1
+            fi
+            python3 - "$response_pages" "$release_tag" "$apk" "$expected_draft" "$DESTINATION_REPO" <<'PY'
+          import hashlib, json, pathlib, sys
+          response_path, tag, apk_path, expected_draft, repo = sys.argv[1:]
+          pages = [json.loads(line) for line in pathlib.Path(response_path).read_text().splitlines() if line.strip()]
+          releases = [release for page in pages for release in page]
+          matches = [item for item in releases if item.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one {repo} release for {tag}, found {len(matches)}"
+          release = matches[0]
+          apk = pathlib.Path(apk_path)
+          name = apk.name
+          expected_url = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          expected_page = f"https://github.com/{repo}/releases/tag/{tag}"
+          expected_digest = "sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest()
+          is_draft = expected_draft == "true"
+          assert release.get("draft") is is_draft, f"unexpected draft state: {release.get('draft')}"
+          assert release.get("prerelease") is False, "release is marked prerelease"
+          if is_draft:
+              assert release.get("html_url", "").startswith(f"https://github.com/{repo}/releases/tag/")
+          else:
+              assert release.get("html_url") == expected_page, f"non-canonical release page: {release.get('html_url')}"
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+          assert len(assets) == 1, f"expected exactly one {name} asset"
+          asset = assets[0]
+          assert asset.get("state") == "uploaded", f"asset is not uploaded: {asset.get('state')}"
+          assert asset.get("size") == apk.stat().st_size, "destination size differs from the verified APK"
+          assert asset.get("digest") == expected_digest, f"destination SHA-256 differs: {asset.get('digest')} != {expected_digest}"
+          download_url = asset.get("browser_download_url", "")
+          assert download_url.startswith(f"https://github.com/{repo}/releases/download/") and download_url.endswith("/" + name), f"non-canonical destination asset: {download_url}"
+          if not is_draft:
+              assert download_url == expected_url, f"destination download URL is not canonical: {download_url}"
+          print(f"VERIFIED {'DRAFT' if is_draft else 'PUBLIC'} {repo}/{tag}: {name}, {asset['size']} bytes, {expected_digest}")
+          PY
+          }
+
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            # Mirror the exact locally verified APK bytes; the destination repository contains
+            # releases/assets, while source/build ownership remains on InternetRadio for now.
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              echo "Creating RP-Android-Apps draft: $release_tag (${RELEASE_APKS[$i]})"
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release create "$release_tag" \
+                --repo "$DESTINATION_REPO" --target "$DESTINATION_BRANCH" --draft \
+                --title "${RELEASE_TITLES[$i]}" --notes-file "${RELEASE_NOTES[$i]}"
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release upload "$release_tag" \
+                "${RELEASE_APKS[$i]}" --repo "$DESTINATION_REPO"
+            done
+            for i in "${!RELEASE_TAGS[@]}"; do
+              verify_target_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
+            done
+          fi
+
+          # Only publish after every old draft—and every configured target draft—has passed
+          # its updater-facing size, SHA-256, stable-state and canonical-release checks.
+          # Mirror mode deliberately leaves all existing InternetRadio releases untouched.
+          if [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              gh release edit "$release_tag" --draft=false
+            done
+          fi
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release edit "$release_tag" \
+                --repo "$DESTINATION_REPO" --draft=false
+            done
+          fi
           for i in "${!RELEASE_TAGS[@]}"; do
             verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" false
+            if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+              verify_target_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" false
+            fi
           done
 
           # Keep the previous-release pointer aligned for the next Live Guard permission delta.
@@ -1228,7 +1369,8 @@ jobs:
               git push origin "HEAD:${GITHUB_REF_NAME}"
             fi
           fi
-          echo "All four stable app releases are published and their updater-facing assets are verified."
+          [[ "$TARGET_PUBLISH_ENABLED" == "true" ]] || { echo "FAIL: dual-repository publication was not enabled."; exit 1; }
+          echo "All four stable app releases are published and their assets are verified on InternetRadio and RP-Android-Apps."
 
       - name: Surface build errors
         if: failure()

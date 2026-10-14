@@ -78,6 +78,8 @@ object AppStrings {
     }
 
     private fun translateDynamic(text: String): String? {
+        val voteLabels = Regex("\\b(\\d+) votes\\b").replace(text) { "${it.groupValues[1]} வாக்குகள்" }
+        if (voteLabels != text) return voteLabels
         Regex("^The saved audio location is missing\\.$").matchEntire(text)
             ?.let { return "சேமித்த ஒலிக் கோப்பு இருப்பிடம் இல்லை." }
         Regex("^Android could not play this audio \\(player error (\\d+)/(\\d+)\\)\\.$").matchEntire(text)
@@ -174,6 +176,10 @@ object AppStrings {
         "AI software assistance" to "AI மென்பொருள் உதவி",
         "App updates" to "பயன்பாட்டு புதுப்பிப்புகள்",
         "Verified GitHub APK updates" to "சரிபார்க்கப்பட்ட GitHub APK புதுப்பிப்புகள்",
+        "Checks RP-Android-Apps first; InternetRadio remains as a grace-period fallback." to "முதலில் RP-Android-Apps சரிபார்க்கப்படும்; இடைக்காலத்தில் InternetRadio மாற்று சேமிப்பகமாகத் தொடரும்.",
+        "Release source" to "வெளியீட்டு மூலம்",
+        "Verified streams stay first; the all-stations list prioritizes Tamil, and Radio Browser votes sort each group." to "சரிபார்க்கப்பட்ட ஒளிபரப்புகள் முதலில்; அனைத்து நிலையப் பட்டியலில் தமிழ் முன்னுரிமை பெறும், ஒவ்வொரு குழுவிலும் Radio Browser வாக்குகள் வரிசைப்படுத்தும்.",
+        "This raises the radio app's audio-session gain by up to 10 dB. Android's device volume limit still applies; lower the boost if you hear distortion." to "இது ரேடியோ ஒலியின் அமர்வு அளவை அதிகபட்சம் 10 dB வரை உயர்த்தும். Android சாதனத்தின் ஒலி வரம்பு தொடரும்; ஒலி சிதைந்தால் Boost-ஐக் குறைக்கவும்.",
         "Check for updates" to "புதுப்பிப்புகளைச் சரிபார்",
         "Checking…" to "சரிபார்க்கிறது…",
         "Update available" to "புதுப்பிப்பு உள்ளது",

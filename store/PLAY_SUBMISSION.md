@@ -6,10 +6,10 @@ This file is a checklist, not evidence that any app is listed, submitted, accept
 
 | App | Module | Current release | Google Play bundle built by CI | F-Droid recipe |
 |---|---|---:|---|---|
-| Live Guard (CleanSweep) | `cleaner` | 2.44 / code 49 | Yes | `com.universalrp.cleansweep.yml` |
-| Ramesh Radio | `radio` | 1.9 / code 9 | Yes | `com.universalrp.tamilnadufm.yml` |
-| PulseEQ | `equalizer` | 1.3 / code 4 | Yes | `com.universalrp.pulseeq.yml` |
-| RP Vocal Remover Studio | `vocalremover` | 0.1.9 / code 10 | No; direct APK distribution | No recipe in this store-art pipeline |
+| Live Guard (CleanSweep) | `cleaner` | 2.46 / code 51 | Yes | `com.universalrp.cleansweep.yml` |
+| Ramesh Radio | `radio` | 1.11 / code 11 | Yes | `com.universalrp.tamilnadufm.yml` |
+| PulseEQ | `equalizer` | 1.5 / code 6 | Yes | `com.universalrp.pulseeq.yml` |
+| RP Vocal Remover Studio | `vocalremover` | 0.1.11 / code 12 | No; direct APK distribution | No recipe in this store-art pipeline |
 
 All four have stable direct-download APKs in GitHub Releases. An AAB produced by CI, fastlane metadata, or an F-Droid recipe does not establish store acceptance or availability. See [`../PUBLISHING.md`](../PUBLISHING.md) and [`../docs/published-release-digests.md`](../docs/published-release-digests.md).
 

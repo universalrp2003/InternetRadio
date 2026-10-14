@@ -466,6 +466,7 @@ object AppUpdates {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text("Verified GitHub APK updates"))
                 Text(text("Stable releases are checked against the app package, version, SHA-256 and installed signing certificate. Downloads stay in the app; Android shows its installer and confirmation."))
+                Text(text("Checks RP-Android-Apps first; InternetRadio remains as a grace-period fallback."))
                 Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                     Text(text("Check for updates on app launch"), modifier = Modifier.weight(1f))
                     Switch(checked = enabled, onCheckedChange = {
@@ -487,6 +488,7 @@ object AppUpdates {
                     Text(text(it) + releaseDetails)
                 }
                 update?.let { release ->
+                    Text(text("Release source") + ": ${release.repository}")
                     Text(text("What’s new") + "\n" + localizedReleaseNotes(release.notes, AppLanguageState.current))
                     if (downloading) {
                         LinearProgressIndicator(
@@ -534,6 +536,7 @@ object AppUpdates {
                     ) {
                         val installedSize = release.size / (1024 * 1024)
                         Text(if (tamil) "நிறுவிய பதிப்பு: $installed · APK: $installedSize MiB" else "Installed: $installed · APK: $installedSize MiB")
+                        Text(text("Release source") + ": ${release.repository}")
                         message?.let { Text(text(it)) }
                         if (downloading) {
                             LinearProgressIndicator(

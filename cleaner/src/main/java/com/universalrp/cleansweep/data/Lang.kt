@@ -426,6 +426,7 @@ object Lang {
         "On. The separate floating button opens Android's media-volume panel; turning it off leaves the charging/data pill unchanged." to
             "இயக்கத்தில் உள்ளது. இந்த தனி மிதக்கும் பொத்தான் Android மீடியா ஒலி பலகையைத் திறக்கும்; இதை அணைப்பது சார்ஜ்/டேட்டா பட்டையை மாற்றாது.",
         "Open system media volume controls" to "சிஸ்டம் மீடியா ஒலி கட்டுப்பாட்டைத் திற",
+        "Tap to open system volume controls; drag to move" to "சிஸ்டம் ஒலி கட்டுப்பாட்டைத் திறத் தட்டவும்; நகர்த்த இழுக்கவும்",
         "Battery" to "பேட்டரி",
         "Temperature" to "வெப்பநிலை",
         "Processor" to "செயலி (CPU)",
@@ -1130,6 +1131,8 @@ object Lang {
         "What’s new" to "புதியவை",
         "Later" to "பிறகு",
         "Verified in-app download; Android confirms installation." to "ஆப்பிற்குள் சரிபார்த்த பதிவிறக்கம்; நிறுவலை Android உறுதிப்படுத்தும்.",
+        "Checks RP-Android-Apps first; InternetRadio remains as a grace-period fallback." to "முதலில் RP-Android-Apps சரிபார்க்கப்படும்; இடைக்காலத்தில் InternetRadio மாற்று சேமிப்பகமாகத் தொடரும்.",
+        "Release source" to "வெளியீட்டு மூலம்",
         "Downloading %s of %s" to "%s / %s பதிவிறங்குகிறது",
         "Installed version: %s" to "நிறுவிய பதிப்பு: %s",
         "Downloads only a stable published Live Guard APK from the official GitHub repository. SHA-256, package, higher version code and the installed signing certificate must match. No browser download or silent installation." to "அதிகாரப்பூர்வ GitHub சேமிப்பகத்திலிருந்து வெளியிடப்பட்ட நிலையான லைவ் கார்டு APK மட்டுமே பதிவிறங்கும். SHA-256, தொகுப்பு அடையாளம், உயர்ந்த பதிப்பு எண் மற்றும் நிறுவிய ஆப்பின் கையொப்பச் சான்றிதழ் பொருந்த வேண்டும். உலாவி பதிவிறக்கமோ மறைமுக நிறுவலோ இல்லை.",

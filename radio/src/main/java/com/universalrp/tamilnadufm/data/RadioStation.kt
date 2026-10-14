@@ -40,9 +40,13 @@ data class RadioStation(
             else -> ""
         }
 
-    /** What the row shows under the name: quality + place, whichever exist. */
+    /** What the row shows under the name: votes (when available), quality and place. */
     val subtitle: String
-        get() = listOf(qualityLabel, place).filter { it.isNotBlank() }.joinToString(" • ")
+        get() = buildList {
+            if (votes > 0) add("$votes votes")
+            if (qualityLabel.isNotBlank()) add(qualityLabel)
+            if (place.isNotBlank()) add(place)
+        }.joinToString(" • ")
 
     val monogram: String
         get() = name.trim().split(" ")

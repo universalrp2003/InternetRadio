@@ -21,6 +21,7 @@ import com.universalrp.tamilnadufm.data.Category
 import com.universalrp.tamilnadufm.data.DirectoryClient
 import com.universalrp.tamilnadufm.data.LocalTrack
 import com.universalrp.tamilnadufm.data.RadioStation
+import com.universalrp.tamilnadufm.data.StationOrdering
 import com.universalrp.tamilnadufm.data.StationRepository
 import com.universalrp.tamilnadufm.player.PlayerBus
 import com.universalrp.tamilnadufm.player.PlaybackService
@@ -34,6 +35,20 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class Tab { RADIO, NEWS, LOCAL, EQUALIZER, MORE }
+
+private val VOTE_ORDERED_CATEGORIES = setOf(
+    Category.ALL,
+    Category.TAMIL,
+    Category.TAMIL_FM,
+    Category.TAMIL_ILAYARAJA,
+    Category.TAMIL_MSV,
+    Category.TAMIL_AR_RAHMAN,
+    Category.TAMIL_80S_90S,
+    Category.TAMIL_DEVOTIONAL,
+            Category.TAMIL_NEWS,
+            Category.ALL_NEWS,
+            Category.TOWNS,
+)
 
 data class UiState(
     val tab: Tab = Tab.RADIO,
@@ -220,13 +235,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             val seeds = repo.seedStations()
             val custom = repo.customStations()
             val recent = repo.recent().mapNotNull { url -> seeds.firstOrNull { it.url.lowercase() == url } }
-            val all = (custom + seeds)
-                .distinctBy { it.url.lowercase() }
-                .sortedWith(
-                    compareByDescending<RadioStation> { it.verified }
-                        .thenByDescending { it.votes }
-                        .thenBy { it.name.lowercase() }
-                )
+            val all = StationOrdering.mostPopular(
+                (custom + seeds).distinctBy { it.url.lowercase() },
+            )
             mutate {
                 it.copy(
                     stations = all,
@@ -321,7 +332,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             matchesQuery && matchesCategory
         }
-        mutate { it.copy(visible = list) }
+        val ordered = when {
+            s.category == Category.ALL || s.category == Category.ALL_NEWS ->
+                StationOrdering.tamilFirstPopular(list)
+            s.category in VOTE_ORDERED_CATEGORIES -> StationOrdering.mostPopular(list)
+            else -> list
+        }
+        mutate { it.copy(visible = ordered) }
     }
 
     // -------------------------------------------------------------- directory

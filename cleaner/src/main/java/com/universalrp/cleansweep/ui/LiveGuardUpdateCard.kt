@@ -46,6 +46,7 @@ fun LiveGuardUpdateCard() {
                 Column(Modifier.weight(1f)) {
                     Text(tr("App updates"), style = MaterialTheme.typography.titleSmall)
                     Text(tr("Verified in-app download; Android confirms installation."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
+                    Text(tr("Checks RP-Android-Apps first; InternetRadio remains as a grace-period fallback."), style = MaterialTheme.typography.labelSmall, color = TextSecondary)
                 }
                 PulsingUpdateButton(available = state.release != null && !state.busy, onClick = { dialog = true })
             }
@@ -67,6 +68,7 @@ fun LiveGuardUpdateCard() {
             state.message?.let { Text(tr(it), style = MaterialTheme.typography.bodySmall) }
             state.release?.let { release ->
                 Text(tr("Published version: %s", release.version))
+                Text(tr("Release source") + ": ${release.repository}", style = MaterialTheme.typography.labelSmall)
                 Text(tr("Published: %s", DisplayTime.dated(release.publishedAt, Lang.languageIn(context) == AppLang.TA)), style = MaterialTheme.typography.labelSmall)
                 Text(localizedReleaseNotes(release.notes).ifBlank { tr("No release notes were published.") }, style = MaterialTheme.typography.bodySmall)
                 if (state.downloading) {
@@ -118,6 +120,8 @@ fun LiveGuardUpdatePrompt() {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 Text(tr("Version %s is available (installed: %s).", prompted.version, com.universalrp.cleansweep.BuildConfig.VERSION_NAME))
+                Text(tr("Release source") + ": ${prompted.repository}", style = MaterialTheme.typography.labelSmall)
+                Text(tr("Checks RP-Android-Apps first; InternetRadio remains as a grace-period fallback."), style = MaterialTheme.typography.labelSmall)
                 Text(tr("This stable APK is downloaded inside Live Guard and verified against its SHA-256, package, newer version and installed signing certificate."), style = MaterialTheme.typography.bodySmall)
                 Text(tr("Android requires per-app Install unknown apps access and shows its own confirmation. Play Protect remains enabled and is not bypassed."), style = MaterialTheme.typography.bodySmall)
                 Text(tr("What’s new"), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold)
