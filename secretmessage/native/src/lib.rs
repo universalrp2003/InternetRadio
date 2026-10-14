@@ -10,7 +10,7 @@ pub mod spike_harness {
         tls_codec::{Deserialize, Serialize},
         *,
     };
-    use openmls_basic_credential::{BasicCredential, SignatureKeyPair};
+    use openmls_basic_credential::SignatureKeyPair;
     use openmls_rust_crypto::OpenMlsRustCrypto;
 
     const TEST_CIPHERSUITE: Ciphersuite = Ciphersuite::MLS_128_DHKEMX25519_AES128GCM_SHA256_Ed25519;
