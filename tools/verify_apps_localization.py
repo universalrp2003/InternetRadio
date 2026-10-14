@@ -15,10 +15,10 @@ EXPR = rf'{STRING}(?:\s*\+\s*{STRING})*'
 PROPER = {"Ramesh Radio", "PulseEQ", "RP VOCAL REMOVER", "STUDIO", "›"}
 FORMAT_TEMPLATES = {"%.1f dB", "Preamp %.1f dB", "preamp %.1f dB", "Volume boost: %.0f dB"}
 EXPECTED_RELEASE_URLS = {
-    "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44",
-    "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9",
-    "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3",
-    "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9",
+    "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.45",
+    "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.10",
+    "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.4",
+    "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.10",
 }
 
 

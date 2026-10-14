@@ -1,0 +1,4 @@
+PulseEQ 1.4
+• Apply DSP changes safely at audio block boundaries.
+• Reset analyser state when the sample rate changes.
+• Verify release URL, APK digest, package, version and signer before installer hand-off.

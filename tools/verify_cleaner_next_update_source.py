@@ -89,7 +89,7 @@ def main():
             all(not path.exists() for path in removed_rating_paths),
             'Arena model-rating card, policy, data and tests must remain removed')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
-    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 49', 'versionName = "2.44"'):
+    for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 50', 'versionName = "2.45"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)
     for removed in ('com.google.mlkit:translate', 'com.google.mlkit:language-id'):
         require(removed not in gradle, 'Removed reader dependency is still declared: ' + removed)
@@ -225,7 +225,7 @@ def main():
             'sameContents' in source('data/DuplicateContentHash.kt'),
             'Private-source recovery or full-content duplicate confirmation was removed')
     print('PASS: Static manifest, privacy/backup, updater, charging, duplicate, rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 42 required suites / 365 prepared declarations; tests NOT executed. Candidate 2.44/code49/API26 matches.')
+    print('PASS: 42 required suites / 365 prepared declarations; tests NOT executed. Candidate 2.45/code50/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

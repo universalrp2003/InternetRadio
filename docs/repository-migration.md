@@ -1,6 +1,6 @@
 # Staged repository migration plan
 
-**Status: bridge preparation authorized; destination repository not yet created.** Keep the existing repository at `github.com/universalrp2003/InternetRadio` available throughout the transition. Installed releases use that exact API/release path and reject HTTP redirects. The bridge clients are being prepared to check `RP-Android-Apps` first and retain `InternetRadio` as a verified fallback. Do not rename, delete, archive or redirect the current repository now.
+**Status: bridge preparation authorized; destination `universalrp2003/RP-Android-Apps` was created as a public repository on 14 October 2026, with a `main` branch, README and GPL-3.0 license. It has no app releases yet.** Keep the existing repository at `github.com/universalrp2003/InternetRadio` available throughout the transition. Installed releases use that exact API/release path and reject HTTP redirects. The bridge clients check `RP-Android-Apps` first and retain `InternetRadio` as a verified fallback. Do not rename, delete, archive or redirect the current repository now.
 
 ## Target
 
@@ -16,14 +16,14 @@
 - Keep the old source enabled during the grace period. Do not publish a URL-only rebuild under an existing version or tag; every changed APK needs a new version and tag.
 - Do not rename the old repository or rely on a redirect. Existing clients reject redirects.
 
-The owner reported that all four current apps were installed and working on their phone on 13 October 2026. That does not yet mean a dual-source bridge update has reached the device. The public destination repo currently does not exist, so release publication waits until it has been created and prepared.
+The owner reported that all four current apps were installed and working on their phone on 13 October 2026. That does not yet mean a dual-source bridge update has reached the device. The public destination repo now exists but has no app releases; the bridge APKs still require fresh increasing version codes, a passing CI/release gate and a confirmed update path before publication.
 ## Phase 1 — prepare the destination
 
-Migration is now authorized, but `universalrp2003/RP-Android-Apps` is not yet present.
+The owner created `universalrp2003/RP-Android-Apps` as a separate public repository on 14 October 2026. Its `main` branch currently contains the initial README and GPL-3.0 license; no app releases or APK assets have been published there yet.
 
-1. Create it as a separate public repository under the RP Ideas brand; do not rename or repurpose `InternetRadio`.
-2. Copy the four active source modules, shared code, build scripts, licensing, current documentation and required store metadata. Exclude retired app source and obsolete generated assets.
-3. Configure destination CI, permissions, signing secrets and release-asset verification. Verify canonical APK paths and the release API. Seed current, byte-for-byte verified assets plus a newer test/stable candidate for each app so every bridge can demonstrate update discovery.
+1. **Done:** create the public repository under the RP Ideas brand; `InternetRadio` remains unchanged.
+2. Decide and prepare the destination's ongoing source/build ownership before any source-repository move. The old repository remains authoritative during the bridge.
+3. Configure release permissions and asset verification. Before a bridge release, verify that the public destination release API is reachable. Publish the bridge APKs on the old endpoint first; seed/verify new-repository releases as part of the staged transition so every bridge can demonstrate update discovery.
 4. Keep historical releases and tags in the old repository. Do not overwrite or delete their assets as a condition of creating the new repository.
 
 ## Phase 2 — publish bridge updates from the old endpoint
