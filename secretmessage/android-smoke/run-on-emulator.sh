@@ -77,7 +77,7 @@ sudo chmod 666 /dev/kvm
 
 AVD_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-android-avd.log"
 mkdir -p "$ANDROID_AVD_HOME"
-if ! printf 'no\n' | "$AVDMANAGER" create avd --force \
+if ! printf 'no\n' | "$AVDMANAGER" --verbose create avd --force \
   --name "$AVD_NAME" \
   --package "$ANDROID_EMULATOR_IMAGE" \
   --device "pixel_2" \
