@@ -64,7 +64,7 @@ internal object DuplicateContentHash {
             }
         }
         if (bytesRead != expectedSize || file.length() != expectedSize) return null
-        digest.digest().toHexString()
+        return digest.digest().toHexString()
     }
 
     /** Byte-for-byte confirmation, used after full hashes have narrowed a candidate group. */

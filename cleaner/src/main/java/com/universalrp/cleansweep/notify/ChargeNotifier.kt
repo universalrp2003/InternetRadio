@@ -92,7 +92,7 @@ object ChargeNotifier {
 
         val isUnlimited = dataUsage?.isUnlimited5g == true
         val chargeStatusText = when {
-            percent >= 100 -> t("Full")
+            battery.percent >= 100 -> t("Full")
             battery.charging -> LiveChargingEta.estimate(battery)?.let { t("ETA %s", formatMinutes(it.minutesToFull)) }
             else -> null
         }

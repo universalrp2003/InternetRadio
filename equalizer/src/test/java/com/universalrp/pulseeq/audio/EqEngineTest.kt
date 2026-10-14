@@ -16,7 +16,7 @@ class EqEngineTest {
         val engine = EqEngine()
         engine.configure(48_000)
         engine.setCurve(List(Bands.COUNT) { 0f }, 0f)
-        val input = FloatArray(2048) { index -> 0.6f * sin(index * 0.071) }
+        val input = FloatArray(2048) { index -> 0.6f * sin(index * 0.071).toFloat() }
         val expected = input.copyOf()
 
         engine.process(input, input.size / 2)
