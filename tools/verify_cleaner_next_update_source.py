@@ -79,7 +79,15 @@ def main():
             'Safe system scope defaults missing')
     require('vm.loadAppCaches()' in source('ui/AppCacheScreen.kt'), 'Cache reopening refresh missing')
     require('daily_ai", false' in source('work/HealthWatchWorker.kt'), 'Automatic online daily summaries not opt-in')
-    require('ArenaRatingCard' not in source('ui/AiScreens.kt') and not (ROOT/'cleaner/src/main/java/com/universalrp/cleansweep/ai/ArenaRatings.kt').exists(), 'Arena model-rating card/data source must remain removed')
+    removed_rating_paths = (
+        ROOT/'cleaner/src/main/java/com/universalrp/cleansweep/ai/ArenaRatingPolicy.kt',
+        ROOT/'cleaner/src/main/java/com/universalrp/cleansweep/ai/ArenaRatings.kt',
+        ROOT/'cleaner/src/main/java/com/universalrp/cleansweep/ui/ArenaRatingCard.kt',
+        ROOT/'cleaner/src/test/java/com/universalrp/cleansweep/ai/ArenaRatingPolicyTest.kt',
+    )
+    require('ArenaRatingCard' not in source('ui/AiScreens.kt') and
+            all(not path.exists() for path in removed_rating_paths),
+            'Arena model-rating card, policy, data and tests must remain removed')
     gradle = (ROOT/'cleaner/build.gradle.kts').read_text()
     for rule in ('minSdk = 26', 'targetSdk = 36', 'versionCode = 49', 'versionName = "2.44"'):
         require(rule in gradle, 'Release candidate version/API differs: ' + rule)

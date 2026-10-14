@@ -589,7 +589,7 @@ jobs:
                         AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen CorePrivacyMigrationPolicy \
                         CorePrivacyMigration LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
                         LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
-                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification \
+                        LocalReadGate cancelAiReport cancelDeviceIdentification \
                         ChargingHonestyPolicy ThermalWarningPolicy AiOutputBudgetPolicy; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
@@ -597,6 +597,15 @@ jobs:
               echo "FAIL: $symbol is missing from the CleanSweep APK"
               exit 1
             fi
+          done
+
+          echo "=== removed LM Arena rating feature gate (debug DEX) ==="
+          for retired_rating in ArenaRatingPolicy ArenaRatings ArenaRatingCard; do
+            if grep -aq "$retired_rating" "$WORK/cleaner.dex"; then
+              echo "FAIL: retired model-rating symbol $retired_rating is compiled into CleanSweep"
+              exit 1
+            fi
+            echo "OK: $retired_rating is absent from the CleanSweep APK"
           done
 
           echo "=== v2.40 retired notification-reader gate (debug AND release) ==="
