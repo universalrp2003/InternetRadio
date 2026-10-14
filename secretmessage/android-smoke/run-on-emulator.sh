@@ -8,6 +8,36 @@ ANDROID_EMULATOR_IMAGE="${ANDROID_EMULATOR_IMAGE:-system-images;android-35;googl
 APK="$SCRIPT_DIR/app/build/outputs/apk/debug/app-debug.apk"
 EMULATOR_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-android-emulator.log"
 
+emit_failure() {
+  local title="$1"
+  local details="$2"
+  if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+    {
+      printf '## %s\n' "$title"
+      echo '```text'
+      printf '%s\n' "$details"
+      echo '```'
+    } >> "$GITHUB_STEP_SUMMARY"
+  fi
+  details="${details//'%'/'%25'}"
+  details="${details//$'\r'/'%0D'}"
+  details="${details//$'\n'/'%0A'}"
+  echo "::error title=$title::$details"
+}
+
+report_unexpected_failure() {
+  local status="$?"
+  local details="Failed command: $BASH_COMMAND"
+  trap - ERR
+  if [[ -f "$EMULATOR_LOG" ]]; then
+    details+=$'\n'
+    details+="$(tail -n 80 "$EMULATOR_LOG" 2>/dev/null || true)"
+  fi
+  emit_failure "Android emulator helper failed (exit $status)" "$details"
+  exit "$status"
+}
+trap report_unexpected_failure ERR
+
 if [[ -z "$SDK_ROOT" ]]; then
   echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2
   exit 2
@@ -35,20 +65,33 @@ if [[ ! -s "$APK" ]]; then
 fi
 
 if [[ ! -e /dev/kvm ]]; then
-  echo "KVM is unavailable; refusing a potentially unbounded software-emulation run." >&2
+  emit_failure "Android emulator cannot run" "KVM is unavailable; refusing a potentially unbounded software-emulation run."
   exit 1
 fi
 sudo chmod 666 /dev/kvm
 
-printf 'no\n' | "$AVDMANAGER" create avd --force \
+AVD_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-android-avd.log"
+if ! printf 'no\n' | "$AVDMANAGER" create avd --force \
   --name "$AVD_NAME" \
   --package "$ANDROID_EMULATOR_IMAGE" \
-  --device "pixel_2"
+  --device "pixel_2" > "$AVD_LOG" 2>&1; then
+  emit_failure "Android AVD creation failed" "$(cat "$AVD_LOG")"
+  exit 1
+fi
 
 "$ADB" kill-server >/dev/null 2>&1 || true
-"$ADB" start-server
-"$EMULATOR" -accel-check
+ADB_START_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-adb-start.log"
+if ! "$ADB" start-server > "$ADB_START_LOG" 2>&1; then
+  emit_failure "ADB server failed to start" "$(cat "$ADB_START_LOG")"
+  exit 1
+fi
 
+ACCEL_LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/secretmessage-emulator-accel.log"
+if ! "$EMULATOR" -accel-check > "$ACCEL_LOG" 2>&1; then
+  emit_failure "Android emulator acceleration check failed" "$(cat "$ACCEL_LOG")"
+  exit 1
+fi
+cat "$ACCEL_LOG"
 echo "Starting Android emulator AVD $AVD_NAME from $ANDROID_EMULATOR_IMAGE."
 emulator_pid=""
 cleanup() {
@@ -66,15 +109,16 @@ trap cleanup EXIT
 emulator_pid=$!
 sleep 5
 if ! kill -0 "$emulator_pid" 2>/dev/null; then
-  echo "Android emulator exited before creating an ADB device. Emulator log tail:" >&2
-  tail -n 160 "$EMULATOR_LOG" >&2 || true
+  emit_failure "Android emulator exited before ADB startup" "$(tail -n 120 "$EMULATOR_LOG" 2>/dev/null || true)"
   exit 1
 fi
 
 if ! timeout 90 "$ADB" wait-for-device; then
-  echo "ADB did not detect the Android emulator. Devices and emulator log tail:" >&2
-  "$ADB" devices -l >&2 || true
-  tail -n 160 "$EMULATOR_LOG" >&2 || true
+  diagnostics=$'ADB did not detect the Android emulator.\n'
+  diagnostics+="$("$ADB" devices -l 2>&1 || true)"
+  diagnostics+=$'\n'
+  diagnostics+="$(tail -n 120 "$EMULATOR_LOG" 2>/dev/null || true)"
+  emit_failure "ADB did not detect the Android emulator" "$diagnostics"
   exit 1
 fi
 booted=false
@@ -87,8 +131,11 @@ for attempt in $(seq 1 90); do
   sleep 2
 done
 if [[ "$booted" != true ]]; then
-  echo "Android emulator did not finish booting. Emulator log tail:" >&2
-  tail -n 120 "$EMULATOR_LOG" >&2 || true
+  diagnostics=$'Android emulator did not finish booting.\n'
+  diagnostics+="$("$ADB" logcat -d -t 120 2>&1 || true)"
+  diagnostics+=$'\n'
+  diagnostics+="$(tail -n 120 "$EMULATOR_LOG" 2>/dev/null || true)"
+  emit_failure "Android emulator boot timed out" "$diagnostics"
   exit 1
 fi
 
@@ -117,10 +164,11 @@ for attempt in $(seq 1 90); do
   sleep 2
 done
 if [[ "$smoke_result" != "pass" ]]; then
-  echo "The JNI smoke test did not report PASS in the Android emulator. Filtered logcat:" >&2
-  "$ADB" logcat -d -s MLS_SMOKE:I '*:S' >&2 || true
-  echo "Emulator log tail:" >&2
-  tail -n 120 "$EMULATOR_LOG" >&2 || true
+  diagnostics=$'The JNI smoke test did not report PASS in the Android emulator.\n'
+  diagnostics+="$("$ADB" logcat -d -t 160 2>&1 || true)"
+  diagnostics+=$'\n'
+  diagnostics+="$(tail -n 120 "$EMULATOR_LOG" 2>/dev/null || true)"
+  emit_failure "Android JNI smoke test failed in emulator" "$diagnostics"
   exit 1
 fi
 
