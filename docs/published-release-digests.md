@@ -1,8 +1,23 @@
 # Verified published Android APK digests
 
-The current bridge releases were published in GitHub Actions run **38501139771** from source commit `85afc48c20edd86d19a81e65cdc307c29535ab1d`. The workflow verifies each built APK's package, version, minimum SDK, signing certificate and local SHA-256 before publication, stages the four releases as drafts, compares asset size and SHA-256 with GitHub's release API, then publishes and verifies the public release URLs/assets. The public API records below independently confirm that each release is not a draft and each asset URL is canonical.
+The latest stable batch was built, verified and published by GitHub Actions run **38521705254**, from source commit `838122db61ef7c177977f04595af0f4a1452bb8a`. The workflow checked the APK package, version, minimum SDK, signing certificate, local SHA-256 and release-asset metadata before promoting the releases. It published the same four APKs to `universalrp2003/RP-Android-Apps` and `universalrp2003/InternetRadio`.
 
-## Current stable bridge releases — 14 October 2026
+## Current stable releases — 14 October 2026
+
+| App | Version / code | RP-Android-Apps release | InternetRadio fallback | APK asset | Bytes | SHA-256 |
+| --- | ---: | --- | --- | --- | ---: | --- |
+| Live Guard | 2.46 / 51 | [live-guard-v2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | [live-guard-v2.46](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46) | `CleanSweep-v2.46.apk` | 13,655,296 | `92be908e773d0214c5c8dc0d9bf4254f05541fc791d6494316a0a07cfb6ea80a` |
+| Ramesh Radio | 1.11 / 11 | [ramesh-radio-v1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | [ramesh-radio-v1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11) | `Ramesh-Radio-v1.11.apk` | 14,494,129 | `e27c408ac7e199fc480b15e7472e4c3bcbf121f79bb6dbddb5d875c0e48594fc` |
+| PulseEQ | 1.5 / 6 | [pulseeq-v1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | [pulseeq-v1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) | `PulseEQ-v1.5.apk` | 11,534,600 | `1860ad5282e9d2809143e6923678f467b13f55e9bee9c02b1612b7ab0622be5f` |
+| RP Vocal Remover Studio | 0.1.11 / 12 | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) | `RP-Vocal-Remover-Studio-v0.1.11.apk` | 63,671,220 | `aea56a8676ce73339eb8eae4e29b0760676ed8300f47970490223061f876f609` |
+
+The post-publication GitHub API check confirmed that all eight release records are public, stable (not drafts or prereleases), and have canonical release-page and APK-download URLs. For each app, the destination release is newer than the bridge version, and its asset name, byte size and SHA-256 digest match the `InternetRadio` copy exactly. The APK updaters check `RP-Android-Apps` first and `InternetRadio` second; when an otherwise-valid version is present in both, the new repository has priority. This validates public API discovery and the source-selection logic for all four apps. It does **not** claim an on-device download or installation of these exact APK bytes; keep that end-to-end check in the migration grace-period checklist.
+
+The earlier build-only run [38514595315](https://github.com/universalrp2003/InternetRadio/actions/runs/38514595315) produced different candidate APK hashes. Those candidate-build records remain in [`candidate-build-digests.md`](candidate-build-digests.md) and must not be substituted for the published digests above.
+
+## Previous stable bridge releases — 14 October 2026
+
+These versions were published to `InternetRadio` so existing installations could update to a bridge client that knows both repositories. Their release records remain available unchanged:
 
 | App | Release | APK asset | Bytes | SHA-256 |
 | --- | --- | --- | ---: | --- |
@@ -11,11 +26,9 @@ The current bridge releases were published in GitHub Actions run **38501139771**
 | PulseEQ | [pulseeq-v1.4](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.4) | `PulseEQ-v1.4.apk` | 11,534,600 | `b1164d8899e75d757c1f6a2f88e14fed2a49654747812158ffd38e1bb11cd290` |
 | RP Vocal Remover Studio | [rp-vocal-remover-studio-v0.1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.10) | `RP-Vocal-Remover-Studio-v0.1.10.apk` | 63,668,936 | `ccbedc4565c78541efd44cfdf831b465d261b8eaef505b8ba477326755a5c70e` |
 
-These are bridge releases on the existing `InternetRadio` endpoint. The APK updaters query `RP-Android-Apps` first and then `InternetRadio`, selecting the newest valid release; the UI does not show repository-by-repository status. The owner confirmed on 14 October that all four bridge apps work and manual update checks complete without errors, so the one-to-two-month grace period is in progress. The new public repository still has no app releases, so retrieval from that source remains to be demonstrated. Do not archive or disable the old endpoint until the grace period and new-source checks are complete.
-
 ## Previous stable releases — 13 October 2026
 
-These original release records and assets remain unchanged in `InternetRadio`:
+These historical release pages, tags and APK assets remain on `InternetRadio`:
 
 | App | Release | APK asset | Bytes | SHA-256 |
 | --- | --- | --- | ---: | --- |
@@ -24,4 +37,4 @@ These original release records and assets remain unchanged in `InternetRadio`:
 | PulseEQ | [pulseeq-v1.3](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3) | `PulseEQ-v1.3.apk` | 11,533,640 | `fa5a96407ffd5439aee677fa1855c05ef5b9c5f9bee3199ea397707580ddc3cc` |
 | RP Vocal Remover Studio | [rp-vocal-remover-studio-v0.1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9) | `RP-Vocal-Remover-Studio-v0.1.9.apk` | 63,659,576 | `e49ca9fbf96aed66351d13ae63c3d2878280b6b09be42b050c00de9d97e6b208` |
 
-The APK updater uses stable release tags and verifies asset digests. Installing a downloaded APK remains subject to Android's per-app **Install unknown apps** setting and the platform's confirmation screen; this workflow does not install silently or bypass Play Protect.
+For every release, installation remains under Android's per-app **Install unknown apps** permission and installer confirmation. The updater does not silently install or bypass Play Protect.

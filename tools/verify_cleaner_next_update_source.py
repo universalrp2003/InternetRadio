@@ -225,7 +225,7 @@ def main():
             'sameContents' in source('data/DuplicateContentHash.kt'),
             'Private-source recovery or full-content duplicate confirmation was removed')
     print('PASS: Static manifest, privacy/backup, updater, charging, duplicate, rating/widget/scope contracts and XML well-formedness.')
-    print('PASS: 42 required suites / 365 prepared declarations; tests NOT executed. Candidate 2.46/code51/API26 matches.')
+    print('PASS: 42 required suites / 365 prepared declarations; tests NOT executed. Release 2.46/code51/API26 matches.')
     print('Source checks are NOT Kotlin/Compose/resource compilation, APK verification, device delivery or a released build.')
 
 

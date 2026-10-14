@@ -2,14 +2,14 @@
 
 Four actively maintained, open-source Android apps developed by **Ramesh prathap .R** with shared project contributions, including software assistance from **Arena.ai Agent Mode**. The apps offer Tamil-first interfaces with an in-app English option. Current minimum Android versions are listed below; device-dependent features are described honestly in each app's documentation.
 
-| App | Module | Current release | Android | Purpose |
+| App | Module | Current release (RP-Android-Apps) | Android | Purpose |
 |---|---|---:|---:|---|
-| **Live Guard (CleanSweep)** | `cleaner` | [2.45](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.45) | 8.0+ (API 26) | Phone cleanup, health and security review, network tools, and optional assistance. |
-| **Ramesh Radio** | `radio` | [1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.10) | 8.0+ (API 26) | Tamil and world radio, vote-ranked station lists, local playback, and session boost. |
-| **PulseEQ** | `equalizer` | [1.4](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.4) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
-| **RP Vocal Remover Studio** | `vocalremover` | [0.1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.10) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
+| **Live Guard (CleanSweep)** | `cleaner` | [2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | 8.0+ (API 26) | Phone cleanup, health and security review, network tools, and optional assistance. |
+| **Ramesh Radio** | `radio` | [1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | 8.0+ (API 26) | Tamil and world radio, vote-ranked station lists, local playback, and session boost. |
+| **PulseEQ** | `equalizer` | [1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
+| **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 
-**Next release candidates (not published):** Live Guard 2.46, Ramesh Radio 1.11, PulseEQ 1.5, and RP Vocal Remover Studio 0.1.11 passed the CI build, unit/regression and APK verification gates. Publication stopped before creating drafts because the required cross-repository Actions secret is not configured. Set `RP_ANDROID_APPS_RELEASE_TOKEN` in the `InternetRadio` repository's Actions secrets with `contents:write` limited to `RP-Android-Apps`, then manually dispatch **Build APK** on `arena/a56e1b40-internetradio` with `release_tag=v2026.10.14`. Candidate APK build hashes are recorded in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md), but no public release asset or published-release digest exists yet.
+**Published release batch (14 October 2026):** all four versions above passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Each stable APK is published on both `RP-Android-Apps` and `InternetRadio`; the release pages and SHA-256 digests are listed in [`docs/published-release-digests.md`](docs/published-release-digests.md). Earlier candidate-run hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are not the published asset hashes.
 
 ## Install and update
 
@@ -17,7 +17,7 @@ Download each signed APK from its linked GitHub Release page. The apps check for
 
 For download filenames, sizes and verified SHA-256 values, see [`docs/published-release-digests.md`](docs/published-release-digests.md). Release pages are the authoritative source for current APKs and release notes.
 
-> **Live Guard candidate note:** the 2.46 permission-delta gate found no newly added dangerous permission, so a physical-device evidence record was not required. The four-app build passed CI, but publication was blocked before any release draft was created because the destination write secret is missing. No device test, public APK or candidate digest is claimed. See the [installation advisory](docs/live-guard-play-protect-install-block.md) and [candidate release notes](releases/live-guard-v2.46.md).
+> **Live Guard test note:** the 2.46 publication passed the permission-delta gate without requiring a new physical-device evidence record. CI and public-asset verification passed, but those checks are not an exact-build phone test or Play Protect approval. See the [installation advisory](docs/live-guard-play-protect-install-block.md) and [release notes](releases/live-guard-v2.46.md).
 
 ## Privacy and audio
 
@@ -48,7 +48,7 @@ GitHub Actions performs the full build, localization/source checks, CleanSweep r
 
 The active Gradle build, CI, store metadata and documentation cover the four apps above. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
 
-The repository URL is intentionally still `github.com/universalrp2003/InternetRadio`: already-installed apps use that endpoint and do not follow repository-rename redirects. The 2.45 / 1.10 / 1.4 / 0.1.10 bridge releases are published there so those installations can update. On 14 October, the owner confirmed that all four bridge apps work and manual update checks complete without errors; the one-to-two-month grace period is in progress. The clients query the new public `RP-Android-Apps` repository first and then `InternetRadio`, but the new repository has no app releases yet, so retrieval from that source remains to be demonstrated. Keep both repositories and the old release assets available until grace-period and new-source validation are complete. See [`docs/repository-migration.md`](docs/repository-migration.md).
+`RP-Android-Apps` is now seeded with stable releases for all four apps. On 14 October 2026, the public GitHub API returned the expected newer version for each app, with canonical release/asset URLs and matching asset sizes and SHA-256 digests on both repositories. The updater code checks `RP-Android-Apps` first, then the verified `InternetRadio` fallback; when versions tie, it prefers the new repository. This validates the public metadata and selection path, but is not an on-device download/install test of these exact APK bytes. The owner previously confirmed the bridge apps work and manual checks complete; keep the old repository, release URLs, tags and assets unchanged throughout the one-to-two-month grace period, which began 14 October. Do not archive it until grace-period and device validation are complete. See [`docs/repository-migration.md`](docs/repository-migration.md).
 
 ## Project documents
 

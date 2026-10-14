@@ -1,66 +1,71 @@
 # Staged repository migration plan
 
-**Status: all four increasing-version bridge APKs were published on `universalrp2003/InternetRadio` on 14 October 2026 after destination preflight and CI/release checks passed. On 14 October the owner confirmed all four bridge apps are working and manual update checks finish without errors; the one-to-two-month grace period starts on that confirmation date. The public destination `universalrp2003/RP-Android-Apps` (created with a `main` branch, README and GPL-3.0 license) still has no app releases, so fetching a newer release from the destination remains to be verified during the grace period.** Keep the existing repository at `github.com/universalrp2003/InternetRadio` available throughout the transition. Installed releases use that exact API/release path and reject HTTP redirects. The bridge clients query `RP-Android-Apps` first and then `InternetRadio`; both sources are retained. Do not rename, delete, archive or redirect the current repository now.
+**Status — 14 October 2026:** the four-app release batch (Live Guard 2.46, Ramesh Radio 1.11, PulseEQ 1.5 and RP Vocal Remover Studio 0.1.11) is published on both `universalrp2003/RP-Android-Apps` and `universalrp2003/InternetRadio`. GitHub Actions run [38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) passed build, regression and release verification. A live public-API check verified all four destination releases are discoverable, stable, newer than their bridge versions, and have canonical URLs and byte-identical size/SHA-256 metadata to the old-repository copies. Source inspection and the passing updater tests confirm every app checks the new repository first and retains the old fallback. **This is API/source-level discovery verification; fetching and installing these exact new APK bytes on a phone is still pending.** Keep `InternetRadio`, its historical release pages, tags and assets intact during the agreed one-to-two-month grace period.
 
-## Target
+## Target and invariants
 
 - Public project brand: **RP Ideas**.
-- Future repository slug: **`RP-Android-Apps`**.
-- Active apps: Live Guard, Ramesh Radio, PulseEQ and RP Vocal Remover Studio.
-- Preserve the existing repository's published GitHub Releases, tags and APK assets as historical records. Prefer archiving the old repository after the transition rather than deleting it.
+- New release repository: **`universalrp2003/RP-Android-Apps`**.
+- Existing/bridge repository: **`universalrp2003/InternetRadio`**.
+- Active apps: Live Guard, Ramesh Radio, PulseEQ and RP Vocal Remover Studio. RP Vocal Remover Studio remains standalone.
+- The old repository remains public and unarchived during the grace period. Do not rename, delete, archive, redirect, or remove its historical releases, tags or APK assets until the later transition gate has passed.
+- The target repository is the first updater source. The old source is a verified fallback. Do not remove the fallback during this grace period.
 
-## Phase 0 — keep both signed release sources safe
+## Verified public release batch — 14 October 2026
 
-- Existing installed releases continue to use `universalrp2003/InternetRadio` until their bridge APK is installed.
-- Bridge APKs check `universalrp2003/RP-Android-Apps` first and the still-live `universalrp2003/InternetRadio` second. Each candidate must pass the same HTTPS canonical-path, stable-release, asset-size, SHA-256, package/version and pinned-signer checks.
-- Keep the old source enabled during the grace period. Do not publish a URL-only rebuild under an existing version or tag; every changed APK needs a new version and tag.
-- Do not rename the old repository or rely on a redirect. Existing clients reject redirects.
+| App | Bridge version → available update | RP-Android-Apps | InternetRadio mirror |
+|---|---:|---|---|
+| Live Guard | 2.45 → 2.46 | [live-guard-v2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | [live-guard-v2.46](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46) |
+| Ramesh Radio | 1.10 → 1.11 | [ramesh-radio-v1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | [ramesh-radio-v1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11) |
+| PulseEQ | 1.4 → 1.5 | [pulseeq-v1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | [pulseeq-v1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) |
+| RP Vocal Remover Studio | 0.1.10 → 0.1.11 | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) |
 
-The owner had reported that all four then-current apps were installed and working on 13 October 2026; that earlier report did not cover the bridge builds. On 14 October, after the bridge releases were published, the owner confirmed all four apps were working and manual update checks completed without errors. The destination still has no app releases, so an actual update fetched from `RP-Android-Apps` has not yet been demonstrated.
+The post-publication API check independently checked each expected tag in both repositories: `draft=false`, `prerelease=false`, exact canonical release page, one uploaded APK with the expected filename, canonical download URL, valid SHA-256, and equal size/digest across repositories. Each destination version is numerically newer than the corresponding bridge version. Exact public APK sizes and SHA-256 digests are recorded in [`published-release-digests.md`](published-release-digests.md).
 
-## Phase 1 — prepare the destination
+The updater source is shared by Ramesh Radio, PulseEQ and RP Vocal Remover Studio; Live Guard has its own implementation. Both paths enumerate the ordered sources `RP-Android-Apps` then `InternetRadio`, accept only stable releases on canonical GitHub paths with valid size/digest metadata, and choose a newer version. If a version is present on both repositories, the new source wins the equal-version tie. The signed APK is then rechecked for digest, package, version and pinned signer before Android's installer hand-off. The build run's source/unit tests passed, and the live API check confirms all four matching release records. No updater check/install was performed on a physical device against these exact published bytes, so device validation remains open.
 
-The owner created `universalrp2003/RP-Android-Apps` as a separate public repository on 14 October 2026. Its `main` branch currently contains the initial README and GPL-3.0 license; no app releases or APK assets have been published there yet.
+## Phase 1 — prepare and seed the destination (publication done)
 
-1. **Done:** create the public repository under the RP Ideas brand; `InternetRadio` remains unchanged.
-2. Decide and prepare the destination's ongoing source/build ownership before any source-repository move. The old repository remains authoritative during the bridge.
-3. **Bridge preflight and publication done:** the workflow checked that the destination is public, initialized, unarchived and reachable, then published and verified all four bridge APKs on the old endpoint. The owner has since confirmed the bridge apps work; seed and verify new-repository releases during the grace period. The destination currently has no app releases.
-4. Keep historical releases and tags in the old repository. Do not overwrite or delete their assets as a condition of creating the new repository.
+The owner created `RP-Android-Apps` as a separate public repository with a `main` branch, README and GPL-3.0 license. The active Android source/build remains on `InternetRadio` for now; the destination is seeded with public stable APK releases and assets, not a source-code migration.
 
-## Phase 2 — publish bridge updates from the old endpoint (complete)
+1. The destination was public, initialized, unarchived and reachable at publication time.
+2. The owner configured the scoped Actions write secret in the source repository; no secret value is recorded here.
+3. Run [38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) published and verified all four stable releases to both repositories. The target release assets have matching digests/sizes and are now visible through the public Releases API.
+4. Keep the source repository authoritative for builds until migration ownership is intentionally changed. Never overwrite an existing target tag or reuse an app version for changed APK bytes.
 
-The four increasing-version bridge APKs are published on the **old** `InternetRadio` endpoint so already-installed versions can discover them. Each bridge build checks `RP-Android-Apps` first and retains `InternetRadio` as a verified fallback.
+## Phase 2 — bridge releases on the old endpoint (complete)
 
-| App | Bridge version / code | Published release |
+The initial bridge batch was intentionally published on `InternetRadio` so already-installed pre-migration clients could find an increasing-version update:
+
+| App | Bridge version / code | Old-endpoint release |
 |---|---:|---|
 | Live Guard | 2.45 / 50 | [live-guard-v2.45](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.45) |
 | Ramesh Radio | 1.10 / 10 | [ramesh-radio-v1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.10) |
 | PulseEQ | 1.4 / 5 | [pulseeq-v1.4](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.4) |
 | RP Vocal Remover Studio | 0.1.10 / 11 | [rp-vocal-remover-studio-v0.1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.10) |
 
-GitHub Actions run [38501139771](https://github.com/universalrp2003/InternetRadio/actions/runs/38501139771), from source commit `85afc48c20edd86d19a81e65cdc307c29535ab1d`, passed the builds, regression suites, APK package/version/signer and digest checks, Live Guard permission-delta gate, four-release staging/publication and public asset verification. All four releases are stable, with their published byte sizes and SHA-256 values recorded in [`published-release-digests.md`](published-release-digests.md). The Live Guard gate found no newly added dangerous permission relative to 2.44, so no physical-device evidence record was required. These exact CI APKs were not installed on a phone during publication; no exact-build device test is claimed.
-
-**Owner confirmation received on 14 October 2026:** the owner reports all four bridge apps are working and manual update checks complete without errors. The updater UI does not expose a separate status for each repository. Source inspection confirms all four clients query `RP-Android-Apps` first and then `InternetRadio`, selecting the newest valid release while preserving the old source. Because the destination still has no app releases, this does not yet demonstrate fetching an update from the new repository. The publication run did not install hash-identified APK bytes on a phone; record this as owner-reported device confirmation, not an exact-digest device-test result. Android's per-app **Install unknown apps** permission and installer confirmation remain required. Keep all four old-endpoint release pages, tags and assets unchanged.
+Bridge publication run [38501139771](https://github.com/universalrp2003/InternetRadio/actions/runs/38501139771) passed its build, unit/regression, package/version/signer, digest and Live Guard permission-delta checks. The owner confirmed on 14 October that all four bridge apps work and manual update checks finish without errors. This remains owner-reported feedback: the CI did not install hash-identified APK bytes on a phone, and no device model/OS or exact-build digest evidence was provided. Android's per-app **Install unknown apps** access and confirmation remain required for direct APK installs.
 
 ## Phase 3 — grace period (in progress)
 
-On **14 October 2026**, the owner confirmed that all four bridge apps are working and manual update checks complete without errors. The UI does not show per-repository status; the clients query `RP-Android-Apps` first and then `InternetRadio`. Since the destination has no app releases yet, confirming a successful fetch from the new repository remains a grace-period validation task. No device model/Android version or hash-linked exact-build evidence was supplied, so retain this as owner-reported confirmation rather than an exact-digest test claim.
+The one-to-two-month grace period starts **14 October 2026**, the owner's bridge-app confirmation date. Review no earlier than around **14 November**; plan a migration decision around **14 December 2026 or later** if any check remains incomplete. Extend the period if needed.
 
-**Grace period start: 14 October 2026.** Keep both repository sources in the clients for approximately **one to two months**—review no earlier than around 14 November and plan a migration decision around 14 December 2026 or later if any validation remains incomplete. Extend the period if needed. During this period:
+During this period:
 
-- Leave every old release page, tag and APK asset available; do not break old URLs.
-- Publish new active releases at `RP-Android-Apps` and confirm the new-first lookup works for all four apps. This end-to-end new-source check remains pending while the destination has no app releases.
-- Keep `InternetRadio` as the verified fallback while any device may still be using the bridge.
-- Only after the grace period and successful destination/update validation, prepare a later release that removes the old updater source. Do not combine this with the first bridge.
+- Keep `InternetRadio` available and unarchived. Do not rename it or rely on a repository redirect; existing installed clients use its exact API/release path and reject redirects.
+- Preserve every historical `InternetRadio` release page, tag and APK asset. The new latest release batch was added to both repositories; earlier historical assets must remain unchanged.
+- Keep the `InternetRadio` updater fallback in all four apps while any device may still be on a bridge build.
+- The API/source-selection check for all four apps is complete; still arrange a real-device manual check from each bridge app, where feasible, and confirm the update card attributes the offered release to `RP-Android-Apps` before Android's installer opens. Do not report that these exact bytes were device-tested until their hashes are tied to a physical install.
+- Do not remove the old updater source as part of another feature update. Make that a separately versioned, later migration release after grace-period validation and owner confirmation.
 
-## Phase 4 — retire, preserve history
+## Phase 4 — retire while preserving history (not started)
 
-Only after the grace period and owner confirmation:
+Only after the grace period and the device/update validations are complete and the owner confirms:
 
-1. Publish and verify the later updater-only transition that removes the old `InternetRadio` source while retaining all APK verification checks.
-2. Stop using the old repository for new development and releases.
-3. Archive the existing `InternetRadio` repository rather than deleting it, after checking that its public release pages and APK assets remain reachable.
-4. Keep old tags, release notes, APKs and their digests unchanged for historical/reference use. Do not replace old files, erase old tags, or assume an archived repository is an update source.
-5. Update root documentation and store records to identify `RP-Android-Apps` as the active source, while preserving clear links to the historical archive.
+1. Prepare, build and publish a later updater-only transition that removes the `InternetRadio` updater source while retaining all APK verification checks.
+2. Stop using `InternetRadio` for new development/releases only after the target is proven to serve updates to all four apps.
+3. Archive—not delete—the old repository, after confirming its historical public release pages and APK assets remain reachable.
+4. Preserve old tags, release notes, APKs and their digest records. Do not replace old release assets or assume an archived repository is still an update source.
+5. Update active-source documentation while keeping a clear link to the historical archive.
 
-If any update, signing, release-host or device-compatibility check fails, stop the migration and keep the current repository endpoint active until a safe recovery plan is agreed.
+If any signing, update-discovery, release-host or device-compatibility check fails, keep the old endpoint available and defer archival until a safe recovery plan is agreed.
