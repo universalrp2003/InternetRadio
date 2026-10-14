@@ -2,7 +2,6 @@ package com.universalrp.vocalremover.processing
 
 import com.universalrp.vocalremover.audio.DecodedPcmInfo
 import com.universalrp.vocalremover.engine.SherpaUvrEngine
-import com.universalrp.vocalremover.health.DeviceMonitor
 import com.universalrp.vocalremover.health.DeviceSnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -45,7 +44,7 @@ interface ProcessorHost {
  * either side to reduce edge artifacts.
  */
 class ChunkedSeparationProcessor(
-    private val monitor: DeviceMonitor,
+    private val readDeviceSnapshot: () -> DeviceSnapshot,
 ) {
     suspend fun process(
         job: SeparationJob,
@@ -350,7 +349,7 @@ class ChunkedSeparationProcessor(
             }
             val requiredBytes = missingSegmentBytes + (if (privateWavReady) 0L else wavBytes) +
                 wavBytes + ProcessingPolicy.STORAGE_SAFETY_RESERVE_BYTES
-            val available = monitor.read().availableStorageBytes
+            val available = readDeviceSnapshot().availableStorageBytes
                 ?: throw IllegalStateException("Free app storage could not be measured safely; check device storage, then retry.")
             if (available >= requiredBytes) return
 
@@ -374,7 +373,7 @@ class ChunkedSeparationProcessor(
                 throw CancellationException("Canceled by user")
             }
             ensureNotCanceled(host)
-            val snapshot = monitor.read()
+            val snapshot = readDeviceSnapshot()
             val decision = ProcessingPolicy.decide(
                 profile = profile,
                 availableCores = Runtime.getRuntime().availableProcessors(),
