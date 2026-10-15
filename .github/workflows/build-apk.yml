@@ -1,4 +1,4 @@
-# GitHub Actions workflow: builds and verifies the four actively maintained Android apps.
+# GitHub Actions workflow: builds/releases four maintained apps and compiles the isolated Secret Message local-only preview (debug/test only).
 # - Live Guard / CleanSweep (:cleaner)
 # - Ramesh Radio (:radio)
 # - PulseEQ (:equalizer)
@@ -218,9 +218,11 @@ jobs:
       - name: Build the APKs
         run: |
           set -o pipefail
-          # The four requested apps get release APKs. Vocal Remover is standalone and
-          # distributed by direct APK download, so it deliberately has no Play bundle here.
-          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :radio:testReleaseUnitTest :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest assembleDebug :cleaner:assembleRelease :radio:assembleRelease :equalizer:assembleRelease :vocalremover:assembleRelease :cleaner:bundleRelease :radio:bundleRelease :equalizer:bundleRelease --no-daemon 2>&1 | tee build.log
+          # The four maintained apps get release APKs. Secret Message is a separate,
+          # local-only preview: run its policy tests and build only its debug APK. It is
+          # deliberately excluded from every release/bundle task below. Vocal Remover is
+          # standalone and distributed by direct APK download, so it has no Play bundle.
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :radio:testReleaseUnitTest :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest :secretmessage:testDebugUnitTest assembleDebug :cleaner:assembleRelease :radio:assembleRelease :equalizer:assembleRelease :vocalremover:assembleRelease :cleaner:bundleRelease :radio:bundleRelease :equalizer:bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify required CleanSweep regression suites
         run: python3 tools/verify_cleaner_regressions.py
@@ -237,6 +239,7 @@ jobs:
             cleaner/build/test-results/test*UnitTest/*.xml
             radio/build/test-results/test*UnitTest/*.xml
             vocalremover/build/test-results/test*UnitTest/*.xml
+            secretmessage/product/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
 
       - name: Verify built APKs
@@ -249,6 +252,13 @@ jobs:
           for m in cleaner equalizer radio vocalremover; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
+          ls -la secretmessage/product/build/outputs/apk/debug/
+
+          SECRET_MESSAGE_PREVIEW=$(ls secretmessage/product/build/outputs/apk/debug/*.apk | head -1)
+          test -n "$SECRET_MESSAGE_PREVIEW" || { echo "FAIL: Secret Message local preview debug APK was not produced"; exit 1; }
+          if compgen -G "secretmessage/product/build/outputs/apk/release/*.apk" >/dev/null; then
+            echo "FAIL: the Secret Message local preview must not produce a release APK"; exit 1
+          fi
 
           CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
@@ -298,6 +308,19 @@ jobs:
             echo "FAIL: aapt2 not found, cannot verify the app icons"
             exit 1
           fi
+          PREVIEW_BADGING=$("$AAPT" dump badging "$SECRET_MESSAGE_PREVIEW")
+          echo "$PREVIEW_BADGING" | grep -Fq "application-label:'Secret Message Preview (NOT SECURE)'" || {
+            echo "FAIL: Secret Message preview APK is missing its explicit not-secure label"; exit 1;
+          }
+          AAPT_LEGACY="$(dirname "$AAPT")/aapt"
+          if [ ! -x "$AAPT_LEGACY" ]; then
+            echo "FAIL: legacy aapt is needed to verify merged APK permissions"; exit 1
+          fi
+          PREVIEW_PERMISSIONS=$("$AAPT_LEGACY" dump permissions "$SECRET_MESSAGE_PREVIEW")
+          if printf '%s\n' "$PREVIEW_PERMISSIONS" | grep -Eq 'uses-permission(-sdk-[0-9]+)?:'; then
+            echo "FAIL: Secret Message local preview unexpectedly requests an Android permission"; exit 1
+          fi
+          echo "OK: Secret Message debug preview is labelled NOT SECURE and requests no Android permissions"
           for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             bad=$("$AAPT" dump badging "$rel" || true)
             icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)

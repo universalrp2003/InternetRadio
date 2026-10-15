@@ -9,6 +9,8 @@ Four actively maintained, open-source Android apps developed by **Ramesh prathap
 | **PulseEQ** | `equalizer` | [1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
 | **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 
+**Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview only echoes text/drawings locally; it has no network connection or cryptography. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
+
 **Published release batch (14 October 2026):** all four versions above passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Each stable APK is published on both `RP-Android-Apps` and `InternetRadio`; the release pages and SHA-256 digests are listed in [`docs/published-release-digests.md`](docs/published-release-digests.md). Build-only candidate hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are not the published asset hashes.
 
 ## Install and update
@@ -42,11 +44,11 @@ The project uses JDK 17, Gradle 8.14.3, the Android SDK and NDK. Open the reposi
   :equalizer:assembleRelease :vocalremover:assembleRelease
 ```
 
-GitHub Actions performs the full build, localization/source checks, CleanSweep regression suite, package/version/signature verification and release-asset digest checks. The workflow also generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio is distributed as a standalone APK.
+For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions performs the full build, localization/source checks, CleanSweep regression suite, package/version/signature verification and release-asset digest checks. It is configured to compile/test the local-only preview but excludes it from every release and bundle task; this branch change still needs hosted build confirmation. The workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio is distributed as a standalone APK.
 
 ## Project scope and repository URL
 
-The active Gradle build, CI, store metadata and documentation cover the four apps above. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
+The four apps above remain the only released products in the store and four-app release batch; Secret Message is a separate local-only development preview. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
 
 `RP-Android-Apps` is now seeded with stable releases for all four apps. On 14 October 2026, the public GitHub API returned the expected newer versions with canonical URLs and identical asset sizes/SHA-256 values on both repositories. The updater checks `RP-Android-Apps` first and prefers it for equal versions. Owner-provided phone screenshots now show update-available notices for all four bridge versions, confirming on-device update discovery; they do not show which repository supplied the result or a completed download/install of these exact APKs. Keep the old repository, release URLs, tags and assets unchanged throughout the one-to-two-month grace period, which began 14 October. Do not archive it until the grace period and device download/install validation are complete. See [`docs/repository-migration.md`](docs/repository-migration.md).
 
