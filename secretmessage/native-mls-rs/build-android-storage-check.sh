@@ -14,6 +14,17 @@ fi
 
 TOOLCHAIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
 SYSROOT="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
+CROSS_TOOL_SHIMS="${TMPDIR:-/tmp}/secretmessage-android-cross-tool-shims"
+if [[ ! -x "$TOOLCHAIN/llvm-ar" || ! -x "$TOOLCHAIN/llvm-ranlib" ]]; then
+  echo "Android NDK llvm-ar/llvm-ranlib tools are missing from $TOOLCHAIN." >&2
+  exit 2
+fi
+mkdir -p "$CROSS_TOOL_SHIMS"
+for prefix in aarch64-linux-android armv7a-linux-androideabi i686-linux-android x86_64-linux-android; do
+  ln -sf "$TOOLCHAIN/llvm-ar" "$CROSS_TOOL_SHIMS/${prefix}-ar"
+  ln -sf "$TOOLCHAIN/llvm-ranlib" "$CROSS_TOOL_SHIMS/${prefix}-ranlib"
+done
+export PATH="$CROSS_TOOL_SHIMS:$PATH"
 
 build_target() {
   local target="$1"
