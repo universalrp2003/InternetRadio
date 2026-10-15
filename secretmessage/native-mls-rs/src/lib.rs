@@ -367,6 +367,214 @@ pub mod spike_harness {
             run_two_member_memory_smoke_test();
         }
     }
+
+    /// Host-only exercise of upstream SQLCipher-backed group-state persistence.
+    /// It deliberately does not demonstrate Android Keystore key protection.
+    #[cfg(all(test, feature = "storage-spike"))]
+    mod sqlcipher_restart_tests {
+        use super::{
+            assert_application_message, test_client, test_crypto_provider, test_signing_material,
+            PinnedIdentityProvider, TEST_CIPHERSUITE,
+        };
+        use mls_rs::client_builder::{BaseSqlConfig, ClientBuilder, MlsConfig};
+        use mls_rs::crypto::SignatureSecretKey;
+        use mls_rs::identity::SigningIdentity;
+        use mls_rs::storage_provider::sqlite::connection_strategy::{
+            CipheredConnectionStrategy, FileConnectionStrategy, SqlCipherConfig, SqlCipherKey,
+        };
+        use mls_rs::storage_provider::sqlite::SqLiteDataStorageEngine;
+        use mls_rs::{Client, ExtensionList, MlsMessage};
+        use mls_rs_crypto_awslc::AwsLcCryptoProvider;
+        use std::path::{Path, PathBuf};
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        const TEST_DATABASE_KEY: [u8; 32] = [0xA5; 32];
+        const PERSISTENCE_SENTINEL: &[u8] = b"MLS-RS-SQLCIPHER-RESTORE-PLAINTEXT-19bd";
+        const RESUMED_TEXT: &[u8] = b"MLS-RS-SQLCIPHER-RESTORED-GROUP-2fa6";
+
+        struct TestDatabase(PathBuf);
+
+        impl TestDatabase {
+            fn new() -> Self {
+                let timestamp = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system clock is after the Unix epoch")
+                    .as_nanos();
+                let path = std::env::temp_dir().join(format!(
+                    "mls-rs-sqlcipher-{}-{timestamp}.db",
+                    std::process::id()
+                ));
+                Self(path)
+            }
+
+            fn path(&self) -> &Path {
+                &self.0
+            }
+        }
+
+        impl Drop for TestDatabase {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_file(&self.0);
+                for suffix in ["-journal", "-wal", "-shm"] {
+                    let _ = std::fs::remove_file(format!("{}{suffix}", self.0.display()));
+                }
+            }
+        }
+
+        fn sqlcipher_client(
+            path: &Path,
+            database_key: [u8; 32],
+            crypto_provider: AwsLcCryptoProvider,
+            signing_identity: SigningIdentity,
+            secret_key: SignatureSecretKey,
+            identity_provider: PinnedIdentityProvider,
+        ) -> Result<Client<impl MlsConfig>, Box<dyn std::error::Error>> {
+            let connection = CipheredConnectionStrategy::new(
+                FileConnectionStrategy::new(path),
+                SqlCipherConfig::new(SqlCipherKey::RawKey(database_key)),
+            );
+            let storage = SqLiteDataStorageEngine::new(connection)?;
+            Ok(ClientBuilder::<BaseSqlConfig>::new_sqlite(storage)?
+                .identity_provider(identity_provider)
+                .crypto_provider(crypto_provider)
+                .signing_identity(signing_identity, secret_key, TEST_CIPHERSUITE)
+                .build())
+        }
+
+        #[test]
+        fn sqlcipher_group_state_reopens_and_resumes_without_plaintext_marker() {
+            let database = TestDatabase::new();
+            let alice_crypto = test_crypto_provider();
+            let bob_crypto = test_crypto_provider();
+            let (alice_identity, alice_secret_key) =
+                test_signing_material(&alice_crypto, "storage-test-alice");
+            let (bob_identity, bob_secret_key) =
+                test_signing_material(&bob_crypto, "storage-test-bob");
+            let trusted_identities = vec![alice_identity.clone(), bob_identity.clone()];
+
+            let alice = sqlcipher_client(
+                database.path(),
+                TEST_DATABASE_KEY,
+                alice_crypto.clone(),
+                alice_identity.clone(),
+                alice_secret_key.clone(),
+                PinnedIdentityProvider::new(trusted_identities.clone()),
+            )
+            .expect("open Alice's SQLCipher-backed test client");
+            let bob = test_client(
+                bob_crypto,
+                bob_identity,
+                bob_secret_key,
+                PinnedIdentityProvider::new(trusted_identities.clone()),
+            )
+            .expect("build Bob's in-memory test client");
+
+            let mut alice_group = alice
+                .create_group(ExtensionList::default(), Default::default(), None)
+                .expect("create Alice's SQLCipher-backed group");
+            let group_id = alice_group.group_id().to_vec();
+            let bob_key_package = bob
+                .generate_key_package_message(Default::default(), Default::default(), None)
+                .expect("generate Bob's test KeyPackage");
+            let bob_key_package = MlsMessage::from_bytes(
+                &bob_key_package.to_bytes().expect("serialize Bob's KeyPackage"),
+            )
+            .expect("deserialize Bob's KeyPackage");
+            let add_member = alice_group
+                .commit_builder()
+                .add_member(bob_key_package)
+                .expect("stage Bob's test KeyPackage");
+            let commit = add_member.build().expect("build the MLS commit");
+            alice_group
+                .apply_pending_commit()
+                .expect("persist Alice's post-commit group state");
+            let welcome = MlsMessage::from_bytes(
+                &commit.welcome_messages[0]
+                    .to_bytes()
+                    .expect("serialize the MLS Welcome"),
+            )
+            .expect("deserialize the MLS Welcome");
+            let (mut bob_group, _) = bob
+                .join_group(None, &welcome, None)
+                .expect("join Bob to the in-memory group");
+
+            let before_restart = alice_group
+                .encrypt_application_message(PERSISTENCE_SENTINEL, Vec::new())
+                .expect("encrypt a marker before closing Alice's client");
+            let before_restart_wire = before_restart
+                .to_bytes()
+                .expect("serialize the pre-restart MLS message");
+            assert!(
+                !before_restart_wire
+                    .windows(PERSISTENCE_SENTINEL.len())
+                    .any(|window| window == PERSISTENCE_SENTINEL),
+                "pre-restart plaintext marker appeared in the MLS wire message"
+            );
+            let received = bob_group
+                .process_incoming_message(
+                    MlsMessage::from_bytes(&before_restart_wire)
+                        .expect("deserialize the pre-restart MLS message"),
+                )
+                .expect("Bob decrypts the pre-restart message");
+            assert_application_message(received, PERSISTENCE_SENTINEL);
+
+            drop(alice_group);
+            drop(alice);
+            let database_bytes = std::fs::read(database.path())
+                .expect("SQLCipher database exists after group-state writes");
+            assert!(
+                !database_bytes.starts_with(b"SQLite format 3\0"),
+                "SQLCipher database unexpectedly exposes the plaintext SQLite file header"
+            );
+            assert!(
+                !database_bytes
+                    .windows(PERSISTENCE_SENTINEL.len())
+                    .any(|window| window == PERSISTENCE_SENTINEL),
+                "test marker appeared in the encrypted SQLCipher database bytes"
+            );
+
+            let restored_alice = sqlcipher_client(
+                database.path(),
+                TEST_DATABASE_KEY,
+                test_crypto_provider(),
+                alice_identity.clone(),
+                alice_secret_key.clone(),
+                PinnedIdentityProvider::new(trusted_identities.clone()),
+            )
+            .expect("reopen Alice's SQLCipher-backed client");
+            let mut restored_group = restored_alice
+                .load_group(&group_id)
+                .expect("reload the persisted Alice group snapshot");
+            let resumed = restored_group
+                .encrypt_application_message(RESUMED_TEXT, Vec::new())
+                .expect("encrypt after restoring the MLS group state");
+            let resumed_wire = resumed
+                .to_bytes()
+                .expect("serialize the post-restart MLS message");
+            let received = bob_group
+                .process_incoming_message(
+                    MlsMessage::from_bytes(&resumed_wire)
+                        .expect("deserialize the post-restart MLS message"),
+                )
+                .expect("Bob decrypts Alice's post-restart message");
+            assert_application_message(received, RESUMED_TEXT);
+
+            drop(restored_group);
+            drop(restored_alice);
+            assert!(
+                sqlcipher_client(
+                    database.path(),
+                    [0x00; 32],
+                    test_crypto_provider(),
+                    alice_identity,
+                    alice_secret_key,
+                    PinnedIdentityProvider::new(trusted_identities),
+                )
+                .is_err(),
+                "an incorrect SQLCipher key must not open the stored MLS state"
+            );
+        }
+    }
 }
 
 // Reuse the existing narrowly scoped JNI method; it calls the matching
