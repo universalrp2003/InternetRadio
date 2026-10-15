@@ -47,4 +47,4 @@ build_target armv7-linux-androideabi "armv7a-linux-androideabi${API_LEVEL}-clang
 build_target i686-linux-android "i686-linux-android${API_LEVEL}-clang"
 build_target x86_64-linux-android "x86_64-linux-android${API_LEVEL}-clang"
 
-echo "PASS: the optional mls-rs SQLCipher dependency graph cross-built for all four Android ABIs. This is build-only feasibility evidence; it does not exercise SQLCipher at runtime or Android Keystore key management."
+echo "PASS: the optional mls-rs SQLCipher graph, including its separate vendored OpenSSL backend, cross-built for all four Android ABIs beside the AWS-LC MLS provider. This is build-only feasibility evidence; it does not exercise SQLCipher at runtime or Android Keystore key management."
