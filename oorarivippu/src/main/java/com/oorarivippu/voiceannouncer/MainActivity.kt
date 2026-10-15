@@ -1,0 +1,688 @@
+package com.oorarivippu.voiceannouncer
+
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.filled.GpsFixed
+import androidx.compose.material.icons.filled.GpsOff
+import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.PowerSettingsNew
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+
+private val AppColorScheme = lightColorScheme(
+    primary = Color(0xFF0F766E),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFCCFBF1),
+    onPrimaryContainer = Color(0xFF134E4A),
+    secondary = Color(0xFF1E40AF),
+    onSecondary = Color.White,
+    background = Color(0xFFF8FAFC),
+    surface = Color.White,
+    onSurface = Color(0xFF0F172A)
+)
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        AppPreferences.init(this)
+        AppPreferences.updateLiveStatus(
+            isGpsEnabled = GpsStateReceiver.isGpsProviderEnabled(this)
+        )
+
+        setContent {
+            MaterialTheme(colorScheme = AppColorScheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    OorArivippuScreen(
+                        onStartService = { startAnnouncerService() },
+                        onStopService = { stopAnnouncerService() },
+                        onTestVoice = { triggerTestVoice() }
+                    )
+                }
+            }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        AppPreferences.updateLiveStatus(
+            isGpsEnabled = GpsStateReceiver.isGpsProviderEnabled(this)
+        )
+    }
+
+    private fun startAnnouncerService() {
+        val intent = Intent(this, LocationAnnouncementService::class.java).apply {
+            action = LocationAnnouncementService.ACTION_START_TRACKING
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
+        }
+    }
+
+    private fun stopAnnouncerService() {
+        val intent = Intent(this, LocationAnnouncementService::class.java).apply {
+            action = LocationAnnouncementService.ACTION_STOP_TRACKING
+        }
+        startService(intent)
+    }
+
+    private fun triggerTestVoice() {
+        val intent = Intent(this, LocationAnnouncementService::class.java).apply {
+            action = LocationAnnouncementService.ACTION_TEST_VOICE
+        }
+        startService(intent)
+    }
+}
+
+@Composable
+fun OorArivippuScreen(
+    onStartService: () -> Unit,
+    onStopService: () -> Unit,
+    onTestVoice: () -> Unit
+) {
+    val context = LocalContext.current
+    val state by AppPreferences.state.collectAsState()
+    val ui = BilingualStrings.forLang(state.appLanguage)
+
+    var hasPermissions by remember {
+        mutableStateOf(checkRequiredPermissions(context))
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        hasPermissions = checkRequiredPermissions(context)
+        if (hasPermissions) {
+            onStartService()
+        }
+    }
+
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            // 1. Header Banner
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF0F766E)),
+                shape = RoundedCornerShape(18.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RecordVoiceOver,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Text(
+                            text = ui.appTitle,
+                            color = Color.White,
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Text(
+                        text = ui.appSubtitle,
+                        color = Color(0xFFE2E8F0),
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        text = ui.locationDisclosure,
+                        color = Color(0xFFD1FAE5),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                }
+            }
+
+            // 2. Language Selection Card (App Language & Voice Announcement Language, Default Tamil)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    LanguageSelectorRow(
+                        icon = Icons.Default.Translate,
+                        label = ui.appLanguageLabel,
+                        selectedLang = state.appLanguage,
+                        tamilLabel = ui.tamilName,
+                        englishLabel = ui.englishName,
+                        onSelect = { AppPreferences.setAppLanguage(it) }
+                    )
+                    Divider(color = Color(0xFFE2E8F0))
+                    LanguageSelectorRow(
+                        icon = Icons.Default.VolumeUp,
+                        label = ui.voiceLanguageLabel,
+                        selectedLang = state.voiceLanguage,
+                        tamilLabel = ui.tamilName,
+                        englishLabel = ui.englishName,
+                        onSelect = { AppPreferences.setVoiceLanguage(it) }
+                    )
+                }
+            }
+
+            // 3. Permission Prompt Banner (if not yet granted)
+            if (!hasPermissions) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = ui.permissionNeededBanner,
+                            color = Color(0xFF92400E),
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Button(
+                            onClick = {
+                                permissionLauncher.launch(buildPermissionArray())
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFD97706))
+                        ) {
+                            Text(text = ui.grantPermissionButton, color = Color.White)
+                        }
+                    }
+                }
+            }
+
+            // 4. Master ON / OFF Button & Live Status Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(18.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val statusColor = when {
+                        !state.isTrackingEnabled -> Color(0xFF64748B)
+                        !state.isGpsEnabled -> Color(0xFFDC2626)
+                        else -> Color(0xFF15803D)
+                    }
+
+                    val statusText = when {
+                        !state.isTrackingEnabled -> ui.statusTrackingStopped
+                        !state.isGpsEnabled -> ui.statusGpsOff
+                        state.bikeCarDetectionEnabled && !state.isVehicleMoving -> ui.statusWaitingForMove
+                        else -> ui.statusTrackingActive
+                    }
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(12.dp)
+                                .clip(CircleShape)
+                                .background(statusColor)
+                        )
+                        Text(
+                            text = statusText,
+                            color = statusColor,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+
+                    // Prominent Master ON / OFF Toggle Button
+                    Button(
+                        onClick = {
+                            if (state.isTrackingEnabled) {
+                                onStopService()
+                            } else {
+                                if (checkRequiredPermissions(context)) {
+                                    hasPermissions = true
+                                    onStartService()
+                                } else {
+                                    permissionLauncher.launch(buildPermissionArray())
+                                }
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (state.isTrackingEnabled) Color(0xFFDC2626) else Color(0xFF0F766E)
+                        ),
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(58.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PowerSettingsNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = if (state.isTrackingEnabled) ui.masterTurnOff else ui.masterTurnOn,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = onTestVoice,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = ui.testVoiceButton)
+                    }
+                }
+            }
+
+            // 5. Current Place & Speed Telemetry Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (state.isGpsEnabled) Icons.Default.GpsFixed else Icons.Default.GpsOff,
+                            contentDescription = null,
+                            tint = if (state.isGpsEnabled) Color(0xFF0F766E) else Color(0xFFDC2626)
+                        )
+                        Text(
+                            text = ui.currentPlaceLabel,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                    }
+
+                    InfoRow(
+                        label = ui.currentCityLabel,
+                        value = state.currentCityOrVillage.ifBlank { ui.unknownPlace }
+                    )
+                    InfoRow(
+                        label = ui.currentSubAreaLabel,
+                        value = state.currentSubArea.ifBlank { ui.unknownPlace }
+                    )
+                    InfoRow(
+                        label = ui.currentSpeedLabel,
+                        value = "${state.currentSpeedKmh.toInt()} km/h • " +
+                            if (state.isVehicleMoving) ui.travelModeDetected else ui.travelModeStationary
+                    )
+                }
+            }
+
+            // 6. Announcement Rules & Travel Options Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    // Option A: Same-City Next Place Announcement ON/OFF
+                    SettingToggleItem(
+                        icon = Icons.Default.LocationCity,
+                        title = ui.sameCityOptionTitle,
+                        subtitle = ui.sameCityOptionSubtitle,
+                        checked = state.announceSameCitySubArea,
+                        onCheckedChange = { AppPreferences.setAnnounceSameCitySubArea(it) }
+                    )
+
+                    Divider(color = Color(0xFFE2E8F0))
+
+                    // Option B: Bike / Car Travel Detection ON/OFF
+                    SettingToggleItem(
+                        icon = Icons.Default.DirectionsBike,
+                        title = ui.bikeCarModeTitle,
+                        subtitle = ui.bikeCarModeSubtitle,
+                        checked = state.bikeCarDetectionEnabled,
+                        onCheckedChange = { AppPreferences.setBikeCarDetectionEnabled(it) }
+                    )
+
+                    Divider(color = Color(0xFFE2E8F0))
+
+                    // Option C: Announce immediately when ON button pressed
+                    SettingToggleItem(
+                        icon = Icons.Default.VolumeUp,
+                        title = ui.announceOnStartTitle,
+                        subtitle = ui.announceOnStartSubtitle,
+                        checked = state.announceImmediatelyOnStart,
+                        onCheckedChange = { AppPreferences.setAnnounceImmediatelyOnStart(it) }
+                    )
+
+                    Divider(color = Color(0xFFE2E8F0))
+
+                    // Option D: Minimum Travel Distance Slider
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = "${ui.minDistanceTitle}: ${state.minDistanceMeters} m",
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Slider(
+                            value = state.minDistanceMeters.toFloat(),
+                            onValueChange = { AppPreferences.setMinDistanceMeters(it.toInt()) },
+                            valueRange = 200f..3000f,
+                            steps = 13
+                        )
+                    }
+                }
+            }
+
+            // 7. Recent Voice Announcements History Card
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = ui.historySectionTitle,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        )
+                        if (state.history.isNotEmpty()) {
+                            TextButton(onClick = { AppPreferences.clearHistory() }) {
+                                Text(text = ui.clearHistoryButton)
+                            }
+                        }
+                    }
+
+                    if (state.history.isEmpty()) {
+                        Text(
+                            text = ui.emptyHistoryText,
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp
+                        )
+                    } else {
+                        state.history.forEach { item ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFF1F5F9))
+                                    .padding(10.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = item.title,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = Color(0xFF0F766E)
+                                    )
+                                    Text(
+                                        text = item.timestamp,
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF64748B)
+                                    )
+                                }
+                                Text(
+                                    text = item.spokenText,
+                                    fontSize = 13.sp,
+                                    color = Color(0xFF334155)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LanguageSelectorRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    selectedLang: String,
+    tamilLabel: String,
+    englishLabel: String,
+    onSelect: (String) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF0F766E),
+                modifier = Modifier.size(20.dp)
+            )
+            Text(
+                text = label,
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 14.sp
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            FilterChip(
+                selected = selectedLang == "ta",
+                onClick = { onSelect("ta") },
+                label = { Text(text = tamilLabel, fontWeight = FontWeight.Bold) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color(0xFFCCFBF1),
+                    selectedLabelColor = Color(0xFF134E4A)
+                )
+            )
+            FilterChip(
+                selected = selectedLang == "en",
+                onClick = { onSelect("en") },
+                label = { Text(text = englishLabel, fontWeight = FontWeight.Bold) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = Color(0xFFCCFBF1),
+                    selectedLabelColor = Color(0xFF134E4A)
+                )
+            )
+        }
+    }
+}
+
+@Composable
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            color = Color(0xFF64748B),
+            fontSize = 13.sp
+        )
+        Text(
+            text = value,
+            color = Color(0xFF0F172A),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp
+        )
+    }
+}
+
+@Composable
+private fun SettingToggleItem(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            modifier = Modifier.weight(1f).padding(end = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF0F766E),
+                modifier = Modifier.padding(top = 2.dp).size(22.dp)
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = title,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                )
+                Text(
+                    text = subtitle,
+                    color = Color(0xFF64748B),
+                    fontSize = 12.sp,
+                    lineHeight = 17.sp
+                )
+            }
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
+    }
+}
+
+private fun buildPermissionArray(): Array<String> {
+    val list = mutableListOf(
+        Manifest.permission.ACCESS_FINE_LOCATION,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    )
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        list.add(Manifest.permission.POST_NOTIFICATIONS)
+    }
+    return list.toTypedArray()
+}
+
+private fun checkRequiredPermissions(context: android.content.Context): Boolean {
+    val fineGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_FINE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val coarseGranted = ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.ACCESS_COARSE_LOCATION
+    ) == PackageManager.PERMISSION_GRANTED
+    val locationGranted = fineGranted || coarseGranted
+    val notificationsGranted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+    return locationGranted && notificationsGranted
+}
