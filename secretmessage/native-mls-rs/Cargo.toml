@@ -18,4 +18,4 @@ android-jni = ["dep:jni", "spike-harness"]
 [dependencies]
 mls-rs = { version = "=0.56.0", default-features = false, features = ["std", "rfc_compliant"] }
 mls-rs-crypto-awslc = { version = "=0.25.0", default-features = false, features = ["non-fips"] }
-jni = { version = "0.21.1", optional = true }
+jni = { version = "=0.22.4", optional = true }

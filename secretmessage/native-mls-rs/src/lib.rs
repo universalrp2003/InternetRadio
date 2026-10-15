@@ -94,8 +94,7 @@ pub mod spike_harness {
         let welcome_wire = commit.welcome_messages[0]
             .to_bytes()
             .expect("serialize the MLS Welcome");
-        let welcome =
-            MlsMessage::from_bytes(&welcome_wire).expect("deserialize the MLS Welcome");
+        let welcome = MlsMessage::from_bytes(&welcome_wire).expect("deserialize the MLS Welcome");
         let (mut bob_group, _) = bob
             .join_group(None, &welcome, None)
             .expect("join Bob to the in-memory MLS group");
@@ -113,8 +112,8 @@ pub mod spike_harness {
                 .any(|window| window == ALICE_TEXT),
             "Alice's test plaintext appeared in the serialized MLS message"
         );
-        let alice_in = MlsMessage::from_bytes(&alice_wire)
-            .expect("deserialize Alice's encrypted MLS message");
+        let alice_in =
+            MlsMessage::from_bytes(&alice_wire).expect("deserialize Alice's encrypted MLS message");
         let received_by_bob = bob_group
             .process_incoming_message(alice_in)
             .expect("authenticate and decrypt Alice's MLS message");
