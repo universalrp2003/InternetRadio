@@ -2,34 +2,52 @@
 
 ## Kotlin / resource errors
 ```
-e: secretmessage/product/src/main/java/com/rpideas/secretmessage/preview/MainActivity.kt:448:33 Unresolved reference 'Send'.
 ```
 
 ## Gradle summary
 ```
-[Incubating] Problems report is available at: file:///home/runner/work/InternetRadio/InternetRadio/build/reports/problems/problems-report.html
+```
 
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-Execution failed for task ':secretmessage:compileDebugKotlin'.
-> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
-   > Compilation error. See log for more details
-
-* Try:
-> Run with --stacktrace option to get the stack trace.
-> Run with --info or --debug option to get more log output.
-> Run with --scan to get full insights.
-> Get more help at https://help.gradle.org.
-
-Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
-
-You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
-
-For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
-
-BUILD FAILED in 2m 24s
-202 actionable tasks: 147 executed, 55 from cache
+## APK verification output
+```
+=== APK files ===
+total 19476
+drwxr-xr-x 2 runner runner     4096 Oct 15 03:45 .
+drwxr-xr-x 4 runner runner     4096 Oct 15 03:46 ..
+-rw-r--r-- 1 runner runner 19929869 Oct 15 03:45 cleaner-debug.apk
+-rw-r--r-- 1 runner runner      414 Oct 15 03:45 output-metadata.json
+total 16512
+drwxr-xr-x 2 runner runner     4096 Oct 15 03:43 .
+drwxr-xr-x 4 runner runner     4096 Oct 15 03:45 ..
+-rw-r--r-- 1 runner runner 16892103 Oct 15 03:43 equalizer-debug.apk
+-rw-r--r-- 1 runner runner      411 Oct 15 03:43 output-metadata.json
+total 20176
+drwxr-xr-x 2 runner runner     4096 Oct 15 03:44 .
+drwxr-xr-x 4 runner runner     4096 Oct 15 03:45 ..
+-rw-r--r-- 1 runner runner      413 Oct 15 03:44 output-metadata.json
+-rw-r--r-- 1 runner runner 20644229 Oct 15 03:44 radio-debug.apk
+total 79820
+drwxr-xr-x 2 runner runner     4096 Oct 15 03:47 .
+drwxr-xr-x 4 runner runner     4096 Oct 15 03:47 ..
+-rw-r--r-- 1 runner runner      423 Oct 15 03:47 output-metadata.json
+-rw-r--r-- 1 runner runner 81721909 Oct 15 03:47 vocalremover-debug.apk
+total 16264
+drwxr-xr-x 2 runner runner     4096 Oct 15 03:44 .
+drwxr-xr-x 3 runner runner     4096 Oct 15 03:44 ..
+-rw-r--r-- 1 runner runner      435 Oct 15 03:44 output-metadata.json
+-rw-r--r-- 1 runner runner 16640403 Oct 15 03:44 secretmessage-debug.apk
+OK: standalone Vocal Remover debug + release APKs: vocalremover/build/outputs/apk/debug/vocalremover-debug.apk / vocalremover/build/outputs/apk/release/vocalremover-release.apk
+=== Google Play bundles (.aab) for the three store-packaged apps ===
+OK: CleanSweep-v2.46.aab inside the build
+OK: PulseEQ-v1.5.aab inside the build
+OK: Ramesh-Radio-v1.11.aab inside the build
+=== signed release APKs ===
+OK: cleaner/build/outputs/apk/release/cleaner-release.apk
+OK: radio/build/outputs/apk/release/radio-release.apk
+OK: equalizer/build/outputs/apk/release/equalizer-release.apk
+OK: vocalremover/build/outputs/apk/release/vocalremover-release.apk
+=== App icons inside the built APKs ===
+FAIL: Secret Message local preview unexpectedly requests an Android permission
 ```
 
 ## Store artwork step
