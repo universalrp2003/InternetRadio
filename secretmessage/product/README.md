@@ -14,4 +14,4 @@ The prominent in-app warning is intentional: **do not enter sensitive content**.
 
 The independent `../native-mls-rs` candidate remains a test-only feasibility harness. It is not linked into this app. The standalone `../android-smoke` APK is also not this app. Passing the candidate or preview tests does not establish security, interoperability, or release readiness.
 
-Build the debug preview with `./gradlew :secretmessage:assembleDebug`; run its pure policy tests with `./gradlew :secretmessage:testDebugUnitTest`.
+Build the debug preview with `./gradlew :secretmessage:assembleDebug`; run its pure policy tests with `./gradlew :secretmessage:testDebugUnitTest`. Hosted compilation, unit tests, and the merged-APK network-permission gate passed in [run 38678283393](https://github.com/universalrp2003/InternetRadio/actions/runs/38678283393). No physical-device UX test or connected two-phone test has been performed.
