@@ -1,6 +1,6 @@
 # Build and release guide — RP Ideas
 
-This guide covers the four active modules in the current repository. GitHub Releases are the verified direct-download channel. A successful CI build is required before publication; CI success is not Play Protect approval or a device-compatibility certification.
+This guide covers the four legacy batch modules and the separately released Oor Arivippu app. GitHub Releases are the verified direct-download channel. A successful CI build is required before publication; CI success is not Play Protect approval or a device-compatibility certification.
 
 ## Latest published release batch — 14 October 2026
 
@@ -15,11 +15,21 @@ This guide covers the four active modules in the current repository. GitHub Rele
 
 The previously published releases, tags and assets for retired modules are retained as history. They are not built or included in new release batches.
 
+## Oor Arivippu standalone stable release
+
+Oor Arivippu is a fifth active product but is intentionally excluded from the existing four-app batch, whose app versions/tags are already public. Its owner-authorized first stable release uses `.github/workflows/oorarivippu-release.yml` and is built separately as version 1.0.0 / code 2 (`Oor-Arivippu-v1.0.0.apk`).
+
+The standalone workflow runs the Oor Arivippu release unit tests, release lint and signed release build; checks package/version, APK size, SHA-256 and the pinned release certificate; then stages identical APK bytes as drafts in both repositories. It verifies both draft assets before publishing the destination release and then the `InternetRadio` source fallback, and checks their canonical URLs and matching size/digest again. Publication requires the source repository's `RP_ANDROID_APPS_RELEASE_TOKEN` secret with destination-release write access.
+
+The workflow is restricted to the authorized Arena branch. A commit containing `[publish-oorarivippu]` is the explicit publication trigger; do not use that marker until the Oor test workflow and required hosted checks have passed and publication is authorized. Ordinary commits do not publish. Never overwrite either repository's existing tag or reuse a version for changed APK bytes.
+
+Earlier Oor Arivippu test APKs were debug-signed. They are not production updater builds and may not be updatable to the stable-signed APK; Android may require uninstalling a test APK first, which removes that installation's local settings and history. The owner reports prior two-device testing, but the future stable APK's exact hash is not considered device-tested unless it is matched to that APK.
+
 ## CI build
 
-The GitHub Actions workflow `.github/workflows/build-apk.yml` builds all four debug and signed release APKs, runs unit and required CleanSweep regression tests, checks localization and source contracts, validates the package/version/minimum SDK/permissions/icons/signatures, and verifies release asset size and SHA-256 against the local APK bytes.
+The GitHub Actions workflow `.github/workflows/build-apk.yml` builds the four legacy-batch debug and signed release APKs, runs unit and required CleanSweep regression tests, checks localization and source contracts, validates package/version/minimum SDK/permissions/icons/signatures, and verifies release asset size and SHA-256 against the local APK bytes. Oor Arivippu has its own test workflow and the standalone stable workflow described above.
 
-The workflow also produces Android App Bundles for `cleaner`, `radio` and `equalizer`. RP Vocal Remover Studio is a standalone direct-download APK and has no AAB in this workflow.
+The legacy batch workflow also produces Android App Bundles for `cleaner`, `radio` and `equalizer`. RP Vocal Remover Studio and Oor Arivippu are standalone direct-download APKs and have no AAB in that workflow.
 
 Local commands (JDK 17, Android SDK and NDK required):
 
@@ -31,6 +41,9 @@ Local commands (JDK 17, Android SDK and NDK required):
 
 ./gradlew :cleaner:assembleRelease :radio:assembleRelease \
   :equalizer:assembleRelease :vocalremover:assembleRelease
+
+./gradlew :oorarivippu:testDebugUnitTest :oorarivippu:testReleaseUnitTest \
+  :oorarivippu:lintDebug :oorarivippu:lintRelease :oorarivippu:assembleRelease
 ```
 
 ## Verified GitHub Releases
@@ -53,4 +66,4 @@ No release process disables Play Protect or bypasses Android's installer. Users 
 
 ## Store metadata
 
-The active store-art pipeline covers CleanSweep, Ramesh Radio and PulseEQ. F-Droid metadata is present for those three modules; it is preparation, not a claim that F-Droid has accepted or published them. RP Vocal Remover Studio currently ships through its GitHub Release only. See [`store/README.md`](store/README.md).
+The active store-art pipeline covers CleanSweep, Ramesh Radio and PulseEQ. F-Droid metadata is present for those three modules; it is preparation, not a claim that F-Droid has accepted or published them. RP Vocal Remover Studio and Oor Arivippu ship through their GitHub Releases only. See [`store/README.md`](store/README.md).

@@ -54,7 +54,7 @@ import java.time.Instant
 import java.util.UUID
 
 /**
- * Verified GitHub Releases updater for Ramesh Radio, PulseEQ and RP Vocal Remover Studio.
+ * Verified GitHub Releases updater for the RP Ideas Android apps, including Oor Arivippu.
  * It never installs automatically: Android's per-app sideload permission, package installer
  * confirmation and Play Protect remain in control.
  */
@@ -83,6 +83,7 @@ object AppUpdates {
         "Ramesh-Radio" -> AppIdentity(prefix, "com.universalrp.tamilnadufm")
         "PulseEQ" -> AppIdentity(prefix, "com.universalrp.pulseeq")
         "RP-Vocal-Remover-Studio" -> AppIdentity(prefix, "com.universalrp.vocalremover")
+        "Oor-Arivippu" -> AppIdentity(prefix, "com.oorarivippu.voiceannouncer")
         else -> throw IllegalArgumentException("No updater configuration exists for this app")
     }
 

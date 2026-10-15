@@ -4,7 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Match the established RP Ideas release signer so verified updates can be installed.
+val stableKeystore = rootProject.file("ci-keystore/release.p12")
+
 android {
+    sourceSets.getByName("main").java.srcDir(rootProject.file("shared/src/main/java"))
     namespace = "com.oorarivippu.voiceannouncer"
     compileSdk = 36
 
@@ -12,9 +16,28 @@ android {
         applicationId = "com.oorarivippu.voiceannouncer"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-test"
+        versionCode = 2
+        versionName = "1.0.0"
         vectorDrawables.useSupportLibrary = true
+    }
+
+    signingConfigs {
+        if (stableKeystore.exists()) {
+            create("stable") {
+                storeFile = stableKeystore
+                storePassword = "cleansweep-ci"
+                keyAlias = "cleansweep"
+                keyPassword = "cleansweep-ci"
+                storeType = "PKCS12"
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+            if (stableKeystore.exists()) signingConfig = signingConfigs.getByName("stable")
+        }
     }
 
     buildFeatures {

@@ -1,4 +1,4 @@
-# GitHub Actions workflow: builds/releases four maintained apps and compiles the isolated Secret Message local-only preview (debug/test only).
+# GitHub Actions workflow: builds the four legacy-batch apps and compiles the isolated Secret Message preview (debug/test only). Oor Arivippu has a separate release workflow.
 # - Live Guard / CleanSweep (:cleaner)
 # - Ramesh Radio (:radio)
 # - PulseEQ (:equalizer)

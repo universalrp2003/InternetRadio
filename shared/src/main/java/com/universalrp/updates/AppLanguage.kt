@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Tamil-first interface language shared by Ramesh Radio, PulseEQ and Vocal Remover Studio. */
+/** Tamil-first interface language shared by the RP Ideas Android apps. */
 enum class AppLanguage(val preferenceValue: String) {
     TAMIL("ta"),
     ENGLISH("en");

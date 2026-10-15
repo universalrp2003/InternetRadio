@@ -35,6 +35,8 @@ class BilingualStringsTest {
             assertTrue(strings.voiceStatusUnavailable.isNotBlank())
             assertTrue(strings.statusInternetUnavailable.isNotBlank())
             assertTrue(strings.internetUnavailableDetails.isNotBlank())
+            assertTrue(strings.offlineReminderTitle.isNotBlank())
+            assertTrue(strings.offlineReminderSubtitle.isNotBlank())
             assertTrue(strings.statusCallPaused.isNotBlank())
             assertTrue(strings.destinationAlertExplanation.isNotBlank())
             assertTrue(strings.headsetWhereAmISubtitle.isNotBlank())
@@ -63,6 +65,12 @@ class BilingualStringsTest {
             "It is 5:20 PM. Your current location is Town Centre, Alangudi.",
             BilingualStrings.buildWhereAmIAnnouncement("en", "Alangudi", "Town Centre", "5:20 PM")
         )
+    }
+
+    @Test
+    fun offlineReminderClearlySaysInternetIsUnavailableInBothLanguages() {
+        assertTrue(BilingualStrings.buildOfflineReminderAnnouncement("en").contains("Internet is unavailable"))
+        assertTrue(BilingualStrings.buildOfflineReminderAnnouncement("ta").contains("இணைய இணைப்பு இல்லை"))
     }
 
     @Test

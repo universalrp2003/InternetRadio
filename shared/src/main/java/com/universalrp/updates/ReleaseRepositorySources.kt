@@ -6,8 +6,8 @@ import java.net.URI
  * Ordered public release sources for the staged RP Ideas migration.
  *
  * The new repository is checked first; the old InternetRadio source remains a verified
- * fallback during the migration grace period. Do not remove the old source until the owner
- * confirms that all four bridge versions have been installed and update checks work.
+ * fallback during the migration grace period. Oor Arivippu uses both sources from its first
+ * stable release. Do not remove the old source until all four legacy bridge versions are confirmed.
  */
 object ReleaseRepositorySources {
     data class Source(val owner: String, val repository: String) {

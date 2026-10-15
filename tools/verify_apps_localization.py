@@ -20,6 +20,13 @@ EXPECTED_RELEASE_URLS = {
     "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5",
     "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11",
 }
+EXPECTED_OOR_RELEASE_URLS = {
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0",
+}
 
 
 def decode_expression(expression: str) -> str:
@@ -115,6 +122,41 @@ def verify_appstrings_accessibility_and_toasts(keys: set[str]) -> None:
             raise ValueError("Missing Tamil runtime formatter for user-facing dynamic text: " + formatter)
 
 
+def verify_oor_bilingual_catalog() -> int:
+    path = ROOT / "oorarivippu/src/main/java/com/oorarivippu/voiceannouncer/BilingualStrings.kt"
+    source = path.read_text(encoding="utf-8")
+    data_class = source.split("data class UiStrings(", 1)[1].split("\n)", 1)[0]
+    expected_fields = set(re.findall(r"\bval\s+(\w+)\s*:\s*String", data_class))
+    if not expected_fields:
+        raise ValueError("Oor Arivippu UiStrings must declare its bilingual fields.")
+
+    for language in ("TAMIL", "ENGLISH"):
+        marker = f"val {language} = UiStrings("
+        if marker not in source:
+            raise ValueError(f"Oor Arivippu is missing the {language} string catalog.")
+        body = source.split(marker, 1)[1].split("\n    )", 1)[0]
+        assignments = re.findall(r"^\s*(\w+)\s*=\s*(.+?)\s*,?\s*$", body, re.M)
+        counts = Counter(name for name, _ in assignments)
+        duplicates = sorted(name for name, count in counts.items() if count > 1)
+        missing = expected_fields - set(counts)
+        extra = set(counts) - expected_fields
+        if duplicates or missing or extra:
+            raise ValueError(
+                f"Oor Arivippu {language} catalog mismatch: missing={sorted(missing)}, "
+                f"extra={sorted(extra)}, duplicates={duplicates}"
+            )
+        for name, expression in assignments:
+            if not expression.strip() or expression.strip() in {'""', "\"\"\"\"\"\""}:
+                raise ValueError(f"Oor Arivippu {language}.{name} is empty.")
+
+    main_source = (ROOT / "oorarivippu/src/main/java/com/oorarivippu/voiceannouncer/MainActivity.kt").read_text(encoding="utf-8")
+    referenced_fields = set(re.findall(r"(?<![.\w])ui\.(\w+)\b", main_source))
+    unknown_fields = referenced_fields - expected_fields
+    if unknown_fields:
+        raise ValueError(f"Oor Arivippu UI references missing bilingual fields: {sorted(unknown_fields)}")
+    return len(expected_fields)
+
+
 def verify_about_links() -> None:
     about_files = {
         "cleaner": ROOT / "cleaner/src/main/java/com/universalrp/cleansweep/ui/AboutScreen.kt",
@@ -133,18 +175,42 @@ def verify_about_links() -> None:
         if re.search(r'\bAuthor\b', source, re.I):
             raise ValueError(f"{app} About still uses the disallowed 'Author' label.")
 
+    oor_path = ROOT / "oorarivippu/src/main/java/com/oorarivippu/voiceannouncer/MainActivity.kt"
+    oor_source = oor_path.read_text(encoding="utf-8")
+    oor_strings = (ROOT / "oorarivippu/src/main/java/com/oorarivippu/voiceannouncer/BilingualStrings.kt").read_text(encoding="utf-8")
+    oor_about_text = oor_source + "\n" + oor_strings
+    oor_urls = set(re.findall(r'https://github\.com/universalrp2003/RP-Android-Apps/releases/tag/[^"\\]+', oor_source))
+    missing_oor = EXPECTED_OOR_RELEASE_URLS - oor_urls
+    if missing_oor:
+        raise ValueError(f"Oor Arivippu About is missing current release links: {sorted(missing_oor)}")
+    for required in (
+        "https://github.com/universalrp2003/InternetRadio",
+        "https://github.com/universalrp2003/RP-Android-Apps",
+        "universalrp2003@gmail.com",
+        "Arena.ai Agent Mode",
+        "Project development",
+        'AppUpdates.Control("Oor-Arivippu")',
+        'AppUpdates.Control("Oor-Arivippu", automatic = true)',
+    ):
+        if required not in oor_about_text:
+            raise ValueError(f"Oor Arivippu About/updater is missing required content: {required}")
+    if re.search(r'\bAuthor\b', oor_about_text, re.I):
+        raise ValueError("Oor Arivippu About still uses the disallowed 'Author' label.")
+
 
 def main() -> int:
     try:
         keys = catalog_keys()
         checked = sum(verify_visible_text(module, keys) for module in ("radio", "equalizer", "vocalremover", "shared"))
+        oor_fields = verify_oor_bilingual_catalog()
         verify_about_links()
         verify_appstrings_accessibility_and_toasts(keys)
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"FAIL: {error}", file=sys.stderr)
         return 1
     print(f"PASS: {len(keys)} unique shared Tamil catalog entries; {checked} explicit Compose labels are covered.")
-    print("PASS: all four About sections link to the four versioned releases and contain the required contributor credits.")
+    print(f"PASS: all {oor_fields} Oor Arivippu UI fields have Tamil and English strings and are referenced consistently.")
+    print("PASS: all four legacy About sections and the Oor Arivippu About/update screen have their required release links and contributor credits.")
     print("Source-only check; translated meaning, Kotlin compilation, runtime layout and device behavior still require their own checks.")
     return 0
 

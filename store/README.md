@@ -1,6 +1,6 @@
 # Store metadata and artwork — RP Ideas
 
-The active store-art pipeline covers the three apps with store metadata: Live Guard (`cleaner`), Ramesh Radio (`radio`) and PulseEQ (`equalizer`). RP Vocal Remover Studio is currently a standalone GitHub-release APK and is not included in the store-art pipeline.
+The active store-art pipeline covers the three apps with store metadata: Live Guard (`cleaner`), Ramesh Radio (`radio`) and PulseEQ (`equalizer`). RP Vocal Remover Studio and Oor Arivippu are standalone GitHub-release APKs and are not included in the store-art pipeline.
 
 ## What is in this directory
 
@@ -31,4 +31,4 @@ Use only images approved for public release. Remove or redact personal informati
 
 ## Build artifacts
 
-The release workflow builds APKs for all four active apps and AABs for `cleaner`, `radio` and `equalizer`. RP Vocal Remover Studio is distributed as its standalone APK. Exact current APK names and verified hashes are listed in [`../docs/published-release-digests.md`](../docs/published-release-digests.md); the GitHub Release pages remain the authoritative downloads.
+The existing batch workflow builds the four legacy apps and AABs for `cleaner`, `radio` and `equalizer`; Oor Arivippu is built by a separate verified release workflow. RP Vocal Remover Studio and Oor Arivippu are distributed as standalone APKs. Exact current APK names and verified hashes are listed in [`../docs/published-release-digests.md`](../docs/published-release-digests.md); the GitHub Release pages remain the authoritative downloads.

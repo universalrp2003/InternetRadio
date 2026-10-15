@@ -33,6 +33,7 @@ data class AppStateSnapshot(
     val isGpsEnabled: Boolean = true,
     val isInternetAvailable: Boolean? = null,
     val isCallAudioPaused: Boolean = false,
+    val offlineReminderIntervalMinutes: Int = 15,
     val currentCityOrVillage: String = "",
     val currentSubArea: String = "",
     val currentDistrict: String = "",
@@ -63,6 +64,7 @@ object AppPreferences {
     private const val KEY_DESTINATION_LONGITUDE = "destination_longitude"
     private const val KEY_DESTINATION_ALERT_MASK = "destination_alert_mask"
     private const val KEY_HEADSET_WHERE_AM_I = "headset_where_am_i_enabled"
+    private const val KEY_OFFLINE_REMINDER_INTERVAL_MINUTES = "offline_reminder_interval_minutes"
 
     private lateinit var prefs: SharedPreferences
     private val _state = MutableStateFlow(AppStateSnapshot())
@@ -83,7 +85,13 @@ object AppPreferences {
             destinationLatitude = prefs.getString(KEY_DESTINATION_LATITUDE, null)?.toDoubleOrNull(),
             destinationLongitude = prefs.getString(KEY_DESTINATION_LONGITUDE, null)?.toDoubleOrNull(),
             destinationAlertMask = prefs.getInt(KEY_DESTINATION_ALERT_MASK, 0),
-            headsetWhereAmIEnabled = prefs.getBoolean(KEY_HEADSET_WHERE_AM_I, false)
+            headsetWhereAmIEnabled = prefs.getBoolean(KEY_HEADSET_WHERE_AM_I, false),
+            offlineReminderIntervalMinutes = OfflineReminderPolicy.normalizeInterval(
+                prefs.getInt(
+                    KEY_OFFLINE_REMINDER_INTERVAL_MINUTES,
+                    OfflineReminderPolicy.DEFAULT_INTERVAL_MINUTES
+                )
+            )
         )
     }
 
@@ -115,6 +123,12 @@ object AppPreferences {
 
     fun setInternetAvailable(available: Boolean) {
         _state.value = _state.value.copy(isInternetAvailable = available)
+    }
+
+    fun setOfflineReminderIntervalMinutes(minutes: Int) {
+        val normalized = OfflineReminderPolicy.normalizeInterval(minutes)
+        prefs.edit().putInt(KEY_OFFLINE_REMINDER_INTERVAL_MINUTES, normalized).apply()
+        _state.value = _state.value.copy(offlineReminderIntervalMinutes = normalized)
     }
 
     fun setCallAudioPaused(paused: Boolean) {

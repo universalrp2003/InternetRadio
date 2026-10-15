@@ -20,6 +20,7 @@ import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.ToneGenerator
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Build
@@ -74,6 +75,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         private const val GEOCODE_MIN_INTERVAL_MS = 30_000L
         private const val GEOCODE_MIN_DISTANCE_METERS = 100f
         private const val MAX_STALE_GEOCODE_DISTANCE_METERS = 500f
+        private const val OFFLINE_BEEP_DURATION_MS = 300
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -87,13 +89,20 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         val alternateLanguageText: String,
         val requestedLanguage: String,
         val requiresInternet: Boolean,
-        val queueMode: Int
+        val queueMode: Int,
+        val fallbackBeepIfVoiceUnavailable: Boolean = false,
+        val isOfflineReminder: Boolean = false,
+        val requireOnDeviceVoice: Boolean = false
     )
     private var pendingSpeechQueue: PendingSpeech? = null
     private var latestSpeakingRequest: PendingSpeech? = null
     private var speakingRequiresInternet = false
     private var callWaitJob: Job? = null
     private var callModeMonitorJob: Job? = null
+    private var offlineReminderJob: Job? = null
+    private var scheduledOfflineReminderIntervalMinutes: Int? = null
+    private var activeOfflineTone: ToneGenerator? = null
+    private var offlineBeepReleaseJob: Job? = null
     private var whereAmIMediaSession: MediaSession? = null
     private var isForegroundStarted = false
     private var lastDestinationDistanceMeters: Float? = null
@@ -163,6 +172,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 if (AppPreferences.state.value.isTrackingEnabled && hasLocationPermission()) {
                     if (!isForegroundStarted) startTrackingInForeground()
                     else updateHeadsetWhereAmIControl()
+                    updateOfflineReminderSchedule()
                     return START_STICKY
                 }
                 return START_NOT_STICKY
@@ -241,6 +251,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         } else {
             stopVoiceImmediately()
         }
+        updateOfflineReminderSchedule(announceImmediately = true)
     }
 
     private fun updateHeadsetWhereAmIControl() {
@@ -315,6 +326,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
 
     private fun stopTrackingAndService() {
         AppPreferences.setTrackingEnabled(false)
+        updateOfflineReminderSchedule()
         isForegroundStarted = false
         updateHeadsetWhereAmIControl()
         callWaitJob?.cancel()
@@ -431,7 +443,142 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             lastGeocodeStartedAtElapsedMs = 0L
             latestReceivedLocation?.let(::onNewLocationReceived)
         }
+        updateOfflineReminderSchedule(announceImmediately = !available)
         updateForegroundNotification()
+    }
+
+    private fun updateOfflineReminderSchedule(announceImmediately: Boolean = false) {
+        val snapshot = AppPreferences.state.value
+        val intervalMinutes = snapshot.offlineReminderIntervalMinutes
+        if (!OfflineReminderPolicy.shouldSchedule(
+                trackingEnabled = snapshot.isTrackingEnabled,
+                internetAvailable = snapshot.isInternetAvailable,
+                intervalMinutes = intervalMinutes
+            )
+        ) {
+            offlineReminderJob?.cancel()
+            offlineReminderJob = null
+            scheduledOfflineReminderIntervalMinutes = null
+            clearOfflineReminderSpeech(stopCurrent = true)
+            stopOfflineBeep()
+            return
+        }
+
+        if (offlineReminderJob?.isActive == true &&
+            scheduledOfflineReminderIntervalMinutes == intervalMinutes
+        ) return
+
+        offlineReminderJob?.cancel()
+        clearOfflineReminderSpeech(stopCurrent = true)
+        scheduledOfflineReminderIntervalMinutes = intervalMinutes
+        offlineReminderJob = serviceScope.launch {
+            if (announceImmediately) announceOfflineReminder()
+            while (true) {
+                kotlinx.coroutines.delay(intervalMinutes * 60_000L)
+                val current = AppPreferences.state.value
+                if (!OfflineReminderPolicy.shouldSchedule(
+                        trackingEnabled = current.isTrackingEnabled,
+                        internetAvailable = current.isInternetAvailable,
+                        intervalMinutes = current.offlineReminderIntervalMinutes
+                    ) || current.offlineReminderIntervalMinutes != intervalMinutes
+                ) break
+                announceOfflineReminder()
+            }
+        }
+    }
+
+    private fun announceOfflineReminder() {
+        val snapshot = AppPreferences.state.value
+        if (!OfflineReminderPolicy.shouldSchedule(
+                trackingEnabled = snapshot.isTrackingEnabled,
+                internetAvailable = snapshot.isInternetAvailable,
+                intervalMinutes = snapshot.offlineReminderIntervalMinutes
+            )
+        ) return
+
+        val requestedLanguage = if (snapshot.voiceLanguage == "en") "en" else "ta"
+        val alternateLanguage = if (requestedLanguage == "en") "ta" else "en"
+        val text = BilingualStrings.buildOfflineReminderAnnouncement(requestedLanguage)
+        val alternateText = BilingualStrings.buildOfflineReminderAnnouncement(alternateLanguage)
+        speakAnnouncement(
+            text = text,
+            voiceLang = requestedLanguage,
+            alternateLanguageText = alternateText,
+            requiresInternet = false,
+            fallbackBeepIfVoiceUnavailable = true,
+            isOfflineReminder = true,
+            requireOnDeviceVoice = true
+        )
+    }
+
+    private fun clearOfflineReminderSpeech(stopCurrent: Boolean) {
+        if (pendingSpeechQueue?.isOfflineReminder == true) {
+            pendingSpeechQueue = null
+            if (callWaitJob?.isActive == true) {
+                callWaitJob?.cancel()
+                callWaitJob = null
+                AppPreferences.setCallAudioPaused(false)
+            }
+        }
+        if (stopCurrent && latestSpeakingRequest?.isOfflineReminder == true) {
+            callModeMonitorJob?.cancel()
+            callModeMonitorJob = null
+            latestSpeakingRequest = null
+            speakingRequiresInternet = false
+            try {
+                tts?.stop()
+            } catch (_: Exception) {}
+            if (pendingSpeechQueue == null && callWaitJob == null) {
+                AppPreferences.setCallAudioPaused(false)
+            }
+        }
+    }
+
+    private fun shouldSendOfflineReminder(): Boolean {
+        val snapshot = AppPreferences.state.value
+        return OfflineReminderPolicy.shouldSchedule(
+            trackingEnabled = snapshot.isTrackingEnabled,
+            internetAvailable = snapshot.isInternetAvailable,
+            intervalMinutes = snapshot.offlineReminderIntervalMinutes
+        )
+    }
+
+    private fun playOfflineBeepIfRelevant(speech: PendingSpeech) {
+        if (speech.fallbackBeepIfVoiceUnavailable && speech.isOfflineReminder &&
+            shouldSendOfflineReminder()
+        ) playOfflineBeep()
+    }
+
+    private fun playOfflineBeep() {
+        if (!shouldSendOfflineReminder() || isPhoneCallAudioActive()) return
+        stopOfflineBeep()
+        val tone = runCatching {
+            ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
+        }.getOrNull() ?: return
+        activeOfflineTone = tone
+        if (!tone.startTone(ToneGenerator.TONE_PROP_BEEP, OFFLINE_BEEP_DURATION_MS)) {
+            activeOfflineTone = null
+            tone.release()
+            return
+        }
+        offlineBeepReleaseJob = serviceScope.launch {
+            kotlinx.coroutines.delay(600L)
+            if (activeOfflineTone === tone) {
+                activeOfflineTone = null
+                runCatching { tone.stopTone() }
+                runCatching { tone.release() }
+            }
+        }
+    }
+
+    private fun stopOfflineBeep() {
+        offlineBeepReleaseJob?.cancel()
+        offlineBeepReleaseJob = null
+        activeOfflineTone?.let { tone ->
+            runCatching { tone.stopTone() }
+            runCatching { tone.release() }
+        }
+        activeOfflineTone = null
     }
 
     private fun onNewLocationReceived(location: Location) {
@@ -816,12 +963,17 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     voiceLang = queued.requestedLanguage,
                     alternateLanguageText = queued.alternateLanguageText,
                     requiresInternet = queued.requiresInternet,
-                    queueMode = queued.queueMode
+                    queueMode = queued.queueMode,
+                    fallbackBeepIfVoiceUnavailable = queued.fallbackBeepIfVoiceUnavailable,
+                    isOfflineReminder = queued.isOfflineReminder,
+                    requireOnDeviceVoice = queued.requireOnDeviceVoice
                 )
             }
         } else {
             isTtsReady = false
+            val queued = pendingSpeechQueue
             pendingSpeechQueue = null
+            queued?.let(::playOfflineBeepIfRelevant)
             AppPreferences.setCallAudioPaused(false)
             AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
             if (!AppPreferences.state.value.isTrackingEnabled) {
@@ -835,7 +987,10 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
      * Checks regional and generic voices before use. If the selected language is missing,
      * try the other supported app language and tell the UI that a fallback is active.
      */
-    private fun configureTtsLanguage(voiceLang: String): String? {
+    private fun configureTtsLanguage(
+        voiceLang: String,
+        requireOnDeviceVoice: Boolean = false
+    ): String? {
         val engine = tts
         if (engine == null || !isTtsReady) {
             AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
@@ -862,7 +1017,17 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         for ((locale, languageCode) in candidates) {
             try {
                 if (engine.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE) continue
+                val localVoice = if (requireOnDeviceVoice) {
+                    engine.voices?.firstOrNull { voice ->
+                        voice.locale.language == locale.language && !voice.isNetworkConnectionRequired
+                    }
+                } else {
+                    null
+                }
+                if (requireOnDeviceVoice && localVoice == null) continue
                 if (engine.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) continue
+                if (localVoice != null) engine.voice = localVoice
+                if (requireOnDeviceVoice && engine.voice?.isNetworkConnectionRequired != false) continue
                 engine.setSpeechRate(0.95f)
                 AppPreferences.setTtsVoiceStatus(
                     if (languageCode == requestedLanguage) {
@@ -886,12 +1051,17 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         voiceLang: String,
         alternateLanguageText: String,
         requiresInternet: Boolean = true,
-        queueMode: Int = TextToSpeech.QUEUE_FLUSH
+        queueMode: Int = TextToSpeech.QUEUE_FLUSH,
+        fallbackBeepIfVoiceUnavailable: Boolean = false,
+        isOfflineReminder: Boolean = false,
+        requireOnDeviceVoice: Boolean = false
     ) {
         val snapshot = AppPreferences.state.value
         if (requiresInternet && snapshot.isInternetAvailable != true) return
-        // Double check GPS is still enabled before speaking while tracking.
-        if (!GpsStateReceiver.isGpsProviderEnabled(this) && snapshot.isTrackingEnabled) return
+        // Place alerts need GPS; an explicit offline-status reminder does not.
+        if (!isOfflineReminder && !GpsStateReceiver.isGpsProviderEnabled(this) &&
+            snapshot.isTrackingEnabled
+        ) return
 
         val requestedLanguage = if (voiceLang == "en") "en" else "ta"
         val speech = PendingSpeech(
@@ -899,7 +1069,10 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             alternateLanguageText = alternateLanguageText,
             requestedLanguage = requestedLanguage,
             requiresInternet = requiresInternet,
-            queueMode = queueMode
+            queueMode = queueMode,
+            fallbackBeepIfVoiceUnavailable = fallbackBeepIfVoiceUnavailable,
+            isOfflineReminder = isOfflineReminder,
+            requireOnDeviceVoice = requireOnDeviceVoice
         )
         if (isPhoneCallAudioActive()) {
             pendingSpeechQueue = speech
@@ -915,15 +1088,16 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             return
         }
 
-        val actualLanguage = configureTtsLanguage(requestedLanguage)
+        val actualLanguage = configureTtsLanguage(requestedLanguage, requireOnDeviceVoice)
         if (actualLanguage == null) {
+            playOfflineBeepIfRelevant(speech)
             if (!snapshot.isTrackingEnabled) stopSelf()
             return
         }
         val localizedText = if (actualLanguage == requestedLanguage) text else alternateLanguageText
         speakingRequiresInternet = requiresInternet
         latestSpeakingRequest = speech
-        requestAudioFocusAndSpeak(engine, localizedText, queueMode)
+        requestAudioFocusAndSpeak(engine, localizedText, queueMode, speech)
         monitorCallModeDuringSpeech(engine)
     }
 
@@ -958,13 +1132,21 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     voiceLang = queued.requestedLanguage,
                     alternateLanguageText = queued.alternateLanguageText,
                     requiresInternet = queued.requiresInternet,
-                    queueMode = queued.queueMode
+                    queueMode = queued.queueMode,
+                    fallbackBeepIfVoiceUnavailable = queued.fallbackBeepIfVoiceUnavailable,
+                    isOfflineReminder = queued.isOfflineReminder,
+                    requireOnDeviceVoice = queued.requireOnDeviceVoice
                 )
             }
         }
     }
 
-    private fun requestAudioFocusAndSpeak(engine: TextToSpeech, text: String, queueMode: Int) {
+    private fun requestAudioFocusAndSpeak(
+        engine: TextToSpeech,
+        text: String,
+        queueMode: Int,
+        speech: PendingSpeech
+    ) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -995,6 +1177,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && focusRequest != null) {
                     audioManager?.abandonAudioFocusRequest(focusRequest)
                 }
+                playOfflineBeepIfRelevant(speech)
                 if (!AppPreferences.state.value.isTrackingEnabled) stopSelf()
             }
         })
@@ -1128,6 +1311,9 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        offlineReminderJob?.cancel()
+        offlineReminderJob = null
+        stopOfflineBeep()
         internetMonitor?.stop()
         internetMonitor = null
         removeLocationUpdatesSafely()

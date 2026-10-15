@@ -77,6 +77,9 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.universalrp.updates.AppLanguage
+import com.universalrp.updates.AppLanguageState
+import com.universalrp.updates.AppUpdates
 import kotlinx.coroutines.launch
 
 private val AppColorScheme = lightColorScheme(
@@ -98,12 +101,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppPreferences.init(this)
+        AppLanguageState.initialize(this)
+        AppLanguageState.set(this, AppLanguage.from(AppPreferences.state.value.appLanguage))
         AppPreferences.updateLiveStatus(
             isGpsEnabled = GpsStateReceiver.isGpsProviderEnabled(this)
         )
 
         setContent {
             MaterialTheme(colorScheme = AppColorScheme) {
+                AppUpdates.Control("Oor-Arivippu", automatic = true)
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -172,6 +178,12 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+private fun openExternalLink(context: android.content.Context, url: String) {
+    runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+    }
+}
+
 @Composable
 fun OorArivippuScreen(
     onStartService: () -> Unit,
@@ -182,6 +194,11 @@ fun OorArivippuScreen(
     val context = LocalContext.current
     val state by AppPreferences.state.collectAsState()
     val ui = BilingualStrings.forLang(state.appLanguage)
+    val installedVersion = remember(context) {
+        runCatching {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        }.getOrNull() ?: "?"
+    }
     var destinationQuery by remember(state.destinationName) {
         mutableStateOf(state.destinationName)
     }
@@ -371,7 +388,10 @@ fun OorArivippuScreen(
                         selectedLang = state.appLanguage,
                         tamilLabel = ui.tamilName,
                         englishLabel = ui.englishName,
-                        onSelect = { AppPreferences.setAppLanguage(it) }
+                        onSelect = {
+                            AppPreferences.setAppLanguage(it)
+                            AppLanguageState.set(context, AppLanguage.from(it))
+                        }
                     )
                     Divider(color = Color(0xFFE2E8F0))
                     LanguageSelectorRow(
@@ -755,6 +775,37 @@ fun OorArivippuScreen(
 
                     Divider(color = Color(0xFFE2E8F0))
 
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(ui.offlineReminderTitle, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                        Text(
+                            text = ui.offlineReminderSubtitle,
+                            color = Color(0xFF64748B),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                        listOf(listOf(0, 5, 10), listOf(15, 30)).forEach { rowOptions ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                rowOptions.forEach { minutes ->
+                                    FilterChip(
+                                        selected = state.offlineReminderIntervalMinutes == minutes,
+                                        onClick = {
+                                            AppPreferences.setOfflineReminderIntervalMinutes(minutes)
+                                            if (state.isTrackingEnabled) onSettingsChanged()
+                                        },
+                                        label = {
+                                            Text(
+                                                if (minutes == 0) ui.offlineReminderOff
+                                                else "$minutes ${ui.offlineReminderMinuteUnit}"
+                                            )
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Divider(color = Color(0xFFE2E8F0))
+
                     // Option D: Minimum Travel Distance Slider
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
@@ -845,6 +896,51 @@ fun OorArivippuScreen(
                             }
                         }
                     }
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(7.dp)
+                ) {
+                    Text(ui.aboutSectionTitle, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                    Text("${ui.aboutVersionLabel}: $installedVersion", color = Color(0xFF64748B), fontSize = 13.sp)
+                    Divider(color = Color(0xFFE2E8F0))
+                    Text(ui.contributorsTitle, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    Text(ui.projectDevelopmentCredit, fontSize = 13.sp)
+                    Text(ui.aiAssistanceCredit, fontSize = 13.sp)
+                    Divider(color = Color(0xFFE2E8F0))
+                    TextButton(
+                        onClick = { openExternalLink(context, "https://github.com/universalrp2003/InternetRadio") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(ui.sourceRepositoryLabel) }
+                    TextButton(
+                        onClick = { openExternalLink(context, "https://github.com/universalrp2003/RP-Android-Apps") },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(ui.downloadRepositoryLabel) }
+                    Divider(color = Color(0xFFE2E8F0))
+                    Text(ui.otherAppsTitle, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                    val releaseLinks = listOf(
+                        ui.liveGuardReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46",
+                        ui.radioReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
+                        ui.pulseEqReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
+                        ui.vocalRemoverReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
+                        ui.oorArivippuReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0"
+                    )
+                    releaseLinks.forEach { (label, url) ->
+                        TextButton(
+                            onClick = { openExternalLink(context, url) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(label) }
+                    }
+                    Divider(color = Color(0xFFE2E8F0))
+                    AppUpdates.Control("Oor-Arivippu")
                 }
             }
         }

@@ -2,19 +2,29 @@
 
 ## Active project scope
 
-- Maintain exactly these four active Android modules: `cleaner` (Live Guard / CleanSweep), `radio` (Ramesh Radio), `equalizer` (PulseEQ) and `vocalremover` (RP Vocal Remover Studio).
+- Maintain five active Android products: `cleaner` (Live Guard / CleanSweep), `radio` (Ramesh Radio), `equalizer` (PulseEQ), `vocalremover` (RP Vocal Remover Studio), and `oorarivippu` (Oor Arivippu / Place Announcer). Oor Arivippu is owner-approved for its first stable release as a separate product and release workflow; do not add it to the existing four-app batch without revising that workflow's tag/version protections.
+- The isolated `secretmessage` preview remains a non-shipping local-only development target, not an active released app or secure messenger. Integrate only approved WhisperPad product modules after verifying their real boundaries; preserve MLS, signing and release requirements. Do not claim secure messaging or equate preview expiry with recipient-view expiry.
 - Retired standalone app modules have been removed from the active build, CI and store metadata at the owner's request. Preserve their already-published GitHub Releases, tags and APK assets as historical records; do not rebuild or publish them.
-- The owner chose **RP Ideas** as the umbrella brand and `RP-Android-Apps` as the destination repository slug. The bridge clients check `RP-Android-Apps` first and keep `InternetRadio` as a verified fallback during the grace period; older installed clients still require the exact `InternetRadio` URL and reject redirects. Follow `docs/repository-migration.md`; do not rename, archive or delete the old repository until all four bridge updates and the later updater-only transition are confirmed.
-- On 13 October 2026 the owner reported installing all four current apps and that they worked on their phone. This is owner-reported device feedback, not a certification for every device or Android version.
+- The owner chose **RP Ideas** as the umbrella brand and `RP-Android-Apps` as the destination repository slug. The four legacy bridge clients check `RP-Android-Apps` first and keep `InternetRadio` as a verified fallback during the grace period; older installed clients still require the exact `InternetRadio` URL and reject redirects. Follow `docs/repository-migration.md`; do not rename, archive or delete the old repository until all four bridge updates and the later updater-only transition are confirmed. Oor Arivippu's first stable release is to be published identically to both repositories.
+- The owner reported that the four existing apps worked on their phone on 13 October 2026. On 15 October, the owner reported successful Oor Arivippu testing on two devices and authorized publication. This is owner-reported feedback, not independent certification. The tested Oor debug APK bytes have not been matched to the future stable release hash; do not claim the exact stable APK was device-tested.
 
 ## Shared app and release requirements
 
-- All four user interfaces are Tamil-first with an in-app English option. When adding visible text, add both translations, preserve dynamic placeholders, and run the localization checks.
-- Do not label any contributor “Author.” About pages credit shared contributors accurately, include Ramesh prathap .R (`universalrp2003@gmail.com`) and Arena.ai Agent Mode as software assistance (no invented contact), and link to the four current release pages.
-- Use the verified stable GitHub Releases updater. Check on launch, offer an update only for a newer stable release, verify official asset URL, size, SHA-256, package/version and pinned signing certificate, then hand off to Android. Never install silently, bypass Play Protect, or claim that the app can grant/revoke Android's per-app “Install unknown apps” access temporarily.
+- The five active app UIs are Tamil-first with an in-app English option. When adding visible text, add both translations, preserve dynamic placeholders, and run the localization checks.
+- Do not label any contributor “Author.” About pages credit shared contributors accurately, include Ramesh prathap .R (`universalrp2003@gmail.com`) and Arena.ai Agent Mode as software assistance (no invented contact), and link to the current release pages.
+- Use the verified stable GitHub Releases updater. Check official release sources, offer only a newer stable version, verify official asset URL, size, SHA-256, package/version and pinned signing certificate, then hand off to Android. Never install silently, bypass Play Protect, or claim that the app can grant/revoke Android's per-app “Install unknown apps” access temporarily.
+- Oor Arivippu uses package `com.oorarivippu.voiceannouncer`, version 1.0.0 / code 2 for its first stable release, the existing pinned RP Ideas signing identity, and a standalone release workflow gated by an explicit `[publish-oorarivippu]` commit on the authorized branch (or a future authorized manual dispatch). Prior test APKs were debug-signed; if Android rejects an update because of the signer, explain that the test build must be uninstalled before installing the stable build. Do not overstate exact-byte device testing.
+- Oor Arivippu must continue to suppress place/destination announcements when internet is unavailable. Its selectable offline-status reminders are Off/5/10/15/30 minutes (default 15); use an on-device TTS voice when a local voice exists, otherwise a short local beep. Do not use network TTS for offline reminders.
 - Keep package IDs, signing identity and existing released asset bytes unchanged. Use a new app version/tag for changed APK bytes; never overwrite an existing version's asset.
 - The Live Guard release permission-delta gate is mandatory. A device evidence record is required when a release adds a dangerous permission; fail closed if the previous release cannot be inspected. App-op/signature permissions are not runtime-dangerous permissions. If evidence exists, publish only the exact tested APK bytes. Never describe CI as a phone test or claim Play Protect approval.
 - The repository currently supports direct APK sideloading. Any store listing or certification claim must be separately verified.
+
+## Oor Arivippu (Place Announcer)
+
+- Keep connectivity-loss status explicit, suppress place/destination speech while offline, and offer only the configured periodic offline-status reminder. The reminder uses a verified local TTS voice or a short notification-stream beep; it must not invoke online geocoding/voice for offline-status speech.
+- Keep tracking user-controlled and visible in the ongoing foreground notification. Preserve the optional headset “Where am I?” control and avoid announcing while call audio is active.
+- The service field declaration is `private val travelDetector = TravelStateDetector()`; preserve that exact declaration when making related edits.
+- About content must include the project and AI-assistance credits, source/download repository links, current app release links, and the verified updater. Keep the updater language synchronized with the app's Tamil/English preference.
 
 ## Live Guard (CleanSweep)
 
@@ -34,6 +44,6 @@
 
 ## Verification before release
 
-- Run `python3 tools/verify_cleaner_localization.py`, `python3 tools/verify_apps_localization.py`, `python3 tools/verify_cleaner_core_manifest.py`, `python3 tools/verify_cleaner_next_update_source.py`, and `python3 -m unittest discover -s tools/tests -p 'test_*.py' -v` when relevant.
-- CI must build all four active modules, run their unit tests and the required CleanSweep regression suites, verify package/version/minimum SDK/permissions/signature/assets, and compare GitHub release-asset sizes and SHA-256 values before and after publication.
+- Run `python3 tools/verify_cleaner_localization.py`, `python3 tools/verify_apps_localization.py`, `python3 tools/verify_cleaner_core_manifest.py`, `python3 tools/verify_cleaner_next_update_source.py`, and `python3 -m unittest discover -s tools/tests -p 'test_*.py' -v` when relevant. Also run Oor Arivippu unit tests, lint, and a signed release build for its standalone release.
+- CI must build the four legacy batch modules, run their unit tests and required CleanSweep regression suites, verify package/version/minimum SDK/permissions/signature/assets, and compare GitHub release-asset sizes and SHA-256 values before and after publication. Oor Arivippu is verified/published by its dedicated workflow; require both repositories to serve the same signed APK before considering publication complete.
 - Give an honest validation summary and call out any remaining real-device tests. User reports, static checks, CI builds and release metadata are distinct kinds of evidence.
