@@ -112,12 +112,34 @@ pub mod spike_harness {
                 .any(|window| window == ALICE_TEXT),
             "Alice's test plaintext appeared in the serialized MLS message"
         );
+        // Flip a ciphertext/tag byte without changing the serialized message structure.
+        // The receiver must reject it, then remain able to process the unmodified message.
+        let mut tampered_wire = alice_wire.clone();
+        let last_byte = tampered_wire
+            .last_mut()
+            .expect("serialized MLS application message is non-empty");
+        *last_byte ^= 0x01;
+        let tampered_in = MlsMessage::from_bytes(&tampered_wire)
+            .expect("ciphertext-byte change preserves the MLS message structure");
+        assert!(
+            bob_group.process_incoming_message(tampered_in).is_err(),
+            "Bob must reject Alice's modified MLS ciphertext"
+        );
+
         let alice_in =
             MlsMessage::from_bytes(&alice_wire).expect("deserialize Alice's encrypted MLS message");
         let received_by_bob = bob_group
             .process_incoming_message(alice_in)
             .expect("authenticate and decrypt Alice's MLS message");
         assert_application_message(received_by_bob, ALICE_TEXT);
+
+        // MLS must reject duplicate delivery after accepting the original message.
+        let alice_replay =
+            MlsMessage::from_bytes(&alice_wire).expect("deserialize Alice's replayed message");
+        assert!(
+            bob_group.process_incoming_message(alice_replay).is_err(),
+            "Bob must reject a replayed MLS application message"
+        );
 
         // Bob -> Alice confirms both members can send under the resulting group state.
         let bob_message = bob_group
@@ -132,12 +154,35 @@ pub mod spike_harness {
                 .any(|window| window == BOB_TEXT),
             "Bob's test plaintext appeared in the serialized MLS message"
         );
+
+        // Alice also rejects modified ciphertext and duplicate delivery.
+        let mut tampered_bob_wire = bob_wire.clone();
+        let last_byte = tampered_bob_wire
+            .last_mut()
+            .expect("serialized MLS application message is non-empty");
+        *last_byte ^= 0x01;
+        let tampered_bob_in = MlsMessage::from_bytes(&tampered_bob_wire)
+            .expect("ciphertext-byte change preserves the MLS message structure");
+        assert!(
+            alice_group
+                .process_incoming_message(tampered_bob_in)
+                .is_err(),
+            "Alice must reject Bob's modified MLS ciphertext"
+        );
+
         let bob_in =
             MlsMessage::from_bytes(&bob_wire).expect("deserialize Bob's encrypted MLS message");
         let received_by_alice = alice_group
             .process_incoming_message(bob_in)
             .expect("authenticate and decrypt Bob's MLS message");
         assert_application_message(received_by_alice, BOB_TEXT);
+
+        let bob_replay =
+            MlsMessage::from_bytes(&bob_wire).expect("deserialize Bob's replayed message");
+        assert!(
+            alice_group.process_incoming_message(bob_replay).is_err(),
+            "Alice must reject a replayed MLS application message"
+        );
     }
 
     #[cfg(test)]
