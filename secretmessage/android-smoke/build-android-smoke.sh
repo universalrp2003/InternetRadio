@@ -10,6 +10,7 @@ NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${SDK_ROOT:+$SDK_ROOT/ndk/$NDK_VERSION}}"
 API_LEVEL="${ANDROID_API_LEVEL:-26}"
 CRYPTO_LABEL="${SECRET_MESSAGE_CRYPTO_LABEL:-OpenMLS}"
+BINDGEN_USER_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:-}"
 
 if [[ -z "$SDK_ROOT" ]]; then
   echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2
@@ -57,8 +58,7 @@ build_target() {
   # cc-rs uses these target-specific variables rather than Cargo's linker setting.
   export "CC_${target_env_lower}=$linker"
   export "AR_${target_env_lower}=$TOOLCHAIN/llvm-ar"
-  bindgen_extra="${BINDGEN_EXTRA_CLANG_ARGS:-}"
-  export "BINDGEN_EXTRA_CLANG_ARGS=--target=$bindgen_target --sysroot=$ndk_sysroot${bindgen_extra:+ $bindgen_extra}"
+  export "BINDGEN_EXTRA_CLANG_ARGS=${BINDGEN_USER_ARGS}${BINDGEN_USER_ARGS:+ }--target=$bindgen_target --sysroot=$ndk_sysroot"
   echo "Building JNI-enabled $CRYPTO_LABEL smoke library for $target ($abi, Android API $API_LEVEL)"
   (cd "$NATIVE_DIR" && cargo build --locked --release --features android-jni --target "$target")
   if [[ ! -s "$output" ]]; then
