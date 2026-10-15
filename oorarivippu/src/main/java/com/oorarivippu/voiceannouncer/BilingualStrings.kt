@@ -21,11 +21,17 @@ data class UiStrings(
     val statusTrackingActive: String,
     val statusTrackingStopped: String,
     val statusGpsOff: String,
+    val statusInternetUnavailable: String,
+    val internetUnavailableDetails: String,
+    val statusCallPaused: String,
     val statusWaitingForMove: String,
     val currentPlaceLabel: String,
     val currentCityLabel: String,
     val currentSubAreaLabel: String,
+    val currentDistrictLabel: String,
     val currentSpeedLabel: String,
+    val locationIntervalLabel: String,
+    val adaptiveBatteryNote: String,
     val travelModeDetected: String,
     val travelModeStationary: String,
     val sameCityOptionTitle: String,
@@ -35,6 +41,17 @@ data class UiStrings(
     val announceOnStartTitle: String,
     val announceOnStartSubtitle: String,
     val minDistanceTitle: String,
+    val destinationSectionTitle: String,
+    val destinationFieldLabel: String,
+    val destinationSetButton: String,
+    val destinationClearButton: String,
+    val destinationLookupInProgress: String,
+    val destinationSetMessage: String,
+    val destinationNotFoundMessage: String,
+    val destinationNeedsInternetMessage: String,
+    val destinationAlertExplanation: String,
+    val headsetWhereAmITitle: String,
+    val headsetWhereAmISubtitle: String,
     val testVoiceButton: String,
     val historySectionTitle: String,
     val emptyHistoryText: String,
@@ -69,11 +86,17 @@ object BilingualStrings {
         statusTrackingActive = "பின்னணியில் ஜி.பி.எஸ் (GPS) கண்காணிப்பு இயங்குகிறது",
         statusTrackingStopped = "அறிவிப்பு நிறுத்தப்பட்டுள்ளது (OFF)",
         statusGpsOff = "ஜி.பி.எஸ் (GPS) ஆஃப் செய்யப்பட்டுள்ளது - அறிவிப்பு இல்லை",
+        statusInternetUnavailable = "இணைய இணைப்பு இல்லை — இடப் பெயர் தேடலும் குரல் அறிவிப்பும் தற்காலிகமாக நிறுத்தப்பட்டுள்ளன.",
+        internetUnavailableDetails = "GPS இடத்தைப் பெறுகிறது; ஆனால் இணையம்/Android Geocoder கிடைக்கும் வரை புதிய ஊர், மாவட்ட, இலக்கு அறிவிப்புகள் இல்லை. இணைப்பைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.",
+        statusCallPaused = "அழைப்பின் போது குரல் அறிவிப்பு நிறுத்தப்பட்டுள்ளது; அழைப்பு முடிந்ததும் தற்போதைய இடத்தை அறிவிக்கும்.",
         statusWaitingForMove = "பைக் / கார் பயண இயக்கத்திற்காக காத்திருக்கிறது...",
         currentPlaceLabel = "தற்போதைய இட விவரம்",
         currentCityLabel = "ஊர் / நகரம்",
         currentSubAreaLabel = "பகுதி / தெரு",
+        currentDistrictLabel = "மாவட்டம்",
         currentSpeedLabel = "வேகம் & நிலை",
+        locationIntervalLabel = "GPS புதுப்பிப்பு இடைவெளி",
+        adaptiveBatteryNote = "நிலையான இடத்தில் 45s, நகரப் போக்குவரத்தில் 15s, நெடுஞ்சாலை வேகத்தில் 5s. உண்மையான பேட்டரி சேமிப்பு சாதனம்/சூழலைப் பொறுத்தது; சதவீதம் உறுதி இல்லை.",
         travelModeDetected = "பைக் / வாகன பயணம் கண்டறியப்பட்டது",
         travelModeStationary = "ஒரே இடத்தில் உள்ளீர்கள் (அறிவிப்பு அமைதி)",
         sameCityOptionTitle = "ஒரே ஊருக்குள் அடுத்த பகுதி அறிவிப்பு",
@@ -83,6 +106,17 @@ object BilingualStrings {
         announceOnStartTitle = "ஆன் செய்தவுடன் தற்போதைய ஊரை அறிவி",
         announceOnStartSubtitle = "பட்டனை ஆன் செய்தவுடன் முதல் முறை தற்போதைய ஊர் பெயரை குரலில் அறிவிக்கும்.",
         minDistanceTitle = "குறைந்தபட்ச நகர்வு தூரம்",
+        destinationSectionTitle = "இலக்கு நெருங்கும் அறிவிப்பு",
+        destinationFieldLabel = "இலக்கு ஊர் / நகரம்",
+        destinationSetButton = "இலக்கை அமை",
+        destinationClearButton = "இலக்கை நீக்கு",
+        destinationLookupInProgress = "இடத்தைத் தேடுகிறது...",
+        destinationSetMessage = "இலக்கு அமைக்கப்பட்டது. 10, 5, 2 km மற்றும் சுமார் 500 m-இல் அறிவிக்கும்.",
+        destinationNotFoundMessage = "இந்த இடத்தை Android Geocoder-ல் கண்டறிய முடியவில்லை. பெயரைத் தெளிவாக உள்ளிடவும்.",
+        destinationNeedsInternetMessage = "இலக்கைத் தேடுவதற்கும் குரல் அறிவிப்பிற்கும் இணையம் தேவை.",
+        destinationAlertExplanation = "இணையம் கிடைக்கும் போது GPS தூரத்தைப் பயன்படுத்தி 10 km, 5 km, 2 km மற்றும் சுமார் 500 m (வந்தடைந்தது) அறிவிக்கும். துல்லியம் GPS/Geocoder-ஐப் பொறுத்தது.",
+        headsetWhereAmITitle = "ஹெட்செட் பொத்தானில் ‘இப்போது எந்த ஊர்?’",
+        headsetWhereAmISubtitle = "விருப்பமாக இயக்கவும்: பயண அறிவிப்பு ON-இல், ஹெட்செட்டின் Next/skip பொத்தானை அழுத்தினால் தற்போதைய இடம் குரலில் சொல்லும். ஹெட்செட்/OEM-ஐப் பொறுத்து செயல்பாடு மாறலாம்; இசைக் கட்டுப்பாட்டுடன் மோதலாம்.",
         testVoiceButton = "குரல் சோதனை (Test Voice)",
         historySectionTitle = "சமீபத்திய ஊர் அறிவிப்புகள்",
         emptyHistoryText = "இன்னும் எந்த ஊர் அறிவிப்பும் செய்யப்படவில்லை.",
@@ -115,11 +149,17 @@ object BilingualStrings {
         statusTrackingActive = "Background GPS Tracking & Voice Active",
         statusTrackingStopped = "Announcer is Turned OFF",
         statusGpsOff = "Phone GPS is Turned OFF — No Announcements",
+        statusInternetUnavailable = "No validated internet — place lookup and voice announcements are paused.",
+        internetUnavailableDetails = "GPS can still receive your position, but new place, district, and destination announcements wait until internet access returns. Check your connection and try again.",
+        statusCallPaused = "Announcements are paused during a call; the latest place will be spoken after it ends.",
         statusWaitingForMove = "Waiting for Bike / Car movement...",
         currentPlaceLabel = "Current Location Status",
         currentCityLabel = "City / Village",
         currentSubAreaLabel = "Sub-Area / Locality",
+        currentDistrictLabel = "District",
         currentSpeedLabel = "Speed & Motion",
+        locationIntervalLabel = "GPS update interval",
+        adaptiveBatteryNote = "45s while stationary, 15s in city traffic, and 5s at highway speeds. Actual battery savings depend on device and conditions; no percentage is guaranteed.",
         travelModeDetected = "Bike / Vehicle Travel Active",
         travelModeStationary = "Stationary / Routine Area (Muted)",
         sameCityOptionTitle = "Same-City Next Place Announcement",
@@ -129,6 +169,17 @@ object BilingualStrings {
         announceOnStartTitle = "Announce Current Place When Turned ON",
         announceOnStartSubtitle = "Speaks your current village/city once immediately when you press ON.",
         minDistanceTitle = "Minimum Travel Distance",
+        destinationSectionTitle = "Destination proximity alerts",
+        destinationFieldLabel = "Destination town / city",
+        destinationSetButton = "Set destination",
+        destinationClearButton = "Clear destination",
+        destinationLookupInProgress = "Looking up place...",
+        destinationSetMessage = "Destination set. Alerts are planned at 10, 5, 2 km and about 500 m (arrival).",
+        destinationNotFoundMessage = "Android Geocoder could not find that place. Try a more specific name.",
+        destinationNeedsInternetMessage = "Internet is needed to look up a destination and for voice place announcements.",
+        destinationAlertExplanation = "Uses GPS distance for 10 km, 5 km, 2 km and about 500 m (arrival) alerts while internet is available. Accuracy depends on GPS and the geocoder.",
+        headsetWhereAmITitle = "“Where am I?” from headset button",
+        headsetWhereAmISubtitle = "Optional: while tracking is ON, press the headset Next/skip button to speak your current place. Support varies by headset/OEM and may conflict with music controls.",
         testVoiceButton = "Test Voice Announcement",
         historySectionTitle = "Recent Voice Announcements",
         emptyHistoryText = "No places announced yet in this session.",
@@ -179,6 +230,47 @@ object BilingualStrings {
             } else {
                 "$cityOrVillage, அடுத்த பகுதி $subArea."
             }
+        }
+    }
+
+    fun buildDestinationAnnouncement(
+        voiceLang: String,
+        destinationName: String,
+        distanceMeters: Int,
+        arrived: Boolean
+    ): String {
+        return if (voiceLang == "en") {
+            if (arrived) "You have arrived at $destinationName."
+            else "$destinationName is ${distanceMeters / 1_000} kilometres away."
+        } else {
+            if (arrived) "நீங்கள் $destinationName-ஐ வந்தடைந்துவிட்டீர்கள்."
+            else "$destinationName இலக்கு இன்னும் ${distanceMeters / 1_000} கிலோமீட்டர் தொலைவில் உள்ளது."
+        }
+    }
+
+    fun buildDistrictAnnouncement(voiceLang: String, district: String): String =
+        if (voiceLang == "en") "Entering $district district."
+        else "$district மாவட்டத்திற்குள் வந்தடைந்தீர்கள்."
+
+    fun buildHighwayLandmarkAnnouncement(voiceLang: String, landmark: String): String =
+        if (voiceLang == "en") "Approaching $landmark."
+        else "$landmark பகுதியை நெருங்குகிறீர்கள்."
+
+    fun buildWhereAmIAnnouncement(
+        voiceLang: String,
+        cityOrVillage: String,
+        subArea: String,
+        timeText: String
+    ): String {
+        val place = if (subArea.isBlank() || subArea.equals(cityOrVillage, ignoreCase = true)) {
+            cityOrVillage
+        } else {
+            "$subArea, $cityOrVillage"
+        }
+        return if (voiceLang == "en") {
+            "It is $timeText. Your current location is $place."
+        } else {
+            "மணி $timeText. தற்போதைய இடம் $place."
         }
     }
 

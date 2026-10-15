@@ -41,12 +41,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -60,6 +62,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -74,6 +77,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.launch
 
 private val AppColorScheme = lightColorScheme(
     primary = Color(0xFF0F766E),
@@ -88,6 +92,8 @@ private val AppColorScheme = lightColorScheme(
 )
 
 class MainActivity : ComponentActivity() {
+
+    private var internetMonitor: InternetConnectivityMonitor? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,11 +111,25 @@ class MainActivity : ComponentActivity() {
                     OorArivippuScreen(
                         onStartService = { startAnnouncerService() },
                         onStopService = { stopAnnouncerService() },
-                        onTestVoice = { triggerTestVoice() }
+                        onTestVoice = { triggerTestVoice() },
+                        onSettingsChanged = { refreshAnnouncerSettings() }
                     )
                 }
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        internetMonitor = InternetConnectivityMonitor(this, AppPreferences::setInternetAvailable).also {
+            it.start()
+        }
+    }
+
+    override fun onStop() {
+        internetMonitor?.stop()
+        internetMonitor = null
+        super.onStop()
     }
 
     override fun onResume() {
@@ -137,6 +157,13 @@ class MainActivity : ComponentActivity() {
         startService(intent)
     }
 
+    private fun refreshAnnouncerSettings() {
+        val intent = Intent(this, LocationAnnouncementService::class.java).apply {
+            action = LocationAnnouncementService.ACTION_SETTINGS_CHANGED
+        }
+        startService(intent)
+    }
+
     private fun triggerTestVoice() {
         val intent = Intent(this, LocationAnnouncementService::class.java).apply {
             action = LocationAnnouncementService.ACTION_TEST_VOICE
@@ -149,11 +176,18 @@ class MainActivity : ComponentActivity() {
 fun OorArivippuScreen(
     onStartService: () -> Unit,
     onStopService: () -> Unit,
-    onTestVoice: () -> Unit
+    onTestVoice: () -> Unit,
+    onSettingsChanged: () -> Unit
 ) {
     val context = LocalContext.current
     val state by AppPreferences.state.collectAsState()
     val ui = BilingualStrings.forLang(state.appLanguage)
+    var destinationQuery by remember(state.destinationName) {
+        mutableStateOf(state.destinationName)
+    }
+    var destinationLookupMessage by remember { mutableStateOf("") }
+    var isResolvingDestination by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     var hasPermissions by remember {
         mutableStateOf(checkRequiredPermissions(context))
@@ -294,6 +328,32 @@ fun OorArivippuScreen(
                 }
             }
 
+            if (state.isInternetAvailable == false) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7)),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(
+                            text = ui.statusInternetUnavailable,
+                            color = Color(0xFF92400E),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = ui.internetUnavailableDetails,
+                            color = Color(0xFF92400E),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                    }
+                }
+            }
+
             // 2. Language Selection Card (App Language & Voice Announcement Language, Default Tamil)
             Card(
                 colors = CardDefaults.cardColors(containerColor = Color.White),
@@ -381,12 +441,15 @@ fun OorArivippuScreen(
                     val statusColor = when {
                         !state.isTrackingEnabled -> Color(0xFF64748B)
                         !state.isGpsEnabled -> Color(0xFFDC2626)
+                        state.isInternetAvailable == false || state.isCallAudioPaused -> Color(0xFFB45309)
                         else -> Color(0xFF15803D)
                     }
 
                     val statusText = when {
                         !state.isTrackingEnabled -> ui.statusTrackingStopped
                         !state.isGpsEnabled -> ui.statusGpsOff
+                        state.isInternetAvailable == false -> ui.statusInternetUnavailable
+                        state.isCallAudioPaused -> ui.statusCallPaused
                         state.bikeCarDetectionEnabled && !state.isVehicleMoving -> ui.statusWaitingForMove
                         else -> ui.statusTrackingActive
                     }
@@ -403,6 +466,7 @@ fun OorArivippuScreen(
                         )
                         Text(
                             text = statusText,
+                            modifier = Modifier.weight(1f),
                             color = statusColor,
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -493,11 +557,144 @@ fun OorArivippuScreen(
                         label = ui.currentSubAreaLabel,
                         value = state.currentSubArea.ifBlank { ui.unknownPlace }
                     )
+                    if (state.currentDistrict.isNotBlank()) {
+                        InfoRow(
+                            label = ui.currentDistrictLabel,
+                            value = state.currentDistrict
+                        )
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            text = ui.currentSpeedLabel,
+                            color = Color(0xFF64748B),
+                            fontSize = 13.sp
+                        )
+                        Text(
+                            text = "${state.currentSpeedKmh.toInt()} km/h",
+                            color = Color(0xFF0F172A),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp
+                        )
+                        Text(
+                            text = if (state.isVehicleMoving) ui.travelModeDetected else ui.travelModeStationary,
+                            color = if (state.isVehicleMoving) Color(0xFF15803D) else Color(0xFF64748B),
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp
+                        )
+                    }
                     InfoRow(
-                        label = ui.currentSpeedLabel,
-                        value = "${state.currentSpeedKmh.toInt()} km/h • " +
-                            if (state.isVehicleMoving) ui.travelModeDetected else ui.travelModeStationary
+                        label = ui.locationIntervalLabel,
+                        value = "${state.locationUpdateIntervalSeconds} s"
                     )
+                }
+            }
+
+            // Destination alarms rely on the device geocoder and stored GPS coordinates.
+            Card(
+                colors = CardDefaults.cardColors(containerColor = Color.White),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(9.dp)
+                ) {
+                    Text(
+                        text = ui.destinationSectionTitle,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                    Text(
+                        text = ui.destinationAlertExplanation,
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
+                    OutlinedTextField(
+                        value = destinationQuery,
+                        onValueChange = {
+                            destinationQuery = it
+                            destinationLookupMessage = ""
+                        },
+                        label = { Text(ui.destinationFieldLabel) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = {
+                                if (state.isInternetAvailable != true) {
+                                    destinationLookupMessage = ui.destinationNeedsInternetMessage
+                                } else {
+                                    isResolvingDestination = true
+                                    destinationLookupMessage = ui.destinationLookupInProgress
+                                    coroutineScope.launch {
+                                        val result = resolveDestination(
+                                            context = context,
+                                            query = destinationQuery,
+                                            voiceLanguage = state.voiceLanguage
+                                        )
+                                        isResolvingDestination = false
+                                        if (result == null) {
+                                            destinationLookupMessage = ui.destinationNotFoundMessage
+                                        } else {
+                                            AppPreferences.setDestination(
+                                                name = result.displayName,
+                                                latitude = result.latitude,
+                                                longitude = result.longitude
+                                            )
+                                            destinationLookupMessage = ui.destinationSetMessage
+                                        }
+                                    }
+                                }
+                            },
+                            enabled = !isResolvingDestination && destinationQuery.isNotBlank(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isResolvingDestination) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                            } else {
+                                Text(ui.destinationSetButton)
+                            }
+                        }
+                        if (state.destinationName.isNotBlank()) {
+                            TextButton(onClick = {
+                                AppPreferences.clearDestination()
+                                destinationLookupMessage = ""
+                            }) {
+                                Text(ui.destinationClearButton)
+                            }
+                        }
+                    }
+                    if (state.destinationName.isNotBlank()) {
+                        Text(
+                            text = "${ui.destinationFieldLabel}: ${state.destinationName}",
+                            color = Color(0xFF0F766E),
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp
+                        )
+                    }
+                    if (destinationLookupMessage.isNotBlank()) {
+                        Text(
+                            text = destinationLookupMessage,
+                            color = if (destinationLookupMessage == ui.destinationSetMessage) {
+                                Color(0xFF15803D)
+                            } else {
+                                Color(0xFFB45309)
+                            },
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                    }
                 }
             }
 
@@ -545,6 +742,19 @@ fun OorArivippuScreen(
 
                     Divider(color = Color(0xFFE2E8F0))
 
+                    SettingToggleItem(
+                        icon = Icons.Default.VolumeUp,
+                        title = ui.headsetWhereAmITitle,
+                        subtitle = ui.headsetWhereAmISubtitle,
+                        checked = state.headsetWhereAmIEnabled,
+                        onCheckedChange = {
+                            AppPreferences.setHeadsetWhereAmIEnabled(it)
+                            if (state.isTrackingEnabled) onSettingsChanged()
+                        }
+                    )
+
+                    Divider(color = Color(0xFFE2E8F0))
+
                     // Option D: Minimum Travel Distance Slider
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
@@ -559,6 +769,12 @@ fun OorArivippuScreen(
                             steps = 13
                         )
                     }
+                    Text(
+                        text = ui.adaptiveBatteryNote,
+                        color = Color(0xFF64748B),
+                        fontSize = 12.sp,
+                        lineHeight = 17.sp
+                    )
                 }
             }
 
@@ -692,14 +908,19 @@ private fun InfoRow(label: String, value: String) {
     ) {
         Text(
             text = label,
+            modifier = Modifier.weight(0.4f),
             color = Color(0xFF64748B),
-            fontSize = 13.sp
+            fontSize = 13.sp,
+            lineHeight = 17.sp
         )
         Text(
             text = value,
+            modifier = Modifier.weight(0.6f),
             color = Color(0xFF0F172A),
             fontWeight = FontWeight.SemiBold,
-            fontSize = 13.sp
+            fontSize = 13.sp,
+            lineHeight = 17.sp,
+            textAlign = TextAlign.End
         )
     }
 }

@@ -20,8 +20,11 @@ import android.location.LocationManager
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
@@ -64,6 +67,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         const val ACTION_START_TRACKING = "com.oorarivippu.voiceannouncer.action.START_TRACKING"
         const val ACTION_STOP_TRACKING = "com.oorarivippu.voiceannouncer.action.STOP_TRACKING"
         const val ACTION_TEST_VOICE = "com.oorarivippu.voiceannouncer.action.TEST_VOICE"
+        const val ACTION_SETTINGS_CHANGED = "com.oorarivippu.voiceannouncer.action.SETTINGS_CHANGED"
 
         private const val NOTIFICATION_CHANNEL_ID = "oor_arivippu_location_channel"
         private const val NOTIFICATION_ID = 1001
@@ -81,12 +85,28 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     private data class PendingSpeech(
         val text: String,
         val alternateLanguageText: String,
-        val requestedLanguage: String
+        val requestedLanguage: String,
+        val requiresInternet: Boolean,
+        val queueMode: Int
     )
     private var pendingSpeechQueue: PendingSpeech? = null
+    private var latestSpeakingRequest: PendingSpeech? = null
+    private var speakingRequiresInternet = false
+    private var callWaitJob: Job? = null
+    private var callModeMonitorJob: Job? = null
+    private var whereAmIMediaSession: MediaSession? = null
+    private var isForegroundStarted = false
+    private var lastDestinationDistanceMeters: Float? = null
+    private var activeDestinationKey: String? = null
+    private var lastAnnouncedDistrict: String = ""
+    private var lastAnnouncedHighwayLandmark: String = ""
+    private var hasEstablishedPlaceBaseline = false
 
     private val travelDetector = TravelStateDetector()
+    private val adaptivePollingPolicy = AdaptiveLocationPollingPolicy()
+    private var activeLocationIntervalMs: Long? = null
     private var gpsReceiver: GpsStateReceiver? = null
+    private var internetMonitor: InternetConnectivityMonitor? = null
 
     // Track previously announced City/Village and Sub-Locality so we never repeat the same place
     private var lastAnnouncedCity: String = ""
@@ -125,6 +145,9 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         locationManager = getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         tts = TextToSpeech(this, this)
+        internetMonitor = InternetConnectivityMonitor(this) { available ->
+            serviceScope.launch { handleInternetAvailability(available) }
+        }.also { it.start() }
 
         createNotificationChannel()
         registerGpsStateReceiver()
@@ -134,6 +157,14 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         when (intent?.action) {
             ACTION_STOP_TRACKING -> {
                 stopTrackingAndService()
+                return START_NOT_STICKY
+            }
+            ACTION_SETTINGS_CHANGED -> {
+                if (AppPreferences.state.value.isTrackingEnabled && hasLocationPermission()) {
+                    if (!isForegroundStarted) startTrackingInForeground()
+                    else updateHeadsetWhereAmIControl()
+                    return START_STICKY
+                }
                 return START_NOT_STICKY
             }
             ACTION_TEST_VOICE -> {
@@ -147,7 +178,12 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     voiceLang = alternateLanguage,
                     currentCity = snap.currentCityOrVillage
                 )
-                speakAnnouncement(testSentence, snap.voiceLanguage, fallbackSentence)
+                speakAnnouncement(
+                    text = testSentence,
+                    voiceLang = snap.voiceLanguage,
+                    alternateLanguageText = fallbackSentence,
+                    requiresInternet = false
+                )
                 // A test-voice service should not be resurrected as a tracking service. Keep
                 // sticky behavior only when an already-active tracking session needs it.
                 return if (snap.isTrackingEnabled) START_STICKY else START_NOT_STICKY
@@ -196,7 +232,9 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
+        isForegroundStarted = true
         AppPreferences.setTrackingEnabled(true)
+        updateHeadsetWhereAmIControl()
 
         if (isGpsOn) {
             requestLocationUpdatesSafely()
@@ -205,13 +243,96 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         }
     }
 
+    private fun updateHeadsetWhereAmIControl() {
+        val enabled = AppPreferences.state.value.isTrackingEnabled &&
+            AppPreferences.state.value.headsetWhereAmIEnabled
+        if (!enabled) {
+            whereAmIMediaSession?.isActive = false
+            whereAmIMediaSession?.release()
+            whereAmIMediaSession = null
+            return
+        }
+        if (whereAmIMediaSession != null) return
+
+        val session = MediaSession(this, "OorArivippuWhereAmI")
+        session.setFlags(
+            MediaSession.FLAG_HANDLES_MEDIA_BUTTONS or
+                MediaSession.FLAG_HANDLES_TRANSPORT_CONTROLS
+        )
+        session.setCallback(object : MediaSession.Callback() {
+            override fun onSkipToNext() {
+                speakCurrentPlaceNow()
+            }
+        }, Handler(Looper.getMainLooper()))
+        session.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(PlaybackState.ACTION_SKIP_TO_NEXT)
+                .setState(PlaybackState.STATE_PAUSED, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 0f)
+                .build()
+        )
+        session.isActive = true
+        whereAmIMediaSession = session
+    }
+
+    private fun speakCurrentPlaceNow() {
+        val snapshot = AppPreferences.state.value
+        if (!snapshot.isTrackingEnabled || snapshot.isInternetAvailable != true) return
+        val location = latestReceivedLocation?.let { Location(it) } ?: return
+
+        serviceScope.launch {
+            val current = AppPreferences.state.value
+            val resolved = reverseGeocodePlace(location, current.voiceLanguage)
+            if (!AppPreferences.state.value.isTrackingEnabled ||
+                AppPreferences.state.value.isInternetAvailable != true
+            ) return@launch
+
+            val city = resolved?.cityOrVillage?.takeIf { it.isNotBlank() }
+                ?: AppPreferences.state.value.currentCityOrVillage
+            if (city.isBlank()) return@launch
+            val subArea = resolved?.subArea ?: AppPreferences.state.value.currentSubArea
+            val locale = if (current.voiceLanguage == "en") Locale("en", "IN") else Locale("ta", "IN")
+            val timeText = java.text.SimpleDateFormat("h:mm a", locale).format(java.util.Date())
+            val primary = BilingualStrings.buildWhereAmIAnnouncement(
+                current.voiceLanguage,
+                city,
+                subArea,
+                timeText
+            )
+            val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
+            val alternate = BilingualStrings.buildWhereAmIAnnouncement(
+                alternateLanguage,
+                city,
+                subArea,
+                java.text.SimpleDateFormat(
+                    "h:mm a",
+                    if (alternateLanguage == "en") Locale("en", "IN") else Locale("ta", "IN")
+                ).format(java.util.Date())
+            )
+            AppPreferences.appendAnnouncementLog("Current place: $city", primary)
+            speakAnnouncement(primary, current.voiceLanguage, alternate)
+        }
+    }
+
     private fun stopTrackingAndService() {
         AppPreferences.setTrackingEnabled(false)
+        isForegroundStarted = false
+        updateHeadsetWhereAmIControl()
+        callWaitJob?.cancel()
+        callWaitJob = null
+        pendingSpeechQueue = null
+        AppPreferences.setCallAudioPaused(false)
+        lastDestinationDistanceMeters = null
+        activeDestinationKey = null
+        lastAnnouncedDistrict = ""
+        lastAnnouncedHighwayLandmark = ""
+        hasEstablishedPlaceBaseline = false
         removeLocationUpdatesSafely()
         reverseGeocodeJob?.cancel()
         reverseGeocodeJob = null
         stopVoiceImmediately()
         travelDetector.reset()
+        adaptivePollingPolicy.reset()
+        AppPreferences.setLocationUpdateIntervalMillis(AdaptiveLocationPollingPolicy.HIGHWAY_INTERVAL_MS)
         lastAnnouncedCity = ""
         lastAnnouncedSubArea = ""
         hasMadeInitialStartAnnouncement = false
@@ -223,11 +344,13 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     }
 
     @SuppressLint("MissingPermission")
-    private fun requestLocationUpdatesSafely() {
+    private fun requestLocationUpdatesSafely(intervalMs: Long = AdaptiveLocationPollingPolicy.HIGHWAY_INTERVAL_MS) {
+        if (activeLocationIntervalMs == intervalMs) return
         removeLocationUpdatesSafely()
+        val safeIntervalMs = intervalMs.coerceAtLeast(5_000L)
         try {
-            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000L)
-                .setMinUpdateIntervalMillis(3000L)
+            val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, safeIntervalMs)
+                .setMinUpdateIntervalMillis(safeIntervalMs)
                 .setMinUpdateDistanceMeters(15f)
                 .build()
             fusedLocationClient.requestLocationUpdates(
@@ -235,18 +358,21 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 fusedLocationCallback,
                 Looper.getMainLooper()
             )
-        } catch (e: Exception) {
-            // Fallback to native Android LocationManager if Google Play Services is unavailable
+            activeLocationIntervalMs = safeIntervalMs
+        } catch (_: Exception) {
+            // Fallback to native Android LocationManager if Google Play Services is unavailable.
             try {
                 locationManager?.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
-                    5000L,
+                    safeIntervalMs,
                     15f,
                     fallbackLocationListener,
                     Looper.getMainLooper()
                 )
+                activeLocationIntervalMs = safeIntervalMs
             } catch (_: Exception) {}
         }
+        AppPreferences.setLocationUpdateIntervalMillis(safeIntervalMs)
     }
 
     private fun removeLocationUpdatesSafely() {
@@ -256,6 +382,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         try {
             locationManager?.removeUpdates(fallbackLocationListener)
         } catch (_: Exception) {}
+        activeLocationIntervalMs = null
     }
 
     private fun handleGpsStateChange(isGpsEnabled: Boolean) {
@@ -270,10 +397,39 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             lastGeocodedLocation = null
             lastGeocodeStartedAtElapsedMs = 0L
             latestReceivedLocation = null
+            travelDetector.reset()
+            adaptivePollingPolicy.reset()
+            AppPreferences.setLocationUpdateIntervalMillis(AdaptiveLocationPollingPolicy.HIGHWAY_INTERVAL_MS)
         } else if (AppPreferences.state.value.isTrackingEnabled) {
             lastGeocodedLocation = null
             lastGeocodeStartedAtElapsedMs = 0L
             requestLocationUpdatesSafely()
+        }
+        updateForegroundNotification()
+    }
+
+    private fun handleInternetAvailability(available: Boolean) {
+        val wasAvailable = AppPreferences.state.value.isInternetAvailable
+        AppPreferences.setInternetAvailable(available)
+        if (wasAvailable == available) return
+
+        if (!available) {
+            // Do not continue an in-flight lookup or speak stale place information offline.
+            geocodeRequestToken++
+            reverseGeocodeJob?.cancel()
+            reverseGeocodeJob = null
+            if (pendingSpeechQueue?.requiresInternet == true) pendingSpeechQueue = null
+            if (speakingRequiresInternet) {
+                callModeMonitorJob?.cancel()
+                callModeMonitorJob = null
+                latestSpeakingRequest = null
+                tts?.stop()
+                speakingRequiresInternet = false
+            }
+        } else if (AppPreferences.state.value.isTrackingEnabled) {
+            lastGeocodedLocation = null
+            lastGeocodeStartedAtElapsedMs = 0L
+            latestReceivedLocation?.let(::onNewLocationReceived)
         }
         updateForegroundNotification()
     }
@@ -299,14 +455,30 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             speedKmh = motion.currentSpeedKmh,
             isVehicleMoving = motion.isTravelingByVehicleOrMovedFar
         )
+        val adaptiveInterval = adaptivePollingPolicy.intervalFor(
+            speedKmh = motion.currentSpeedKmh,
+            movementDetected = motion.isTravelingByVehicleOrMovedFar
+        )
+        if (activeLocationIntervalMs != adaptiveInterval) {
+            requestLocationUpdatesSafely(adaptiveInterval)
+        }
 
+        processDestinationProximity(location)
+        if (AppPreferences.state.value.isInternetAvailable != true) {
+            updateForegroundNotification()
+            return
+        }
         if (!shouldStartReverseGeocode(location)) return
 
         val requestToken = ++geocodeRequestToken
         reverseGeocodeJob = serviceScope.launch {
             try {
                 val resolved = reverseGeocodePlace(location, snap.voiceLanguage) ?: return@launch
-                if (!AppPreferences.state.value.isTrackingEnabled) return@launch
+                val currentAfterLookup = AppPreferences.state.value
+                if (!currentAfterLookup.isTrackingEnabled ||
+                    currentAfterLookup.isInternetAvailable != true ||
+                    requestToken != geocodeRequestToken
+                ) return@launch
 
                 // Do not speak a place result if the device has already travelled far from
                 // the location that was being resolved; the next throttled request will catch up.
@@ -321,31 +493,64 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 AppPreferences.updateLiveStatus(
                     isGpsEnabled = true,
                     cityOrVillage = cityOrVillage,
-                    subArea = subArea
+                    subArea = subArea,
+                    district = resolved.district
                 )
                 updateForegroundNotification()
                 if (cityOrVillage.isBlank()) return@launch
 
                 val isFirstStartAnnouncement =
                     !hasMadeInitialStartAnnouncement && current.announceImmediatelyOnStart
+                if (isFirstStartAnnouncement) {
+                    // Honor the explicit startup option even with a 0 km/h fix or when the
+                    // resolved place matches a value retained by a prior service session.
+                    announceInitialPlace(
+                        location = location,
+                        cityOrVillage = cityOrVillage,
+                        subArea = subArea,
+                        voiceLanguage = current.voiceLanguage,
+                        includeSubArea = current.announceSameCitySubArea,
+                        district = resolved.district,
+                        highwayLandmark = resolved.highwayLandmark.orEmpty()
+                    )
+                    return@launch
+                }
+
+                val firstPlaceFix = !hasEstablishedPlaceBaseline
+                if (firstPlaceFix) {
+                    lastAnnouncedDistrict = resolved.district
+                    lastAnnouncedHighwayLandmark = resolved.highwayLandmark.orEmpty()
+                    hasEstablishedPlaceBaseline = true
+                }
+
                 val isNewCityOrVillage = !cityOrVillage.equals(lastAnnouncedCity, ignoreCase = true)
                 val isNewSubAreaInSameCity = !isNewCityOrVillage &&
                     subArea.isNotBlank() &&
                     !subArea.equals(cityOrVillage, ignoreCase = true) &&
                     !subArea.equals(lastAnnouncedSubArea, ignoreCase = true)
-                val movementAllowsAnnouncement = isFirstStartAnnouncement || current.isVehicleMoving
-                if (!movementAllowsAnnouncement) return@launch
+                val districtChanged = !firstPlaceFix &&
+                    resolved.district.isNotBlank() &&
+                    !resolved.district.equals(lastAnnouncedDistrict, ignoreCase = true)
+                val landmark = resolved.highwayLandmark.orEmpty()
+                val landmarkChanged = !firstPlaceFix &&
+                    landmark.isNotBlank() &&
+                    !landmark.equals(lastAnnouncedHighwayLandmark, ignoreCase = true)
+                if (!current.isVehicleMoving) return@launch
+
+                val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
+                val primaryParts = mutableListOf<String>()
+                val alternateParts = mutableListOf<String>()
+                var logTitle = cityOrVillage
 
                 if (isNewCityOrVillage) {
-                    val sentence = BilingualStrings.buildSpokenAnnouncement(
+                    primaryParts += BilingualStrings.buildSpokenAnnouncement(
                         voiceLang = current.voiceLanguage,
                         isNewCityOrVillage = true,
                         cityOrVillage = cityOrVillage,
                         subArea = subArea,
                         includeSubArea = current.announceSameCitySubArea
                     )
-                    val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
-                    val alternateSentence = BilingualStrings.buildSpokenAnnouncement(
+                    alternateParts += BilingualStrings.buildSpokenAnnouncement(
                         voiceLang = alternateLanguage,
                         isNewCityOrVillage = true,
                         cityOrVillage = cityOrVillage,
@@ -354,24 +559,18 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     )
                     lastAnnouncedCity = cityOrVillage
                     lastAnnouncedSubArea = subArea
-                    hasMadeInitialStartAnnouncement = true
-                    travelDetector.markPlaceAnnounced(location)
-
-                    val displayTitle = if (subArea.isNotBlank() &&
+                    logTitle = if (subArea.isNotBlank() &&
                         !subArea.equals(cityOrVillage, ignoreCase = true)
                     ) "$cityOrVillage ($subArea)" else cityOrVillage
-                    AppPreferences.appendAnnouncementLog(displayTitle, sentence)
-                    speakAnnouncement(sentence, current.voiceLanguage, alternateSentence)
                 } else if (isNewSubAreaInSameCity && current.announceSameCitySubArea) {
-                    val sentence = BilingualStrings.buildSpokenAnnouncement(
+                    primaryParts += BilingualStrings.buildSpokenAnnouncement(
                         voiceLang = current.voiceLanguage,
                         isNewCityOrVillage = false,
                         cityOrVillage = cityOrVillage,
                         subArea = subArea,
                         includeSubArea = true
                     )
-                    val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
-                    val alternateSentence = BilingualStrings.buildSpokenAnnouncement(
+                    alternateParts += BilingualStrings.buildSpokenAnnouncement(
                         voiceLang = alternateLanguage,
                         isNewCityOrVillage = false,
                         cityOrVillage = cityOrVillage,
@@ -379,15 +578,140 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                         includeSubArea = true
                     )
                     lastAnnouncedSubArea = subArea
+                    logTitle = "$subArea, $cityOrVillage"
+                }
+
+                if (districtChanged) {
+                    primaryParts += BilingualStrings.buildDistrictAnnouncement(
+                        current.voiceLanguage,
+                        resolved.district
+                    )
+                    alternateParts += BilingualStrings.buildDistrictAnnouncement(
+                        alternateLanguage,
+                        resolved.district
+                    )
+                    lastAnnouncedDistrict = resolved.district
+                    logTitle = "${resolved.district} district"
+                }
+                if (landmarkChanged) {
+                    primaryParts += BilingualStrings.buildHighwayLandmarkAnnouncement(
+                        current.voiceLanguage,
+                        landmark
+                    )
+                    alternateParts += BilingualStrings.buildHighwayLandmarkAnnouncement(
+                        alternateLanguage,
+                        landmark
+                    )
+                    lastAnnouncedHighwayLandmark = landmark
+                    logTitle = landmark
+                }
+
+                if (primaryParts.isNotEmpty()) {
                     hasMadeInitialStartAnnouncement = true
                     travelDetector.markPlaceAnnounced(location)
-                    AppPreferences.appendAnnouncementLog("$subArea, $cityOrVillage", sentence)
-                    speakAnnouncement(sentence, current.voiceLanguage, alternateSentence)
+                    val primary = primaryParts.joinToString(" ")
+                    val alternate = alternateParts.joinToString(" ")
+                    AppPreferences.appendAnnouncementLog(logTitle, primary)
+                    speakAnnouncement(primary, current.voiceLanguage, alternate)
                 }
             } finally {
                 if (requestToken == geocodeRequestToken) reverseGeocodeJob = null
             }
         }
+    }
+
+    private fun processDestinationProximity(location: Location) {
+        val snapshot = AppPreferences.state.value
+        val name = snapshot.destinationName
+        val latitude = snapshot.destinationLatitude
+        val longitude = snapshot.destinationLongitude
+        if (name.isBlank() || latitude == null || longitude == null) {
+            activeDestinationKey = null
+            lastDestinationDistanceMeters = null
+            return
+        }
+
+        val destinationKey = "$name|$latitude|$longitude"
+        if (activeDestinationKey != destinationKey) {
+            activeDestinationKey = destinationKey
+            lastDestinationDistanceMeters = null
+        }
+        val destination = Location("saved-destination").apply {
+            this.latitude = latitude
+            this.longitude = longitude
+        }
+        val distance = location.distanceTo(destination)
+        val result = DestinationProximityPolicy.evaluate(
+            currentDistanceMeters = distance,
+            previousDistanceMeters = lastDestinationDistanceMeters,
+            announcedMask = snapshot.destinationAlertMask
+        )
+        lastDestinationDistanceMeters = distance
+        if (result.updatedMask != snapshot.destinationAlertMask) {
+            AppPreferences.setDestinationAlertMask(result.updatedMask)
+        }
+        val alertDistance = result.alertDistanceMeters ?: return
+        if (snapshot.isInternetAvailable != true) return
+
+        val arrived = alertDistance == DestinationProximityPolicy.ARRIVAL_RADIUS_METERS.toInt()
+        val primary = BilingualStrings.buildDestinationAnnouncement(
+            voiceLang = snapshot.voiceLanguage,
+            destinationName = name,
+            distanceMeters = alertDistance,
+            arrived = arrived
+        )
+        val alternateLanguage = if (snapshot.voiceLanguage == "en") "ta" else "en"
+        val alternate = BilingualStrings.buildDestinationAnnouncement(
+            voiceLang = alternateLanguage,
+            destinationName = name,
+            distanceMeters = alertDistance,
+            arrived = arrived
+        )
+        AppPreferences.appendAnnouncementLog(name, primary)
+        speakAnnouncement(
+            text = primary,
+            voiceLang = snapshot.voiceLanguage,
+            alternateLanguageText = alternate,
+            queueMode = TextToSpeech.QUEUE_ADD
+        )
+    }
+
+    private fun announceInitialPlace(
+        location: Location,
+        cityOrVillage: String,
+        subArea: String,
+        voiceLanguage: String,
+        includeSubArea: Boolean,
+        district: String,
+        highwayLandmark: String
+    ) {
+        val primary = BilingualStrings.buildSpokenAnnouncement(
+            voiceLang = voiceLanguage,
+            isNewCityOrVillage = true,
+            cityOrVillage = cityOrVillage,
+            subArea = subArea,
+            includeSubArea = includeSubArea
+        )
+        val alternateLanguage = if (voiceLanguage == "en") "ta" else "en"
+        val alternate = BilingualStrings.buildSpokenAnnouncement(
+            voiceLang = alternateLanguage,
+            isNewCityOrVillage = true,
+            cityOrVillage = cityOrVillage,
+            subArea = subArea,
+            includeSubArea = includeSubArea
+        )
+        lastAnnouncedCity = cityOrVillage
+        lastAnnouncedSubArea = subArea
+        lastAnnouncedDistrict = district
+        lastAnnouncedHighwayLandmark = highwayLandmark
+        hasEstablishedPlaceBaseline = true
+        hasMadeInitialStartAnnouncement = true
+        travelDetector.markPlaceAnnounced(location)
+        val displayTitle = if (subArea.isNotBlank() &&
+            !subArea.equals(cityOrVillage, ignoreCase = true)
+        ) "$cityOrVillage ($subArea)" else cityOrVillage
+        AppPreferences.appendAnnouncementLog(displayTitle, primary)
+        speakAnnouncement(primary, voiceLanguage, alternate)
     }
 
     private fun shouldStartReverseGeocode(location: Location): Boolean {
@@ -410,7 +734,9 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
 
     data class ResolvedPlace(
         val cityOrVillage: String,
-        val subArea: String
+        val subArea: String,
+        val district: String,
+        val highwayLandmark: String?
     )
 
     @Suppress("DEPRECATION")
@@ -459,15 +785,23 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         ).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
 
         // Extract Same-City Next Place (Sub-Locality / Neighborhood / Street)
-        val rawSubArea = listOfNotNull(
-            address.subLocality,
-            address.thoroughfare,
-            address.featureName?.takeIf { !it.matches(Regex("^[0-9+\\-.,\\s]+$")) }
-        ).firstOrNull { it.isNotBlank() && !it.equals(cityOrVillage, ignoreCase = true) }?.trim().orEmpty()
+        val rawSubArea = PlaceDataPolicy.cleanSubArea(
+            candidates = listOf(address.subLocality, address.thoroughfare, address.featureName),
+            cityOrVillage = cityOrVillage
+        )
+        val districtCandidate = address.subAdminArea?.trim().orEmpty()
+        val district = districtCandidate.takeIf {
+            it.isNotBlank() && !it.equals(cityOrVillage, ignoreCase = true)
+        }.orEmpty()
+        val highwayLandmark = PlaceDataPolicy.highwayLandmark(
+            listOf(address.thoroughfare, address.featureName, address.subLocality)
+        )
 
         return ResolvedPlace(
             cityOrVillage = cityOrVillage,
-            subArea = rawSubArea
+            subArea = rawSubArea,
+            district = district,
+            highwayLandmark = highwayLandmark
         )
     }
 
@@ -480,12 +814,15 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 speakAnnouncement(
                     text = queued.text,
                     voiceLang = queued.requestedLanguage,
-                    alternateLanguageText = queued.alternateLanguageText
+                    alternateLanguageText = queued.alternateLanguageText,
+                    requiresInternet = queued.requiresInternet,
+                    queueMode = queued.queueMode
                 )
             }
         } else {
             isTtsReady = false
             pendingSpeechQueue = null
+            AppPreferences.setCallAudioPaused(false)
             AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
             if (!AppPreferences.state.value.isTrackingEnabled) {
                 // A one-shot test-voice service has nothing else to do if the TTS engine failed.
@@ -547,33 +884,87 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     private fun speakAnnouncement(
         text: String,
         voiceLang: String,
-        alternateLanguageText: String
+        alternateLanguageText: String,
+        requiresInternet: Boolean = true,
+        queueMode: Int = TextToSpeech.QUEUE_FLUSH
     ) {
-        // Double check GPS is still enabled before speaking.
-        if (!GpsStateReceiver.isGpsProviderEnabled(this) && AppPreferences.state.value.isTrackingEnabled) {
+        val snapshot = AppPreferences.state.value
+        if (requiresInternet && snapshot.isInternetAvailable != true) return
+        // Double check GPS is still enabled before speaking while tracking.
+        if (!GpsStateReceiver.isGpsProviderEnabled(this) && snapshot.isTrackingEnabled) return
+
+        val requestedLanguage = if (voiceLang == "en") "en" else "ta"
+        val speech = PendingSpeech(
+            text = text,
+            alternateLanguageText = alternateLanguageText,
+            requestedLanguage = requestedLanguage,
+            requiresInternet = requiresInternet,
+            queueMode = queueMode
+        )
+        if (isPhoneCallAudioActive()) {
+            pendingSpeechQueue = speech
+            AppPreferences.setCallAudioPaused(true)
+            updateForegroundNotification()
+            waitForPhoneCallToEnd()
             return
         }
-        val requestedLanguage = if (voiceLang == "en") "en" else "ta"
+
         val engine = tts
         if (!isTtsReady || engine == null) {
-            pendingSpeechQueue = PendingSpeech(
-                text = text,
-                alternateLanguageText = alternateLanguageText,
-                requestedLanguage = requestedLanguage
-            )
+            pendingSpeechQueue = speech
             return
         }
 
         val actualLanguage = configureTtsLanguage(requestedLanguage)
         if (actualLanguage == null) {
-            if (!AppPreferences.state.value.isTrackingEnabled) stopSelf()
+            if (!snapshot.isTrackingEnabled) stopSelf()
             return
         }
         val localizedText = if (actualLanguage == requestedLanguage) text else alternateLanguageText
-        requestAudioFocusAndSpeak(engine, localizedText)
+        speakingRequiresInternet = requiresInternet
+        latestSpeakingRequest = speech
+        requestAudioFocusAndSpeak(engine, localizedText, queueMode)
+        monitorCallModeDuringSpeech(engine)
     }
 
-    private fun requestAudioFocusAndSpeak(engine: TextToSpeech, text: String) {
+    private fun isPhoneCallAudioActive(): Boolean {
+        val mode = (getSystemService(Context.AUDIO_SERVICE) as? AudioManager)?.mode ?: return false
+        return mode == AudioManager.MODE_IN_CALL ||
+            mode == AudioManager.MODE_IN_COMMUNICATION ||
+            mode == AudioManager.MODE_RINGTONE ||
+            (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+                mode == AudioManager.MODE_CALL_SCREENING)
+    }
+
+    private fun waitForPhoneCallToEnd() {
+        if (callWaitJob?.isActive == true) return
+        callWaitJob = serviceScope.launch {
+            while (pendingSpeechQueue != null && isPhoneCallAudioActive()) {
+                kotlinx.coroutines.delay(1_000L)
+            }
+            val queued = pendingSpeechQueue
+            callWaitJob = null
+            if (queued == null) {
+                AppPreferences.setCallAudioPaused(false)
+                updateForegroundNotification()
+                return@launch
+            }
+            pendingSpeechQueue = null
+            AppPreferences.setCallAudioPaused(false)
+            updateForegroundNotification()
+            if (!queued.requiresInternet || AppPreferences.state.value.isInternetAvailable == true) {
+                speakAnnouncement(
+                    text = queued.text,
+                    voiceLang = queued.requestedLanguage,
+                    alternateLanguageText = queued.alternateLanguageText,
+                    requiresInternet = queued.requiresInternet,
+                    queueMode = queued.queueMode
+                )
+            }
+        }
+    }
+
+    private fun requestAudioFocusAndSpeak(engine: TextToSpeech, text: String, queueMode: Int) {
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         val audioAttributes = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
@@ -608,11 +999,44 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             }
         })
 
-        engine.speak(text, TextToSpeech.QUEUE_FLUSH, null, "place_announce_${System.currentTimeMillis()}")
+        engine.speak(text, queueMode, null, "place_announce_${System.currentTimeMillis()}")
+    }
+
+    private fun monitorCallModeDuringSpeech(engine: TextToSpeech) {
+        if (callModeMonitorJob?.isActive == true) return
+        callModeMonitorJob = serviceScope.launch {
+            var idleChecks = 0
+            while (idleChecks < 5) {
+                kotlinx.coroutines.delay(300L)
+                if (engine.isSpeaking()) idleChecks = 0 else idleChecks++
+                if (isPhoneCallAudioActive()) {
+                    if (pendingSpeechQueue == null) {
+                        pendingSpeechQueue = latestSpeakingRequest
+                    }
+                    if (pendingSpeechQueue != null) {
+                        AppPreferences.setCallAudioPaused(true)
+                        updateForegroundNotification()
+                        try {
+                            engine.stop()
+                        } catch (_: Exception) {}
+                        waitForPhoneCallToEnd()
+                    }
+                    break
+                }
+            }
+            callModeMonitorJob = null
+        }
     }
 
     private fun stopVoiceImmediately() {
         pendingSpeechQueue = null
+        latestSpeakingRequest = null
+        speakingRequiresInternet = false
+        callModeMonitorJob?.cancel()
+        callModeMonitorJob = null
+        callWaitJob?.cancel()
+        callWaitJob = null
+        AppPreferences.setCallAudioPaused(false)
         try {
             tts?.stop()
         } catch (_: Exception) {}
@@ -674,6 +1098,8 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
 
         val contentText = when {
             !snap.isGpsEnabled -> ui.statusGpsOff
+            snap.isInternetAvailable == false -> ui.statusInternetUnavailable
+            snap.isCallAudioPaused -> ui.statusCallPaused
             snap.currentCityOrVillage.isNotBlank() -> {
                 val sub = if (snap.currentSubArea.isNotBlank()) " • ${snap.currentSubArea}" else ""
                 "${snap.currentCityOrVillage}$sub (${snap.currentSpeedKmh.toInt()} km/h)"
@@ -702,7 +1128,14 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() {
+        internetMonitor?.stop()
+        internetMonitor = null
         removeLocationUpdatesSafely()
+        whereAmIMediaSession?.isActive = false
+        whereAmIMediaSession?.release()
+        whereAmIMediaSession = null
+        callWaitJob?.cancel()
+        AppPreferences.setCallAudioPaused(false)
         stopVoiceImmediately()
         try {
             tts?.shutdown()

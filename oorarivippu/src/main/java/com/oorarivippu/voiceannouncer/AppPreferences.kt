@@ -31,11 +31,20 @@ data class AppStateSnapshot(
     val announceImmediatelyOnStart: Boolean = true,
     val minDistanceMeters: Int = 500,      // Minimum distance before re-evaluating same-area drift
     val isGpsEnabled: Boolean = true,
+    val isInternetAvailable: Boolean? = null,
+    val isCallAudioPaused: Boolean = false,
     val currentCityOrVillage: String = "",
     val currentSubArea: String = "",
+    val currentDistrict: String = "",
     val currentSpeedKmh: Float = 0f,
     val isVehicleMoving: Boolean = false,
+    val locationUpdateIntervalSeconds: Int = 5,
     val ttsVoiceStatus: TtsVoiceStatus = TtsVoiceStatus.UNKNOWN,
+    val destinationName: String = "",
+    val destinationLatitude: Double? = null,
+    val destinationLongitude: Double? = null,
+    val destinationAlertMask: Int = 0,
+    val headsetWhereAmIEnabled: Boolean = false,
     val history: List<AnnouncementLogItem> = emptyList()
 )
 
@@ -49,6 +58,11 @@ object AppPreferences {
     private const val KEY_BIKE_CAR_MODE = "bike_car_detection_enabled"
     private const val KEY_ANNOUNCE_ON_START = "announce_immediately_on_start"
     private const val KEY_MIN_DISTANCE_METERS = "min_distance_meters"
+    private const val KEY_DESTINATION_NAME = "destination_name"
+    private const val KEY_DESTINATION_LATITUDE = "destination_latitude"
+    private const val KEY_DESTINATION_LONGITUDE = "destination_longitude"
+    private const val KEY_DESTINATION_ALERT_MASK = "destination_alert_mask"
+    private const val KEY_HEADSET_WHERE_AM_I = "headset_where_am_i_enabled"
 
     private lateinit var prefs: SharedPreferences
     private val _state = MutableStateFlow(AppStateSnapshot())
@@ -64,7 +78,12 @@ object AppPreferences {
             announceSameCitySubArea = prefs.getBoolean(KEY_SAME_CITY_SUB_AREA, true),
             bikeCarDetectionEnabled = prefs.getBoolean(KEY_BIKE_CAR_MODE, true),
             announceImmediatelyOnStart = prefs.getBoolean(KEY_ANNOUNCE_ON_START, true),
-            minDistanceMeters = prefs.getInt(KEY_MIN_DISTANCE_METERS, 500)
+            minDistanceMeters = prefs.getInt(KEY_MIN_DISTANCE_METERS, 500).coerceIn(200, 3000),
+            destinationName = prefs.getString(KEY_DESTINATION_NAME, "") ?: "",
+            destinationLatitude = prefs.getString(KEY_DESTINATION_LATITUDE, null)?.toDoubleOrNull(),
+            destinationLongitude = prefs.getString(KEY_DESTINATION_LONGITUDE, null)?.toDoubleOrNull(),
+            destinationAlertMask = prefs.getInt(KEY_DESTINATION_ALERT_MASK, 0),
+            headsetWhereAmIEnabled = prefs.getBoolean(KEY_HEADSET_WHERE_AM_I, false)
         )
     }
 
@@ -94,6 +113,61 @@ object AppPreferences {
         _state.value = _state.value.copy(ttsVoiceStatus = status)
     }
 
+    fun setInternetAvailable(available: Boolean) {
+        _state.value = _state.value.copy(isInternetAvailable = available)
+    }
+
+    fun setCallAudioPaused(paused: Boolean) {
+        _state.value = _state.value.copy(isCallAudioPaused = paused)
+    }
+
+    fun setLocationUpdateIntervalMillis(intervalMillis: Long) {
+        val seconds = (intervalMillis / 1_000L).toInt().coerceAtLeast(1)
+        _state.value = _state.value.copy(locationUpdateIntervalSeconds = seconds)
+    }
+
+    fun setHeadsetWhereAmIEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_HEADSET_WHERE_AM_I, enabled).apply()
+        _state.value = _state.value.copy(headsetWhereAmIEnabled = enabled)
+    }
+
+    fun setDestination(name: String, latitude: Double, longitude: Double) {
+        val cleanName = name.trim()
+        prefs.edit()
+            .putString(KEY_DESTINATION_NAME, cleanName)
+            .putString(KEY_DESTINATION_LATITUDE, latitude.toString())
+            .putString(KEY_DESTINATION_LONGITUDE, longitude.toString())
+            .putInt(KEY_DESTINATION_ALERT_MASK, 0)
+            .apply()
+        _state.value = _state.value.copy(
+            destinationName = cleanName,
+            destinationLatitude = latitude,
+            destinationLongitude = longitude,
+            destinationAlertMask = 0
+        )
+    }
+
+    fun clearDestination() {
+        prefs.edit()
+            .remove(KEY_DESTINATION_NAME)
+            .remove(KEY_DESTINATION_LATITUDE)
+            .remove(KEY_DESTINATION_LONGITUDE)
+            .remove(KEY_DESTINATION_ALERT_MASK)
+            .apply()
+        _state.value = _state.value.copy(
+            destinationName = "",
+            destinationLatitude = null,
+            destinationLongitude = null,
+            destinationAlertMask = 0
+        )
+    }
+
+    fun setDestinationAlertMask(mask: Int) {
+        val normalized = mask and 0x0F
+        prefs.edit().putInt(KEY_DESTINATION_ALERT_MASK, normalized).apply()
+        _state.value = _state.value.copy(destinationAlertMask = normalized)
+    }
+
     fun setAnnounceSameCitySubArea(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_SAME_CITY_SUB_AREA, enabled).apply()
         _state.value = _state.value.copy(announceSameCitySubArea = enabled)
@@ -120,6 +194,7 @@ object AppPreferences {
         isGpsEnabled: Boolean = _state.value.isGpsEnabled,
         cityOrVillage: String = _state.value.currentCityOrVillage,
         subArea: String = _state.value.currentSubArea,
+        district: String = _state.value.currentDistrict,
         speedKmh: Float = _state.value.currentSpeedKmh,
         isVehicleMoving: Boolean = _state.value.isVehicleMoving
     ) {
@@ -127,6 +202,7 @@ object AppPreferences {
             isGpsEnabled = isGpsEnabled,
             currentCityOrVillage = cityOrVillage,
             currentSubArea = subArea,
+            currentDistrict = district,
             currentSpeedKmh = speedKmh,
             isVehicleMoving = isVehicleMoving
         )

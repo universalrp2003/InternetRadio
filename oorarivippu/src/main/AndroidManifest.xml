@@ -8,6 +8,7 @@
     <!-- Requested in a separate, optional step only after foreground permission is granted. -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- Tracking is started by the user from the visible activity and continues
          as a location foreground service with an ongoing notification. -->

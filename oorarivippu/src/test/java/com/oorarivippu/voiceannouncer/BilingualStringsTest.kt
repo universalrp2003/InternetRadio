@@ -33,7 +33,36 @@ class BilingualStringsTest {
             assertTrue(strings.voiceStatusAvailable.isNotBlank())
             assertTrue(strings.voiceStatusFallback.isNotBlank())
             assertTrue(strings.voiceStatusUnavailable.isNotBlank())
+            assertTrue(strings.statusInternetUnavailable.isNotBlank())
+            assertTrue(strings.internetUnavailableDetails.isNotBlank())
+            assertTrue(strings.statusCallPaused.isNotBlank())
+            assertTrue(strings.destinationAlertExplanation.isNotBlank())
+            assertTrue(strings.headsetWhereAmISubtitle.isNotBlank())
         }
+    }
+
+    @Test
+    fun destinationAndDistrictAnnouncementsHaveLocalizedText() {
+        assertEquals(
+            "Pudukkottai is 5 kilometres away.",
+            BilingualStrings.buildDestinationAnnouncement("en", "Pudukkottai", 5_000, arrived = false)
+        )
+        assertEquals(
+            "Entering Pudukkottai district.",
+            BilingualStrings.buildDistrictAnnouncement("en", "Pudukkottai")
+        )
+        assertEquals(
+            "Approaching NH 44.",
+            BilingualStrings.buildHighwayLandmarkAnnouncement("en", "NH 44")
+        )
+        assertTrue(
+            BilingualStrings.buildDestinationAnnouncement("ta", "புதுக்கோட்டை", 500, arrived = true)
+                .contains("வந்தடைந்துவிட்டீர்கள்")
+        )
+        assertEquals(
+            "It is 5:20 PM. Your current location is Town Centre, Alangudi.",
+            BilingualStrings.buildWhereAmIAnnouncement("en", "Alangudi", "Town Centre", "5:20 PM")
+        )
     }
 
     @Test
