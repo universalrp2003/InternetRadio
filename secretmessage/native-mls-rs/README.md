@@ -1,0 +1,9 @@
+# mls-rs / AWS-LC feasibility lane (TEST ONLY)
+
+This separate harness evaluates the published **mls-rs 0.56.0** MLS implementation with the project's **AWS-LC provider 0.25.0**, restricted to `CipherSuite::CURVE25519_AES128` (the RFC 9420 X25519 / AES-128-GCM / SHA-256 / Ed25519 suite). It reuses only the existing small JNI entry point and standalone smoke APK; the protocol implementation and crypto provider come from upstream crates. The candidate is not linked into the Secret Message product application.
+
+The upstream project is actively maintained and publishes Apache-2.0-or-MIT licensed crates. Its README explicitly says it has not received a full third-party security audit. Its provider table marks AWS-LC as stable and RustCrypto as experimental; this lane uses AWS-LC and does not enable experimental post-quantum suites. Those upstream statements are not an audit of the resolved dependency graph or an endorsement for this product.
+
+The harness runs a synthetic two-member, in-memory group, serializes MLS messages at the simulated transport boundary, and checks a bidirectional application-message round trip plus absence of test plaintext in the wire bytes. It uses demonstration `BasicCredential` identities only. It does not validate real device identity, persistent key protection, network delivery, two-phone interop, or message-expiry behavior.
+
+CI will record the generated lockfile, run host tests/Clippy/RustSec, check the Android dependency graph, build the standalone APK for four Android ABIs, and launch the fixture on a hosted API 35 emulator. Even if those feasibility checks pass, this does not grant security/release approval. Keep all RustSec findings visible; do not ignore advisories or use this candidate for sensitive communications. No product integration or publication is authorized by this test lane.

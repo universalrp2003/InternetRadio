@@ -9,6 +9,7 @@ SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${SDK_ROOT:+$SDK_ROOT/ndk/$NDK_VERSION}}"
 API_LEVEL="${ANDROID_API_LEVEL:-26}"
+CRYPTO_LABEL="${SECRET_MESSAGE_CRYPTO_LABEL:-OpenMLS}"
 
 if [[ -z "$SDK_ROOT" ]]; then
   echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2
@@ -49,7 +50,7 @@ build_target() {
   fi
 
   export "CARGO_TARGET_${target_env}_LINKER=$linker"
-  echo "Building JNI-enabled OpenMLS smoke library for $target ($abi, Android API $API_LEVEL)"
+  echo "Building JNI-enabled $CRYPTO_LABEL smoke library for $target ($abi, Android API $API_LEVEL)"
   (cd "$NATIVE_DIR" && cargo build --locked --release --features android-jni --target "$target")
   if [[ ! -s "$output" ]]; then
     echo "Expected JNI cdylib was not produced: $output" >&2

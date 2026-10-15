@@ -1,0 +1,21 @@
+[package]
+name = "secretmessage-mls-rs-spike"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.94"
+license = "GPL-3.0-only"
+publish = false
+
+[lib]
+name = "secretmessage_mls_spike"
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+spike-harness = []
+android-jni = ["dep:jni", "spike-harness"]
+
+[dependencies]
+mls-rs = { version = "=0.56.0", default-features = false, features = ["std", "rfc_compliant"] }
+mls-rs-crypto-awslc = { version = "=0.25.0", default-features = false, features = ["non-fips"] }
+jni = { version = "0.21.1", optional = true }

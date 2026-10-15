@@ -18,6 +18,8 @@ bash secretmessage/android-smoke/build-android-smoke.sh
 
 The script builds the test-only JNI-enabled Rust `cdylib` for arm64-v8a, armeabi-v7a, x86, and x86_64; copies those build outputs into the standalone Gradle project; assembles a debug APK; and checks that all four libraries are packaged and the APK has no Internet permission. If `secretmessage/native/Cargo.lock` is absent, it generates a feasibility lockfile and leaves it for review; this does not clear RustSec or imply security approval. Generated `.so`, APK, Gradle, and Rust build outputs are ignored. CI uploads the debug APK as a short-retention feasibility artifact only; no release or store workflow consumes it.
 
+For a separate, isolated dependency experiment, `SECRET_MESSAGE_NATIVE_DIR` can point the same build script at another test-only crate with the same JNI library name/features. `SECRET_MESSAGE_CRYPTO_LABEL` changes only the build log label. The upstream OpenMLS and mls-rs/AWS-LC workflows use this override; neither candidate is linked into the product app, and their APK artifacts are not release inputs.
+
 ## Run on a Linux Android emulator
 
 The runtime smoke helper expects an API 35 x86_64 Google APIs image, Android emulator/platform-tools, and KVM acceleration. After building the APK, install those SDK components and run:
