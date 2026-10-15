@@ -42,6 +42,7 @@ build_target() {
   local abi="$3"
   local target_env linker output
   target_env="$(printf '%s' "$target" | tr '[:lower:]-' '[:upper:]_')"
+  target_env_lower="${target_env,,}"
   linker="$TOOLCHAIN/$linker_name"
   output="$NATIVE_DIR/target/$target/release/libsecretmessage_mls_spike.so"
   if [[ ! -x "$linker" ]]; then
@@ -50,6 +51,10 @@ build_target() {
   fi
 
   export "CARGO_TARGET_${target_env}_LINKER=$linker"
+  # Native crypto crates such as AWS-LC also invoke the C compiler directly;
+  # cc-rs uses these target-specific variables rather than Cargo's linker setting.
+  export "CC_${target_env_lower}=$linker"
+  export "AR_${target_env_lower}=$TOOLCHAIN/llvm-ar"
   echo "Building JNI-enabled $CRYPTO_LABEL smoke library for $target ($abi, Android API $API_LEVEL)"
   (cd "$NATIVE_DIR" && cargo build --locked --release --features android-jni --target "$target")
   if [[ ! -s "$output" ]]; then
