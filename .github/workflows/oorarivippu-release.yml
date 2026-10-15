@@ -92,10 +92,25 @@ jobs:
           test -x "$aapt" && test -x "$apksigner"
           "$aapt" dump badging "$apk" > "$RUNNER_TEMP/oorarivippu-badging.txt"
           grep -Fq "package: name='${expected_package}' versionCode='${expected_code}' versionName='${expected_version}'" "$RUNNER_TEMP/oorarivippu-badging.txt"
-          signer_output="$("$apksigner" verify --verbose --print-certs "$apk")"
-          printf '%s\n' "$signer_output"
-          signer="$(printf '%s\n' "$signer_output" | awk -F': ' '/Signer #1 certificate SHA-256 digest:/ { print $2; exit }' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          if [[ "$signer" != "$expected_signer" ]]; then
+          if grep -q "application-debuggable" "$RUNNER_TEMP/oorarivippu-badging.txt"; then
+            echo "::error::Release APK is marked debuggable."
+            exit 1
+          fi
+          if ! grep -Eiq "(^|[[:space:]])(sdkVersion|minSdkVersion)[[:space:]]*[:=][[:space:]]*['\"]?26(['\"]|[[:space:]]|$)" "$RUNNER_TEMP/oorarivippu-badging.txt"; then
+            echo "::error::Release APK minSdk is not API 26."
+            exit 1
+          fi
+          keytool -exportcert -keystore ci-keystore/release.p12 -storepass cleansweep-ci \
+            -alias cleansweep -file "$RUNNER_TEMP/project-certificate.der"
+          expected_cert="$(sha256sum "$RUNNER_TEMP/project-certificate.der" | cut -d ' ' -f 1)"
+          if [[ "$expected_cert" != "$expected_signer" ]]; then
+            echo "::error::Stable signing key differs from the updater's pinned certificate."
+            exit 1
+          fi
+          "$apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/oorarivippu-signature.txt"
+          cat "$RUNNER_TEMP/oorarivippu-signature.txt"
+          signer="$(sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' "$RUNNER_TEMP/oorarivippu-signature.txt" | tr -d ' :\r' | tr 'A-F' 'a-f' | sort -u)"
+          if [[ -z "$signer" || "$signer" != "$expected_signer" ]]; then
             echo "::error::Unexpected stable signing certificate: $signer"
             exit 1
           fi
