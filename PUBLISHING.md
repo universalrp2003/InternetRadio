@@ -17,13 +17,13 @@ The previously published releases, tags and assets for retired modules are retai
 
 ## Oor Arivippu standalone stable release
 
-Oor Arivippu is a fifth active product but is intentionally excluded from the existing four-app batch, whose app versions/tags are already public. Its owner-authorized first stable release uses `.github/workflows/oorarivippu-release.yml` and is built separately as version 1.0.0 / code 2 (`Oor-Arivippu-v1.0.0.apk`).
+Oor Arivippu is a fifth active product but remains intentionally excluded from the existing four-app batch. Its owner-authorized first stable release, version 1.0.0 / code 2 (`Oor-Arivippu-v1.0.0.apk`), was published separately through `.github/workflows/oorarivippu-release.yml` in [run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). The [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0) and [InternetRadio fallback](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.0) are public.
 
 The standalone workflow runs the Oor Arivippu release unit tests, release lint and signed release build; checks package/version, APK size, SHA-256 and the pinned release certificate; then stages identical APK bytes as drafts in both repositories. It verifies both draft assets before publishing the destination release and then the `InternetRadio` source fallback, and checks their canonical URLs and matching size/digest again. Publication requires the source repository's `RP_ANDROID_APPS_RELEASE_TOKEN` secret with destination-release write access.
 
 The workflow is restricted to the authorized Arena branch. A commit containing `[publish-oorarivippu]` is the explicit publication trigger; do not use that marker until the Oor test workflow and required hosted checks have passed and publication is authorized. Ordinary commits do not publish. Never overwrite either repository's existing tag or reuse a version for changed APK bytes.
 
-Earlier Oor Arivippu test APKs were debug-signed. They are not production updater builds and may not be updatable to the stable-signed APK; Android may require uninstalling a test APK first, which removes that installation's local settings and history. The owner reports prior two-device testing, but the future stable APK's exact hash is not considered device-tested unless it is matched to that APK.
+Earlier Oor Arivippu test APKs were debug-signed. They are not production updater builds and may not be updatable to the stable-signed APK; Android may require uninstalling a test APK first, which removes that installation's local settings and history. The owner reports successful testing on two devices, but those reports are not matched to the published stable APK hash and must not be described as exact-build device validation.
 
 ## CI build
 

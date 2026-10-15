@@ -1,17 +1,20 @@
 # Changelog — RP Ideas Android apps
 
-This file indexes the four actively maintained apps. App-specific details, installation notes and verified APK digests are linked below. Historical GitHub Releases, tags and assets remain available even when no longer represented in the active source tree.
+This file indexes the five actively maintained apps. App-specific details, installation notes and verified APK digests are linked below. Historical GitHub Releases, tags and assets remain available even when no longer represented in the active source tree.
 
-## Latest published releases — 14 October 2026
+## Latest published releases — 15 October 2026
 
 | App | Version | Release notes | RP-Android-Apps | InternetRadio fallback |
 |---|---:|---|---|---|
+| Oor Arivippu | 1.0.0 / code 2 | [`releases/oor-arivippu-v1.0.0.md`](releases/oor-arivippu-v1.0.0.md) | [oor-arivippu-v1.0.0](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0) | [oor-arivippu-v1.0.0](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.0) |
 | Live Guard (CleanSweep) | 2.46 / code 51 | [`releases/live-guard-v2.46.md`](releases/live-guard-v2.46.md) | [live-guard-v2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | [live-guard-v2.46](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46) |
 | Ramesh Radio | 1.11 / code 11 | [`releases/ramesh-radio-v1.11.md`](releases/ramesh-radio-v1.11.md) | [ramesh-radio-v1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | [ramesh-radio-v1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11) |
 | PulseEQ | 1.5 / code 6 | [`releases/pulseeq-v1.5.md`](releases/pulseeq-v1.5.md) | [pulseeq-v1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | [pulseeq-v1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) |
 | RP Vocal Remover Studio | 0.1.11 / code 12 | [`releases/rp-vocal-remover-studio-v0.1.11.md`](releases/rp-vocal-remover-studio-v0.1.11.md) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) |
 
 GitHub Actions [run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) passed the four-app build, unit/regression tests, APK and signature checks, and dual-repository publication. Both repositories now serve the four stable APKs. A live public-API check confirmed the destination releases are non-draft/non-prerelease, use canonical release and download URLs, are newer than the bridge versions, and have exactly matching asset sizes and SHA-256 values on both repositories. Owner-provided phone screenshots show update-available notices for all four bridge versions, confirming device-side metadata discovery. They do not show a completed download/install of these exact bytes or identify the supplying repository. The updater source order and selection logic prefer `RP-Android-Apps`. See [`docs/published-release-digests.md`](docs/published-release-digests.md). The build-only hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are from a different run and must not be treated as the published asset digests.
+
+Oor Arivippu 1.0.0 / code 2 was then published separately, outside that four-app batch, by standalone [GitHub Actions run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). The public API confirmed that both repositories serve the same stable APK (`Oor-Arivippu-v1.0.0.apk`, 12,179,013 bytes, SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`) at canonical release and download URLs. The owner reports successful tests on two devices; those owner-reported tests are not matched to this published APK hash.
 
 ## Previous stable bridge releases — 14 October 2026
 
@@ -51,4 +54,4 @@ Older release notes and device-test records remain in `releases/` and `docs/` as
 
 ## Project scope
 
-The current source, Gradle build, CI and store preparation cover Live Guard, Ramesh Radio, PulseEQ and RP Vocal Remover Studio only. Releases for retired modules are preserved on GitHub as history and are not part of current builds or future release batches. The repository slug stays unchanged until the staged updater migration is complete; see [`docs/repository-migration.md`](docs/repository-migration.md).
+The current source, Gradle build and CI cover five active apps: Live Guard, Ramesh Radio, PulseEQ, RP Vocal Remover Studio and Oor Arivippu. The existing four-app batch workflow remains separate from Oor Arivippu's standalone release workflow; store-art preparation currently covers the three apps with store metadata. Releases for retired modules are preserved on GitHub as history and are not part of current builds or future release batches. The repository slug stays unchanged until the staged updater migration is complete; see [`docs/repository-migration.md`](docs/repository-migration.md).

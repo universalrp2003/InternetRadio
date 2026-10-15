@@ -1,23 +1,28 @@
 # RP Ideas — Android apps
 
-Four actively maintained, open-source Android apps developed by **Ramesh prathap .R** with shared project contributions, including software assistance from **Arena.ai Agent Mode**. The apps offer Tamil-first interfaces with an in-app English option. Current minimum Android versions are listed below; device-dependent features are described honestly in each app's documentation.
+Five actively maintained, open-source Android apps developed by **Ramesh prathap .R** with shared project contributions, including software assistance from **Arena.ai Agent Mode**. The apps offer Tamil-first interfaces with an in-app English option. Current minimum Android versions are listed below; device-dependent features are described honestly in each app's documentation.
 
-| App | Module | Current release (RP-Android-Apps) | Android | Purpose |
+| App | Module | Current stable release (RP-Android-Apps) | Android | Purpose |
 |---|---|---:|---:|---|
 | **Live Guard (CleanSweep)** | `cleaner` | [2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | 8.0+ (API 26) | Phone cleanup, health and security review, network tools, and optional assistance. |
 | **Ramesh Radio** | `radio` | [1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | 8.0+ (API 26) | Tamil and world radio, vote-ranked station lists, local playback, and session boost. |
 | **PulseEQ** | `equalizer` | [1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | 8.0+ (API 26) | Twenty-band audio DSP, presets, spectrum view, and local playback. |
 | **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
+| **Oor Arivippu** | `oorarivippu` | [1.0.0](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0) | 8.0+ (API 26) | Tamil/English GPS place and destination announcer with configurable offline-status reminders. |
 
 **Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview only echoes text/drawings locally; it has no network connection or cryptography. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
 
-**Published release batch (14 October 2026):** all four versions above passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Each stable APK is published on both `RP-Android-Apps` and `InternetRadio`; the release pages and SHA-256 digests are listed in [`docs/published-release-digests.md`](docs/published-release-digests.md). Build-only candidate hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are not the published asset hashes.
+## Stable releases
+
+The existing four-app batch (Live Guard, Ramesh Radio, PulseEQ and RP Vocal Remover Studio) passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Oor Arivippu 1.0.0 / code 2 was published separately, outside that batch, by the standalone [release run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). Both repositories now serve the same signed Oor APK at canonical release and download URLs. Filenames, sizes and verified SHA-256 values for all five current releases are in [`docs/published-release-digests.md`](docs/published-release-digests.md); release pages are the authoritative download source.
+
+The owner reports successful Oor Arivippu testing on two devices. These owner-reported tests are not matched to the exact stable APK hash and are not exact-build device validation. CI success and public-asset verification are not Play Protect approval or an all-device compatibility claim.
 
 ## Install and update
 
 Download each signed APK from its linked GitHub Release page. The apps check for newer stable releases and verify the published APK metadata before offering an update. Downloading does not install silently: Android may require the per-app **Install unknown apps** permission and always shows its installer confirmation. Play Protect and Android's signature checks are not bypassed.
 
-For download filenames, sizes and verified SHA-256 values, see [`docs/published-release-digests.md`](docs/published-release-digests.md). Release pages are the authoritative source for current APKs and release notes.
+For download filenames, sizes and verified SHA-256 values, see [`docs/published-release-digests.md`](docs/published-release-digests.md).
 
 > **Live Guard test note:** the 2.46 publication passed the permission-delta gate without requiring a new physical-device evidence record. CI and public-asset verification passed, but those checks are not an exact-build phone test or Play Protect approval. See the [installation advisory](docs/live-guard-play-protect-install-block.md) and [release notes](releases/live-guard-v2.46.md).
 
@@ -27,6 +32,7 @@ For download filenames, sizes and verified SHA-256 values, see [`docs/published-
 - Ramesh Radio contacts the selected station to stream and searches the public station directory only when requested. Local songs stay on the device.
 - PulseEQ processes audio locally. Its optional update check contacts GitHub; system-wide effects remain device/ROM-dependent.
 - RP Vocal Remover Studio downloads its checksum-pinned model from the upstream GitHub release. Selected songs are processed on-device; the app has no selected-audio upload path. The first output is a WAV, the optional second pass is user-started, and MP3 export is lossy while the WAV is retained.
+- Oor Arivippu uses location and Android's Geocoder for trip announcements and destination lookup. Settings and the selected destination are stored locally; the Android/OEM Geocoder provider may process lookups according to its own policy. See [`PRIVACY.md`](PRIVACY.md).
 
 The developer does not operate an app backend, ad network or analytics service. Third-party services may receive requests when an online feature is used or enabled and during update checks, under their own policies; see the privacy policy for details.
 
@@ -42,15 +48,17 @@ The project uses JDK 17, Gradle 8.14.3, the Android SDK and NDK. Open the reposi
 
 ./gradlew :cleaner:assembleRelease :radio:assembleRelease \
   :equalizer:assembleRelease :vocalremover:assembleRelease
+
+./gradlew :oorarivippu:testReleaseUnitTest :oorarivippu:lintRelease :oorarivippu:assembleRelease
 ```
 
-For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions performs the full build, localization/source checks, CleanSweep regression suite, package/version/signature verification and release-asset digest checks. It is configured to compile/test the local-only preview but excludes it from every release and bundle task. Hosted compilation, unit tests and the merged-APK network-permission gate passed in [run 38678283393](https://github.com/universalrp2003/InternetRadio/actions/runs/38678283393). The workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio is distributed as a standalone APK.
+For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions builds the four legacy batch apps and performs the required localization, regression, package/version/signature and release-asset checks. Oor Arivippu has its own test and marker-gated stable release workflows. The preview is excluded from every release and bundle task. Hosted compilation, unit tests and the merged-APK network-permission gate passed in [run 38678283393](https://github.com/universalrp2003/InternetRadio/actions/runs/38678283393). The four-app batch workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio and Oor Arivippu are distributed as standalone APKs.
 
-## Project scope and repository URL
+## Project scope and repository URLs
 
-The four apps above remain the only released products in the store and four-app release batch; Secret Message is a separate local-only development preview. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
+There are five active products: the four legacy batch apps listed above plus Oor Arivippu, which uses its own standalone stable release workflow. Secret Message remains a separate local-only development preview. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
 
-`RP-Android-Apps` is now seeded with stable releases for all four apps. On 14 October 2026, the public GitHub API returned the expected newer versions with canonical URLs and identical asset sizes/SHA-256 values on both repositories. The updater checks `RP-Android-Apps` first and prefers it for equal versions. Owner-provided phone screenshots now show update-available notices for all four bridge versions, confirming on-device update discovery; they do not show which repository supplied the result or a completed download/install of these exact APKs. Keep the old repository, release URLs, tags and assets unchanged throughout the one-to-two-month grace period, which began 14 October. Do not archive it until the grace period and device download/install validation are complete. See [`docs/repository-migration.md`](docs/repository-migration.md).
+`RP-Android-Apps` is the primary updater source and `InternetRadio` is the verified fallback. The four legacy bridge clients check the new repository first and keep the old endpoint during the agreed migration grace period that began 14 October 2026; do not archive or rename `InternetRadio` until the migration checks are complete. Oor Arivippu 1.0.0 was published to both repositories separately and is not part of that four-app bridge batch. See [`docs/repository-migration.md`](docs/repository-migration.md).
 
 ## Project documents
 
