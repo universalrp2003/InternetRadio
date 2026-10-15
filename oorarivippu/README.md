@@ -2,6 +2,8 @@
 
 **Current stable release:** 1.0.0 / code 2
 
+**Requested stable release:** 1.0.1 / code 3 (`Oor-Arivippu-v1.0.1.apk`, tag `oor-arivippu-v1.0.1`). The owner tested the debug APK from [run 38776902130](https://github.com/universalrp2003/InternetRadio/actions/runs/38776902130) and authorized publication; the Oor test workflow then passed on the exact 1.0.1 source in [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762). 1.0.0 remains the current stable release until both repositories serve the verified 1.0.1 APK. See the [1.0.1 release notes](../releases/oor-arivippu-v1.0.1.md).
+
 **Package:** `com.oorarivippu.voiceannouncer`
 
 **Minimum Android:** 8.0 / API 26
