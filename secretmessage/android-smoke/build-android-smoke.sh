@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
-NATIVE_DIR="$REPO_ROOT/secretmessage/native"
+NATIVE_DIR="${SECRET_MESSAGE_NATIVE_DIR:-$REPO_ROOT/secretmessage/native}"
 APP_DIR="$SCRIPT_DIR/app"
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}"
