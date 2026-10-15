@@ -5,6 +5,11 @@ name: Oor Arivippu stable release
 on:
   push:
     branches: [arena/a56e1b40-internetradio]
+    # Workflow-only edits are not a release candidate and must not start this workflow.
+    paths-ignore:
+      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/oorarivippu-release.yml"
+      - ".github/workflows/oorarivippu-test-apk.yml"
   workflow_dispatch:
     inputs:
       publish:

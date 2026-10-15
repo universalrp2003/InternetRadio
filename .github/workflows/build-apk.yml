@@ -11,6 +11,12 @@ on:
     # A dated workspace tag requests a verified batch publication; the resulting APKs
     # receive separate, version-specific release tags for each of the four requested apps.
     tags: [ "v*" ]
+    # Oor Arivippu has a separate test/release flow; skip its files and workflow-only edits.
+    paths-ignore:
+      - "oorarivippu/**"
+      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/oorarivippu-release.yml"
+      - ".github/workflows/oorarivippu-test-apk.yml"
   workflow_dispatch:
     inputs:
       release_tag:

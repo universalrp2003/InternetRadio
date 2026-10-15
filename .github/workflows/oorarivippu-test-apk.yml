@@ -1,5 +1,7 @@
 name: OorArivippu test APK
 
+# GitHub exposes manual dispatch only after this file is on the default branch.
+# Until then, matching Arena-branch pushes can run this test-only build.
 on:
   push:
     branches: [main, "arena/**"]
