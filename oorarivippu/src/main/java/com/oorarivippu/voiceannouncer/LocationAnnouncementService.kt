@@ -31,6 +31,7 @@ import android.os.Looper
 import android.os.SystemClock
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.speech.tts.Voice
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.android.gms.location.FusedLocationProviderClient
@@ -84,6 +85,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     private var locationManager: LocationManager? = null
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
+    private val defaultTtsVoices = mutableMapOf<String, Voice?>()
     private data class PendingSpeech(
         val text: String,
         val alternateLanguageText: String,
@@ -188,11 +190,19 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     voiceLang = alternateLanguage,
                     currentCity = snap.currentCityOrVillage
                 )
+                val selectedVoiceNeedsInternet = snap.availableTtsVoices
+                    .firstOrNull { it.name == snap.selectedTtsVoiceNameFor(snap.voiceLanguage) }
+                    ?.requiresNetworkConnection == true
+                if (selectedVoiceNeedsInternet && snap.isInternetAvailable != true) {
+                    AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.NETWORK_REQUIRED)
+                    if (!snap.isTrackingEnabled) stopSelf(startId)
+                    return if (snap.isTrackingEnabled) START_STICKY else START_NOT_STICKY
+                }
                 speakAnnouncement(
                     text = testSentence,
                     voiceLang = snap.voiceLanguage,
                     alternateLanguageText = fallbackSentence,
-                    requiresInternet = false
+                    requiresInternet = selectedVoiceNeedsInternet
                 )
                 // A test-voice service should not be resurrected as a tracking service. Keep
                 // sticky behavior only when an already-active tracking session needs it.
@@ -670,18 +680,18 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     hasEstablishedPlaceBaseline = true
                 }
 
-                val isNewCityOrVillage = !cityOrVillage.equals(lastAnnouncedCity, ignoreCase = true)
+                val isNewCityOrVillage = !PlaceDataPolicy.samePlaceName(cityOrVillage, lastAnnouncedCity)
                 val isNewSubAreaInSameCity = !isNewCityOrVillage &&
                     subArea.isNotBlank() &&
-                    !subArea.equals(cityOrVillage, ignoreCase = true) &&
-                    !subArea.equals(lastAnnouncedSubArea, ignoreCase = true)
+                    !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage) &&
+                    !PlaceDataPolicy.samePlaceName(subArea, lastAnnouncedSubArea)
                 val districtChanged = !firstPlaceFix &&
                     resolved.district.isNotBlank() &&
-                    !resolved.district.equals(lastAnnouncedDistrict, ignoreCase = true)
+                    !PlaceDataPolicy.samePlaceName(resolved.district, lastAnnouncedDistrict)
                 val landmark = resolved.highwayLandmark.orEmpty()
                 val landmarkChanged = !firstPlaceFix &&
                     landmark.isNotBlank() &&
-                    !landmark.equals(lastAnnouncedHighwayLandmark, ignoreCase = true)
+                    !PlaceDataPolicy.samePlaceName(landmark, lastAnnouncedHighwayLandmark)
                 if (!current.isVehicleMoving) return@launch
 
                 val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
@@ -707,7 +717,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     lastAnnouncedCity = cityOrVillage
                     lastAnnouncedSubArea = subArea
                     logTitle = if (subArea.isNotBlank() &&
-                        !subArea.equals(cityOrVillage, ignoreCase = true)
+                        !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage)
                     ) "$cityOrVillage ($subArea)" else cityOrVillage
                 } else if (isNewSubAreaInSameCity && current.announceSameCitySubArea) {
                     primaryParts += BilingualStrings.buildSpokenAnnouncement(
@@ -855,7 +865,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         hasMadeInitialStartAnnouncement = true
         travelDetector.markPlaceAnnounced(location)
         val displayTitle = if (subArea.isNotBlank() &&
-            !subArea.equals(cityOrVillage, ignoreCase = true)
+            !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage)
         ) "$cityOrVillage ($subArea)" else cityOrVillage
         AppPreferences.appendAnnouncementLog(displayTitle, primary)
         speakAnnouncement(primary, voiceLanguage, alternate)
@@ -925,21 +935,19 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         address ?: return null
 
         // Extract Village / Town / City name reliably across rural and urban India
-        val cityOrVillage = listOfNotNull(
-            address.locality,
-            address.subAdminArea,
-            address.adminArea
-        ).firstOrNull { it.isNotBlank() }?.trim().orEmpty()
+        val cityOrVillage = PlaceDataPolicy.cleanCityOrVillage(
+            listOf(address.locality, address.subAdminArea, address.adminArea)
+        )
 
-        // Extract Same-City Next Place (Sub-Locality / Neighborhood / Street)
+        // Prefer a geocoder's named feature (e.g. a hospital or bus stand) to its road field.
+        // Plus Codes and long route/address chains are filtered before they can be announced.
         val rawSubArea = PlaceDataPolicy.cleanSubArea(
-            candidates = listOf(address.subLocality, address.thoroughfare, address.featureName),
+            candidates = listOf(address.featureName, address.subLocality, address.thoroughfare),
             cityOrVillage = cityOrVillage
         )
-        val districtCandidate = address.subAdminArea?.trim().orEmpty()
-        val district = districtCandidate.takeIf {
-            it.isNotBlank() && !it.equals(cityOrVillage, ignoreCase = true)
-        }.orEmpty()
+        val district = PlaceDataPolicy.cleanPlaceName(address.subAdminArea)
+            ?.takeUnless { PlaceDataPolicy.samePlaceName(it, cityOrVillage) }
+            .orEmpty()
         val highwayLandmark = PlaceDataPolicy.highwayLandmark(
             listOf(address.thoroughfare, address.featureName, address.subLocality)
         )
@@ -1014,28 +1022,39 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             )
         }
 
+        val availableVoices = engine.voices.orEmpty()
         for ((locale, languageCode) in candidates) {
             try {
                 if (engine.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE) continue
-                val localVoice = if (requireOnDeviceVoice) {
-                    engine.voices?.firstOrNull { voice ->
-                        voice.locale.language == locale.language && !voice.isNetworkConnectionRequired
-                    }
-                } else {
-                    null
-                }
-                if (requireOnDeviceVoice && localVoice == null) continue
                 if (engine.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) continue
-                if (localVoice != null) engine.voice = localVoice
+
+                val languageVoices = availableVoices.filter { it.locale.language == locale.language }
+                val defaultVoice = defaultTtsVoices.getOrPut(languageCode) {
+                    engine.voice?.takeIf { it.locale.language == locale.language }
+                        ?: languageVoices.firstOrNull()
+                }
+                val selectedVoiceName = AppPreferences.state.value
+                    .selectedTtsVoiceNameFor(languageCode)
+                val selectedVoice = languageVoices.firstOrNull { it.name == selectedVoiceName }
+                val voiceToUse = if (requireOnDeviceVoice) {
+                    selectedVoice?.takeIf { !it.isNetworkConnectionRequired }
+                        ?: defaultVoice?.takeIf { !it.isNetworkConnectionRequired }
+                        ?: languageVoices.firstOrNull { !it.isNetworkConnectionRequired }
+                } else {
+                    selectedVoice ?: defaultVoice
+                }
+                if (requireOnDeviceVoice && voiceToUse == null) continue
+                if (voiceToUse != null) engine.voice = voiceToUse
                 if (requireOnDeviceVoice && engine.voice?.isNetworkConnectionRequired != false) continue
+
                 engine.setSpeechRate(0.95f)
-                AppPreferences.setTtsVoiceStatus(
-                    if (languageCode == requestedLanguage) {
-                        TtsVoiceStatus.AVAILABLE
-                    } else {
-                        TtsVoiceStatus.FALLBACK_LANGUAGE
-                    }
-                )
+                val voiceStatus = when {
+                    languageCode != requestedLanguage -> TtsVoiceStatus.FALLBACK_LANGUAGE
+                    !requireOnDeviceVoice && selectedVoiceName.isNotBlank() && selectedVoice == null ->
+                        TtsVoiceStatus.SELECTED_VOICE_UNAVAILABLE
+                    else -> TtsVoiceStatus.AVAILABLE
+                }
+                AppPreferences.setTtsVoiceStatus(voiceStatus)
                 return languageCode
             } catch (_: Exception) {
                 // Continue to the next installed locale rather than failing the service.

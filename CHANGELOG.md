@@ -2,6 +2,10 @@
 
 This file indexes the five actively maintained apps. App-specific details, installation notes and verified APK digests are linked below. Historical GitHub Releases, tags and assets remain available even when no longer represented in the active source tree.
 
+## Unreleased
+
+- Oor Arivippu filters Plus Codes and coordinate-only labels, compares normalized place names before speaking, prefers named landmarks such as hospitals/bus stands, and offers up to four Android TTS voices per language where available. Network voices are identified; offline reminders continue to use a local voice or beep.
+
 ## Latest published releases — 15 October 2026
 
 | App | Version | Release notes | RP-Android-Apps | InternetRadio fallback |

@@ -6,7 +6,10 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -42,6 +45,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -71,6 +76,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -97,10 +103,14 @@ private val AppColorScheme = lightColorScheme(
 class MainActivity : ComponentActivity() {
 
     private var internetMonitor: InternetConnectivityMonitor? = null
+    private var voiceCatalogTts: TextToSpeech? = null
+    private var voiceCatalogGeneration = 0
+    private val voiceCatalogHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         AppPreferences.init(this)
+        refreshTtsVoiceCatalog()
         AppLanguageState.initialize(this)
         AppLanguageState.set(this, AppLanguage.from(AppPreferences.state.value.appLanguage))
         AppPreferences.updateLiveStatus(
@@ -118,10 +128,41 @@ class MainActivity : ComponentActivity() {
                         onStartService = { startAnnouncerService() },
                         onStopService = { stopAnnouncerService() },
                         onTestVoice = { triggerTestVoice() },
-                        onSettingsChanged = { refreshAnnouncerSettings() }
+                        onSettingsChanged = { refreshAnnouncerSettings() },
+                        onRefreshVoiceCatalog = { refreshTtsVoiceCatalog() }
                     )
                 }
             }
+        }
+    }
+
+    private fun refreshTtsVoiceCatalog() {
+        val requestGeneration = ++voiceCatalogGeneration
+        voiceCatalogTts?.shutdown()
+        AppPreferences.setTtsVoiceCatalog(emptyList(), loaded = false)
+        voiceCatalogTts = runCatching {
+            TextToSpeech(this) { status ->
+                voiceCatalogHandler.post {
+                    if (requestGeneration != voiceCatalogGeneration || isDestroyed) return@post
+                    val engine = voiceCatalogTts
+                    val voices = if (status == TextToSpeech.SUCCESS && engine != null) {
+                        runCatching {
+                            TtsVoicePolicy.fromAndroidVoices(
+                                voices = engine.voices.orEmpty(),
+                                appLanguage = AppPreferences.state.value.appLanguage
+                            )
+                        }.getOrDefault(emptyList())
+                    } else {
+                        emptyList()
+                    }
+                    AppPreferences.setTtsVoiceCatalog(voices, loaded = true)
+                    engine?.shutdown()
+                    if (voiceCatalogTts === engine) voiceCatalogTts = null
+                }
+            }
+        }.getOrNull()
+        if (voiceCatalogTts == null) {
+            AppPreferences.setTtsVoiceCatalog(emptyList(), loaded = true)
         }
     }
 
@@ -136,6 +177,13 @@ class MainActivity : ComponentActivity() {
         internetMonitor?.stop()
         internetMonitor = null
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        voiceCatalogGeneration++
+        voiceCatalogTts?.shutdown()
+        voiceCatalogTts = null
+        super.onDestroy()
     }
 
     override fun onResume() {
@@ -189,7 +237,8 @@ fun OorArivippuScreen(
     onStartService: () -> Unit,
     onStopService: () -> Unit,
     onTestVoice: () -> Unit,
-    onSettingsChanged: () -> Unit
+    onSettingsChanged: () -> Unit,
+    onRefreshVoiceCatalog: () -> Unit
 ) {
     val context = LocalContext.current
     val state by AppPreferences.state.collectAsState()
@@ -202,6 +251,7 @@ fun OorArivippuScreen(
     var destinationQuery by remember(state.destinationName) {
         mutableStateOf(state.destinationName)
     }
+    var voiceChoicesExpanded by remember { mutableStateOf(false) }
     var destinationLookupMessage by remember { mutableStateOf("") }
     var isResolvingDestination by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -391,6 +441,7 @@ fun OorArivippuScreen(
                         onSelect = {
                             AppPreferences.setAppLanguage(it)
                             AppLanguageState.set(context, AppLanguage.from(it))
+                            onRefreshVoiceCatalog()
                         }
                     )
                     Divider(color = Color(0xFFE2E8F0))
@@ -402,10 +453,121 @@ fun OorArivippuScreen(
                         englishLabel = ui.englishName,
                         onSelect = { AppPreferences.setVoiceLanguage(it) }
                     )
+                    val selectedVoiceName = state.selectedTtsVoiceNameFor(state.voiceLanguage)
+                    val voiceChoices = remember(
+                        state.availableTtsVoices,
+                        state.voiceLanguage,
+                        selectedVoiceName
+                    ) {
+                        TtsVoicePolicy.choicesForLanguage(
+                            voices = state.availableTtsVoices,
+                            languageCode = state.voiceLanguage,
+                            selectedVoiceName = selectedVoiceName
+                        )
+                    }
+                    val selectedVoice = state.availableTtsVoices.firstOrNull {
+                        it.languageCode == state.voiceLanguage && it.name == selectedVoiceName
+                    }
+                    val selectedVoiceButtonLabel = when {
+                        !state.isTtsVoiceCatalogLoaded && selectedVoiceName.isNotBlank() ->
+                            ui.voiceChoiceLoading
+                        selectedVoice == null && selectedVoiceName.isBlank() -> ui.voiceChoiceSystemDefault
+                        selectedVoice == null -> ui.voiceStatusSelectedUnavailable
+                        selectedVoice.requiresNetworkConnection ->
+                            "${selectedVoice.displayName} · ${ui.voiceChoiceOnline}"
+                        else -> "${selectedVoice.displayName} · ${ui.voiceChoiceOnDevice}"
+                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = ui.voiceChoiceLabel,
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        )
+                        Text(
+                            text = ui.voiceChoiceSubtitle,
+                            color = Color(0xFF64748B),
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp
+                        )
+                        Box(modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(
+                                onClick = { voiceChoicesExpanded = true },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = selectedVoiceButtonLabel,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = voiceChoicesExpanded,
+                                onDismissRequest = { voiceChoicesExpanded = false },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(ui.voiceChoiceSystemDefault) },
+                                    onClick = {
+                                        AppPreferences.setSelectedTtsVoice(state.voiceLanguage, "")
+                                        voiceChoicesExpanded = false
+                                        if (state.isTrackingEnabled) onSettingsChanged()
+                                    }
+                                )
+                                voiceChoices.forEach { voice ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Column {
+                                                Text(
+                                                    text = voice.displayName,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = if (voice.requiresNetworkConnection) {
+                                                        ui.voiceChoiceOnline
+                                                    } else {
+                                                        ui.voiceChoiceOnDevice
+                                                    },
+                                                    color = Color(0xFF64748B),
+                                                    fontSize = 11.sp
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            AppPreferences.setSelectedTtsVoice(
+                                                state.voiceLanguage,
+                                                voice.name
+                                            )
+                                            voiceChoicesExpanded = false
+                                            if (state.isTrackingEnabled) onSettingsChanged()
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                        if (!state.isTtsVoiceCatalogLoaded) {
+                            Text(
+                                text = ui.voiceChoiceLoading,
+                                color = Color(0xFF64748B),
+                                fontSize = 12.sp
+                            )
+                        } else if (voiceChoices.isEmpty()) {
+                            Text(
+                                text = ui.voiceChoicesUnavailable,
+                                color = Color(0xFFB45309),
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
                     val (voiceStatusText, voiceStatusColor) = when (state.ttsVoiceStatus) {
                         TtsVoiceStatus.UNKNOWN -> ui.voiceStatusNotChecked to Color(0xFF64748B)
                         TtsVoiceStatus.AVAILABLE -> ui.voiceStatusAvailable to Color(0xFF15803D)
                         TtsVoiceStatus.FALLBACK_LANGUAGE -> ui.voiceStatusFallback to Color(0xFFB45309)
+                        TtsVoiceStatus.SELECTED_VOICE_UNAVAILABLE ->
+                            ui.voiceStatusSelectedUnavailable to Color(0xFFB45309)
+                        TtsVoiceStatus.NETWORK_REQUIRED ->
+                            ui.voiceStatusNetworkRequired to Color(0xFFB45309)
                         TtsVoiceStatus.UNAVAILABLE -> ui.voiceStatusUnavailable to Color(0xFFB91C1C)
                     }
                     Text(
@@ -874,18 +1036,24 @@ fun OorArivippuScreen(
                             ) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.Top
                                 ) {
                                     Text(
                                         text = item.title,
+                                        modifier = Modifier.weight(1f),
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
-                                        color = Color(0xFF0F766E)
+                                        color = Color(0xFF0F766E),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
                                     )
                                     Text(
                                         text = item.timestamp,
                                         fontSize = 11.sp,
-                                        color = Color(0xFF64748B)
+                                        color = Color(0xFF64748B),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
                                 Text(

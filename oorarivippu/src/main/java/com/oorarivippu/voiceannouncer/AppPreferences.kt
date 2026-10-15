@@ -19,6 +19,8 @@ enum class TtsVoiceStatus {
     UNKNOWN,
     AVAILABLE,
     FALLBACK_LANGUAGE,
+    SELECTED_VOICE_UNAVAILABLE,
+    NETWORK_REQUIRED,
     UNAVAILABLE
 }
 
@@ -41,13 +43,20 @@ data class AppStateSnapshot(
     val isVehicleMoving: Boolean = false,
     val locationUpdateIntervalSeconds: Int = 5,
     val ttsVoiceStatus: TtsVoiceStatus = TtsVoiceStatus.UNKNOWN,
+    val tamilTtsVoiceName: String = "",
+    val englishTtsVoiceName: String = "",
+    val availableTtsVoices: List<TtsVoiceOption> = emptyList(),
+    val isTtsVoiceCatalogLoaded: Boolean = false,
     val destinationName: String = "",
     val destinationLatitude: Double? = null,
     val destinationLongitude: Double? = null,
     val destinationAlertMask: Int = 0,
     val headsetWhereAmIEnabled: Boolean = false,
     val history: List<AnnouncementLogItem> = emptyList()
-)
+) {
+    fun selectedTtsVoiceNameFor(languageCode: String): String =
+        if (languageCode == "en") englishTtsVoiceName else tamilTtsVoiceName
+}
 
 object AppPreferences {
     private const val PREFS_NAME = "oor_arivippu_prefs"
@@ -55,6 +64,8 @@ object AppPreferences {
     private const val KEY_TRACKING_ENABLED = "is_tracking_enabled"
     private const val KEY_APP_LANG = "app_language"
     private const val KEY_VOICE_LANG = "voice_language"
+    private const val KEY_TAMIL_TTS_VOICE = "tamil_tts_voice"
+    private const val KEY_ENGLISH_TTS_VOICE = "english_tts_voice"
     private const val KEY_SAME_CITY_SUB_AREA = "announce_same_city_sub_area"
     private const val KEY_BIKE_CAR_MODE = "bike_car_detection_enabled"
     private const val KEY_ANNOUNCE_ON_START = "announce_immediately_on_start"
@@ -77,6 +88,8 @@ object AppPreferences {
             isTrackingEnabled = prefs.getBoolean(KEY_TRACKING_ENABLED, false),
             appLanguage = prefs.getString(KEY_APP_LANG, "ta") ?: "ta",
             voiceLanguage = prefs.getString(KEY_VOICE_LANG, "ta") ?: "ta",
+            tamilTtsVoiceName = prefs.getString(KEY_TAMIL_TTS_VOICE, "") ?: "",
+            englishTtsVoiceName = prefs.getString(KEY_ENGLISH_TTS_VOICE, "") ?: "",
             announceSameCitySubArea = prefs.getBoolean(KEY_SAME_CITY_SUB_AREA, true),
             bikeCarDetectionEnabled = prefs.getBoolean(KEY_BIKE_CAR_MODE, true),
             announceImmediatelyOnStart = prefs.getBoolean(KEY_ANNOUNCE_ON_START, true),
@@ -119,6 +132,25 @@ object AppPreferences {
 
     fun setTtsVoiceStatus(status: TtsVoiceStatus) {
         _state.value = _state.value.copy(ttsVoiceStatus = status)
+    }
+
+    fun setSelectedTtsVoice(languageCode: String, voiceName: String) {
+        val isEnglish = languageCode == "en"
+        val key = if (isEnglish) KEY_ENGLISH_TTS_VOICE else KEY_TAMIL_TTS_VOICE
+        val cleanName = voiceName.trim()
+        prefs.edit().putString(key, cleanName).apply()
+        _state.value = _state.value.copy(
+            englishTtsVoiceName = if (isEnglish) cleanName else _state.value.englishTtsVoiceName,
+            tamilTtsVoiceName = if (isEnglish) _state.value.tamilTtsVoiceName else cleanName,
+            ttsVoiceStatus = TtsVoiceStatus.UNKNOWN
+        )
+    }
+
+    fun setTtsVoiceCatalog(voices: List<TtsVoiceOption>, loaded: Boolean) {
+        _state.value = _state.value.copy(
+            availableTtsVoices = voices,
+            isTtsVoiceCatalogLoaded = loaded
+        )
     }
 
     fun setInternetAvailable(available: Boolean) {
