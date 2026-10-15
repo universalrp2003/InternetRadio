@@ -14,7 +14,7 @@ crate-type = ["cdylib", "rlib"]
 default = []
 spike-harness = []
 android-jni = ["dep:jni", "spike-harness"]
-# Host-only persistence experiment; intentionally not enabled for Android JNI builds.
+# Separate persistence experiment; excluded from the standard Android JNI/product feature set.
 storage-spike = ["spike-harness", "mls-rs/sqlcipher-bundled"]
 
 [dependencies]
