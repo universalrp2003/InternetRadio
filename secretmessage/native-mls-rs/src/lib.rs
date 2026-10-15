@@ -358,7 +358,6 @@ pub mod spike_harness {
         );
     }
 
-    #[path = "../lan_smoke.rs"]
     mod lan_smoke;
     pub use lan_smoke::{run_lan_mls_host, run_lan_mls_join};
 

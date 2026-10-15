@@ -16,7 +16,7 @@ if [[ "$LAN_TEST_ENABLED" != true && "$LAN_TEST_ENABLED" != false ]]; then
   echo "SECRET_MESSAGE_LAN_TEST_ENABLED must be true or false." >&2
   exit 2
 fi
-if [[ "$LAN_TEST_ENABLED" == true && ! -f "$NATIVE_DIR/src/lan_smoke.rs" ]]; then
+if [[ "$LAN_TEST_ENABLED" == true && ! -f "$NATIVE_DIR/src/spike_harness/lan_smoke.rs" ]]; then
   echo "The LAN test UI requires the mls-rs candidate native crate." >&2
   exit 2
 fi
