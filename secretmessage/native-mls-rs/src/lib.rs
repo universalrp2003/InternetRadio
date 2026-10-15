@@ -6,13 +6,16 @@
 #[cfg(feature = "spike-harness")]
 pub mod spike_harness {
     use mls_rs::client_builder::MlsConfig;
-    use mls_rs::error::MlsError;
+    use mls_rs::crypto::{CipherSuiteProvider, SignatureSecretKey};
+    use mls_rs::error::{IntoAnyError, MlsError};
     use mls_rs::group::ReceivedMessage;
-    use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
-    use mls_rs::identity::SigningIdentity;
+    use mls_rs::identity::basic::BasicCredential;
+    use mls_rs::identity::{CredentialType, SigningIdentity};
+    use mls_rs::time::MlsTime;
     use mls_rs::{
-        CipherSuite, CipherSuiteProvider, Client, CryptoProvider, ExtensionList, MlsMessage,
+        CipherSuite, Client, CryptoProvider, ExtensionList, IdentityProvider, MlsMessage,
     };
+    use mls_rs_core::identity::MemberValidationContext;
     use mls_rs_crypto_awslc::AwsLcCryptoProvider;
 
     const TEST_CIPHERSUITE: CipherSuite = CipherSuite::CURVE25519_AES128;
@@ -21,16 +24,106 @@ pub mod spike_harness {
     const BOB_TAMPER_TEXT: &[u8] = b"MLS-RS-SPIKE-BOB-TAMPER-PLAINTEXT-d0ae61";
     const BOB_TEXT: &[u8] = b"MLS-RS-SPIKE-BOB-TO-ALICE-TEST-PLAINTEXT-1cda73";
 
+    #[derive(Debug)]
+    struct PinnedIdentityError;
+
+    impl std::fmt::Display for PinnedIdentityError {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            formatter.write_str("MLS identity is not pinned by this test fixture")
+        }
+    }
+
+    impl std::error::Error for PinnedIdentityError {}
+
+    impl IntoAnyError for PinnedIdentityError {
+        fn into_dyn_error(
+            self,
+        ) -> Result<Box<dyn std::error::Error + Send + Sync>, Self> {
+            Ok(Box::new(self))
+        }
+    }
+
+    /// Test-only allowlist representing an out-of-band peer-key pin.
+    /// This is not a production identity or certificate system.
+    #[derive(Clone, Debug)]
+    struct PinnedIdentityProvider {
+        trusted_identities: Vec<SigningIdentity>,
+    }
+
+    impl PinnedIdentityProvider {
+        fn new(trusted_identities: Vec<SigningIdentity>) -> Self {
+            Self { trusted_identities }
+        }
+
+        fn validate(&self, identity: &SigningIdentity) -> Result<(), PinnedIdentityError> {
+            if self.trusted_identities.contains(identity) {
+                Ok(())
+            } else {
+                Err(PinnedIdentityError)
+            }
+        }
+    }
+
+    impl IdentityProvider for PinnedIdentityProvider {
+        type Error = PinnedIdentityError;
+
+        fn validate_member(
+            &self,
+            signing_identity: &SigningIdentity,
+            _timestamp: Option<MlsTime>,
+            _context: MemberValidationContext<'_>,
+        ) -> Result<(), Self::Error> {
+            self.validate(signing_identity)
+        }
+
+        fn validate_external_sender(
+            &self,
+            signing_identity: &SigningIdentity,
+            _timestamp: Option<MlsTime>,
+            _extensions: Option<&ExtensionList>,
+        ) -> Result<(), Self::Error> {
+            self.validate(signing_identity)
+        }
+
+        fn identity(
+            &self,
+            signing_identity: &SigningIdentity,
+            _extensions: &ExtensionList,
+        ) -> Result<Vec<u8>, Self::Error> {
+            self.validate(signing_identity)?;
+            signing_identity
+                .credential
+                .as_basic()
+                .map(|credential| credential.identifier().to_vec())
+                .ok_or(PinnedIdentityError)
+        }
+
+        fn valid_successor(
+            &self,
+            predecessor: &SigningIdentity,
+            successor: &SigningIdentity,
+            _extensions: &ExtensionList,
+        ) -> Result<bool, Self::Error> {
+            self.validate(predecessor)?;
+            self.validate(successor)?;
+            Ok(predecessor == successor)
+        }
+
+        fn supported_types(&self) -> Vec<CredentialType> {
+            vec![BasicCredential::credential_type()]
+        }
+    }
+
     fn test_crypto_provider() -> AwsLcCryptoProvider {
         // Keep the feasibility harness on the RFC 9420 mandatory-to-implement
         // X25519/AES-128-GCM/SHA-256/Ed25519 cipher suite only.
         AwsLcCryptoProvider::with_enabled_cipher_suites(vec![TEST_CIPHERSUITE])
     }
 
-    fn test_client(
-        crypto_provider: AwsLcCryptoProvider,
+    fn test_signing_material(
+        crypto_provider: &AwsLcCryptoProvider,
         label: &str,
-    ) -> Result<Client<impl MlsConfig>, MlsError> {
+    ) -> (SigningIdentity, SignatureSecretKey) {
         let cipher_suite = crypto_provider
             .cipher_suite_provider(TEST_CIPHERSUITE)
             .expect("AWS-LC provider supports the selected test cipher suite");
@@ -38,12 +131,22 @@ pub mod spike_harness {
             .signature_key_generate()
             .expect("generate a test-only signature key pair");
 
-        // BasicCredential is demonstration scaffolding, not peer authentication.
+        // BasicCredential is only a label; the fixture pins the full signing identity.
         let credential = BasicCredential::new(label.as_bytes().to_vec());
-        let signing_identity = SigningIdentity::new(credential.into_credential(), public_key);
+        (
+            SigningIdentity::new(credential.into_credential(), public_key),
+            secret_key,
+        )
+    }
 
+    fn test_client(
+        crypto_provider: AwsLcCryptoProvider,
+        signing_identity: SigningIdentity,
+        secret_key: SignatureSecretKey,
+        identity_provider: PinnedIdentityProvider,
+    ) -> Result<Client<impl MlsConfig>, MlsError> {
         Ok(Client::builder()
-            .identity_provider(BasicIdentityProvider)
+            .identity_provider(identity_provider)
             .crypto_provider(crypto_provider)
             .signing_identity(signing_identity, secret_key, TEST_CIPHERSUITE)
             .build())
@@ -64,14 +167,62 @@ pub mod spike_harness {
     /// boundary. It creates no identity for a real person, uses no network, and
     /// writes no persistent state.
     pub fn run_two_member_memory_smoke_test() {
-        let alice = test_client(test_crypto_provider(), "test-alice")
-            .expect("build Alice's test-only MLS client");
-        let bob = test_client(test_crypto_provider(), "test-bob")
-            .expect("build Bob's test-only MLS client");
+        let alice_crypto_provider = test_crypto_provider();
+        let bob_crypto_provider = test_crypto_provider();
+        let (alice_identity, alice_secret_key) =
+            test_signing_material(&alice_crypto_provider, "test-alice");
+        let (bob_identity, bob_secret_key) =
+            test_signing_material(&bob_crypto_provider, "test-bob");
+        let trusted_identities = vec![alice_identity.clone(), bob_identity.clone()];
+
+        let alice = test_client(
+            alice_crypto_provider,
+            alice_identity,
+            alice_secret_key,
+            PinnedIdentityProvider::new(trusted_identities.clone()),
+        )
+        .expect("build Alice's pinned test-only MLS client");
+        let bob = test_client(
+            bob_crypto_provider,
+            bob_identity,
+            bob_secret_key,
+            PinnedIdentityProvider::new(trusted_identities),
+        )
+        .expect("build Bob's pinned test-only MLS client");
+
+        let attacker_crypto_provider = test_crypto_provider();
+        let (attacker_identity, attacker_secret_key) =
+            test_signing_material(&attacker_crypto_provider, "test-bob");
+        let attacker = test_client(
+            attacker_crypto_provider,
+            attacker_identity.clone(),
+            attacker_secret_key,
+            PinnedIdentityProvider::new(vec![attacker_identity]),
+        )
+        .expect("build the forged-peer MLS client");
 
         let mut alice_group = alice
             .create_group(ExtensionList::default(), Default::default(), None)
             .expect("create Alice's in-memory MLS group");
+
+        // A different signing key reusing Bob's BasicCredential label must fail
+        // Alice's exact SigningIdentity pin before the legitimate Bob is added.
+        let forged_key_package = attacker
+            .generate_key_package_message(Default::default(), Default::default(), None)
+            .expect("generate the forged peer's test KeyPackage");
+        let forged_key_package_wire = forged_key_package
+            .to_bytes()
+            .expect("serialize the forged peer's KeyPackage");
+        let forged_key_package_in = MlsMessage::from_bytes(&forged_key_package_wire)
+            .expect("deserialize the forged peer's KeyPackage");
+        let forged_add = alice_group
+            .commit_builder()
+            .add_member(forged_key_package_in)
+            .expect("stage the forged KeyPackage for rejection testing");
+        assert!(
+            forged_add.build().is_err(),
+            "Alice must reject Bob's credential label with an unpinned signing key"
+        );
 
         // Bob's public KeyPackage crosses the simulated transport as serialized bytes.
         let bob_key_package = bob
