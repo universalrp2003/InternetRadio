@@ -10,7 +10,16 @@ NDK_VERSION="${ANDROID_NDK_VERSION:-27.2.12479018}"
 NDK_ROOT="${ANDROID_NDK_HOME:-${SDK_ROOT:+$SDK_ROOT/ndk/$NDK_VERSION}}"
 API_LEVEL="${ANDROID_API_LEVEL:-26}"
 CRYPTO_LABEL="${SECRET_MESSAGE_CRYPTO_LABEL:-OpenMLS}"
+LAN_TEST_ENABLED="${SECRET_MESSAGE_LAN_TEST_ENABLED:-false}"
 BINDGEN_USER_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:-}"
+if [[ "$LAN_TEST_ENABLED" != true && "$LAN_TEST_ENABLED" != false ]]; then
+  echo "SECRET_MESSAGE_LAN_TEST_ENABLED must be true or false." >&2
+  exit 2
+fi
+if [[ "$LAN_TEST_ENABLED" == true && ! -f "$NATIVE_DIR/src/lan_smoke.rs" ]]; then
+  echo "The LAN test UI requires the mls-rs candidate native crate." >&2
+  exit 2
+fi
 
 if [[ -z "$SDK_ROOT" ]]; then
   echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2
@@ -74,12 +83,16 @@ build_target armv7-linux-androideabi "armv7a-linux-androideabi${API_LEVEL}-clang
 build_target i686-linux-android "i686-linux-android${API_LEVEL}-clang" x86
 build_target x86_64-linux-android "x86_64-linux-android${API_LEVEL}-clang" x86_64
 
-if grep -q 'android.permission.INTERNET' "$APP_DIR/src/main/AndroidManifest.xml"; then
-  echo "The test-only smoke app must not request Internet permission." >&2
+if ! grep -q 'android.permission.INTERNET' "$APP_DIR/src/main/AndroidManifest.xml"; then
+  echo "The same-Wi-Fi MLS LAN test needs INTERNET permission for direct TCP sockets." >&2
   exit 1
 fi
 
-"$REPO_ROOT/gradlew" -p "$SCRIPT_DIR" :app:assembleDebug --no-daemon
+gradle_args=()
+if [[ "$LAN_TEST_ENABLED" == true ]]; then
+  gradle_args+=("-PlanTestEnabled=true")
+fi
+"$REPO_ROOT/gradlew" -p "$SCRIPT_DIR" "${gradle_args[@]}" :app:assembleDebug --no-daemon
 APK="$APP_DIR/build/outputs/apk/debug/app-debug.apk"
 if [[ ! -s "$APK" ]]; then
   echo "Standalone Android smoke APK was not produced: $APK" >&2
@@ -111,11 +124,11 @@ if [[ -z "$AAPT" || ! -x "$AAPT" ]]; then
   exit 1
 fi
 permission_dump="$("$AAPT" dump permissions "$APK")"
-if grep -q 'android.permission.INTERNET' <<< "$permission_dump"; then
-  echo "Merged standalone smoke APK unexpectedly requests Internet permission:" >&2
+if ! grep -q 'android.permission.INTERNET' <<< "$permission_dump"; then
+  echo "Merged LAN smoke APK is missing INTERNET permission for local TCP sockets:" >&2
   printf '%s\n' "$permission_dump" >&2
   exit 1
 fi
 
 echo "Standalone test-only APK: $APK"
-echo "Verified: all four native ABIs packaged; Internet permission absent."
+echo "Verified: all four native ABIs packaged; INTERNET permission is present for the LAN-only test path."

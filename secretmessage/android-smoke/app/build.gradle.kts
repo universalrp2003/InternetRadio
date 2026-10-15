@@ -2,6 +2,8 @@ plugins {
     id("com.android.application") version "8.13.0"
 }
 
+val lanTestEnabled = providers.gradleProperty("lanTestEnabled").orNull == "true"
+
 android {
     namespace = "com.rpideas.secretmessage.smoke"
     compileSdk = 36
@@ -10,8 +12,13 @@ android {
         applicationId = "com.rpideas.secretmessage.smoke"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0-test"
+        versionCode = 2
+        versionName = "0.2.0-lan-test"
+        buildConfigField("boolean", "LAN_TEST_ENABLED", lanTestEnabled.toString())
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     compileOptions {
