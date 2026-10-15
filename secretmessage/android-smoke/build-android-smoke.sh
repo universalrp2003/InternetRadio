@@ -44,6 +44,8 @@ build_target() {
   target_env="$(printf '%s' "$target" | tr '[:lower:]-' '[:upper:]_')"
   target_env_lower="${target_env,,}"
   linker="$TOOLCHAIN/$linker_name"
+  bindgen_target="${linker_name%-clang}"
+  ndk_sysroot="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
   output="$NATIVE_DIR/target/$target/release/libsecretmessage_mls_spike.so"
   if [[ ! -x "$linker" ]]; then
     echo "Required Android linker not found: $linker" >&2
@@ -55,6 +57,8 @@ build_target() {
   # cc-rs uses these target-specific variables rather than Cargo's linker setting.
   export "CC_${target_env_lower}=$linker"
   export "AR_${target_env_lower}=$TOOLCHAIN/llvm-ar"
+  bindgen_extra="${BINDGEN_EXTRA_CLANG_ARGS:-}"
+  export "BINDGEN_EXTRA_CLANG_ARGS=--target=$bindgen_target --sysroot=$ndk_sysroot${bindgen_extra:+ $bindgen_extra}"
   echo "Building JNI-enabled $CRYPTO_LABEL smoke library for $target ($abi, Android API $API_LEVEL)"
   (cd "$NATIVE_DIR" && cargo build --locked --release --features android-jni --target "$target")
   if [[ ! -s "$output" ]]; then
