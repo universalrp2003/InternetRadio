@@ -59,7 +59,9 @@ pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_runNati
 }
 
 #[unsafe(no_mangle)]
-pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_runNativeLanJoin<'caller>(
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_runNativeLanJoin<
+    'caller,
+>(
     mut unowned_env: EnvUnowned<'caller>,
     _this: JObject<'caller>,
     host_ip: JString<'caller>,

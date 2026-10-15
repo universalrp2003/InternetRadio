@@ -78,8 +78,8 @@ fn send_frame(stream: &mut TcpStream, bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > MAX_FRAME_BYTES {
         return Err("Refusing an oversized test frame.".into());
     }
-    let length = u32::try_from(bytes.len())
-        .map_err(|_| "Test frame length overflowed.".to_owned())?;
+    let length =
+        u32::try_from(bytes.len()).map_err(|_| "Test frame length overflowed.".to_owned())?;
     stream
         .write_all(&length.to_be_bytes())
         .and_then(|_| stream.write_all(bytes))
@@ -113,9 +113,7 @@ fn verify_application_message(
     context: &str,
 ) -> Result<(), String> {
     match message {
-        ReceivedMessage::ApplicationMessage(application)
-            if application.data() == expected =>
-        {
+        ReceivedMessage::ApplicationMessage(application) if application.data() == expected => {
             Ok(())
         }
         ReceivedMessage::ApplicationMessage(_) => {
@@ -140,7 +138,9 @@ fn encrypt_test_message<C: MlsConfig>(
         .windows(plaintext.len())
         .any(|window| window == plaintext)
     {
-        return Err(format!("The fixed plaintext marker appeared in {context} wire bytes."));
+        return Err(format!(
+            "The fixed plaintext marker appeared in {context} wire bytes."
+        ));
     }
     Ok(wire)
 }
@@ -231,11 +231,8 @@ fn guest_session(mut stream: TcpStream, token: &str) -> Result<String, String> {
         .join_group(None, &welcome, None)
         .map_err(|error| format!("Could not join the ephemeral MLS test group: {error}"))?;
 
-    let guest_wire = encrypt_test_message(
-        &mut guest_group,
-        GUEST_TO_HOST,
-        "guest-to-host message",
-    )?;
+    let guest_wire =
+        encrypt_test_message(&mut guest_group, GUEST_TO_HOST, "guest-to-host message")?;
     send_frame(&mut stream, &guest_wire)?;
 
     let host_wire = receive_frame(&mut stream)?;
@@ -286,7 +283,7 @@ pub fn run_lan_mls_join(host_ip: &str, port: u16, token: &str) -> Result<String,
 
 #[cfg(test)]
 mod tests {
-    use super::{host_session, guest_session};
+    use super::{guest_session, host_session};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::thread;
     use std::time::Duration;
