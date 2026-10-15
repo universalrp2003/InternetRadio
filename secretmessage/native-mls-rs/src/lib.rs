@@ -477,7 +477,9 @@ pub mod spike_harness {
                 .generate_key_package_message(Default::default(), Default::default(), None)
                 .expect("generate Bob's test KeyPackage");
             let bob_key_package = MlsMessage::from_bytes(
-                &bob_key_package.to_bytes().expect("serialize Bob's KeyPackage"),
+                &bob_key_package
+                    .to_bytes()
+                    .expect("serialize Bob's KeyPackage"),
             )
             .expect("deserialize Bob's KeyPackage");
             let add_member = alice_group
@@ -487,6 +489,9 @@ pub mod spike_harness {
             let commit = add_member.build().expect("build the MLS commit");
             alice_group
                 .apply_pending_commit()
+                .expect("apply Alice's post-commit group state");
+            alice_group
+                .write_to_storage()
                 .expect("persist Alice's post-commit group state");
             let welcome = MlsMessage::from_bytes(
                 &commit.welcome_messages[0]
@@ -501,6 +506,9 @@ pub mod spike_harness {
             let before_restart = alice_group
                 .encrypt_application_message(PERSISTENCE_SENTINEL, Vec::new())
                 .expect("encrypt a marker before closing Alice's client");
+            alice_group
+                .write_to_storage()
+                .expect("persist Alice's post-send ratchet state");
             let before_restart_wire = before_restart
                 .to_bytes()
                 .expect("serialize the pre-restart MLS message");
