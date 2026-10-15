@@ -15,6 +15,13 @@ data class AnnouncementLogItem(
     val spokenText: String
 )
 
+enum class TtsVoiceStatus {
+    UNKNOWN,
+    AVAILABLE,
+    FALLBACK_LANGUAGE,
+    UNAVAILABLE
+}
+
 data class AppStateSnapshot(
     val isTrackingEnabled: Boolean = false,
     val appLanguage: String = "ta",        // Default Tamil ("ta")
@@ -28,6 +35,7 @@ data class AppStateSnapshot(
     val currentSubArea: String = "",
     val currentSpeedKmh: Float = 0f,
     val isVehicleMoving: Boolean = false,
+    val ttsVoiceStatus: TtsVoiceStatus = TtsVoiceStatus.UNKNOWN,
     val history: List<AnnouncementLogItem> = emptyList()
 )
 
@@ -76,7 +84,14 @@ object AppPreferences {
 
     fun setVoiceLanguage(lang: String) {
         prefs.edit().putString(KEY_VOICE_LANG, lang).apply()
-        _state.value = _state.value.copy(voiceLanguage = lang)
+        _state.value = _state.value.copy(
+            voiceLanguage = lang,
+            ttsVoiceStatus = TtsVoiceStatus.UNKNOWN
+        )
+    }
+
+    fun setTtsVoiceStatus(status: TtsVoiceStatus) {
+        _state.value = _state.value.copy(ttsVoiceStatus = status)
     }
 
     fun setAnnounceSameCitySubArea(enabled: Boolean) {

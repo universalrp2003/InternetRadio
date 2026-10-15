@@ -5,6 +5,8 @@
          Android/Play-services reverse geocoding. It does not collect or upload logs. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Requested in a separate, optional step only after foreground permission is granted. -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Tracking is started by the user from the visible activity and continues

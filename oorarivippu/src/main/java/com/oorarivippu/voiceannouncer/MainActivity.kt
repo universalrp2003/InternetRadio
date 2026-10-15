@@ -3,8 +3,10 @@ package com.oorarivippu.voiceannouncer
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -34,6 +36,7 @@ import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,6 +55,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +71,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 
 private val AppColorScheme = lightColorScheme(
     primary = Color(0xFF0F766E),
@@ -151,14 +158,88 @@ fun OorArivippuScreen(
     var hasPermissions by remember {
         mutableStateOf(checkRequiredPermissions(context))
     }
+    var showBackgroundPermissionDialog by remember { mutableStateOf(false) }
+    var backgroundSettingsPending by remember { mutableStateOf(false) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    fun beginTrackingAfterForegroundPermission() {
+        hasPermissions = checkRequiredPermissions(context)
+        if (!hasPermissions) return
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
+            !hasBackgroundLocationPermission(context)
+        ) {
+            showBackgroundPermissionDialog = true
+        } else {
+            onStartService()
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
-    ) { _ ->
+    ) {
+        beginTrackingAfterForegroundPermission()
+    }
+    val backgroundPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
         hasPermissions = checkRequiredPermissions(context)
-        if (hasPermissions) {
-            onStartService()
+        if (hasPermissions) onStartService()
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                hasPermissions = checkRequiredPermissions(context)
+                if (backgroundSettingsPending) {
+                    backgroundSettingsPending = false
+                    if (hasPermissions) onStartService()
+                }
+            }
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    if (showBackgroundPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackgroundPermissionDialog = false },
+            title = { Text(ui.backgroundLocationTitle) },
+            text = { Text(ui.backgroundLocationRationale) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showBackgroundPermissionDialog = false
+                        if (Build.VERSION.SDK_INT == Build.VERSION_CODES.Q) {
+                            backgroundPermissionLauncher.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                        } else {
+                            backgroundSettingsPending = true
+                            val settingsIntent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.fromParts("package", context.packageName, null)
+                            }
+                            try {
+                                context.startActivity(settingsIntent)
+                            } catch (_: Exception) {
+                                backgroundSettingsPending = false
+                                if (checkRequiredPermissions(context)) onStartService()
+                            }
+                        }
+                    }
+                ) {
+                    Text(ui.allowBackgroundLocationButton)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showBackgroundPermissionDialog = false
+                        if (checkRequiredPermissions(context)) onStartService()
+                    }
+                ) {
+                    Text(ui.continueWithoutBackgroundButton)
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -241,6 +322,18 @@ fun OorArivippuScreen(
                         englishLabel = ui.englishName,
                         onSelect = { AppPreferences.setVoiceLanguage(it) }
                     )
+                    val (voiceStatusText, voiceStatusColor) = when (state.ttsVoiceStatus) {
+                        TtsVoiceStatus.UNKNOWN -> ui.voiceStatusNotChecked to Color(0xFF64748B)
+                        TtsVoiceStatus.AVAILABLE -> ui.voiceStatusAvailable to Color(0xFF15803D)
+                        TtsVoiceStatus.FALLBACK_LANGUAGE -> ui.voiceStatusFallback to Color(0xFFB45309)
+                        TtsVoiceStatus.UNAVAILABLE -> ui.voiceStatusUnavailable to Color(0xFFB91C1C)
+                    }
+                    Text(
+                        text = voiceStatusText,
+                        color = voiceStatusColor,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
                 }
             }
 
@@ -322,13 +415,10 @@ fun OorArivippuScreen(
                         onClick = {
                             if (state.isTrackingEnabled) {
                                 onStopService()
+                            } else if (checkRequiredPermissions(context)) {
+                                beginTrackingAfterForegroundPermission()
                             } else {
-                                if (checkRequiredPermissions(context)) {
-                                    hasPermissions = true
-                                    onStartService()
-                                } else {
-                                    permissionLauncher.launch(buildPermissionArray())
-                                }
+                                permissionLauncher.launch(buildPermissionArray())
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
@@ -686,3 +776,10 @@ private fun checkRequiredPermissions(context: android.content.Context): Boolean 
         ) == PackageManager.PERMISSION_GRANTED
     return locationGranted && notificationsGranted
 }
+
+private fun hasBackgroundLocationPermission(context: android.content.Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.ACCESS_BACKGROUND_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED

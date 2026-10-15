@@ -78,7 +78,12 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     private var locationManager: LocationManager? = null
     private var tts: TextToSpeech? = null
     private var isTtsReady = false
-    private var pendingSpeechQueue: String? = null
+    private data class PendingSpeech(
+        val text: String,
+        val alternateLanguageText: String,
+        val requestedLanguage: String
+    )
+    private var pendingSpeechQueue: PendingSpeech? = null
 
     private val travelDetector = TravelStateDetector()
     private var gpsReceiver: GpsStateReceiver? = null
@@ -137,7 +142,12 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     voiceLang = snap.voiceLanguage,
                     currentCity = snap.currentCityOrVillage
                 )
-                speakAnnouncement(testSentence, snap.voiceLanguage)
+                val alternateLanguage = if (snap.voiceLanguage == "en") "ta" else "en"
+                val fallbackSentence = BilingualStrings.buildTestSpeech(
+                    voiceLang = alternateLanguage,
+                    currentCity = snap.currentCityOrVillage
+                )
+                speakAnnouncement(testSentence, snap.voiceLanguage, fallbackSentence)
                 // A test-voice service should not be resurrected as a tracking service. Keep
                 // sticky behavior only when an already-active tracking session needs it.
                 return if (snap.isTrackingEnabled) START_STICKY else START_NOT_STICKY
@@ -334,6 +344,14 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                         subArea = subArea,
                         includeSubArea = current.announceSameCitySubArea
                     )
+                    val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
+                    val alternateSentence = BilingualStrings.buildSpokenAnnouncement(
+                        voiceLang = alternateLanguage,
+                        isNewCityOrVillage = true,
+                        cityOrVillage = cityOrVillage,
+                        subArea = subArea,
+                        includeSubArea = current.announceSameCitySubArea
+                    )
                     lastAnnouncedCity = cityOrVillage
                     lastAnnouncedSubArea = subArea
                     hasMadeInitialStartAnnouncement = true
@@ -343,10 +361,18 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                         !subArea.equals(cityOrVillage, ignoreCase = true)
                     ) "$cityOrVillage ($subArea)" else cityOrVillage
                     AppPreferences.appendAnnouncementLog(displayTitle, sentence)
-                    speakAnnouncement(sentence, current.voiceLanguage)
+                    speakAnnouncement(sentence, current.voiceLanguage, alternateSentence)
                 } else if (isNewSubAreaInSameCity && current.announceSameCitySubArea) {
                     val sentence = BilingualStrings.buildSpokenAnnouncement(
                         voiceLang = current.voiceLanguage,
+                        isNewCityOrVillage = false,
+                        cityOrVillage = cityOrVillage,
+                        subArea = subArea,
+                        includeSubArea = true
+                    )
+                    val alternateLanguage = if (current.voiceLanguage == "en") "ta" else "en"
+                    val alternateSentence = BilingualStrings.buildSpokenAnnouncement(
+                        voiceLang = alternateLanguage,
                         isNewCityOrVillage = false,
                         cityOrVillage = cityOrVillage,
                         subArea = subArea,
@@ -356,7 +382,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     hasMadeInitialStartAnnouncement = true
                     travelDetector.markPlaceAnnounced(location)
                     AppPreferences.appendAnnouncementLog("$subArea, $cityOrVillage", sentence)
-                    speakAnnouncement(sentence, current.voiceLanguage)
+                    speakAnnouncement(sentence, current.voiceLanguage, alternateSentence)
                 }
             } finally {
                 if (requestToken == geocodeRequestToken) reverseGeocodeJob = null
@@ -451,38 +477,100 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
             configureTtsLanguage(AppPreferences.state.value.voiceLanguage)
             pendingSpeechQueue?.let { queued ->
                 pendingSpeechQueue = null
-                speakAnnouncement(queued, AppPreferences.state.value.voiceLanguage)
+                speakAnnouncement(
+                    text = queued.text,
+                    voiceLang = queued.requestedLanguage,
+                    alternateLanguageText = queued.alternateLanguageText
+                )
             }
-        } else if (!AppPreferences.state.value.isTrackingEnabled) {
-            // A one-shot test-voice service has nothing else to do if the TTS engine failed.
-            stopSelf()
+        } else {
+            isTtsReady = false
+            pendingSpeechQueue = null
+            AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
+            if (!AppPreferences.state.value.isTrackingEnabled) {
+                // A one-shot test-voice service has nothing else to do if the TTS engine failed.
+                stopSelf()
+            }
         }
     }
 
-    private fun configureTtsLanguage(voiceLang: String) {
-        val engine = tts ?: return
-        val targetLocale = if (voiceLang == "en") Locale("en", "IN") else Locale("ta", "IN")
-        val result = engine.setLanguage(targetLocale)
-        if (result == TextToSpeech.LANG_MISSING_DATA || result == TextToSpeech.LANG_NOT_SUPPORTED) {
-            // Fallback to generic Tamil or English if regional IN variant is missing
-            val fallback = if (voiceLang == "en") Locale.ENGLISH else Locale("ta")
-            engine.setLanguage(fallback)
+    /**
+     * Checks regional and generic voices before use. If the selected language is missing,
+     * try the other supported app language and tell the UI that a fallback is active.
+     */
+    private fun configureTtsLanguage(voiceLang: String): String? {
+        val engine = tts
+        if (engine == null || !isTtsReady) {
+            AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
+            return null
         }
-        engine.setSpeechRate(0.95f)
+
+        val requestedLanguage = if (voiceLang == "en") "en" else "ta"
+        val candidates = if (requestedLanguage == "en") {
+            listOf(
+                Locale("en", "IN") to "en",
+                Locale.ENGLISH to "en",
+                Locale("ta", "IN") to "ta",
+                Locale("ta") to "ta"
+            )
+        } else {
+            listOf(
+                Locale("ta", "IN") to "ta",
+                Locale("ta") to "ta",
+                Locale("en", "IN") to "en",
+                Locale.ENGLISH to "en"
+            )
+        }
+
+        for ((locale, languageCode) in candidates) {
+            try {
+                if (engine.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE) continue
+                if (engine.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) continue
+                engine.setSpeechRate(0.95f)
+                AppPreferences.setTtsVoiceStatus(
+                    if (languageCode == requestedLanguage) {
+                        TtsVoiceStatus.AVAILABLE
+                    } else {
+                        TtsVoiceStatus.FALLBACK_LANGUAGE
+                    }
+                )
+                return languageCode
+            } catch (_: Exception) {
+                // Continue to the next installed locale rather than failing the service.
+            }
+        }
+
+        AppPreferences.setTtsVoiceStatus(TtsVoiceStatus.UNAVAILABLE)
+        return null
     }
 
-    private fun speakAnnouncement(text: String, voiceLang: String) {
-        // Double check GPS is still enabled before speaking
+    private fun speakAnnouncement(
+        text: String,
+        voiceLang: String,
+        alternateLanguageText: String
+    ) {
+        // Double check GPS is still enabled before speaking.
         if (!GpsStateReceiver.isGpsProviderEnabled(this) && AppPreferences.state.value.isTrackingEnabled) {
             return
         }
+        val requestedLanguage = if (voiceLang == "en") "en" else "ta"
         val engine = tts
         if (!isTtsReady || engine == null) {
-            pendingSpeechQueue = text
+            pendingSpeechQueue = PendingSpeech(
+                text = text,
+                alternateLanguageText = alternateLanguageText,
+                requestedLanguage = requestedLanguage
+            )
             return
         }
-        configureTtsLanguage(voiceLang)
-        requestAudioFocusAndSpeak(engine, text)
+
+        val actualLanguage = configureTtsLanguage(requestedLanguage)
+        if (actualLanguage == null) {
+            if (!AppPreferences.state.value.isTrackingEnabled) stopSelf()
+            return
+        }
+        val localizedText = if (actualLanguage == requestedLanguage) text else alternateLanguageText
+        requestAudioFocusAndSpeak(engine, localizedText)
     }
 
     private fun requestAudioFocusAndSpeak(engine: TextToSpeech, text: String) {
