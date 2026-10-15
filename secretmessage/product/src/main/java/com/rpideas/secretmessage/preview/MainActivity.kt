@@ -445,8 +445,7 @@ private fun PreviewQwertyKeyboard(
             ),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
         ) {
-            Icon(Icons.Outlined.Send, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text("Send local preview", modifier = Modifier.padding(start = 7.dp), fontWeight = FontWeight.SemiBold)
+            Text("Send local preview", fontWeight = FontWeight.SemiBold)
         }
     }
 }
