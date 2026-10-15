@@ -6,14 +6,15 @@
 #[cfg(feature = "spike-harness")]
 pub mod spike_harness {
     use mls_rs::client_builder::MlsConfig;
-    use mls_rs::crypto::{CipherSuiteProvider, SignatureSecretKey};
+    use mls_rs::crypto::SignatureSecretKey;
     use mls_rs::error::{IntoAnyError, MlsError};
     use mls_rs::group::ReceivedMessage;
     use mls_rs::identity::basic::BasicCredential;
     use mls_rs::identity::{CredentialType, SigningIdentity};
     use mls_rs::time::MlsTime;
     use mls_rs::{
-        CipherSuite, Client, CryptoProvider, ExtensionList, IdentityProvider, MlsMessage,
+        CipherSuite, CipherSuiteProvider, Client, CryptoProvider, ExtensionList, IdentityProvider,
+        MlsMessage,
     };
     use mls_rs_core::identity::MemberValidationContext;
     use mls_rs_crypto_awslc::AwsLcCryptoProvider;
@@ -36,9 +37,7 @@ pub mod spike_harness {
     impl std::error::Error for PinnedIdentityError {}
 
     impl IntoAnyError for PinnedIdentityError {
-        fn into_dyn_error(
-            self,
-        ) -> Result<Box<dyn std::error::Error + Send + Sync>, Self> {
+        fn into_dyn_error(self) -> Result<Box<dyn std::error::Error + Send + Sync>, Self> {
             Ok(Box::new(self))
         }
     }
