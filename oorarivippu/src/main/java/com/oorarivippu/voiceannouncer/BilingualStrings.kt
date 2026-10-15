@@ -65,8 +65,7 @@ object BilingualStrings {
         travelModeDetected = "பைக் / வாகன பயணம் கண்டறியப்பட்டது",
         travelModeStationary = "ஒரே இடத்தில் உள்ளீர்கள் (அறிவிப்பு அமைதி)",
         sameCityOptionTitle = "ஒரே ஊருக்குள் அடுத்த பகுதி அறிவிப்பு",
-        sameCityOptionSubtitle = "ஆன் (ON): ஒரே நகரத்திற்குள் புதிய பகுதி வந்தாலும் அறிவிக்கும்.
-ஆஃப் (OFF): அடுத்த ஊர் அல்லது கிராமத்திற்கு மாறினால் மட்டுமே அறிவிக்கும்.",
+        sameCityOptionSubtitle = "ஆன் (ON): ஒரே நகரத்திற்குள் புதிய பகுதி வந்தாலும் அறிவிக்கும்.\nஆஃப் (OFF): அடுத்த ஊர் அல்லது கிராமத்திற்கு மாறினால் மட்டுமே அறிவிக்கும்.",
         bikeCarModeTitle = "பைக் / கார் பயணத்தை கண்டறிந்து அறிவி",
         bikeCarModeSubtitle = "பைக் அல்லது காரில் பயணிக்கும் போது மட்டும் (அல்லது குறிப்பிட்ட தூரம் கடந்த பின்) அறிவிக்கும். ஒரே இடத்தில் இருக்கும்போது அறிவிக்காது.",
         announceOnStartTitle = "ஆன் செய்தவுடன் தற்போதைய ஊரை அறிவி",
@@ -104,8 +103,7 @@ object BilingualStrings {
         travelModeDetected = "Bike / Vehicle Travel Active",
         travelModeStationary = "Stationary / Routine Area (Muted)",
         sameCityOptionTitle = "Same-City Next Place Announcement",
-        sameCityOptionSubtitle = "ON: Announces new neighborhoods/areas within the same city.
-OFF: Announces ONLY when entering a new city, town, or village.",
+        sameCityOptionSubtitle = "ON: Announces new neighborhoods/areas within the same city.\nOFF: Announces ONLY when entering a new city, town, or village.",
         bikeCarModeTitle = "Bike / Car Travel Detection",
         bikeCarModeSubtitle = "Starts announcing only when traveling by bike/car or moving past the distance threshold. Prevents announcements when staying at the same place.",
         announceOnStartTitle = "Announce Current Place When Turned ON",
