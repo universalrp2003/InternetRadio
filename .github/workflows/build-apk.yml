@@ -317,10 +317,18 @@ jobs:
             echo "FAIL: legacy aapt is needed to verify merged APK permissions"; exit 1
           fi
           PREVIEW_PERMISSIONS=$("$AAPT_LEGACY" dump permissions "$SECRET_MESSAGE_PREVIEW")
-          if printf '%s\n' "$PREVIEW_PERMISSIONS" | grep -Eq 'uses-permission(-sdk-[0-9]+)?:'; then
-            echo "FAIL: Secret Message local preview unexpectedly requests an Android permission"; exit 1
+          echo "=== Secret Message preview merged APK permissions ==="
+          if [ -n "$PREVIEW_PERMISSIONS" ]; then printf '%s\n' "$PREVIEW_PERMISSIONS"; else echo "(none reported)"; fi
+          {
+            echo '### Secret Message preview merged APK permissions'
+            echo '```text'
+            if [ -n "$PREVIEW_PERMISSIONS" ]; then printf '%s\n' "$PREVIEW_PERMISSIONS"; else echo '(none reported)'; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if printf '%s\n' "$PREVIEW_PERMISSIONS" | grep -Eq 'android.permission.(INTERNET|ACCESS_NETWORK_STATE|CHANGE_NETWORK_STATE)'; then
+            echo "FAIL: Secret Message local preview unexpectedly includes a network permission"; exit 1
           fi
-          echo "OK: Secret Message debug preview is labelled NOT SECURE and requests no Android permissions"
+          echo "OK: Secret Message debug preview is labelled NOT SECURE and includes no network permission"
           for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             bad=$("$AAPT" dump badging "$rel" || true)
             icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)

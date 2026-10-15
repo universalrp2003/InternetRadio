@@ -44,7 +44,7 @@ The project uses JDK 17, Gradle 8.14.3, the Android SDK and NDK. Open the reposi
   :equalizer:assembleRelease :vocalremover:assembleRelease
 ```
 
-For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions performs the full build, localization/source checks, CleanSweep regression suite, package/version/signature verification and release-asset digest checks. It is configured to compile/test the local-only preview but excludes it from every release and bundle task; this branch change still needs hosted build confirmation. The workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio is distributed as a standalone APK.
+For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions performs the full build, localization/source checks, CleanSweep regression suite, package/version/signature verification and release-asset digest checks. It is configured to compile/test the local-only preview but excludes it from every release and bundle task. Hosted compilation and unit tests passed; the merged-APK permission check is being narrowed and rerun. The workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio is distributed as a standalone APK.
 
 ## Project scope and repository URL
 
