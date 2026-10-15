@@ -16,7 +16,7 @@ Oor Arivippu is a GPS place and destination announcer. It is a fifth active RP I
 
 Both public releases carry `Oor-Arivippu-v1.0.0.apk`, 12,179,013 bytes, SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`. GitHub Actions [run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks; it verified the two public assets have identical digest and size and canonical URLs.
 
-The owner reports successful testing on two devices. That is owner-reported feedback; the device results have not been matched to this exact stable APK hash. Do not treat it as exact-build device validation.
+The owner reports that the stable app is working and has been tested on two devices. Supplied screenshots show the v1.0.0 (code 2) package, Play Protect's “This app looks safe” screen, and the running app's About/update screen reporting v1.0.0 with no newer release. This supports owner-reported device validation of the release version, but the screenshots do not show the APK SHA-256 or prove the installed bytes match this exact public asset.
 
 Earlier test APKs were debug-signed. Android may not allow a debug-signed test installation to update to the stable RP Ideas signer. If Android rejects the update, uninstall the test APK before installing stable; uninstalling removes that test installation's local settings and announcement history. Android still controls its per-app **Install unknown apps** permission, confirmation screen and Play Protect decision. The app does not install silently or bypass those checks.
 

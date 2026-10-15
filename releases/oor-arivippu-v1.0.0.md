@@ -15,7 +15,7 @@ First stable release of Oor Arivippu, a Tamil/English GPS place announcer.
 
 **Moving from a test build:** earlier Oor Arivippu test APKs were debug-signed. Android does not permit an APK signed by the stable RP Ideas key to update a test APK signed with a different certificate. If you installed a test APK, uninstall it before installing this stable release. Uninstalling removes its local preferences and announcement history.
 
-The owner reports successful testing on two devices. Those owner-reported tests have not been matched to this stable APK's hash. The published artifact is 12,179,013 bytes with SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`.
+The owner reports successful testing on two devices and that the stable app is working. Owner-provided screenshots show the `Oor-Arivippu-v1.0.0.apk` install flow, package `com.oorarivippu.voiceannouncer` version 1.0.0 (2), Play Protect's “This app looks safe” screen, and the running app's About/update screen reporting version 1.0.0 with no newer release. This supports owner-reported device validation of the release version, but the screenshots do not show an APK SHA-256 and do not link the installed bytes to the published asset. The published artifact is 12,179,013 bytes with SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`.
 
 ## தமிழ்
 
@@ -27,4 +27,4 @@ The owner reports successful testing on two devices. Those owner-reported tests 
 
 **சோதனைப் பதிப்பிலிருந்து மாறுதல்:** முந்தைய Oor Arivippu சோதனை APK-கள் debug கையொப்பத்துடன் இருந்தன. வேறு கையொப்பமுள்ள test APK-ஐ நிலையான RP Ideas கையொப்பம் கொண்ட APK-ஆல் Android நேரடியாகப் புதுப்பிக்க அனுமதிக்காது. சோதனை APK நிறுவியிருந்தால், நிலையான பதிப்பை நிறுவுவதற்கு முன் அதை நீக்கவும். நீக்கும்போது உள்ளூர் அமைப்புகளும் அறிவிப்பு வரலாறும் அழியும்.
 
-உரிமையாளர் இரண்டு சாதனங்களில் சோதனை வெற்றியடைந்ததாகத் தெரிவித்துள்ளார். அந்த உரிமையாளர் தெரிவித்த சோதனைகள் இந்த நிலையான APK-இன் hash-உடன் பொருத்தப்படவில்லை. வெளியிடப்பட்ட APK அளவு 12,179,013 bytes; SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`.
+நிலையான செயலி இயங்குவதாகவும், இரண்டு சாதனங்களில் சோதனை வெற்றியடைந்ததாகவும் உரிமையாளர் தெரிவித்துள்ளார். உரிமையாளர் வழங்கிய படங்களில் `Oor-Arivippu-v1.0.0.apk` நிறுவல் நடைமுறை, `com.oorarivippu.voiceannouncer` package-இன் 1.0.0 (2) பதிப்பு, Play Protect-இன் “This app looks safe” திரை, மேலும் செயலியின் About/புதுப்பிப்பு திரையில் 1.0.0 மற்றும் புதிய புதுப்பிப்பு இல்லை என்ற நிலை காணப்படுகிறது. இது பதிப்பு-அடிப்படையிலான உரிமையாளர் தெரிவித்த சாதனச் சரிபார்ப்பை ஆதரிக்கிறது; ஆனால் படங்களில் APK SHA-256 இல்லை, எனவே நிறுவிய bytes வெளியிடப்பட்ட asset-உடன் hash மூலம் பொருத்தப்படவில்லை. வெளியிடப்பட்ட APK அளவு 12,179,013 bytes; SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`.

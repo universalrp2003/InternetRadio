@@ -16,7 +16,7 @@ Five actively maintained, open-source Android apps developed by **Ramesh prathap
 
 The existing four-app batch (Live Guard, Ramesh Radio, PulseEQ and RP Vocal Remover Studio) passed build, unit/regression, permission, package, signature and release-asset checks in [GitHub Actions run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Oor Arivippu 1.0.0 / code 2 was published separately, outside that batch, by the standalone [release run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). Both repositories now serve the same signed Oor APK at canonical release and download URLs. Filenames, sizes and verified SHA-256 values for all five current releases are in [`docs/published-release-digests.md`](docs/published-release-digests.md); release pages are the authoritative download source.
 
-The owner reports successful Oor Arivippu testing on two devices. These owner-reported tests are not matched to the exact stable APK hash and are not exact-build device validation. CI success and public-asset verification are not Play Protect approval or an all-device compatibility claim.
+The owner reports the stable Oor Arivippu app is working and has been tested on two devices. Screenshots show package `com.oorarivippu.voiceannouncer` version 1.0.0 (2), Play Protect's “This app looks safe” screen, and the running app reporting 1.0.0 with no newer update. The images do not show the APK SHA-256, so the installed bytes are not hash-matched to the public asset. CI success and public-asset verification are not an all-device compatibility claim.
 
 ## Install and update
 
