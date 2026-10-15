@@ -15,12 +15,15 @@ fi
 TOOLCHAIN="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin"
 SYSROOT="$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/sysroot"
 CROSS_TOOL_SHIMS="${TMPDIR:-/tmp}/secretmessage-android-cross-tool-shims"
+CARGO_TARGET_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/mls-rs-sqlcipher-android-target"
 if [[ ! -x "$TOOLCHAIN/llvm-ar" || ! -x "$TOOLCHAIN/llvm-ranlib" ]]; then
   echo "Android NDK llvm-ar/llvm-ranlib tools are missing from $TOOLCHAIN." >&2
   exit 2
 fi
-mkdir -p "$CROSS_TOOL_SHIMS"
-for prefix in aarch64-linux-android armv7a-linux-androideabi i686-linux-android x86_64-linux-android; do
+mkdir -p "$CROSS_TOOL_SHIMS" "$CARGO_TARGET_DIR"
+export CARGO_TARGET_DIR
+echo "Using isolated Cargo target directory: $CARGO_TARGET_DIR"
+for prefix in aarch64-linux-android armv7a-linux-androideabi arm-linux-androideabi i686-linux-android x86_64-linux-android; do
   ln -sf "$TOOLCHAIN/llvm-ar" "$CROSS_TOOL_SHIMS/${prefix}-ar"
   ln -sf "$TOOLCHAIN/llvm-ranlib" "$CROSS_TOOL_SHIMS/${prefix}-ranlib"
 done
@@ -46,7 +49,7 @@ build_target() {
 
   echo "Cross-building the separate mls-rs SQLCipher feature for $target (Android API $API_LEVEL)."
   (cd "$NATIVE_DIR" && cargo build --locked --release --features "android-jni storage-spike" --target "$target")
-  output="$NATIVE_DIR/target/$target/release/libsecretmessage_mls_spike.so"
+  output="$CARGO_TARGET_DIR/$target/release/libsecretmessage_mls_spike.so"
   if [[ ! -s "$output" ]]; then
     echo "Expected cross-built JNI library was not produced: $output" >&2
     exit 1
