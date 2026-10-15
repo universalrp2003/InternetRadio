@@ -25,7 +25,7 @@ EXPECTED_OOR_RELEASE_URLS = {
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
-    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.1",
 }
 
 
