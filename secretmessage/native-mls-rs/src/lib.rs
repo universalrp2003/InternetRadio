@@ -16,7 +16,9 @@ pub mod spike_harness {
     use mls_rs_crypto_awslc::AwsLcCryptoProvider;
 
     const TEST_CIPHERSUITE: CipherSuite = CipherSuite::CURVE25519_AES128;
+    const ALICE_TAMPER_TEXT: &[u8] = b"MLS-RS-SPIKE-ALICE-TAMPER-PLAINTEXT-72af4d";
     const ALICE_TEXT: &[u8] = b"MLS-RS-SPIKE-ALICE-TO-BOB-TEST-PLAINTEXT-2f3491";
+    const BOB_TAMPER_TEXT: &[u8] = b"MLS-RS-SPIKE-BOB-TAMPER-PLAINTEXT-d0ae61";
     const BOB_TEXT: &[u8] = b"MLS-RS-SPIKE-BOB-TO-ALICE-TEST-PLAINTEXT-1cda73";
 
     fn test_crypto_provider() -> AwsLcCryptoProvider {
@@ -99,22 +101,21 @@ pub mod spike_harness {
             .join_group(None, &welcome, None)
             .expect("join Bob to the in-memory MLS group");
 
-        // Alice -> Bob: the test plaintext must not appear in the serialized MLS message.
-        let alice_message = alice_group
-            .encrypt_application_message(ALICE_TEXT, Vec::new())
-            .expect("encrypt Alice's test message");
-        let alice_wire = alice_message
+        // Alice -> Bob: malformed ciphertext must be rejected, but a fresh
+        // next-generation application message must still be accepted.
+        let alice_tamper_message = alice_group
+            .encrypt_application_message(ALICE_TAMPER_TEXT, Vec::new())
+            .expect("encrypt Alice's tamper-test message");
+        let alice_tamper_wire = alice_tamper_message
             .to_bytes()
-            .expect("serialize Alice's encrypted MLS message");
+            .expect("serialize Alice's tamper-test message");
         assert!(
-            !alice_wire
-                .windows(ALICE_TEXT.len())
-                .any(|window| window == ALICE_TEXT),
-            "Alice's test plaintext appeared in the serialized MLS message"
+            !alice_tamper_wire
+                .windows(ALICE_TAMPER_TEXT.len())
+                .any(|window| window == ALICE_TAMPER_TEXT),
+            "Alice's tamper-test plaintext appeared in the serialized MLS message"
         );
-        // Flip a ciphertext/tag byte without changing the serialized message structure.
-        // The receiver must reject it, then remain able to process the unmodified message.
-        let mut tampered_wire = alice_wire.clone();
+        let mut tampered_wire = alice_tamper_wire;
         let last_byte = tampered_wire
             .last_mut()
             .expect("serialized MLS application message is non-empty");
@@ -126,6 +127,18 @@ pub mod spike_harness {
             "Bob must reject Alice's modified MLS ciphertext"
         );
 
+        let alice_message = alice_group
+            .encrypt_application_message(ALICE_TEXT, Vec::new())
+            .expect("encrypt Alice's follow-up test message");
+        let alice_wire = alice_message
+            .to_bytes()
+            .expect("serialize Alice's encrypted MLS message");
+        assert!(
+            !alice_wire
+                .windows(ALICE_TEXT.len())
+                .any(|window| window == ALICE_TEXT),
+            "Alice's test plaintext appeared in the serialized MLS message"
+        );
         let alice_in =
             MlsMessage::from_bytes(&alice_wire).expect("deserialize Alice's encrypted MLS message");
         let received_by_bob = bob_group
@@ -133,7 +146,7 @@ pub mod spike_harness {
             .expect("authenticate and decrypt Alice's MLS message");
         assert_application_message(received_by_bob, ALICE_TEXT);
 
-        // MLS must reject duplicate delivery after accepting the original message.
+        // MLS must reject duplicate delivery after accepting the fresh message.
         let alice_replay =
             MlsMessage::from_bytes(&alice_wire).expect("deserialize Alice's replayed message");
         assert!(
@@ -141,22 +154,20 @@ pub mod spike_harness {
             "Bob must reject a replayed MLS application message"
         );
 
-        // Bob -> Alice confirms both members can send under the resulting group state.
-        let bob_message = bob_group
-            .encrypt_application_message(BOB_TEXT, Vec::new())
-            .expect("encrypt Bob's test message");
-        let bob_wire = bob_message
+        // Bob -> Alice mirrors the tamper, next-generation recovery and replay checks.
+        let bob_tamper_message = bob_group
+            .encrypt_application_message(BOB_TAMPER_TEXT, Vec::new())
+            .expect("encrypt Bob's tamper-test message");
+        let bob_tamper_wire = bob_tamper_message
             .to_bytes()
-            .expect("serialize Bob's encrypted MLS message");
+            .expect("serialize Bob's tamper-test message");
         assert!(
-            !bob_wire
-                .windows(BOB_TEXT.len())
-                .any(|window| window == BOB_TEXT),
-            "Bob's test plaintext appeared in the serialized MLS message"
+            !bob_tamper_wire
+                .windows(BOB_TAMPER_TEXT.len())
+                .any(|window| window == BOB_TAMPER_TEXT),
+            "Bob's tamper-test plaintext appeared in the serialized MLS message"
         );
-
-        // Alice also rejects modified ciphertext and duplicate delivery.
-        let mut tampered_bob_wire = bob_wire.clone();
+        let mut tampered_bob_wire = bob_tamper_wire;
         let last_byte = tampered_bob_wire
             .last_mut()
             .expect("serialized MLS application message is non-empty");
@@ -170,6 +181,18 @@ pub mod spike_harness {
             "Alice must reject Bob's modified MLS ciphertext"
         );
 
+        let bob_message = bob_group
+            .encrypt_application_message(BOB_TEXT, Vec::new())
+            .expect("encrypt Bob's follow-up test message");
+        let bob_wire = bob_message
+            .to_bytes()
+            .expect("serialize Bob's encrypted MLS message");
+        assert!(
+            !bob_wire
+                .windows(BOB_TEXT.len())
+                .any(|window| window == BOB_TEXT),
+            "Bob's test plaintext appeared in the serialized MLS message"
+        );
         let bob_in =
             MlsMessage::from_bytes(&bob_wire).expect("deserialize Bob's encrypted MLS message");
         let received_by_alice = alice_group
