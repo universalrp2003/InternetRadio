@@ -2,6 +2,8 @@
 
 **Current stable release:** 1.0.1 / code 3
 
+**Requested stable release:** 1.0.2 / code 4 (`Oor-Arivippu-v1.0.2.apk`, tag `oor-arivippu-v1.0.2`). Place and district announcements now speak only the place names, without the repeated “Entering” and “தற்போது … ஊருக்குள் வந்துள்ளீர்கள்” filler. The owner asked for publication without a device test; the Oor test workflow passed on the exact 1.0.2 source in [run 38840000191](https://github.com/universalrp2003/InternetRadio/actions/runs/38840000191). 1.0.1 remains the current stable release until both repositories serve the verified 1.0.2 APK. See the [1.0.2 release notes](../releases/oor-arivippu-v1.0.2.md).
+
 **Package:** `com.oorarivippu.voiceannouncer`
 
 **Minimum Android:** 8.0 / API 26
