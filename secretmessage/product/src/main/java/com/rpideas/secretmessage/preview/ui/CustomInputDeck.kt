@@ -37,6 +37,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,8 +65,10 @@ internal enum class DrawnLetterSizePreset(val label: String, val heightDp: Float
 }
 
 /** Letter pads are square so a glyph keeps its shape inline; pictures use a 3:2 surface. */
-internal const val LETTER_PAD_HEIGHT_DP = 168f
-internal const val PICTURE_PAD_HEIGHT_DP = 176f
+internal const val LETTER_PAD_HEIGHT_DP = 140f
+internal const val PICTURE_PAD_HEIGHT_DP = 150f
+internal const val COMPACT_LETTER_PAD_HEIGHT_DP = 96f
+internal const val COMPACT_PICTURE_PAD_HEIGHT_DP = 100f
 internal const val PICTURE_ASPECT_RATIO = 1.5f
 private const val DEFAULT_LINE_WIDTH_DP = 5f
 
@@ -83,6 +87,7 @@ internal fun CustomInputDeck(
     onSendInlineMessage: () -> Unit,
     onSendFullPicture: (List<VectorStroke>) -> Unit,
     modifier: Modifier = Modifier,
+    compact: Boolean = false,
 ) {
     var deckMode by remember { mutableStateOf(InputDeckMode.ENGLISH_KEYBOARD) }
     var isShifted by remember { mutableStateOf(false) }
@@ -96,20 +101,20 @@ internal fun CustomInputDeck(
         modifier = modifier
             .fillMaxWidth()
             .background(DeckBackground, RoundedCornerShape(14.dp))
-            .padding(8.dp),
+            .padding(6.dp),
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(ComposerBackground, RoundedCornerShape(10.dp))
                 .border(1.dp, ComposerBorder, RoundedCornerShape(10.dp))
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .heightIn(max = 76.dp)
+                    .heightIn(max = if (compact) 44.dp else 72.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
                 if (composerSegments.isEmpty()) {
@@ -148,7 +153,7 @@ internal fun CustomInputDeck(
             }
         }
 
-        Spacer(Modifier.height(8.dp))
+        Spacer(Modifier.height(6.dp))
 
         if (deckMode == InputDeckMode.ENGLISH_KEYBOARD) {
             EnglishKeyboardLayout(
@@ -164,10 +169,11 @@ internal fun CustomInputDeck(
                 onSwitchToDrawPad = { deckMode = InputDeckMode.DRAWING_PAD },
             )
         } else {
-            val padHeightDp = if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                LETTER_PAD_HEIGHT_DP
-            } else {
-                PICTURE_PAD_HEIGHT_DP
+            val padHeightDp = when {
+                drawSubMode == DrawingPadSubMode.INLINE_LETTER && compact -> COMPACT_LETTER_PAD_HEIGHT_DP
+                drawSubMode == DrawingPadSubMode.INLINE_LETTER -> LETTER_PAD_HEIGHT_DP
+                compact -> COMPACT_PICTURE_PAD_HEIGHT_DP
+                else -> PICTURE_PAD_HEIGHT_DP
             }
             val strokeLimit = if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
                 PayloadLimits.MAX_STROKES_PER_GLYPH
@@ -226,20 +232,15 @@ internal fun CustomInputDeck(
                     valueRange = 2f..18f,
                     modifier = Modifier.weight(1f),
                 )
-            }
-
-            if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text("Letter size", color = Muted, fontSize = 12.sp)
+                if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
                     DrawnLetterSizePreset.entries.forEach { preset ->
                         FilterChip(
                             selected = letterSizePreset == preset,
                             onClick = { letterSizePreset = preset },
-                            label = { Text(preset.label, fontSize = 11.sp) },
+                            label = { Text(preset.label.take(1), fontSize = 12.sp) },
+                            modifier = Modifier
+                                .padding(start = 4.dp)
+                                .semantics { contentDescription = "${preset.label} letter size" },
                         )
                     }
                 }
@@ -247,11 +248,11 @@ internal fun CustomInputDeck(
 
             val surfaceModifier = if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
                 Modifier
-                    .height(LETTER_PAD_HEIGHT_DP.dp)
+                    .height(padHeightDp.dp)
                     .aspectRatio(1f, matchHeightConstraintsFirst = true)
             } else {
                 Modifier
-                    .height(PICTURE_PAD_HEIGHT_DP.dp)
+                    .height(padHeightDp.dp)
                     .aspectRatio(PICTURE_ASPECT_RATIO, matchHeightConstraintsFirst = true)
             }
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -274,19 +275,18 @@ internal fun CustomInputDeck(
             Text(
                 text = if (acceptsStrokes) {
                     if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                        "Draw one letter or word in any language, then insert it into your message."
+                        "Draw a letter or word in any language, then insert it."
                     } else {
-                        "Draw a picture; it is sent as its own message."
+                        "Draw a picture; it is sent on its own."
                     }
                 } else {
-                    "Drawing limit reached. Insert, send, undo or clear to continue."
+                    "Drawing limit reached: insert, send, undo or clear."
                 },
                 color = Muted,
                 fontSize = 11.sp,
-                modifier = Modifier.padding(top = 4.dp),
+                maxLines = 1,
+                modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
             )
-
-            Spacer(Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),

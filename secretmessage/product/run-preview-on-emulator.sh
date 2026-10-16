@@ -183,6 +183,7 @@ STEP="disclosures"
 wait_for text "NOT SECURE · LOCAL PREVIEW ONLY" equals 40
 wait_for text "Pairing not enabled"
 wait_for text "Not connected"
+wait_for text "NOT SECURE"
 
 STEP="built-in keyboard and send"
 tap text "h"
@@ -203,7 +204,10 @@ tap text "Back to chat"
 
 STEP="drawing pad modes"
 tap text "Draw pad"
+# The pad controls must fit on a Pixel 2-sized screen (an earlier layout pushed them off-screen).
 wait_for text "+ Insert letter"
+wait_for content-desc "Medium letter size"
+wait_for text "Undo"
 tap text "Picture"
 wait_for text "Send picture"
 tap text "English keyboard"

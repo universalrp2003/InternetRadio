@@ -3,6 +3,7 @@ package com.rpideas.secretmessage.preview.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,71 +76,72 @@ internal fun ChatScreen(
         onDispose { currentVisibilityCallback(false) }
     }
 
+    // Leading items: notice, status, optional message, then messages (or the empty notice) and a footer.
+    val leadingItems = if (notice != null) 3 else 2
+    val totalItems = leadingItems + (if (messages.isEmpty()) 1 else messages.size) + 1
     LaunchedEffect(messages.size) {
-        if (messages.isNotEmpty()) listState.animateScrollToItem(messages.lastIndex)
+        if (messages.isNotEmpty()) listState.animateScrollToItem(totalItems - 1)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        PreviewHeader(onOpenSettings = onOpenSettings)
-        Spacer(Modifier.height(8.dp))
-        LocalOnlyNotice()
-        Spacer(Modifier.height(6.dp))
-        ConnectionStatusCard(sessionStatus = sessionStatus, statusDescription = statusDescription)
-        if (notice != null) {
-            Text(
-                text = notice,
-                color = Warm,
-                fontSize = 12.sp,
-                modifier = Modifier.padding(top = 6.dp),
-            )
-        }
-
-        LazyColumn(
-            state = listState,
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        // Short screens (for example landscape) get smaller drawing pads so the controls stay visible.
+        val compact = maxHeight < 600.dp
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentPadding = PaddingValues(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+                .fillMaxSize()
+                .padding(horizontal = 10.dp, vertical = 4.dp),
         ) {
-            if (messages.isEmpty()) {
+            PreviewHeader(onOpenSettings = onOpenSettings)
+
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(vertical = 6.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                item { LocalOnlyNotice() }
+                item { ConnectionStatusCard(sessionStatus = sessionStatus, statusDescription = statusDescription) }
+                if (notice != null) {
+                    item { Text(text = notice, color = Warm, fontSize = 12.sp) }
+                }
+                if (messages.isEmpty()) {
+                    item {
+                        EmptyChatNotice(
+                            Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 96.dp),
+                        )
+                    }
+                } else {
+                    items(messages, key = { it.id }) { message ->
+                        MessageBubble(message = message, nowElapsedMillis = nowElapsedMillis)
+                    }
+                }
                 item {
-                    EmptyChatNotice(
-                        Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = 120.dp),
+                    Text(
+                        text = "No connection in this preview · unsent messages are removed after " +
+                            "${UNDELIVERED_TTL_MILLIS / 1_000L} seconds · not encrypted",
+                        modifier = Modifier.fillMaxWidth(),
+                        color = Muted,
+                        fontSize = 11.sp,
+                        textAlign = TextAlign.Center,
                     )
                 }
-            } else {
-                items(messages, key = { it.id }) { message ->
-                    MessageBubble(message = message, nowElapsedMillis = nowElapsedMillis)
-                }
             }
-        }
 
-        CustomInputDeck(
-            composerSegments = composer,
-            canSend = canSend,
-            onTypeEnglishChar = onTypeEnglishChar,
-            onBackspace = onBackspace,
-            onInsertInlineGlyph = onInsertInlineGlyph,
-            onSendInlineMessage = onSendInlineMessage,
-            onSendFullPicture = onSendFullPicture,
-        )
-        Text(
-            text = "No connection in this preview · unsent messages are removed after " +
-                "${UNDELIVERED_TTL_MILLIS / 1_000L} seconds · not encrypted",
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp),
-            color = Muted,
-            fontSize = 11.sp,
-            textAlign = TextAlign.Center,
-        )
+            CustomInputDeck(
+                composerSegments = composer,
+                canSend = canSend,
+                onTypeEnglishChar = onTypeEnglishChar,
+                onBackspace = onBackspace,
+                onInsertInlineGlyph = onInsertInlineGlyph,
+                onSendInlineMessage = onSendInlineMessage,
+                onSendFullPicture = onSendFullPicture,
+                compact = compact,
+            )
+        }
     }
 }
 
@@ -151,8 +152,8 @@ private fun PreviewHeader(onOpenSettings: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Surface(
-            modifier = Modifier.size(40.dp),
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.size(36.dp),
+            shape = RoundedCornerShape(12.dp),
             color = PanelRaised,
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -160,13 +161,13 @@ private fun PreviewHeader(onOpenSettings: () -> Unit) {
             }
         }
         Column(modifier = Modifier.padding(start = 10.dp)) {
-            Text("Secret Message", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Ink)
+            Text("Secret Message", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
             Text("LOCAL UI PREVIEW", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
         }
         Spacer(Modifier.weight(1f))
         Surface(shape = CircleShape, color = Color(0xFF3A3026)) {
             Text(
-                "PREVIEW",
+                "NOT SECURE",
                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                 color = Warm,
                 fontSize = 10.sp,
