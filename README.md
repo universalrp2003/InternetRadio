@@ -10,7 +10,7 @@ Five actively maintained, open-source Android apps developed by **Ramesh prathap
 | **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 | **Oor Arivippu** | `oorarivippu` | [1.0.2](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2) | 8.0+ (API 26) | Tamil/English GPS place and destination announcer with configurable offline-status reminders. |
 
-**Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview (0.2.0-preview) shows the WhisperPad product screens on one phone only: built-in keyboard and drawing pad, timers, tones and an optional app lock. It has no network connection, pairing or cryptography, and messages are never delivered; each unsent message disappears after 30 seconds. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
+**Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview (0.2.1-preview) shows the WhisperPad product screens on one phone only: built-in keyboard and a large drawing pad, timers, tones and an optional app lock. It has no network connection, pairing or cryptography, and messages are never delivered; each unsent message disappears after 30 seconds. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
 
 ## Stable releases
 

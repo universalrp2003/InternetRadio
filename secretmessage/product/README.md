@@ -64,12 +64,19 @@ The dedicated workflow `.github/workflows/secret-message-preview.yml` (test only
    - drawing a stroke, inserting it as a letter and sending it, then sending a drawn picture;
    - that the app does not crash.
 
+Run [38842553168](https://github.com/universalrp2003/InternetRadio/actions/runs/38842553168) (commit `a66e0e9`) passed all of these steps for 0.2.1-preview:
+
+- **Unit tests:** 42 tests in 9 classes, including 5 for the pad size, with no failures.
+- **Artifact:** `secretmessage-preview-debug-apk-5`, available until 30 October 2026.
+- **APK:** `secretmessage-debug.apk`, version 0.2.1-preview, 17,952,802 bytes, SHA-256 `f0f4854a56bf716d8aa717ef96d4c39bb283dac2a2d5e9d1c94dea7f9a1e315b`.
+- **Not yet on a phone:** 0.2.1-preview has only been tested on the emulator.
+
 For 0.2.0-preview, run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621) (commit `d93ccca`) passed the checks of that version:
 
 - **Unit tests:** 37 tests in 8 classes, with no failures.
 - **Artifact:** `secretmessage-preview-debug-apk-4`, available until 30 October 2026.
 - **APK:** `secretmessage-debug.apk`, 17,952,802 bytes, SHA-256 `e04e4e273de5a36d2bce52f8c49a34ad72cef29e6f8d7e5a5c645687df31866b`.
-- **Not a device test:** the emulator run is not a physical-device test.
+- **Emulator only:** that CI run is not a physical-device test; the owner's device test follows.
 
 An earlier run of the same smoke test found that the drawing-pad controls did not fit on a Pixel 2-sized screen. The layout was fixed before this pass.
 
