@@ -17,7 +17,7 @@ A small update to Oor Arivippu 1.0.1: place announcements are now short and spea
 
 **Moving from a test build:** Oor Arivippu test APKs are debug-signed. Android does not allow this stable, RP Ideas-signed APK to update a debug-signed test installation. Uninstall the test APK first; uninstalling removes its local settings and announcement history.
 
-**Testing:** at the owner's request, this update was published without a device test. Before publication, GitHub Actions ran the app's unit tests on this exact source, including new checks of the announcement wording in both languages, together with Android lint and the stable-release package, version and signing checks. This release's APK hash is recorded separately after publication.
+**Testing:** at the owner's request, this update was published without a device test. Before publication, GitHub Actions ran the app's unit tests on this exact source, including new checks of the announcement wording in both languages, together with Android lint and the stable-release package, version and signing checks. The published APK is 12,195,401 bytes with SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`.
 
 ## தமிழ்
 
@@ -31,4 +31,4 @@ A small update to Oor Arivippu 1.0.1: place announcements are now short and spea
 
 **சோதனைப் பதிப்பிலிருந்து மாறுதல்:** ஊர் அறிவிப்பு சோதனை APK-கள் debug கையொப்பம் கொண்டவை. debug கையொப்பமுள்ள சோதனை நிறுவலை இந்த நிலையான RP Ideas கையொப்ப APK-ஆல் புதுப்பிக்க Android அனுமதிக்காது. முதலில் சோதனை APK-ஐ நீக்கவும்; நீக்கும்போது அதன் உள்ளூர் அமைப்புகளும் அறிவிப்பு வரலாறும் அழியும்.
 
-**சோதனை:** உரிமையாளரின் கோரிக்கைப்படி, இந்தப் புதுப்பிப்பு சாதனச் சோதனையின்றி வெளியிடப்பட்டது. வெளியீட்டுக்கு முன், இதே மூலக் குறியீட்டில் GitHub Actions செயலியின் unit test-களை (இரு மொழிகளிலும் அறிவிப்பு உரைக்கான புதிய சோதனைகள் உட்பட) Android lint-உடனும், நிலையான வெளியீட்டுக்கான package, பதிப்பு, கையொப்பச் சரிபார்ப்புகளுடனும் இயக்கியது. இந்த வெளியீட்டின் APK hash வெளியீட்டுக்குப் பிறகு தனியாகப் பதிவு செய்யப்படும்.
+**சோதனை:** உரிமையாளரின் கோரிக்கைப்படி, இந்தப் புதுப்பிப்பு சாதனச் சோதனையின்றி வெளியிடப்பட்டது. வெளியீட்டுக்கு முன், இதே மூலக் குறியீட்டில் GitHub Actions செயலியின் unit test-களை (இரு மொழிகளிலும் அறிவிப்பு உரைக்கான புதிய சோதனைகள் உட்பட) Android lint-உடனும், நிலையான வெளியீட்டுக்கான package, பதிப்பு, கையொப்பச் சரிபார்ப்புகளுடனும் இயக்கியது. வெளியிடப்பட்ட APK அளவு 12,195,401 bytes; SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`.
