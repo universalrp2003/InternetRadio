@@ -1,8 +1,8 @@
 # Privacy policy — RP Ideas Android apps
 
-**Last updated: 15 October 2026** · **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
+**Last updated: 16 October 2026** · **Developer: Ramesh prathap .R — universalrp2003@gmail.com**
 
-This policy covers five actively maintained Android apps and their current stable releases: **Live Guard (CleanSweep) 2.46**, **Ramesh Radio 1.11**, **PulseEQ 1.5**, **RP Vocal Remover Studio 0.1.11**, and **Oor Arivippu 1.0.0**. Older app versions and unreleased builds may behave differently.
+This policy covers five actively maintained Android apps and their current stable releases: **Live Guard (CleanSweep) 2.46**, **Ramesh Radio 1.11**, **PulseEQ 1.5**, **RP Vocal Remover Studio 0.1.11**, and **Oor Arivippu 1.0.1**. Older app versions and unreleased builds may behave differently.
 
 ## The short version
 

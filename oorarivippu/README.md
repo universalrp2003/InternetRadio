@@ -1,8 +1,6 @@
 # Oor Arivippu — Tamil/English place announcer
 
-**Current stable release:** 1.0.0 / code 2
-
-**Requested stable release:** 1.0.1 / code 3 (`Oor-Arivippu-v1.0.1.apk`, tag `oor-arivippu-v1.0.1`). The owner tested the debug APK from [run 38776902130](https://github.com/universalrp2003/InternetRadio/actions/runs/38776902130) and authorized publication; the Oor test workflow then passed on the exact 1.0.1 source in [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762). 1.0.0 remains the current stable release until both repositories serve the verified 1.0.1 APK. See the [1.0.1 release notes](../releases/oor-arivippu-v1.0.1.md).
+**Current stable release:** 1.0.1 / code 3
 
 **Package:** `com.oorarivippu.voiceannouncer`
 
@@ -12,13 +10,15 @@ Oor Arivippu is a GPS place and destination announcer. It is a fifth active RP I
 
 ## Download the stable release
 
-- [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0) — primary updater source.
-- [InternetRadio release](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.0) — verified fallback.
-- [Release notes](../releases/oor-arivippu-v1.0.0.md) · [published APK size and SHA-256 ledger](../docs/published-release-digests.md).
+- [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.1) — primary updater source.
+- [InternetRadio release](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.1) — verified fallback.
+- [Release notes](../releases/oor-arivippu-v1.0.1.md) · [published APK size and SHA-256 ledger](../docs/published-release-digests.md).
 
-Both public releases carry `Oor-Arivippu-v1.0.0.apk`, 12,179,013 bytes, SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`. GitHub Actions [run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks; it verified the two public assets have identical digest and size and canonical URLs.
+Both public releases carry `Oor-Arivippu-v1.0.1.apk`, 12,195,397 bytes, SHA-256 `ec10c7369807748c9a5608f1a5c6a37eff5f8e1f7433cc16e984c75d8958457d`. Standalone release [run 38826899278](https://github.com/universalrp2003/InternetRadio/actions/runs/38826899278) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks, then verified that the two public assets have identical size and digest at canonical URLs; a separate post-publication API check confirmed the same. Before publication, the Oor test workflow passed on the exact 1.0.1 source in [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762).
 
-The owner reports that the stable app is working and has been tested on two devices. Supplied screenshots show the v1.0.0 (code 2) package, Play Protect's “This app looks safe” screen, and the running app's About/update screen reporting v1.0.0 with no newer release. This supports owner-reported device validation of the release version, but the screenshots do not show the APK SHA-256 or prove the installed bytes match this exact public asset.
+1.0.1 adds Plus Code/coordinate filtering with normalized place-name comparison and separate Tamil/English Android TTS voice choices. The owner installed the debug test APK from [run 38776902130](https://github.com/universalrp2003/InternetRadio/actions/runs/38776902130), built from the same app source before the version was raised, and reported that it works: screenshots show Play Protect's “This app looks safe” screen, the About page at 1.0.0, the voice picker listing on-device and Internet voices, and a current-place announcement. That build was debug-signed and reported 1.0.0, so its bytes necessarily differ from the stable APK; the exact 1.0.1 bytes have not been device-tested.
+
+The earlier stable release, 1.0.0 / code 2, remains available unchanged on both repositories: `Oor-Arivippu-v1.0.0.apk`, 12,179,013 bytes, SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`, published by standalone [run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). The owner reported two-device testing of 1.0.0; those screenshots showed the v1.0.0 (code 2) package, Play Protect's “This app looks safe” screen and the running app, but not the APK SHA-256.
 
 Earlier test APKs were debug-signed. Android may not allow a debug-signed test installation to update to the stable RP Ideas signer. If Android rejects the update, uninstall the test APK before installing stable; uninstalling removes that test installation's local settings and announcement history. Android still controls its per-app **Install unknown apps** permission, confirmation screen and Play Protect decision. The app does not install silently or bypass those checks.
 
