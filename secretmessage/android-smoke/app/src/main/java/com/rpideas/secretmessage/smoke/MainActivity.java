@@ -4,12 +4,17 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -24,10 +29,17 @@ import android.widget.Toast;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
 import java.security.SecureRandom;
 import java.util.Enumeration;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
 
 /** Standalone MLS and direct-LAN feasibility harness. Not the Secret Message product app. */
 public final class MainActivity extends Activity {
@@ -35,6 +47,13 @@ public final class MainActivity extends Activity {
     private static final String TAG_LAN = "LAN_SMOKE";
     private static final String NATIVE_LIBRARY = "secretmessage_mls_spike";
     private static final long SAFETY_POLL_MS = 400;
+    private static final String PREFS = "secretmessage_lan_test";
+    private static final String PREF_DEVICE_ID = "device_id";
+    private static final String PREF_IDENTITY = "identity_v1";
+    private static final String PREF_PEER_PINS = "peer_pins_v1";
+    private static final String KEYSTORE_PROVIDER = "AndroidKeyStore";
+    private static final String WRAP_KEY_ALIAS = "secretmessage_lan_test_identity_wrap";
+    private static final int GCM_TAG_BITS = 128;
 
     private final AtomicBoolean lanTaskRunning = new AtomicBoolean(false);
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
@@ -46,6 +65,10 @@ public final class MainActivity extends Activity {
     private Button codesDifferButton;
     private String shownSafetyCode = "";
     private String safetyCheckResult = "Not reached";
+    private TextView identityView;
+    private TextView safetyPeerView;
+    private int defaultTextColor = Color.DKGRAY;
+    private String lastPeerStatus = "Not reached";
     private TextView deviceInfo;
     private TextView localStatusView;
     private TextView lanStatusView;
@@ -57,10 +80,12 @@ public final class MainActivity extends Activity {
     private String inviteUri;
 
     private native String runNativeSmoke();
-    private native String runNativeLanHost(String hostIp, int port, String token);
-    private native String runNativeLanJoin(String hostIp, int port, String token);
-    private native String nativeLanSafetyCode();
+    private native String runNativeLanHost(String hostIp, int port, String token, String identity, String pins);
+    private native String runNativeLanJoin(String hostIp, int port, String token, String identity, String pins);
+    private native String nativeLanSafetyPrompt();
     private native String nativeSubmitLanSafetyDecision(int codesMatch);
+    private native String nativeGenerateLanIdentity(String deviceId);
+    private native String nativeTakeLanVerifiedPeer();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -108,10 +133,12 @@ public final class MainActivity extends Activity {
                 "TEST ONLY — NOT A SECURE CHAT APP. The local MLS button runs synthetic members "
                         + "on this device. The LAN test sends only fixed synthetic MLS messages "
                         + "between devices on the same Wi-Fi, and only after both people confirm that "
-                        + "their phones show the same MLS safety code. Identities are temporary test "
-                        + "keys, nothing is saved, and it must not be used for private or real "
-                        + "messages. SMS shares only a short-lived local invite; the invite is not "
-                        + "identity verification, the safety-code comparison is.");
+                        + "their phones show the same MLS safety code. Each phone keeps one test key, "
+                        + "stored encrypted with an Android Keystore key, remembers the phones it has "
+                        + "verified, and warns if a remembered phone's key changes. No messages are "
+                        + "saved, and it must not be used for private or real messages. SMS shares "
+                        + "only a short-lived local invite; the invite is not identity verification, "
+                        + "the safety-code comparison is.");
         notice.setTextSize(15);
         addWithTopMargin(root, notice, 12);
 
@@ -139,12 +166,28 @@ public final class MainActivity extends Activity {
             lanNotice.setText(
                     "Put both devices on the same non-guest Wi-Fi. One device creates and shares an "
                             + "invite; the other opens or pastes it and taps Join. Both phones then "
-                            + "show a 20-digit safety code: compare them side by side and tap Codes "
-                            + "match on both phones only if every digit is the same. The invite "
+                            + "show a 20-digit safety code and say whether the other phone is new, "
+                            + "remembered, or has a changed key. Compare the codes side by side and "
+                            + "tap Codes match on both phones only if every digit is the same. The invite "
                             + "expires after about 3 minutes. Router client isolation can block this "
                             + "test.");
             lanNotice.setTextSize(14);
             addWithTopMargin(root, lanNotice, 8);
+
+            identityView = new TextView(this);
+            identityView.setTextSize(14);
+            addWithTopMargin(root, identityView, 8);
+
+            Button resetKeyButton = new Button(this);
+            resetKeyButton.setText("Reset this phone's test key");
+            addWithTopMargin(root, resetKeyButton, 8);
+            resetKeyButton.setOnClickListener(view -> resetTestKey());
+
+            Button forgetPeersButton = new Button(this);
+            forgetPeersButton.setText("Forget remembered phones");
+            addWithTopMargin(root, forgetPeersButton, 8);
+            forgetPeersButton.setOnClickListener(view -> forgetPeers());
+            refreshIdentityView();
 
             Button hostButton = new Button(this);
             hostButton.setText("Create local invite / start host");
@@ -188,6 +231,11 @@ public final class MainActivity extends Activity {
             safetyTitle.setText("Compare the safety code");
             safetyTitle.setTextSize(18);
             safetyPanel.addView(safetyTitle, matchWrap());
+
+            safetyPeerView = new TextView(this);
+            safetyPeerView.setTextSize(15);
+            addWithTopMargin(safetyPanel, safetyPeerView, 6);
+            defaultTextColor = safetyPeerView.getCurrentTextColor();
 
             safetyCodeView = new TextView(this);
             safetyCodeView.setTextSize(30);
@@ -280,11 +328,12 @@ public final class MainActivity extends Activity {
             String result;
             try {
                 System.loadLibrary(NATIVE_LIBRARY);
-                result = runNativeLanHost(hostIp, port, token);
+                String identity = loadOrCreateIdentity(false);
+                result = runNativeLanHost(hostIp, port, token, identity, loadPins());
                 if (result == null) result = "FAIL: native host returned no status.";
             } catch (Throwable failure) {
                 result = "FAIL: " + failure.getClass().getSimpleName()
-                        + " while starting or running the LAN host.";
+                        + " while starting or running the LAN host" + detail(failure);
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-host").start();
@@ -324,11 +373,12 @@ public final class MainActivity extends Activity {
             String result;
             try {
                 System.loadLibrary(NATIVE_LIBRARY);
-                result = runNativeLanJoin(invite.host, invite.port, invite.token);
+                String identity = loadOrCreateIdentity(false);
+                result = runNativeLanJoin(invite.host, invite.port, invite.token, identity, loadPins());
                 if (result == null) result = "FAIL: native guest returned no status.";
             } catch (Throwable failure) {
                 result = "FAIL: " + failure.getClass().getSimpleName()
-                        + " while joining the local MLS test.";
+                        + " while joining the local MLS test" + detail(failure);
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-join").start();
@@ -341,6 +391,16 @@ public final class MainActivity extends Activity {
             lanStatusView.setText("LAN MLS: " + result);
             Log.i(TAG_LAN, result);
             lanTaskRunning.set(false);
+            if (result.startsWith("PASS")) {
+                String peer = "";
+                try {
+                    peer = nativeTakeLanVerifiedPeer();
+                } catch (Throwable notAvailable) {
+                    // Without the verified peer there is nothing to remember.
+                }
+                if (peer != null && !peer.isEmpty()) rememberPeer(peer);
+            }
+            refreshIdentityView();
             uiHandler.removeCallbacks(safetyCodePoller);
             if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
             shownSafetyCode = "";
@@ -354,6 +414,7 @@ public final class MainActivity extends Activity {
     private void resetSafetyCheck() {
         shownSafetyCode = "";
         safetyCheckResult = "Not reached";
+        lastPeerStatus = "Not reached";
         if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
     }
 
@@ -370,20 +431,40 @@ public final class MainActivity extends Activity {
 
     private void pollSafetyCode() {
         if (!lanTaskRunning.get()) return;
-        String code = "";
+        String prompt = "";
         try {
-            code = nativeLanSafetyCode();
+            prompt = nativeLanSafetyPrompt();
         } catch (Throwable notLoadedYet) {
             // The worker thread may still be loading the test-only native library.
         }
-        if (code != null && !code.isEmpty() && !code.equals(shownSafetyCode)) {
-            showSafetyCode(code);
+        if (prompt != null && !prompt.isEmpty()) {
+            String[] parts = prompt.split("\\|", -1);
+            if (parts.length == 3 && !parts[0].equals(shownSafetyCode)) {
+                showSafetyCode(parts[0], parts[1], parts[2]);
+            }
         }
         uiHandler.postDelayed(safetyCodePoller, SAFETY_POLL_MS);
     }
 
-    private void showSafetyCode(String code) {
+    private void showSafetyCode(String code, String peerStatus, String peerDevice) {
         shownSafetyCode = code;
+        String device = formatDeviceId(peerDevice);
+        lastPeerStatus = peerStatus + " (device " + device + ")";
+        if ("CHANGED".equals(peerStatus)) {
+            safetyPeerView.setText("WARNING: the test key for device " + device + " has changed since "
+                    + "you verified it. Resetting or reinstalling that phone causes this, but so could "
+                    + "another device pretending to be it. Compare every digit, and tap Codes differ "
+                    + "if you are unsure.");
+            safetyPeerView.setTextColor(Color.rgb(176, 0, 32));
+        } else if ("KNOWN".equals(peerStatus)) {
+            safetyPeerView.setText("Remembered phone (device " + device + "): it is using the same "
+                    + "test key you verified before. Still compare the code.");
+            safetyPeerView.setTextColor(defaultTextColor);
+        } else {
+            safetyPeerView.setText("New phone (device " + device + "). If the codes match, this phone "
+                    + "will remember its test key.");
+            safetyPeerView.setTextColor(defaultTextColor);
+        }
         safetyCheckResult = "Shown on this phone: " + code + " (not answered)";
         safetyCodeView.setText(twoLineCode(code));
         codesMatchButton.setEnabled(true);
@@ -421,6 +502,150 @@ public final class MainActivity extends Activity {
         return groups[0] + " " + groups[1] + "\n" + groups[2] + " " + groups[3];
     }
 
+    private SharedPreferences prefs() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE);
+    }
+
+    /** This phone's test identity text, created or given a new key when needed. Worker thread only. */
+    private synchronized String loadOrCreateIdentity(boolean newKey) throws Exception {
+        SharedPreferences prefs = prefs();
+        String stored = prefs.getString(PREF_IDENTITY, null);
+        if (stored != null && !newKey) {
+            return unwrap(stored);
+        }
+        String deviceId = prefs.getString(PREF_DEVICE_ID, null);
+        if (deviceId == null) deviceId = randomHex(8);
+        String identity = nativeGenerateLanIdentity(deviceId);
+        if (identity == null || !identity.startsWith("v1:")) {
+            throw new IllegalStateException(identity == null ? "no test identity was created" : identity);
+        }
+        boolean saved = prefs.edit()
+                .putString(PREF_DEVICE_ID, deviceId)
+                .putString(PREF_IDENTITY, wrap(identity))
+                .commit();
+        if (!saved) throw new IllegalStateException("the test identity could not be saved");
+        return identity;
+    }
+
+    /** The Android Keystore AES key that encrypts the stored test identity; it never leaves Keystore. */
+    private SecretKey wrappingKey() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance(KEYSTORE_PROVIDER);
+        keyStore.load(null);
+        if (keyStore.containsAlias(WRAP_KEY_ALIAS)) {
+            return (SecretKey) keyStore.getKey(WRAP_KEY_ALIAS, null);
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE_PROVIDER);
+        generator.init(new KeyGenParameterSpec.Builder(
+                WRAP_KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .setKeySize(256)
+                .build());
+        return generator.generateKey();
+    }
+
+    private String wrap(String plain) throws Exception {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, wrappingKey());
+        byte[] sealed = cipher.doFinal(plain.getBytes(StandardCharsets.UTF_8));
+        return Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP) + ":"
+                + Base64.encodeToString(sealed, Base64.NO_WRAP);
+    }
+
+    private String unwrap(String stored) throws Exception {
+        String[] parts = stored.split(":", 2);
+        if (parts.length != 2) throw new IllegalStateException("the stored test identity is malformed");
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, wrappingKey(),
+                new GCMParameterSpec(GCM_TAG_BITS, Base64.decode(parts[0], Base64.NO_WRAP)));
+        return new String(cipher.doFinal(Base64.decode(parts[1], Base64.NO_WRAP)), StandardCharsets.UTF_8);
+    }
+
+    private String loadPins() {
+        return prefs().getString(PREF_PEER_PINS, "");
+    }
+
+    /** Remember a verified phone as "<device ID> <public key hex>", replacing its earlier key. */
+    private void rememberPeer(String pin) {
+        String[] fields = pin.trim().split(" ");
+        if (fields.length != 2) return;
+        StringBuilder updated = new StringBuilder();
+        for (String line : loadPins().split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith(fields[0] + " ")) continue;
+            updated.append(trimmed).append('\n');
+        }
+        updated.append(fields[0]).append(' ').append(fields[1]).append('\n');
+        prefs().edit().putString(PREF_PEER_PINS, updated.toString()).apply();
+    }
+
+    private static int countPins(String pins) {
+        int count = 0;
+        for (String line : pins.split("\n")) {
+            if (!line.trim().isEmpty()) count++;
+        }
+        return count;
+    }
+
+    private String identitySummary() {
+        SharedPreferences prefs = prefs();
+        String deviceId = prefs.getString(PREF_DEVICE_ID, null);
+        int remembered = countPins(loadPins());
+        if (deviceId == null || !prefs.contains(PREF_IDENTITY)) {
+            return "no test identity yet (it is created on the first LAN test); remembered phones: "
+                    + remembered;
+        }
+        return "device " + formatDeviceId(deviceId)
+                + ", key stored encrypted with an Android Keystore key; remembered phones: " + remembered;
+    }
+
+    private void refreshIdentityView() {
+        if (identityView != null) identityView.setText("This phone's test identity: " + identitySummary() + ".");
+    }
+
+    private void resetTestKey() {
+        if (lanTaskRunning.get()) {
+            toast("Wait until the LAN test finishes.");
+            return;
+        }
+        new Thread(() -> {
+            String message;
+            try {
+                System.loadLibrary(NATIVE_LIBRARY);
+                loadOrCreateIdentity(true);
+                message = "New test key created. Phones that remembered this phone will now show a "
+                        + "key-change warning.";
+            } catch (Throwable failure) {
+                message = "Could not reset the test key: " + failure.getClass().getSimpleName() + detail(failure);
+            }
+            final String shown = message;
+            runOnUiThread(() -> {
+                Toast.makeText(this, shown, Toast.LENGTH_LONG).show();
+                refreshIdentityView();
+            });
+        }, "secretmessage-lan-reset-key").start();
+    }
+
+    private void forgetPeers() {
+        if (lanTaskRunning.get()) {
+            toast("Wait until the LAN test finishes.");
+            return;
+        }
+        prefs().edit().remove(PREF_PEER_PINS).apply();
+        refreshIdentityView();
+        toast("Remembered phones cleared.");
+    }
+
+    private static String formatDeviceId(String deviceId) {
+        if (deviceId == null || deviceId.length() != 16) return String.valueOf(deviceId);
+        return deviceId.substring(0, 4) + " " + deviceId.substring(4, 8) + " "
+                + deviceId.substring(8, 12) + " " + deviceId.substring(12);
+    }
+
+    private static String detail(Throwable failure) {
+        return failure.getMessage() == null ? "." : ": " + failure.getMessage();
+    }
+
     private void acceptInviteFromIntent(Intent intent) {
         if (inviteInput == null || intent == null) return;
         Uri data = intent.getData();
@@ -448,6 +673,8 @@ public final class MainActivity extends Activity {
                 + "\nLocal MLS smoke: " + localResult
                 + "\nLAN MLS smoke: " + lanResult
                 + "\nSafety code check: " + safetyCheckResult
+                + "\nOther phone: " + lastPeerStatus
+                + "\nThis phone: " + identitySummary()
                 + "\nScope: fixed synthetic MLS messages only; no chat history or user text.";
     }
 
@@ -541,11 +768,15 @@ public final class MainActivity extends Activity {
     }
 
     private static String newInviteToken() {
-        byte[] bytes = new byte[16];
+        return randomHex(16);
+    }
+
+    private static String randomHex(int byteCount) {
+        byte[] bytes = new byte[byteCount];
         new SecureRandom().nextBytes(bytes);
-        StringBuilder token = new StringBuilder(32);
-        for (byte value : bytes) token.append(String.format(Locale.ROOT, "%02x", value & 0xff));
-        return token.toString();
+        StringBuilder text = new StringBuilder(byteCount * 2);
+        for (byte value : bytes) text.append(String.format(Locale.ROOT, "%02x", value & 0xff));
+        return text.toString();
     }
 
     private void toast(String message) {
