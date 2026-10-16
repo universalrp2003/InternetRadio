@@ -38,6 +38,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -84,8 +86,10 @@ internal fun ChatScreen(
     }
 
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
-        // Short screens (for example landscape) get smaller drawing pads so the controls stay visible.
+        // Short screens (for example landscape) keep a shorter composer so the controls stay visible.
         val compact = maxHeight < 600.dp
+        // The drawing pad aims for about half of this screen's height (owner request after testing 0.2.0).
+        val padSide = DrawingPadLayout.padSideDp(maxWidth.value, maxHeight.value).dp
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -139,6 +143,7 @@ internal fun ChatScreen(
                 onInsertInlineGlyph = onInsertInlineGlyph,
                 onSendInlineMessage = onSendInlineMessage,
                 onSendFullPicture = onSendFullPicture,
+                padSide = padSide,
                 compact = compact,
             )
         }
@@ -275,7 +280,8 @@ private fun MessageBubble(message: EphemeralMessage, nowElapsedMillis: Long) {
                 VectorStrokeThumbnail(
                     strokes = content.fullPictureStrokes,
                     modifier = Modifier
-                        .widthIn(min = 180.dp, max = 276.dp)
+                        .semantics { contentDescription = "Drawn picture" }
+                        .widthIn(min = 160.dp, max = 240.dp)
                         .aspectRatio(PICTURE_ASPECT_RATIO)
                         .clip(RoundedCornerShape(10.dp))
                         .background(CanvasBackground),

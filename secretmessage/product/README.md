@@ -1,15 +1,16 @@
-# Secret Message local UI preview (0.2.0-preview)
+# Secret Message local UI preview (0.2.1-preview)
 
 This is an Android **preview shell**, not the Secret Message product or a secure messenger. It is included as `:secretmessage` so the product screens and timer behavior can be built and tested before any secure transport exists. The app is labelled **NOT SECURE** and must not be used for sensitive content.
 
 ## What this preview does
 
-Version 0.2.0-preview (code 2) adapts the owner-approved **WhisperPad** product/UI modules from the *New WhisperPad P2P Android Agent Blueprint (MLS-Compatible Edition)*. WhisperPad is the product/UI layer for Secret Message, not a separate app.
+Version 0.2.1-preview (code 3) adapts the owner-approved **WhisperPad** product/UI modules from the *New WhisperPad P2P Android Agent Blueprint (MLS-Compatible Edition)*. WhisperPad is the product/UI layer for Secret Message, not a separate app. Version 0.2.1 enlarges the drawing pad: after testing 0.2.0-preview on two phones, the owner asked for a pad about half the screen tall.
 
 - **Built-in input deck (`ui/CustomInputDeck.kt`).** It provides an English QWERTY/symbol keyboard, so the system keyboard is never opened, with a **Draw pad** switch.
-  - **Letter mode:** draw a letter or word in any script on a square pad, then insert it inline at Small/Medium/Large size.
-  - **Picture mode:** draw a standalone sketch on a 3:2 pad.
-  - Line width is adjustable from 2 to 18, with Undo, Clear and Delete.
+  - **Letter mode:** draw a letter or word in any script on a large square pad, then insert it inline at Small/Medium/Large size.
+  - **Picture mode:** draw a standalone sketch on the same square pad. Pictures are shown square in the chat.
+  - **Pad size (`ui/DrawingPadLayout.kt`):** the pad aims for half of the screen height and stays square, so it is as wide as the screen allows. It shrinks only when the control rows need the room, so Undo, Clear, Delete and Insert/Send stay on-screen. Hints appear inside the empty pad.
+  - Line width is adjustable from 2 to 18, with Undo, Clear and Delete. Widths are measured against the original 140 dp pad, so a drawing keeps the same proportions on the large pad, in the small inline letter tiles and in picture bubbles.
   - The deck transmits strokes, not recognized words: there is no handwriting recognition or translation. A single tap is kept as a dot, so marks such as the Tamil pulli survive.
 - **Six original notification tones (`audio/`).** They are generated in code as 16-bit 44.1 kHz PCM and played at the notification volume from Settings. No audio files are bundled. The blueprint's sweep and vibrato tones are corrected to accumulate oscillator phase, and every tone fades in and out to avoid clicks.
 - **RAM-only chat state with the owner's timer rules (`chat/`).** A pure `ChatStateMachine` drives `ChatViewModel`:
@@ -59,10 +60,11 @@ The dedicated workflow `.github/workflows/secret-message-preview.yml` (test only
    - built-in keyboard input;
    - an undelivered message that is still shown during the 30-second window and then disappears;
    - the settings screen and tone preview;
-   - both drawing-pad modes;
+   - both drawing pads: square, at least 35% of the display tall, with their tool buttons on-screen below the pad;
+   - drawing a stroke, inserting it as a letter and sending it, then sending a drawn picture;
    - that the app does not crash.
 
-Run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621) (commit `d93ccca`) passed all of these steps:
+For 0.2.0-preview, run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621) (commit `d93ccca`) passed the checks of that version:
 
 - **Unit tests:** 37 tests in 8 classes, with no failures.
 - **Artifact:** `secretmessage-preview-debug-apk-4`, available until 30 October 2026.
@@ -71,4 +73,13 @@ Run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/
 
 An earlier run of the same smoke test found that the drawing-pad controls did not fit on a Pixel 2-sized screen. The layout was fixed before this pass.
 
-To try it on a phone, download the artifact from the run page, unzip it, and install `secretmessage-debug.apk`. CI debug builds are signed with per-run debug keys, so uninstall an earlier preview first if Android refuses the update. No physical-device test of 0.2.0-preview and no two-phone test has been performed. Passing these checks does not establish security, interoperability or release readiness.
+**Owner device test of 0.2.0-preview (16 October 2026).** The owner installed `secretmessage-debug.apk` (17.95 MB) from artifact `secretmessage-preview-debug-apk-4` on two phones and reported that it works as expected. The photos and screenshots show:
+
+- Play Protect's “This app looks safe” screen and the app-lock prompt;
+- typing with the built-in keyboard, inserted drawn letters and drawn pictures;
+- the “Not delivered · removed in …” countdown;
+- the settings screen with the view timer and the six tones.
+
+The owner asked for a much larger drawing pad, which 0.2.1-preview adds. The screenshots do not show the APK SHA-256, so the installed bytes are not hash-matched to the artifact. Each phone ran the preview on its own; the preview has no connection between phones.
+
+To try it on a phone, download the artifact from the run page, unzip it, and install `secretmessage-debug.apk`. CI debug builds are signed with per-run debug keys, so uninstall an earlier preview first if Android refuses the update. Passing these checks does not establish security, interoperability or release readiness.

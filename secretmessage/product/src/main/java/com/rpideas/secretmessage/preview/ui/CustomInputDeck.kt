@@ -5,13 +5,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +41,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rpideas.secretmessage.preview.chat.StrokePolicy
@@ -64,12 +67,18 @@ internal enum class DrawnLetterSizePreset(val label: String, val heightDp: Float
     LARGE("Large", 54f),
 }
 
-/** Letter pads are square so a glyph keeps its shape inline; pictures use a 3:2 surface. */
-internal const val LETTER_PAD_HEIGHT_DP = 140f
-internal const val PICTURE_PAD_HEIGHT_DP = 150f
-internal const val COMPACT_LETTER_PAD_HEIGHT_DP = 96f
-internal const val COMPACT_PICTURE_PAD_HEIGHT_DP = 100f
-internal const val PICTURE_ASPECT_RATIO = 1.5f
+/**
+ * Both pads are square, sized by [DrawingPadLayout]: a letter keeps its shape inline, and a picture
+ * is shown in a square bubble, so the picture pad can be as large as the letter pad.
+ */
+internal const val PICTURE_ASPECT_RATIO = 1f
+
+/**
+ * Line widths are stored relative to this pad height (the 140 dp letter pad of 0.2.0-preview), not
+ * the current pad's, so a drawing keeps the same proportions on the large pad, in the small inline
+ * letter tiles and in picture bubbles.
+ */
+internal const val LINE_WIDTH_REFERENCE_PAD_DP = 140f
 private const val DEFAULT_LINE_WIDTH_DP = 5f
 
 /**
@@ -86,6 +95,7 @@ internal fun CustomInputDeck(
     onInsertInlineGlyph: (List<VectorStroke>, Float) -> Unit,
     onSendInlineMessage: () -> Unit,
     onSendFullPicture: (List<VectorStroke>) -> Unit,
+    padSide: Dp,
     modifier: Modifier = Modifier,
     compact: Boolean = false,
 ) {
@@ -169,12 +179,6 @@ internal fun CustomInputDeck(
                 onSwitchToDrawPad = { deckMode = InputDeckMode.DRAWING_PAD },
             )
         } else {
-            val padHeightDp = when {
-                drawSubMode == DrawingPadSubMode.INLINE_LETTER && compact -> COMPACT_LETTER_PAD_HEIGHT_DP
-                drawSubMode == DrawingPadSubMode.INLINE_LETTER -> LETTER_PAD_HEIGHT_DP
-                compact -> COMPACT_PICTURE_PAD_HEIGHT_DP
-                else -> PICTURE_PAD_HEIGHT_DP
-            }
             val strokeLimit = if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
                 PayloadLimits.MAX_STROKES_PER_GLYPH
             } else {
@@ -246,47 +250,58 @@ internal fun CustomInputDeck(
                 }
             }
 
-            val surfaceModifier = if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                Modifier
-                    .height(padHeightDp.dp)
-                    .aspectRatio(1f, matchHeightConstraintsFirst = true)
-            } else {
-                Modifier
-                    .height(padHeightDp.dp)
-                    .aspectRatio(PICTURE_ASPECT_RATIO, matchHeightConstraintsFirst = true)
-            }
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                DrawingSurface(
-                    strokes = completedStrokes,
-                    widthFraction = StrokePolicy.widthFraction(lineWidthDp, padHeightDp),
-                    acceptsStrokes = acceptsStrokes,
-                    onStrokeFinished = { stroke ->
-                        val fits = completedStrokes.size < strokeLimit &&
-                            pointsUsed + stroke.points.size <= pointLimit &&
-                            PayloadValidator.isValidStroke(stroke)
-                        if (fits) completedStrokes.add(stroke)
-                    },
-                    modifier = surfaceModifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(CanvasBackground)
-                        .border(1.dp, StrokeInk, RoundedCornerShape(12.dp)),
-                )
-            }
-            Text(
-                text = if (acceptsStrokes) {
-                    if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                        "Draw a letter or word in any language, then insert it."
-                    } else {
-                        "Draw a picture; it is sent on its own."
+            // The pad takes the room left between the control rows, up to [padSide]. The rows are
+            // measured first, so a taller control row shrinks the pad instead of pushing the tools
+            // off-screen.
+            BoxWithConstraints(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .padding(vertical = 3.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val side = minOf(maxWidth, maxHeight, padSide)
+                val isLetterPad = drawSubMode == DrawingPadSubMode.INLINE_LETTER
+                Box(modifier = Modifier.size(side)) {
+                    DrawingSurface(
+                        strokes = completedStrokes,
+                        widthFraction = StrokePolicy.widthFraction(lineWidthDp, LINE_WIDTH_REFERENCE_PAD_DP),
+                        acceptsStrokes = acceptsStrokes,
+                        onStrokeFinished = { stroke ->
+                            val fits = completedStrokes.size < strokeLimit &&
+                                pointsUsed + stroke.points.size <= pointLimit &&
+                                PayloadValidator.isValidStroke(stroke)
+                            if (fits) completedStrokes.add(stroke)
+                        },
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(CanvasBackground)
+                            .border(1.dp, StrokeInk, RoundedCornerShape(12.dp))
+                            .semantics {
+                                contentDescription = if (isLetterPad) "Letter drawing pad" else "Picture drawing pad"
+                            },
+                    )
+                    // The hint sits inside the pad (it does not take touches) until the first stroke.
+                    val padHint = when {
+                        !acceptsStrokes -> "Drawing limit reached: insert, send, undo or clear."
+                        completedStrokes.isNotEmpty() -> null
+                        isLetterPad -> "Draw a letter or word in any language, then insert it."
+                        else -> "Draw a picture; it is sent on its own."
                     }
-                } else {
-                    "Drawing limit reached: insert, send, undo or clear."
-                },
-                color = Muted,
-                fontSize = 11.sp,
-                maxLines = 1,
-                modifier = Modifier.padding(top = 2.dp, bottom = 2.dp),
-            )
+                    if (padHint != null) {
+                        Text(
+                            text = padHint,
+                            color = Muted,
+                            fontSize = 12.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier
+                                .align(if (acceptsStrokes) Alignment.Center else Alignment.BottomCenter)
+                                .padding(16.dp),
+                        )
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -338,6 +353,7 @@ internal fun InlineGlyph(glyph: InlineSegment.DrawnGlyph, modifier: Modifier = M
     VectorStrokeThumbnail(
         strokes = glyph.strokes,
         modifier = modifier
+            .semantics { contentDescription = "Drawn letter" }
             .size(glyph.displayHeightDp.dp)
             .background(GlyphBackground, RoundedCornerShape(4.dp))
             .border(0.5.dp, StrokeInk, RoundedCornerShape(4.dp))

@@ -68,8 +68,8 @@ class SecretMessagePreviewContractTest(unittest.TestCase):
         self.assertIn('include(":secretmessage")', settings)
         self.assertIn('file("secretmessage/product")', settings)
         self.assertIn('applicationId = "com.rpideas.secretmessage.preview"', build)
-        self.assertIn('versionName = "0.2.0-preview"', build)
-        self.assertIn("versionCode = 2", build)
+        self.assertIn('versionName = "0.2.1-preview"', build)
+        self.assertIn("versionCode = 3", build)
         self.assertIn("minSdk = 26", build)
         self.assertNotIn("native-mls-rs", build.split("plugins", 1)[1])
         self.assertNotIn("jniLibs", build)
@@ -147,6 +147,8 @@ class SecretMessagePreviewContractTest(unittest.TestCase):
     def test_whisperpad_product_modules_are_present(self):
         expected = {
             "ui/CustomInputDeck.kt": ("INLINE_LETTER", "FULL_PICTURE", "valueRange = 2f..18f", "Draw pad"),
+            # Owner request after testing 0.2.0 on two phones: a drawing pad about half the screen tall.
+            "ui/DrawingPadLayout.kt": ("TARGET_HEIGHT_FRACTION = 0.5f",),
             "audio/BuiltInNotificationSound.kt": ("QUANTUM_SHIMMER",),
             "audio/ToneSynthesizer.kt": ("SAMPLE_RATE = 44_100",),
             "chat/ChatViewModel.kt": ("class ChatViewModel",),

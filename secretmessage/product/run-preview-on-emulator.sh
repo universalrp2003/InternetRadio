@@ -3,7 +3,8 @@
 #
 # It installs the debug APK on an Android 15 (API 35) emulator and drives the real UI through the
 # accessibility tree: NOT SECURE notice, built-in keyboard input, an undelivered local message,
-# settings and tone preview, drawing-pad modes, the 30-second undelivered expiry, and no crash.
+# settings and tone preview, the large square drawing pads (size and fit), the 30-second
+# undelivered expiry, drawing, inserting and sending a letter and a picture, and no crash.
 # FLAG_SECURE blocks screenshots, not the accessibility tree. This is not a physical-device test.
 set -Eeuo pipefail
 
@@ -101,6 +102,8 @@ for setting in window_animation_scale transition_animation_scale animator_durati
   "$ADB" shell settings put global "$setting" 0
 done
 "$ADB" shell input keyevent 82 >/dev/null 2>&1 || true
+read -r SCREEN_W SCREEN_H < <("$ADB" shell wm size | tr -d '\r' | sed -n 's/^Physical size: \([0-9]*\)x\([0-9]*\)$/\1 \2/p') || true
+[[ -n "${SCREEN_W:-}" && -n "${SCREEN_H:-}" ]] || fail "Could not read the emulator display size: $("$ADB" shell wm size 2>&1)"
 
 dump_ui() {
   local attempt
@@ -174,6 +177,86 @@ tap() {
   sleep 1
 }
 
+# The owner asked for a drawing pad about half the screen tall: require a square pad at least 35% of
+# the display height (the 0.2.0 pad was about 19%) with the given tool button fully on-screen below it.
+check_large_pad() {
+  local pad_desc="$1" tool_text="$2" report
+  wait_for content-desc "$pad_desc"
+  wait_for text "$tool_text"
+  if ! report="$(python3 - "$UI_XML" "$pad_desc" "$tool_text" "$SCREEN_W" "$SCREEN_H" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+path, pad_desc, tool_text, screen_w, screen_h = sys.argv[1:6]
+screen_w, screen_h = int(screen_w), int(screen_h)
+
+
+def bounds(attribute, value):
+    for node in ET.parse(path).getroot().iter("node"):
+        if node.get(attribute, "") == value:
+            match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+            if match:
+                return tuple(map(int, match.groups()))
+    return None
+
+
+pad = bounds("content-desc", pad_desc)
+tool = bounds("text", tool_text)
+if pad is None or tool is None:
+    print(f"missing node: pad={pad} tool={tool}")
+    sys.exit(1)
+width, height = pad[2] - pad[0], pad[3] - pad[1]
+problems = []
+if abs(width - height) > max(6, 0.02 * height):
+    problems.append(f"the pad is not square ({width}x{height} px)")
+if height < 0.35 * screen_h:
+    problems.append(f"the pad height {height} px is below 35% of the {screen_h} px display")
+if tool[1] < pad[3]:
+    problems.append(f"'{tool_text}' starts above the bottom of the pad ({tool[1]} < {pad[3]})")
+if tool[3] > screen_h:
+    problems.append(f"'{tool_text}' extends below the display ({tool[3]} > {screen_h})")
+summary = (
+    f"{pad_desc} {width}x{height} px ({height / screen_h:.0%} of the {screen_w}x{screen_h} display); "
+    f"'{tool_text}' at y {tool[1]}-{tool[3]}"
+)
+if problems:
+    print(summary + "; " + "; ".join(problems))
+    sys.exit(1)
+print(summary)
+PY
+  )"; then
+    fail "Large drawing pad check failed: $report"
+  fi
+  echo "PASS: $report"
+}
+
+# Draw one diagonal stroke across the middle of the pad with the given content description.
+swipe_across() {
+  local pad_desc="$1" coords
+  wait_for content-desc "$pad_desc"
+  coords="$(python3 - "$UI_XML" "$pad_desc" <<'PY'
+import re
+import sys
+import xml.etree.ElementTree as ET
+
+path, pad_desc = sys.argv[1:3]
+for node in ET.parse(path).getroot().iter("node"):
+    if node.get("content-desc", "") == pad_desc:
+        match = re.match(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+        if match:
+            x1, y1, x2, y2 = map(int, match.groups())
+            w, h = x2 - x1, y2 - y1
+            print(x1 + w * 3 // 10, y1 + h * 3 // 10, x1 + w * 7 // 10, y1 + h * 7 // 10)
+            sys.exit(0)
+sys.exit(1)
+PY
+  )" || fail "Could not locate '$pad_desc' for drawing"
+  # shellcheck disable=SC2086
+  "$ADB" shell input swipe $coords 400
+  sleep 1
+}
+
 STEP="install and launch"
 "$ADB" install -r "$APK" > "$WORK/install.log" 2>&1 || fail "$(cat "$WORK/install.log")"
 "$ADB" logcat -c
@@ -202,14 +285,15 @@ wait_for text "Notification tone"
 tap content-desc "Play Crystal Pulse"
 tap text "Back to chat"
 
-STEP="drawing pad modes"
+STEP="large drawing pads"
 tap text "Draw pad"
 # The pad controls must fit on a Pixel 2-sized screen (an earlier layout pushed them off-screen).
 wait_for text "+ Insert letter"
 wait_for content-desc "Medium letter size"
 wait_for text "Undo"
+check_large_pad "Letter drawing pad" "+ Insert letter"
 tap text "Picture"
-wait_for text "Send picture"
+check_large_pad "Picture drawing pad" "Send picture"
 tap text "English keyboard"
 wait_for text "?123"
 if (( $(date +%s) - sent_at < 25 )); then
@@ -223,9 +307,23 @@ remaining=$(( 34 - ($(date +%s) - sent_at) ))
 wait_until_gone text "Not delivered · removed in" contains "$remaining"
 wait_for text "Your preview chat"
 
+STEP="draw, insert and send on the large pads"
+tap text "Draw pad"
+tap text "Letter"
+swipe_across "Letter drawing pad"
+tap text "+ Insert letter"
+wait_for content-desc "Drawn letter"
+tap text "Send"
+tap text "Picture"
+swipe_across "Picture drawing pad"
+tap text "Send picture"
+tap text "English keyboard"
+wait_for text "Not delivered · removed in" contains 10
+wait_for content-desc "Drawn picture"
+
 STEP="crash check"
 app_alive || fail "The preview process exited during the smoke test"
 if "$ADB" logcat -d -b crash 2>/dev/null | grep -q "$PACKAGE"; then
   fail "The crash buffer contains an entry for $PACKAGE"
 fi
-echo "PASS: preview launched on API 35, showed its NOT SECURE notice, accepted built-in keyboard input, kept an undelivered local message for about 30 seconds, opened settings, played a tone, switched drawing-pad modes, and did not crash."
+echo "PASS: preview launched on API 35, showed its NOT SECURE notice, accepted built-in keyboard input, kept an undelivered local message for about 30 seconds, opened settings, played a tone, showed square drawing pads at least 35% of the display tall with their tools on-screen, sent a drawn letter and a drawn picture, and did not crash."
