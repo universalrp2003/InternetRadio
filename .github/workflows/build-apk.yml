@@ -11,12 +11,20 @@ on:
     # A dated workspace tag requests a verified batch publication; the resulting APKs
     # receive separate, version-specific release tags for each of the four requested apps.
     tags: [ "v*" ]
-    # Oor Arivippu has a separate test/release flow; skip its files and workflow-only edits.
+    # Oor Arivippu has a separate test/release flow, and the non-shipping Secret Message preview and
+    # MLS feasibility lanes have their own test-only workflows; skip their files and workflow-only edits.
     paths-ignore:
       - "oorarivippu/**"
+      - "secretmessage/**"
+      - "docs/secret-message-security-design.md"
+      - "tools/tests/test_secretmessage_preview_contract.py"
       - ".github/workflows/build-apk.yml"
       - ".github/workflows/oorarivippu-release.yml"
       - ".github/workflows/oorarivippu-test-apk.yml"
+      - ".github/workflows/secret-message-preview.yml"
+      - ".github/workflows/secret-message-mls-rs-candidate.yml"
+      - ".github/workflows/secret-message-mls-spike.yml"
+      - ".github/workflows/secret-message-mls-upstream-candidate.yml"
   workflow_dispatch:
     inputs:
       release_tag:
