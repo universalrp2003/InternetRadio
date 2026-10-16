@@ -10,7 +10,7 @@ Five actively maintained, open-source Android apps developed by **Ramesh prathap
 | **RP Vocal Remover Studio** | `vocalremover` | [0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | 10+ (API 29) | Local vocal reduction with WAV output and optional MP3 export. |
 | **Oor Arivippu** | `oorarivippu` | [1.0.1](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.1) | 8.0+ (API 26) | Tamil/English GPS place and destination announcer with configurable offline-status reminders. |
 
-**Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview only echoes text/drawings locally; it has no network connection or cryptography. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
+**Secret Message is in development and is not a released or secure messenger.** Its isolated `:secretmessage` preview (0.2.0-preview) shows the WhisperPad product screens on one phone only: built-in keyboard and drawing pad, timers, tones and an optional app lock. It has no network connection, pairing or cryptography, and messages are never delivered; each unsent message disappears after 30 seconds. Do not enter sensitive content. See [`docs/secret-message-security-design.md`](docs/secret-message-security-design.md).
 
 ## Stable releases
 
@@ -52,7 +52,7 @@ The project uses JDK 17, Gradle 8.14.3, the Android SDK and NDK. Open the reposi
 ./gradlew :oorarivippu:testReleaseUnitTest :oorarivippu:lintRelease :oorarivippu:assembleRelease
 ```
 
-For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions builds the four legacy batch apps and performs the required localization, regression, package/version/signature and release-asset checks. Oor Arivippu has its own test and marker-gated stable release workflows. The preview is excluded from every release and bundle task. Hosted compilation, unit tests and the merged-APK network-permission gate passed in [run 38678283393](https://github.com/universalrp2003/InternetRadio/actions/runs/38678283393). The four-app batch workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio and Oor Arivippu are distributed as standalone APKs.
+For the **non-shipping Secret Message preview only**, run `./gradlew :secretmessage:testDebugUnitTest :secretmessage:lintDebug :secretmessage:assembleDebug`; this produces a debug preview, not a release APK. GitHub Actions builds the four legacy batch apps and performs the required localization, regression, package/version/signature and release-asset checks. Oor Arivippu has its own test and marker-gated stable release workflows. The preview is excluded from every release and bundle task and has its own test-only workflow (`secret-message-preview.yml`): contract test, unit tests, lint, debug APK, a merged-permission allowlist, and a hosted API 35 emulator UI smoke test. All of these passed in [run 38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621); that is not a physical-device test. The four-app batch workflow generates Play bundles for CleanSweep, Ramesh Radio and PulseEQ; RP Vocal Remover Studio and Oor Arivippu are distributed as standalone APKs.
 
 ## Project scope and repository URLs
 

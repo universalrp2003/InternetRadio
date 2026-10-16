@@ -1,17 +1,74 @@
-# Secret Message local UI preview
+# Secret Message local UI preview (0.2.0-preview)
 
-This is an Android **preview shell**, not the Secret Message product or a secure messenger. It is included as `:secretmessage` so the UI and expiry behavior can be built and tested independently.
+This is an Android **preview shell**, not the Secret Message product or a secure messenger. It is included as `:secretmessage` so the product screens and timer behavior can be built and tested before any secure transport exists. The app is labelled **NOT SECURE** and must not be used for sensitive content.
 
 ## What this preview does
 
-- Renders a chat-shaped screen with an in-app QWERTY/symbol keyboard and a freehand drawing canvas.
-- Echoes a submitted text or drawing only into the current screen's in-memory state.
-- Removes each local preview item 60 seconds after the local Send/Add action, using Android elapsed-realtime rather than the wall clock.
-- Sets Android `FLAG_SECURE` as a best-effort screenshot/recording deterrent; this is not an absolute guarantee.
-- Declares no Android permissions in its source manifest. CI checks that the merged APK has no network permissions. In particular, this module has no pairing, signaling, transport, persistence, identity, or cryptographic implementation.
+Version 0.2.0-preview (code 2) adapts the owner-approved **WhisperPad** product/UI modules from the *New WhisperPad P2P Android Agent Blueprint (MLS-Compatible Edition)*. WhisperPad is the product/UI layer for Secret Message, not a separate app.
 
-The prominent in-app warning is intentional: **do not enter sensitive content**. The preview does not encrypt, deliver, or receive messages. Its local 60-second timer is only UI behavior and does not demonstrate expiry after authenticated delivery. Preview content is not saved to a database or restored through saved-instance state, but no claim is made about secure memory erasure or operating-system snapshots.
+- **Built-in input deck (`ui/CustomInputDeck.kt`).** It provides an English QWERTY/symbol keyboard, so the system keyboard is never opened, with a **Draw pad** switch.
+  - **Letter mode:** draw a letter or word in any script on a square pad, then insert it inline at Small/Medium/Large size.
+  - **Picture mode:** draw a standalone sketch on a 3:2 pad.
+  - Line width is adjustable from 2 to 18, with Undo, Clear and Delete.
+  - The deck transmits strokes, not recognized words: there is no handwriting recognition or translation. A single tap is kept as a dot, so marks such as the Tamil pulli survive.
+- **Six original notification tones (`audio/`).** They are generated in code as 16-bit 44.1 kHz PCM and played at the notification volume from Settings. No audio files are bundled. The blueprint's sweep and vibrato tones are corrected to accumulate oscillator phase, and every tone fades in and out to avoid clicks.
+- **RAM-only chat state with the owner's timer rules (`chat/`).** A pure `ChatStateMachine` drives `ChatViewModel`:
+  - A sent message is **undelivered** until an authenticated delivery acknowledgement arrives, and is removed **30 seconds after Send**. There is no offline queue and no resend.
+  - The **60–300 second** recipient-view countdown is user-selected in 30-second steps and cannot be turned off. It starts only when the recipient views an authenticated delivery; the sender uses its own configured duration.
+  - Purge requests are offered once, duplicates and acknowledgements for unknown messages are ignored, and memory is bounded.
+  - All timers use Android elapsed realtime. No wall-clock timestamps are sent; the blueprint's `createdAtEpochMs`/`viewedAtEpochMs` fields were removed.
+- **Transport boundary (`transport/SecretMessageMlsTransport.kt`).** This interface comes from the blueprint, and messaging must go through it. Its **only implementation is `UnavailableMlsTransport`**: every send returns false and nothing can arrive.
+  - In this preview, every message therefore stays "Not delivered" and disappears after 30 seconds.
+  - The recipient-view countdown is implemented and unit-tested, but it never starts here.
+- **Optional local app lock (`security/`).** It uses AndroidX BiometricPrompt: fingerprint, face, or the phone's own screen-lock PIN, pattern or password.
+  - It locks on launch and when you return to the app. A prompt you dismiss is not reopened in a loop.
+  - Android 9–10 (API 28–29) use `BIOMETRIC_WEAK | DEVICE_CREDENTIAL`, because AndroidX Biometric rejects the blueprint's `BIOMETRIC_STRONG | DEVICE_CREDENTIAL` on those versions.
+  - If the phone loses its screen lock, the app lock turns itself off. Removing the screen lock already requires the current credential.
+  - Biometric data stays with Android.
+- **Privacy hygiene.** `FLAG_SECURE` is set as a best-effort screenshot and recents deterrent, not a guarantee. The manifest adds WhisperPad `tools:node="remove"` rules for network, camera, microphone, storage, media, contacts, location, Bluetooth and notification permissions. Backup and device-to-device transfer are excluded.
+  - Only three non-content settings are kept in app-private preferences: view timer, tone and app-lock switch.
+  - Message text and drawings are never written to disk or saved-instance state.
+- **Merged APK permissions.** The only permissions are install-time `USE_BIOMETRIC` and `USE_FINGERPRINT` (added by AndroidX Biometric for the optional lock), plus AndroidX Core's app-internal `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. There are no runtime (dangerous) permissions and no network permission. CI fails if any other permission appears.
 
-The independent `../native-mls-rs` candidate remains a test-only feasibility harness. It is not linked into this app. The standalone `../android-smoke` APK is also not this app. Passing the candidate or preview tests does not establish security, interoperability, or release readiness.
+## Deliberately not included
 
-Build the debug preview with `./gradlew :secretmessage:assembleDebug`; run its pure policy tests with `./gradlew :secretmessage:testDebugUnitTest`. Hosted compilation, unit tests, and the merged-APK network-permission gate passed in [run 38678283393](https://github.com/universalrp2003/InternetRadio/actions/runs/38678283393). No physical-device UX test or connected two-phone test has been performed.
+The blueprints were reviewed against `docs/secret-message-security-design.md`. These parts were not adopted:
+
+- **Homegrown crypto.** No ECDH/HKDF/PBKDF2/AES `CryptoEngine`, 6-character shared secrets, or WebRTC client with its own encryption: the design forbids custom handshakes and ciphers.
+- **Hardware transcript signing.** `BiometricAuthManager`'s P-256 "transcript signing" is excluded, because an extra signature outside MLS would be a custom handshake addition. Hardware-backed MLS identity remains a separate design and device-test gate.
+- **Unreviewed services.** No signaling server, TURN service, or automatic GitHub release workflow with generated signing keys.
+- **Notifications.** `EphemeralNotificationManager` is **deferred**. The preview never receives messages, so posting notifications would only add `POST_NOTIFICATIONS` without a function. When a transport exists, notifications must stay content-free.
+- **MLS.** No MLS candidate is linked. The `../native-mls-rs` and `../native` lanes and the standalone `../android-smoke` APK stay separate, test-only feasibility work. Connecting `SecretMessageMlsTransport` to MLS requires the library/provider, identity-binding, dependency, audit and license gates in the security design to pass first.
+
+## Build and test
+
+```sh
+./gradlew :secretmessage:testDebugUnitTest :secretmessage:lintDebug :secretmessage:assembleDebug
+```
+
+This produces a debug preview only. The release/bundle and four-app publication tasks exclude it.
+
+The dedicated workflow `.github/workflows/secret-message-preview.yml` (test only) does the following:
+
+1. Runs the source contract test.
+2. Runs the unit tests and Android lint, and builds the debug APK.
+3. Verifies the NOT SECURE label, the package name and a strict merged-permission allowlist, and reports the APK SHA-256.
+4. Uploads a 14-day test-only artifact.
+5. Runs a UI smoke test on a hosted Android 15 (API 35) emulator (`run-preview-on-emulator.sh`). It checks:
+   - the NOT SECURE notice;
+   - built-in keyboard input;
+   - an undelivered message that is still shown during the 30-second window and then disappears;
+   - the settings screen and tone preview;
+   - both drawing-pad modes;
+   - that the app does not crash.
+
+Run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621) (commit `d93ccca`) passed all of these steps:
+
+- **Unit tests:** 37 tests in 8 classes, with no failures.
+- **Artifact:** `secretmessage-preview-debug-apk-4`, available until 30 October 2026.
+- **APK:** `secretmessage-debug.apk`, 17,952,802 bytes, SHA-256 `e04e4e273de5a36d2bce52f8c49a34ad72cef29e6f8d7e5a5c645687df31866b`.
+- **Not a device test:** the emulator run is not a physical-device test.
+
+An earlier run of the same smoke test found that the drawing-pad controls did not fit on a Pixel 2-sized screen. The layout was fixed before this pass.
+
+To try it on a phone, download the artifact from the run page, unzip it, and install `secretmessage-debug.apk`. CI debug builds are signed with per-run debug keys, so uninstall an earlier preview first if Android refuses the update. No physical-device test of 0.2.0-preview and no two-phone test has been performed. Passing these checks does not establish security, interoperability or release readiness.
