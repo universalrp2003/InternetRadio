@@ -278,7 +278,11 @@ object BilingualStrings {
     }
 
     /**
-     * Formats the spoken voice announcement text in Tamil ("ta") or English ("en").
+     * Formats the spoken place announcement in Tamil ("ta", the default) or English ("en").
+     *
+     * Place announcements repeat throughout a journey, so they speak only the place names,
+     * without filler such as "Entering" or "தற்போது … ஊருக்குள் வந்துள்ளீர்கள்". The closing
+     * full stop separates sentences when a district or landmark announcement follows.
      */
     fun buildSpokenAnnouncement(
         voiceLang: String,
@@ -287,27 +291,16 @@ object BilingualStrings {
         subArea: String?,
         includeSubArea: Boolean
     ): String {
-        return if (voiceLang == "en") {
-            if (isNewCityOrVillage) {
-                if (includeSubArea && !subArea.isNullOrBlank() && !subArea.equals(cityOrVillage, ignoreCase = true)) {
-                    "Entering $cityOrVillage, $subArea."
-                } else {
-                    "Entering $cityOrVillage."
-                }
-            } else {
-                "Entering $subArea, $cityOrVillage."
-            }
-        } else {
-            // Default Tamil ("ta")
-            if (isNewCityOrVillage) {
-                if (includeSubArea && !subArea.isNullOrBlank() && !subArea.equals(cityOrVillage, ignoreCase = true)) {
-                    "தற்போது $cityOrVillage, $subArea பகுதிக்கு வந்துள்ளீர்கள்."
-                } else {
-                    "தற்போது $cityOrVillage ஊருக்குள் வந்துள்ளீர்கள்."
-                }
-            } else {
-                "$cityOrVillage, அடுத்த பகுதி $subArea."
-            }
+        val includesDistinctSubArea = includeSubArea &&
+            !subArea.isNullOrBlank() &&
+            !subArea.equals(cityOrVillage, ignoreCase = true)
+        return when {
+            // A new town, village or city reads the same in both languages: "Alangudi, Santhappettai."
+            isNewCityOrVillage && includesDistinctSubArea -> "$cityOrVillage, $subArea."
+            isNewCityOrVillage -> "$cityOrVillage."
+            // The next area within the same town.
+            voiceLang == "en" -> "$subArea, $cityOrVillage."
+            else -> "$cityOrVillage, அடுத்த பகுதி $subArea."
         }
     }
 
@@ -333,9 +326,10 @@ object BilingualStrings {
             "இணைய இணைப்பு இல்லை. இணையம் திரும்பும் வரை இடப் பெயர் மற்றும் இலக்கு குரல் அறிவிப்புகள் நிறுத்தப்பட்டுள்ளன."
         }
 
+    /** Names the new district without filler, matching the place announcements. */
     fun buildDistrictAnnouncement(voiceLang: String, district: String): String =
-        if (voiceLang == "en") "Entering $district district."
-        else "$district மாவட்டத்திற்குள் வந்தடைந்தீர்கள்."
+        if (voiceLang == "en") "$district district."
+        else "$district மாவட்டம்."
 
     fun buildHighwayLandmarkAnnouncement(voiceLang: String, landmark: String): String =
         if (voiceLang == "en") "Approaching $landmark."

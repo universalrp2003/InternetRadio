@@ -1,6 +1,7 @@
 package com.oorarivippu.voiceannouncer
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -15,7 +16,7 @@ class BilingualStringsTest {
     @Test
     fun englishCityAnnouncementCanIncludeSubArea() {
         assertEquals(
-            "Entering Pudukkottai, Town Centre.",
+            "Pudukkottai, Town Centre.",
             BilingualStrings.buildSpokenAnnouncement(
                 voiceLang = "en",
                 isNewCityOrVillage = true,
@@ -54,7 +55,7 @@ class BilingualStringsTest {
             BilingualStrings.buildDestinationAnnouncement("en", "Pudukkottai", 5_000, arrived = false)
         )
         assertEquals(
-            "Entering Pudukkottai district.",
+            "Pudukkottai district.",
             BilingualStrings.buildDistrictAnnouncement("en", "Pudukkottai")
         )
         assertEquals(
@@ -70,6 +71,70 @@ class BilingualStringsTest {
             BilingualStrings.buildWhereAmIAnnouncement("en", "Alangudi", "Town Centre", "5:20 PM")
         )
     }
+
+    @Test
+    fun placeAnnouncementsSpeakOnlyThePlaceNames() {
+        assertEquals("ஆலங்குடி.", place("ta", newTown = true, town = "ஆலங்குடி", area = null))
+        assertEquals(
+            "ஆலங்குடி, சந்தைப்பேட்டை.",
+            place("ta", newTown = true, town = "ஆலங்குடி", area = "சந்தைப்பேட்டை")
+        )
+        assertEquals(
+            "ஆலங்குடி, அடுத்த பகுதி கம்பர் தெரு.",
+            place("ta", newTown = false, town = "ஆலங்குடி", area = "கம்பர் தெரு")
+        )
+        assertEquals("Alangudi.", place("en", newTown = true, town = "Alangudi", area = null))
+        assertEquals(
+            "Kambar Street, Alangudi.",
+            place("en", newTown = false, town = "Alangudi", area = "Kambar Street")
+        )
+        // The sub-area is left out when the option is off or it only repeats the town name.
+        assertEquals(
+            "Alangudi.",
+            place("en", newTown = true, town = "Alangudi", area = "Santhappettai", includeArea = false)
+        )
+        assertEquals("ஆலங்குடி.", place("ta", newTown = true, town = "ஆலங்குடி", area = "ஆலங்குடி"))
+        assertEquals("Alangudi.", place("en", newTown = true, town = "Alangudi", area = "ALANGUDI"))
+        assertEquals("புதுக்கோட்டை மாவட்டம்.", BilingualStrings.buildDistrictAnnouncement("ta", "புதுக்கோட்டை"))
+    }
+
+    @Test
+    fun repeatedPlaceAnnouncementsHaveNoFillerWords() {
+        val fillerWords = listOf(
+            "Entering", "தற்போது", "வந்துள்ளீர்கள்", "ஊருக்குள்", "பகுதிக்கு",
+            "மாவட்டத்திற்குள்", "வந்தடைந்தீர்கள்"
+        )
+        // "unknown" exercises the Tamil default used for any non-English voice language.
+        val announcements = listOf("ta", "en", "unknown").flatMap { language ->
+            listOf(
+                place(language, newTown = true, town = "Alangudi", area = null),
+                place(language, newTown = true, town = "Alangudi", area = "Santhappettai"),
+                place(language, newTown = false, town = "Alangudi", area = "Kambar Street"),
+                BilingualStrings.buildDistrictAnnouncement(language, "Pudukkottai")
+            )
+        }
+        announcements.forEach { text ->
+            fillerWords.forEach { word ->
+                assertFalse("\"$text\" still contains \"$word\"", text.contains(word))
+            }
+            // A district or landmark sentence may be appended, so each part ends a sentence.
+            assertTrue("\"$text\" must end with a full stop", text.endsWith("."))
+        }
+    }
+
+    private fun place(
+        language: String,
+        newTown: Boolean,
+        town: String,
+        area: String?,
+        includeArea: Boolean = true
+    ): String = BilingualStrings.buildSpokenAnnouncement(
+        voiceLang = language,
+        isNewCityOrVillage = newTown,
+        cityOrVillage = town,
+        subArea = area,
+        includeSubArea = includeArea
+    )
 
     @Test
     fun offlineReminderClearlySaysInternetIsUnavailableInBothLanguages() {

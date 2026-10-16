@@ -1099,7 +1099,7 @@ fun OorArivippuScreen(
                         ui.radioReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
                         ui.pulseEqReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
                         ui.vocalRemoverReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
-                        ui.oorArivippuReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.1"
+                        ui.oorArivippuReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2"
                     )
                     releaseLinks.forEach { (label, url) ->
                         TextButton(
