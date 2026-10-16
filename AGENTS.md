@@ -30,6 +30,7 @@
 - Keep connectivity-loss status explicit, suppress place/destination speech while offline, and offer only the configured periodic offline-status reminder. The reminder uses a verified local TTS voice or a short notification-stream beep; it must not invoke online geocoding/voice for offline-status speech.
 - Keep tracking user-controlled and visible in the ongoing foreground notification. Preserve the optional headset “Where am I?” control and avoid announcing while call audio is active.
 - The service field declaration is `private val travelDetector = TravelStateDetector()`; preserve that exact declaration when making related edits.
+- Owner-requested fixes for the next Oor update (16 October 2026, after 1.0.2): do not announce the geocoder's “Unnamed Road” placeholder (Tamil “பெயரில்லாத சாலை”) as an area, and do not announce the same town again when the geocoder only switches its script (for example ஆலங்குடி, then Alangudi about a minute and a half later). Both appear in the owner's screenshots and are not fixed in 1.0.2. Place announcements speak only the names since 1.0.2; keep them free of filler such as “Entering” or “தற்போது … வந்துள்ளீர்கள்”.
 - About content must include the project and AI-assistance credits, source/download repository links, current app release links, and the verified updater. Keep the updater language synchronized with the app's Tamil/English preference.
 
 ## Live Guard (CleanSweep)

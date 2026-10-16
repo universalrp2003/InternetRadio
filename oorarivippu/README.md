@@ -44,6 +44,13 @@ When internet access is unavailable, GPS tracking may continue, but place-name, 
 - Observe the displayed adaptive GPS interval: about 45 seconds while stationary, 15 seconds in ordinary traffic, and 5 seconds at highway speeds. These are requested intervals, not a measured battery-saving percentage; Android/OEM batching, GPS quality and movement detection can change real behavior. Reverse geocoding is limited to at most once per 30 seconds and generally requires at least 100 m displacement.
 - Continuous GPS tracking can still use substantial battery. Stop tracking when finished.
 
+## Planned for the next update
+
+The owner asked for these fixes in the next version; they are not in 1.0.2:
+
+- Do not announce Google's “Unnamed Road” placeholder (Tamil “பெயரில்லாத சாலை”) as an area name.
+- Do not announce the same town twice when the geocoder switches between Tamil and English script, for example “ஆலங்குடி” and then “Alangudi” about a minute and a half later.
+
 ## Build and CI
 
 ```bash
