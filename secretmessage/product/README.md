@@ -69,7 +69,7 @@ Run [38842553168](https://github.com/universalrp2003/InternetRadio/actions/runs/
 - **Unit tests:** 42 tests in 9 classes, including 5 for the pad size, with no failures.
 - **Artifact:** `secretmessage-preview-debug-apk-5`, available until 30 October 2026.
 - **APK:** `secretmessage-debug.apk`, version 0.2.1-preview, 17,952,802 bytes, SHA-256 `f0f4854a56bf716d8aa717ef96d4c39bb283dac2a2d5e9d1c94dea7f9a1e315b`.
-- **Not yet on a phone:** 0.2.1-preview has only been tested on the emulator.
+- **Owner device test:** on 16 October 2026 the owner tested 0.2.1-preview and reported liking the larger drawing pad. No screenshots or APK hash were supplied for this build.
 
 For 0.2.0-preview, run [38835582621](https://github.com/universalrp2003/InternetRadio/actions/runs/38835582621) (commit `d93ccca`) passed the checks of that version:
 
