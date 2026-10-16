@@ -359,7 +359,9 @@ pub mod spike_harness {
     }
 
     mod lan_smoke;
-    pub use lan_smoke::{run_lan_mls_host, run_lan_mls_join};
+    pub use lan_smoke::{
+        lan_safety_code, run_lan_mls_host, run_lan_mls_join, submit_lan_safety_decision,
+    };
 
     #[cfg(test)]
     mod tests {

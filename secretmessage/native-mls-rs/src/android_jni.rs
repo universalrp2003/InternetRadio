@@ -86,3 +86,47 @@ pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_runNati
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
+
+/// Returns the safety code waiting for this phone's user, or an empty string.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeLanSafetyCode<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let code = catch_unwind(crate::spike_harness::lan_safety_code)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            env.new_string(code).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Passes this phone's answer (1 = the codes match) to the waiting LAN test.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeSubmitLanSafetyDecision<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+    codes_match: jint,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let delivered = catch_unwind(move || {
+                crate::spike_harness::submit_lan_safety_decision(codes_match == 1)
+            })
+            .unwrap_or(false);
+            let status = if delivered {
+                "Answer passed to the LAN test."
+            } else {
+                "No safety-code comparison is waiting."
+            };
+            env.new_string(status).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}

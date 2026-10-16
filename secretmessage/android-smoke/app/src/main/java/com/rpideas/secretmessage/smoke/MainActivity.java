@@ -4,11 +4,15 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Intent;
+import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
@@ -30,8 +34,18 @@ public final class MainActivity extends Activity {
     private static final String TAG_MLS = "MLS_SMOKE";
     private static final String TAG_LAN = "LAN_SMOKE";
     private static final String NATIVE_LIBRARY = "secretmessage_mls_spike";
+    private static final long SAFETY_POLL_MS = 400;
 
     private final AtomicBoolean lanTaskRunning = new AtomicBoolean(false);
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final Runnable safetyCodePoller = this::pollSafetyCode;
+    private ScrollView scrollView;
+    private LinearLayout safetyPanel;
+    private TextView safetyCodeView;
+    private Button codesMatchButton;
+    private Button codesDifferButton;
+    private String shownSafetyCode = "";
+    private String safetyCheckResult = "Not reached";
     private TextView deviceInfo;
     private TextView localStatusView;
     private TextView lanStatusView;
@@ -45,6 +59,8 @@ public final class MainActivity extends Activity {
     private native String runNativeSmoke();
     private native String runNativeLanHost(String hostIp, int port, String token);
     private native String runNativeLanJoin(String hostIp, int port, String token);
+    private native String nativeLanSafetyCode();
+    private native String nativeSubmitLanSafetyDecision(int codesMatch);
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -59,6 +75,12 @@ public final class MainActivity extends Activity {
     }
 
     @Override
+    protected void onDestroy() {
+        uiHandler.removeCallbacks(safetyCodePoller);
+        super.onDestroy();
+    }
+
+    @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
@@ -67,6 +89,7 @@ public final class MainActivity extends Activity {
 
     private void buildUi() {
         ScrollView scroll = new ScrollView(this);
+        scrollView = scroll;
         scroll.setFillViewport(true);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -84,9 +107,11 @@ public final class MainActivity extends Activity {
         notice.setText(
                 "TEST ONLY — NOT A SECURE CHAT APP. The local MLS button runs synthetic members "
                         + "on this device. The LAN test sends only fixed synthetic MLS messages "
-                        + "between devices on the same Wi-Fi. It accepts unverified test identities, "
-                        + "saves no messages, and must not be used for private or real messages. "
-                        + "SMS shares only a short-lived local invite; it is not identity verification.");
+                        + "between devices on the same Wi-Fi, and only after both people confirm that "
+                        + "their phones show the same MLS safety code. Identities are temporary test "
+                        + "keys, nothing is saved, and it must not be used for private or real "
+                        + "messages. SMS shares only a short-lived local invite; the invite is not "
+                        + "identity verification, the safety-code comparison is.");
         notice.setTextSize(15);
         addWithTopMargin(root, notice, 12);
 
@@ -113,8 +138,11 @@ public final class MainActivity extends Activity {
             TextView lanNotice = new TextView(this);
             lanNotice.setText(
                     "Put both devices on the same non-guest Wi-Fi. One device creates and shares an "
-                            + "invite; the other opens or pastes it and taps Join. The invite expires "
-                            + "after about 3 minutes. Router client isolation can block this test.");
+                            + "invite; the other opens or pastes it and taps Join. Both phones then "
+                            + "show a 20-digit safety code: compare them side by side and tap Codes "
+                            + "match on both phones only if every digit is the same. The invite "
+                            + "expires after about 3 minutes. Router client isolation can block this "
+                            + "test.");
             lanNotice.setTextSize(14);
             addWithTopMargin(root, lanNotice, 8);
 
@@ -151,6 +179,40 @@ public final class MainActivity extends Activity {
             lanStatusView.setTextSize(15);
             addWithTopMargin(root, lanStatusView, 8);
 
+            safetyPanel = new LinearLayout(this);
+            safetyPanel.setOrientation(LinearLayout.VERTICAL);
+            safetyPanel.setVisibility(View.GONE);
+            addWithTopMargin(root, safetyPanel, 12);
+
+            TextView safetyTitle = new TextView(this);
+            safetyTitle.setText("Compare the safety code");
+            safetyTitle.setTextSize(18);
+            safetyPanel.addView(safetyTitle, matchWrap());
+
+            safetyCodeView = new TextView(this);
+            safetyCodeView.setTextSize(30);
+            safetyCodeView.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+            safetyCodeView.setGravity(Gravity.CENTER);
+            addWithTopMargin(safetyPanel, safetyCodeView, 8);
+
+            TextView safetyHint = new TextView(this);
+            safetyHint.setText(
+                    "Both phones must show exactly the same 20 digits. Hold them side by side and "
+                            + "check every group. Tap Codes match only if all digits are the same. "
+                            + "If any digit differs, tap Codes differ: another device may be "
+                            + "intercepting the connection.");
+            safetyHint.setTextSize(14);
+            addWithTopMargin(safetyPanel, safetyHint, 8);
+
+            codesMatchButton = new Button(this);
+            codesMatchButton.setText("Codes match");
+            addWithTopMargin(safetyPanel, codesMatchButton, 8);
+            codesMatchButton.setOnClickListener(view -> answerSafetyCode(true));
+
+            codesDifferButton = new Button(this);
+            codesDifferButton.setText("Codes differ");
+            addWithTopMargin(safetyPanel, codesDifferButton, 8);
+            codesDifferButton.setOnClickListener(view -> answerSafetyCode(false));
         }
 
         Button copyButton = new Button(this);
@@ -197,6 +259,7 @@ public final class MainActivity extends Activity {
             Log.e(TAG_LAN, lanResult, error);
             return;
         }
+        resetSafetyCheck();
         final int port = 40000 + new SecureRandom().nextInt(20000);
         final String token = newInviteToken();
         inviteUri = new Uri.Builder()
@@ -225,6 +288,7 @@ public final class MainActivity extends Activity {
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-host").start();
+        startSafetyCodePolling();
     }
 
     private void shareInvite() {
@@ -253,6 +317,7 @@ public final class MainActivity extends Activity {
             lanStatusView.setText("LAN MLS: " + lanResult);
             return;
         }
+        resetSafetyCheck();
         lanResult = "Connecting directly to the private LAN host; no relay is used.";
         lanStatusView.setText("LAN MLS: " + lanResult);
         new Thread(() -> {
@@ -267,6 +332,7 @@ public final class MainActivity extends Activity {
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-join").start();
+        startSafetyCodePolling();
     }
 
     private void finishLanTask(String result) {
@@ -275,11 +341,84 @@ public final class MainActivity extends Activity {
             lanStatusView.setText("LAN MLS: " + result);
             Log.i(TAG_LAN, result);
             lanTaskRunning.set(false);
+            uiHandler.removeCallbacks(safetyCodePoller);
+            if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
+            shownSafetyCode = "";
             inviteUri = null;
             if (shareInviteButton != null) shareInviteButton.setEnabled(false);
             if (invitePreview != null) invitePreview.setText("No active invite");
             updateDiagnostics();
         });
+    }
+
+    private void resetSafetyCheck() {
+        shownSafetyCode = "";
+        safetyCheckResult = "Not reached";
+        if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
+    }
+
+    private void startSafetyCodePolling() {
+        try {
+            // Idempotent; the worker thread reports any load failure as the test result.
+            System.loadLibrary(NATIVE_LIBRARY);
+        } catch (Throwable reportedByWorker) {
+            // Polling keeps retrying until the worker finishes.
+        }
+        uiHandler.removeCallbacks(safetyCodePoller);
+        uiHandler.postDelayed(safetyCodePoller, SAFETY_POLL_MS);
+    }
+
+    private void pollSafetyCode() {
+        if (!lanTaskRunning.get()) return;
+        String code = "";
+        try {
+            code = nativeLanSafetyCode();
+        } catch (Throwable notLoadedYet) {
+            // The worker thread may still be loading the test-only native library.
+        }
+        if (code != null && !code.isEmpty() && !code.equals(shownSafetyCode)) {
+            showSafetyCode(code);
+        }
+        uiHandler.postDelayed(safetyCodePoller, SAFETY_POLL_MS);
+    }
+
+    private void showSafetyCode(String code) {
+        shownSafetyCode = code;
+        safetyCheckResult = "Shown on this phone: " + code + " (not answered)";
+        safetyCodeView.setText(twoLineCode(code));
+        codesMatchButton.setEnabled(true);
+        codesDifferButton.setEnabled(true);
+        safetyPanel.setVisibility(View.VISIBLE);
+        lanResult = "Compare the safety code with the other phone, then answer below.";
+        lanStatusView.setText("LAN MLS: " + lanResult);
+        scrollView.post(() -> scrollView.smoothScrollTo(0, safetyPanel.getTop()));
+    }
+
+    private void answerSafetyCode(boolean codesMatch) {
+        codesMatchButton.setEnabled(false);
+        codesDifferButton.setEnabled(false);
+        String reply;
+        try {
+            reply = nativeSubmitLanSafetyDecision(codesMatch ? 1 : 0);
+        } catch (Throwable failure) {
+            reply = "Could not pass the answer: " + failure.getClass().getSimpleName();
+        }
+        safetyCheckResult = (codesMatch ? "Confirmed on this phone: " : "Reported different on this phone: ")
+                + shownSafetyCode;
+        lanResult = codesMatch
+                ? "You confirmed the code; waiting for the other phone's answer."
+                : "You reported different codes; telling the other phone and stopping.";
+        lanStatusView.setText("LAN MLS: " + lanResult + " (" + reply + ")");
+        Log.i(TAG_LAN, codesMatch
+                ? "This phone's user confirmed the safety code."
+                : "This phone's user reported a different safety code.");
+    }
+
+    /** Shows the four groups on two lines so the code fits a narrow phone at a large size. */
+    private static String twoLineCode(String code) {
+        String[] groups = code.trim().split(" ");
+        if (groups.length != 4) return code;
+        return groups[0] + " " + groups[1] + "\n" + groups[2] + " " + groups[3];
     }
 
     private void acceptInviteFromIntent(Intent intent) {
@@ -308,6 +447,7 @@ public final class MainActivity extends Activity {
         return deviceReport()
                 + "\nLocal MLS smoke: " + localResult
                 + "\nLAN MLS smoke: " + lanResult
+                + "\nSafety code check: " + safetyCheckResult
                 + "\nScope: fixed synthetic MLS messages only; no chat history or user text.";
     }
 
@@ -317,7 +457,8 @@ public final class MainActivity extends Activity {
 
     private String deviceReport() {
         String abi = Build.SUPPORTED_ABIS.length == 0 ? "unknown" : Build.SUPPORTED_ABIS[0];
-        return "Device: " + Build.MANUFACTURER + " " + Build.MODEL
+        return "Test APK: " + BuildConfig.VERSION_NAME
+                + "\nDevice: " + Build.MANUFACTURER + " " + Build.MODEL
                 + "\nAndroid: " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")"
                 + "\nABI: " + abi;
     }
