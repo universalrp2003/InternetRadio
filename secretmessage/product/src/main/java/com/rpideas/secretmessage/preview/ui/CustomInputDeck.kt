@@ -387,7 +387,7 @@ private fun EnglishKeyboardLayout(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         rows.forEachIndexed { rowIndex, keys ->
             Row(
@@ -447,6 +447,9 @@ private fun EnglishKeyboardLayout(
     }
 }
 
+/** Keys about as tall as a phone's own keyboard (owner request after the 0.4.0 Internet test). */
+private val KEY_HEIGHT = 54.dp
+
 @Composable
 private fun KeyButton(
     label: String,
@@ -456,7 +459,7 @@ private fun KeyButton(
 ) {
     Box(
         modifier = modifier
-            .height(42.dp)
+            .height(KEY_HEIGHT)
             .clip(RoundedCornerShape(6.dp))
             .background(background)
             .border(0.5.dp, KeyBorder, RoundedCornerShape(6.dp))
@@ -466,7 +469,7 @@ private fun KeyButton(
         Text(
             text = label,
             color = Color.White,
-            fontSize = if (label.length > 2) 12.sp else 15.sp,
+            fontSize = if (label.length > 2) 14.sp else 22.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
         )

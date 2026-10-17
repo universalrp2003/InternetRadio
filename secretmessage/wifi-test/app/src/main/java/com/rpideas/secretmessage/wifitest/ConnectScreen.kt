@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -75,11 +74,6 @@ internal fun ConnectScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Header(onOpenSettings)
-        Section(color = Color(0xFF342B20)) {
-            Text(WifiWording.NOTICE_TITLE, color = Warm, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Text(WifiWording.NOTICE_BODY, color = Color(0xFFFFE6C7), fontSize = 12.sp, lineHeight = 16.sp)
-            Text("Engine: $engineInfo", color = Color(0xFFFFE6C7), fontSize = 11.sp, lineHeight = 15.sp)
-        }
         if (notice != null) {
             Text(notice, color = Warm, fontSize = 13.sp, lineHeight = 18.sp)
         }
@@ -101,7 +95,7 @@ internal fun ConnectScreen(
             is ConnectionState.Connected -> InfoSection("Connected", "Opening the chat…")
             is ConnectionState.Ending -> InfoSection(state.note, "Messages are removed from both phones.")
         }
-        PhoneSection(identitySummary, idle = state is ConnectionState.Idle, actions)
+        PhoneSection(identitySummary, engineInfo, idle = state is ConnectionState.Idle, actions)
         Spacer(Modifier.padding(bottom = 8.dp))
     }
 }
@@ -111,18 +105,9 @@ private fun Header(onOpenSettings: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column {
             Text("Secret Message", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
-            Text(WifiWording.TEST_LABEL, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
+            Text(WifiWording.SUBTITLE, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
         }
         Spacer(Modifier.weight(1f))
-        Surface(shape = CircleShape, color = Color(0xFF3A3026)) {
-            Text(
-                WifiWording.BADGE,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                color = Warm,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-            )
-        }
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Outlined.Settings, contentDescription = "Settings", tint = Accent)
         }
@@ -168,16 +153,13 @@ private fun IdleSection(state: ConnectionState.Idle, pendingInvite: String?, act
     }
     Section {
         Title("Start or join a chat")
-        Note(
-            "One phone starts the chat and sends the invite; the other phone joins it. Then you both compare a " +
-                "20-digit safety code. Works on mobile data or any Wi-Fi: both phones connect to the owner's test " +
-                "relay, which passes along only encrypted data.",
-        )
+        Note("Start a chat and send the invite; the other phone joins. Then you both compare a 20-digit safety code.")
         Button(onClick = actions::startHost, modifier = Modifier.fillMaxWidth()) { Text("Start a chat") }
         OutlinedButton(onClick = actions::pasteAndJoin, modifier = Modifier.fillMaxWidth()) {
             Text("Paste invite and join")
         }
         TextButton(onClick = actions::startWifiHost) { Text("Start on the same Wi-Fi, without the relay") }
+        Text(WifiWording.NOT_REVIEWED, color = Muted, fontSize = 11.sp, lineHeight = 15.sp)
     }
 }
 
@@ -187,8 +169,7 @@ private fun HostingSection(state: ConnectionState.Hosting, actions: ConnectActio
         Title(if (state.stopping) "Stopping…" else "Waiting for the other phone (up to 3 minutes)")
         if (state.link.isNotEmpty()) Note(state.link, color = Ink)
         Note(
-            "Send this invite to the other phone by SMS or any messaging app. You can switch apps to send it; this " +
-                "phone keeps waiting. The invite works once" +
+            "Send the invite by SMS or any app; this phone keeps waiting. It works once" +
                 (if (state.internet) "" else ", only on this Wi-Fi") + ". Keep it private.",
         )
         SelectionContainer {
@@ -265,11 +246,12 @@ private fun InfoSection(title: String, text: String) {
 }
 
 @Composable
-private fun PhoneSection(identitySummary: String, idle: Boolean, actions: ConnectActions) {
+private fun PhoneSection(identitySummary: String, engineInfo: String, idle: Boolean, actions: ConnectActions) {
     Section {
         Title("This phone")
-        Note("Test identity: $identitySummary.")
-        TextButton(onClick = actions::copyReport) { Text("Copy test report") }
+        Note("Identity: $identitySummary.")
+        Text("Engine: $engineInfo", color = Muted, fontSize = 11.sp, lineHeight = 15.sp)
+        TextButton(onClick = actions::copyReport) { Text("Copy connection report") }
         if (idle) {
             TextButton(onClick = actions::resetKey) { Text("Reset this phone's key") }
             TextButton(onClick = actions::forgetPhones) { Text("Forget remembered phones") }

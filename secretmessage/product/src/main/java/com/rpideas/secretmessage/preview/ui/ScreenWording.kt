@@ -3,9 +3,9 @@ package com.rpideas.secretmessage.preview.ui
 import com.rpideas.secretmessage.preview.chat.UNDELIVERED_TTL_MILLIS
 
 /**
- * Words on the chat screen that differ between builds. The local-only preview uses [Preview]; a
- * separate test build that connects two phones passes its own wording, so these screens never
- * describe a connection they do not have.
+ * Words on the chat screen that differ between builds. The local-only preview uses [Preview]; the
+ * app that connects two phones passes its own wording, so these screens never describe a connection
+ * they do not have. A blank [badge], notice ([noticeTitle] and [noticeBody]) or [footer] is left out.
  */
 internal data class ChatWording(
     val subtitle: String,

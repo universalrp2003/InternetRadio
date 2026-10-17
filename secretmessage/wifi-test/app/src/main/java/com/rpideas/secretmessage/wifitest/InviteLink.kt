@@ -1,7 +1,7 @@
 package com.rpideas.secretmessage.wifitest
 
 /**
- * A short-lived invite for one chat: over the Internet, a random room on the owner's test relay; on
+ * A short-lived invite for one chat: over the Internet, a random room on the owner's relay; on
  * the same Wi-Fi, the host phone's private IPv4 address and listening port. Both carry a one-time
  * token. An invite is a bearer invite for one connection attempt, not identity verification; the
  * people still compare the safety code. Smoke-test invites (`secretmessage://join`) are refused.
@@ -38,7 +38,7 @@ internal sealed class InviteLink {
             val start = text.indexOf(PREFIX)
             require(start >= 0) {
                 if (text.contains("secretmessage://join")) {
-                    "That invite is for the separate MLS smoke test app. Create the invite in Secret Message TEST."
+                    "That invite is for the separate MLS smoke test app. Create the invite in Secret Message."
                 } else {
                     "No Secret Message invite was found. Copy the whole secretmessage://chat link and try again."
                 }
@@ -52,7 +52,7 @@ internal sealed class InviteLink {
                 }
                 .toMap()
             require(parameters["v"] == VERSION) {
-                "This invite comes from a different Secret Message test build. Install the same build on both " +
+                "This invite comes from a different version of Secret Message. Install the same version on both " +
                     "phones and create a new invite."
             }
             val token = parameters["token"].orEmpty()

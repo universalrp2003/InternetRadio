@@ -24,7 +24,7 @@ import com.rpideas.secretmessage.preview.ui.SecretMessageTheme
 import com.rpideas.secretmessage.preview.ui.SettingsScreen
 
 /**
- * Root of the Wi-Fi test build: lock screen, settings, the connect screen, or the WhisperPad chat
+ * Root of the app: lock screen, settings, the connect screen, or the WhisperPad chat
  * once both people have confirmed the safety code.
  */
 @Composable

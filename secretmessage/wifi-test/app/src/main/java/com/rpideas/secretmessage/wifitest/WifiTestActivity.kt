@@ -24,10 +24,10 @@ import com.rpideas.secretmessage.preview.security.AppLockController
 import kotlin.concurrent.thread
 
 /**
- * TEST-ONLY build of Secret Message: the WhisperPad product screens connected to another phone through
- * the mls-rs session, over the Internet via the owner's test relay or directly on the same Wi-Fi,
- * after both people confirm the safety code. It is labelled as not security-reviewed and is never
- * published.
+ * Secret Message: the WhisperPad product screens connected to another phone through the mls-rs MLS
+ * session, over the Internet through the owner's relay or directly on the same Wi-Fi, after both
+ * people confirm the safety code. Published from 1.0.0 at the owner's request (17 October 2026)
+ * without an independent security review, which the app and its release notes say plainly.
  */
 class WifiTestActivity : FragmentActivity(), ConnectActions {
     private lateinit var session: LanChatSession
@@ -120,7 +120,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         val scope = if (invite.contains("relay=")) "one chat" else "same Wi-Fi only, one chat"
         val send = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, "Secret Message TEST invite ($scope):\n$invite")
+            .putExtra(Intent.EXTRA_TEXT, "Secret Message invite ($scope):\n$invite")
         startActivity(Intent.createChooser(send, "Send the invite"))
     }
 
@@ -149,8 +149,8 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
 
     override fun copyReport() {
         val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText("Secret Message test report", buildReport()))
-        notice = "Test report copied. Paste it into the chat."
+        clipboard.setPrimaryClip(ClipData.newPlainText("Secret Message connection report", buildReport()))
+        notice = "Connection report copied. It holds counts only, no messages."
     }
 
     override fun resetKey() {
@@ -207,7 +207,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             "not allowed (the connection service runs without a visible notification)"
         }
         val lines = listOf(
-            "Secret Message test: ${BuildConfig.VERSION_NAME}",
+            "Secret Message report: ${BuildConfig.VERSION_NAME}",
             "Device: ${Build.MANUFACTURER} ${Build.MODEL}",
             "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             "ABI: $abi",
@@ -215,8 +215,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         ) + session.report.lines(open) + listOf(
             "This phone: ${session.identity.summary()}",
             "Notifications: $notifications",
-            "Scope: TEST BUILD, not security-reviewed; Internet relay or same Wi-Fi. Message text and drawings are " +
-                "not included.",
+            "Not independently security-reviewed. Message text and drawings are not included.",
         )
         return lines.joinToString("\n")
     }

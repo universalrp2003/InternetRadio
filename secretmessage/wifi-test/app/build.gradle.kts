@@ -1,9 +1,11 @@
-// TEST-ONLY build of Secret Message: the WhisperPad product screens from ../../product, compiled
+// Secret Message, the published app: the WhisperPad product screens from ../../product, compiled
 // unchanged, plus the connection in this directory, which uses the mls-rs/AWS-LC session from
 // ../../native-mls-rs through JNI, directly on the same Wi-Fi or over the Internet through the owner's
-// test relay (../relay). Owner-approved on 17 October 2026 as a separate, clearly labelled test build
-// (same-Wi-Fi first, then the Internet relay). It is debug-only, never signed for release and never
-// published; the offline preview (../../product) keeps its own build, permissions and checks.
+// relay (../relay). It grew from the owner-approved test builds of 17 October 2026 (same Wi-Fi, then
+// the Internet relay); the owner then asked to publish it without an independent security review.
+// The release APK is built unsigned here and signed in CI with the project's private key; debug
+// builds use their own package (".debug") so they never collide with it. The offline preview
+// (../../product) keeps its own build, permissions and checks.
 plugins {
     id("com.android.application") version "8.13.0"
     id("org.jetbrains.kotlin.android") version "2.2.21"
@@ -19,11 +21,14 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.rpideas.secretmessage.wifitest"
+        applicationId = "com.rpideas.secretmessage"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.4.0-internet-test"
+        // Raise versionCode by one and the last versionName part for every published version, together
+        // with EXPECTED_VERSION/EXPECTED_CODE in .github/workflows/secret-message-wifi-test.yml.
+        versionCode = 1
+        versionName = "1.0.0"
+        manifestPlaceholders["appLabel"] = "Secret Message"
     }
 
     sourceSets {
@@ -36,8 +41,12 @@ android {
     buildTypes {
         debug {
             isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+            manifestPlaceholders["appLabel"] = "Secret Message (debug)"
         }
         release {
+            // Not shrunk, so JNI and OkHttp behave exactly as in the tested debug build.
             isMinifyEnabled = false
         }
     }

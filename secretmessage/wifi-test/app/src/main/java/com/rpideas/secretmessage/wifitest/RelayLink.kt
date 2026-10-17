@@ -21,8 +21,8 @@ import okio.ByteString
 import okio.ByteString.Companion.toByteString
 
 /**
- * The Internet path of this test build. Both phones open a WebSocket (TLS) to the owner's test
- * relay (secretmessage/relay) for the same random room, and the relay forwards bytes between them.
+ * The Internet path of the app. Both phones open a WebSocket (TLS) to the owner's relay
+ * (secretmessage/relay) for the same random room, and the relay forwards bytes between them.
  *
  * The native MLS session runs unchanged over one end of a local socket pair
  * ([NativeBridge.nativeOpenRelayPipe]); this class copies bytes between the other end and the
@@ -201,7 +201,7 @@ internal class RelayLink(
     }
 
     companion object {
-        /** The owner's test relay (Cloudflare free plan), deployed by secret-message-relay.yml. */
+        /** The owner's relay (Cloudflare free plan), deployed by secret-message-relay.yml. */
         const val RELAY_URL = "wss://secretmessage-relay.universalrp2003.workers.dev"
 
         private const val NORMAL_CLOSURE = 1000

@@ -30,8 +30,8 @@ class InviteAndTextTest {
         val cases = mapOf(
             "secretmessage://join?host=192.168.1.2&port=4000&token=$token&v=6" to "smoke test",
             "hello" to "No Secret Message invite",
-            "secretmessage://chat?host=192.168.1.2&port=4000&token=$token&v=1" to "different Secret Message test build",
-            "secretmessage://chat?relay=$room&token=$token&v=3" to "different Secret Message test build",
+            "secretmessage://chat?host=192.168.1.2&port=4000&token=$token&v=1" to "different version of Secret Message",
+            "secretmessage://chat?relay=$room&token=$token&v=3" to "different version of Secret Message",
             "secretmessage://chat?host=8.8.8.8&port=4000&token=$token&v=2" to "private Wi-Fi address",
             "secretmessage://chat?host=192.168.1.2&port=70000&token=$token&v=2" to "port",
             "secretmessage://chat?host=192.168.1.2&port=4000&token=xyz&v=2" to "token",
@@ -107,6 +107,18 @@ class InviteAndTextTest {
         val relayTimeout = RelayText.timedOut(host = true, waitMillis = 180_000)
         assertEquals("Nobody joined within 3 minutes. Start a new chat and send the new invite.", relayTimeout)
         assertEquals(relayTimeout, SessionText.lastResult("FAIL: $relayTimeout", null))
+    }
+
+    @Test
+    fun reportsSayWhereARelayChatWent() {
+        val pass = "PASS: both people confirmed the same MLS safety code, then two separate devices exchanged fixed " +
+            "MLS test messages directly over local Wi-Fi. This phone now remembers the other phone's test key. TEST ONLY."
+        val relayed = SessionText.forReport(pass, internet = true)
+        assertTrue(relayed, relayed.contains("through the Internet relay") && !relayed.contains("local Wi-Fi"))
+        assertFalse(relayed, relayed.contains("TEST ONLY"))
+        val direct = SessionText.forReport(pass, internet = false)
+        assertTrue(direct, direct.contains("directly over local Wi-Fi") && !direct.contains("TEST ONLY"))
+        assertEquals("FAIL: offline", SessionText.forReport("FAIL: offline", internet = true))
     }
 
     @Test

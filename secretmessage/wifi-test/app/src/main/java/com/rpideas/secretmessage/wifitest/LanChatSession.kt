@@ -364,7 +364,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
                     ?.takeIf { it.isNotEmpty() }
                     ?.let { identity.remember(it) }
             }
-            report.finished(result)
+            report.finished(SessionText.forReport(result, internet = via == VIA_INTERNET))
             mutableConnection.value = ConnectionState.Idle(SessionText.lastResult(result, report.chatSummary()))
             status.value = if (result.startsWith("FAIL")) MlsSessionStatus.ERROR else MlsSessionStatus.DISCONNECTED
             description.value = IDLE_DESCRIPTION
@@ -379,8 +379,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             PeerStatus.NEW -> "the new phone"
         }
         val device = if (prompt.peerDevice.isEmpty()) "" else " (device ${PeerPins.formatDeviceId(prompt.peerDevice)})"
-        return "Connected $via to $which$device after both people confirmed the safety code. " +
-            "TEST BUILD: not security-reviewed."
+        return "Connected $via to $which$device."
     }
 
     companion object {

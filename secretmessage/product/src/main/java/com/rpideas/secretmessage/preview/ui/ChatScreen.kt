@@ -82,8 +82,11 @@ internal fun ChatScreen(
     }
 
     // Leading items: notice, status, optional message, then messages (or the empty notice) and a footer.
-    val leadingItems = if (notice != null) 3 else 2
-    val totalItems = leadingItems + (if (messages.isEmpty()) 1 else messages.size) + 1
+    // A build may leave out the notice card, the badge and the footer by giving them blank wording.
+    val showNoticeCard = wording.noticeTitle.isNotBlank() || wording.noticeBody.isNotBlank()
+    val showFooter = wording.footer.isNotBlank()
+    val leadingItems = (if (showNoticeCard) 1 else 0) + 1 + (if (notice != null) 1 else 0)
+    val totalItems = leadingItems + (if (messages.isEmpty()) 1 else messages.size) + (if (showFooter) 1 else 0)
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) listState.animateScrollToItem(totalItems - 1)
     }
@@ -108,7 +111,9 @@ internal fun ChatScreen(
                 contentPadding = PaddingValues(vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { LocalOnlyNotice(wording) }
+                if (showNoticeCard) {
+                    item { LocalOnlyNotice(wording) }
+                }
                 item {
                     ConnectionStatusCard(
                         sessionStatus = sessionStatus,
@@ -133,14 +138,16 @@ internal fun ChatScreen(
                         MessageBubble(message = message, nowElapsedMillis = nowElapsedMillis)
                     }
                 }
-                item {
-                    Text(
-                        text = wording.footer,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = Muted,
-                        fontSize = 11.sp,
-                        textAlign = TextAlign.Center,
-                    )
+                if (showFooter) {
+                    item {
+                        Text(
+                            text = wording.footer,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = Muted,
+                            fontSize = 11.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
                 }
             }
 
@@ -179,14 +186,16 @@ private fun PreviewHeader(wording: ChatWording, onOpenSettings: () -> Unit, onEn
             Text(wording.subtitle, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
         }
         Spacer(Modifier.weight(1f))
-        Surface(shape = CircleShape, color = Color(0xFF3A3026)) {
-            Text(
-                wording.badge,
-                modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
-                color = Warm,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.Bold,
-            )
+        if (wording.badge.isNotBlank()) {
+            Surface(shape = CircleShape, color = Color(0xFF3A3026)) {
+                Text(
+                    wording.badge,
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                    color = Warm,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
         }
         if (onEndChat != null) {
             TextButton(onClick = onEndChat) { Text("End", color = Warm, fontWeight = FontWeight.Bold) }

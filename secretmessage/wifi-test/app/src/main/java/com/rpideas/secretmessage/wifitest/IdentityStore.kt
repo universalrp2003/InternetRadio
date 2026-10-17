@@ -53,7 +53,7 @@ internal class IdentityStore(context: Context) {
         val deviceId = prefs.getString(PREF_DEVICE_ID, null)
         val remembered = PeerPins.count(pins())
         return if (deviceId == null || !prefs.contains(PREF_IDENTITY)) {
-            "no test identity yet (it is created with the first chat); remembered phones: $remembered"
+            "no identity yet (it is created with the first chat); remembered phones: $remembered"
         } else {
             "device ${PeerPins.formatDeviceId(deviceId)}, key stored encrypted with an Android Keystore key; " +
                 "remembered phones: $remembered"

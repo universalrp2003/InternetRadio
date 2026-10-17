@@ -72,6 +72,20 @@ internal object SessionText {
         }
     }
 
+    /**
+     * The native result as the copied report shows it. The native session shares its PASS wording
+     * with the same-Wi-Fi smoke test, so a relay chat says where its messages really went, and the
+     * smoke test's "TEST ONLY." tag is left out.
+     */
+    fun forReport(nativeResult: String, internet: Boolean): String {
+        val placed = if (internet) {
+            nativeResult.replace("directly over local Wi-Fi", "through the Internet relay")
+        } else {
+            nativeResult
+        }
+        return placed.removeSuffix(" TEST ONLY.").trim()
+    }
+
     /** How a chat ended, from the native summary (`Ended on this phone. Sent …`). */
     fun chatEnd(summary: String): String = when {
         summary.startsWith("Ended on this phone") -> "You ended the chat."

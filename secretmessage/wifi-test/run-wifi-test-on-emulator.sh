@@ -1,17 +1,20 @@
 #!/usr/bin/env bash
-# Hosted-emulator smoke test for the TEST-ONLY build of Secret Message (Internet relay and same Wi-Fi).
+# Hosted-emulator smoke test for Secret Message (Internet relay and same Wi-Fi).
 #
-# It installs the debug APK on an Android 15 (API 35) emulator and drives the real UI through the
-# accessibility tree: the test-build notice, the loaded MLS engine (its protocol name on screen), a
-# hosted chat that creates this install's Keystore-wrapped identity and shows an invite, stopping
-# that wait, settings, and no crash. One emulator cannot run both phones, so the two-phone chat
-# itself is covered by the Rust loopback tests and by device tests. This is not a device test.
+# It installs the given APK (the signed release APK when CI has one, otherwise the debug APK) on an
+# Android 15 (API 35) emulator and drives the real UI through the accessibility tree: the start
+# screen, a chat hosted through the live relay until the relay opens the room, a chat hosted on the
+# same Wi-Fi, the identity and loaded MLS engine (its protocol name on screen), settings and About,
+# and no crash. One emulator cannot run both phones, so the two-phone chat itself is covered by the
+# Rust loopback and relay tests and by device tests. This is not a device test.
 set -Eeuo pipefail
 
-APK="${1:?usage: run-wifi-test-on-emulator.sh <debug-apk>}"
-PACKAGE="com.rpideas.secretmessage.wifitest"
+APK="${1:?usage: run-wifi-test-on-emulator.sh <apk>}"
 ACTIVITY="com.rpideas.secretmessage.wifitest.WifiTestActivity"
 SDK_ROOT="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+# The release APK is com.rpideas.secretmessage and the debug APK com.rpideas.secretmessage.debug.
+AAPT2_TOOL="$(find "$SDK_ROOT/build-tools" -type f -name aapt2 2>/dev/null | sort -V | tail -n 1 || true)"
+PACKAGE="$("$AAPT2_TOOL" dump badging "$APK" 2>/dev/null | sed -n "s/^package: name='\([^']*\)'.*/\1/p" | head -n 1)"
 AVD_NAME="${ANDROID_AVD_NAME:-secretmessage-wifi-test-smoke}"
 IMAGE="${ANDROID_EMULATOR_IMAGE:-system-images;android-35;google_apis;x86_64}"
 ANDROID_USER_HOME="${ANDROID_USER_HOME:-$HOME/.android}"
@@ -56,7 +59,9 @@ fail() {
 
 SDK_MANAGER="${ANDROID_SDK_MANAGER:-$(find "$SDK_ROOT/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1 || true)}"
 [[ -x "$SDK_MANAGER" ]] || fail "sdkmanager was not found under $SDK_ROOT/cmdline-tools"
-[[ -s "$APK" ]] || fail "Wi-Fi test APK not found: $APK"
+[[ -s "$APK" ]] || fail "APK not found: $APK"
+[[ "$PACKAGE" == com.rpideas.secretmessage || "$PACKAGE" == com.rpideas.secretmessage.debug ]] \
+  || fail "Unexpected package in $APK: '$PACKAGE'"
 [[ -e /dev/kvm ]] || fail "KVM is unavailable; refusing a slow software-emulated run."
 sudo chmod 666 /dev/kvm
 
@@ -187,12 +192,11 @@ STEP="install and launch"
 "$ADB" logcat -c
 "$ADB" shell am start -W -n "$PACKAGE/$ACTIVITY" > "$WORK/start.log" 2>&1 || fail "$(cat "$WORK/start.log")"
 
-STEP="test-build notice and engine"
-wait_for text "TEST BUILD · NOT SECURITY-REVIEWED" equals 40
-wait_for text "TEST BUILD"
-wait_for text "NOT REVIEWED"
-# The connect screen names the loaded MLS engine and the session protocol (from the native library).
-wait_for text "secretmessage-wifi-chat/1" contains 20
+STEP="start screen"
+wait_for text "Start or join a chat" equals 40
+wait_for text "End-to-end encrypted"
+# The app says plainly that it has not been independently security-reviewed.
+wait_for text "Not independently security-reviewed" contains 10
 
 STEP="host a chat through the Internet relay and stop waiting"
 tap text "Start a chat"
@@ -216,19 +220,21 @@ wait_for text "Start a chat"
 # Hosting created this install's identity, stored encrypted under an Android Keystore key.
 scroll down
 wait_for text "key stored encrypted with an Android Keystore key" contains 10
-wait_for text "Copy test report"
+# The phone section names the loaded MLS engine and the session protocol (from the native library).
+wait_for text "secretmessage-wifi-chat/1" contains 10
+wait_for text "Copy connection report"
 scroll up
 scroll up
 
 STEP="settings"
 tap content-desc "Settings"
 wait_for text "Recipient view timer"
-# The Wi-Fi wording replaces the preview's ("This preview cannot deliver messages …").
+# The app's wording replaces the preview's ("This preview cannot deliver messages …").
 wait_for text "It starts on both phones when the other person views your message." contains
 scroll down
 scroll down
-wait_for text "What this test build is"
-wait_for text "has not been reviewed by a security expert" contains
+wait_for text "About Secret Message"
+wait_for text "has not been independently security-reviewed" contains
 "$ADB" shell input keyevent 4
 sleep 1
 wait_for text "Start a chat"
@@ -238,4 +244,4 @@ app_alive || fail "The app exited during the smoke test"
 if "$ADB" logcat -d -b crash 2>/dev/null | grep -q "$PACKAGE"; then
   fail "The crash buffer contains an entry for $PACKAGE"
 fi
-echo "PASS: the test build launched on API 35, showed its test-build notice, loaded the MLS engine (secretmessage-wifi-chat/1), created its Keystore-wrapped test identity, hosted a chat through the deployed Internet relay (connected over TLS) and on the same Wi-Fi, stopped waiting on request each time, opened settings, and did not crash."
+echo "PASS: $PACKAGE launched on API 35, showed its start screen and not-reviewed note, hosted a chat through the deployed Internet relay (connected over TLS) and on the same Wi-Fi, stopped waiting on request each time, created its Keystore-wrapped identity, loaded the MLS engine (secretmessage-wifi-chat/1), opened settings and About, and did not crash."
