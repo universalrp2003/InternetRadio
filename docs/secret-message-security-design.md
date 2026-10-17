@@ -134,7 +134,7 @@ The third 0.5.0 run on phones showed that a “Codes differ” answer did not re
 - **Frames:** answers are read a piece at a time without reading past the end of the answer, so the fixed test messages that follow a confirmation are never lost.
 - **Version check:** the protocol is now `secretmessage-lan-test/6` and invites carry `v=6`, so 0.5.0 and 0.5.1 phones refuse each other with a clear message.
 - **Tests:** host loopback tests cover a mismatch reported while the other person never answers (with either phone reporting, both finishing within seconds rather than at the two-minute limit), a mismatch reported after the other phone confirmed, a comparison left unanswered on either phone, a late confirmation that still passes, an answer that arrives in pieces together with the start of the next frame, and the screen prompt being withdrawn so that a late tap is refused.
-- **CI:** added after the mls-rs run.
+- **CI:** run [39003431137](https://github.com/universalrp2003/InternetRadio/actions/runs/39003431137) (commit `b9ee9df`) passed every step of the mls-rs lane, including these host tests against the real mls-rs, Clippy with warnings denied, the JNI host check, the dependency, license-metadata and RustSec steps, the four-ABI APK build and the emulator smoke. The APK is artifact `secretmessage-mls-rs-candidate-test-only`, available until 31 October 2026; this lane does not report the APK's SHA-256. The OpenMLS spike lane ([39003431094](https://github.com/universalrp2003/InternetRadio/actions/runs/39003431094)) built and launched the same app but failed at its final feasibility gate, as on every earlier run.
 
 ### Candidate transport
 
