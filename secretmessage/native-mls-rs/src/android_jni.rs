@@ -129,6 +129,8 @@ pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeS
                 crate::spike_harness::submit_lan_safety_decision(codes_match == 1)
             })
             .unwrap_or(false);
+            // MainActivity compares this exact text (ANSWER_ACCEPTED) to tell whether the answer
+            // was used, so change both together.
             let status = if delivered {
                 "Answer passed to the LAN test."
             } else {

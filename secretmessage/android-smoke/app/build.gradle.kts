@@ -12,8 +12,8 @@ android {
         applicationId = "com.rpideas.secretmessage.smoke"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "0.5.0-lan-test"
+        versionCode = 6
+        versionName = "0.5.1-lan-test"
         buildConfigField("boolean", "LAN_TEST_ENABLED", lanTestEnabled.toString())
     }
 

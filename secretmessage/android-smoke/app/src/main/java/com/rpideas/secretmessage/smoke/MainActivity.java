@@ -56,7 +56,9 @@ public final class MainActivity extends Activity {
     private static final String NATIVE_LIBRARY = "secretmessage_mls_spike";
     private static final long LAN_POLL_MS = 250;
     /** Must match the protocol version in the native LAN test; older invites are refused. */
-    private static final String INVITE_VERSION = "5";
+    private static final String INVITE_VERSION = "6";
+    /** The native bridge's reply when this phone's answer reached the waiting comparison. */
+    private static final String ANSWER_ACCEPTED = "Answer passed to the LAN test.";
     private static final int MAX_TYPED_CHARS = 300;
     private static final int MAX_CHAT_LINES = 200;
     private static final String PREFS = "secretmessage_lan_test";
@@ -201,9 +203,11 @@ public final class MainActivity extends Activity {
                             + "remembered, or has a changed key. Compare the codes side by side and "
                             + "tap Codes match on both phones only if every digit is the same. The invite "
                             + "expires after about 3 minutes. Router client isolation can block this "
-                            + "test. Keep this app open on both phones until the test ends; the screen "
-                            + "stays on during the test. On Android 15 and later, leaving the app for a "
-                            + "few seconds (screen lock or another app) closes the connection.");
+                            + "test. Leaving this app to share or paste the invite is fine, but the "
+                            + "host must be back on screen when the other phone joins. From Join until "
+                            + "the result appears, keep this app on screen on both phones (the screen "
+                            + "stays on by itself): on Android 15 and later, leaving it for a few "
+                            + "seconds (screen lock or another app) closes the connection.");
             lanNotice.setTextSize(14);
             addWithTopMargin(root, lanNotice, 8);
 
@@ -281,7 +285,8 @@ public final class MainActivity extends Activity {
                     "Both phones must show exactly the same 20 digits. Hold them side by side and "
                             + "check every group. Tap Codes match only if all digits are the same. "
                             + "If any digit differs, tap Codes differ: another device may be "
-                            + "intercepting the connection.");
+                            + "intercepting the connection. Codes differ on either phone stops both "
+                            + "phones at once.");
             safetyHint.setTextSize(14);
             addWithTopMargin(safetyPanel, safetyHint, 8);
 
@@ -579,6 +584,12 @@ public final class MainActivity extends Activity {
             reply = nativeSubmitLanSafetyDecision(codesMatch ? 1 : 0);
         } catch (Throwable failure) {
             reply = "Could not pass the answer: " + failure.getClass().getSimpleName();
+        }
+        if (!ANSWER_ACCEPTED.equals(reply)) {
+            // The comparison had already ended (for example, the other phone reported different
+            // codes first), so this answer was not used; the result appears when the test ends.
+            lanStatusView.setText("LAN MLS: " + lanResult + " (" + reply + ")");
+            return;
         }
         safetyCheckResult = (codesMatch ? "Confirmed on this phone: " : "Reported different on this phone: ")
                 + shownSafetyCode;

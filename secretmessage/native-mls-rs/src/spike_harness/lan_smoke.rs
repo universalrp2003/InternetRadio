@@ -4,9 +4,10 @@
 //! Keystore key; the MLS layer accepts any BasicCredential. Before any test message is exchanged,
 //! both people compare a safety code derived from the RFC 9420 epoch authenticator of their shared
 //! group and confirm it on both phones; a relaying device would hold two different groups, so the
-//! phones would show different codes. After a confirmed session each phone remembers the other
-//! phone's key and warns if that device later presents a different key. The two people can then
-//! type short test messages to each other inside the same MLS group; they are shown on screen
+//! phones would show different codes. If either person reports different codes, or does not
+//! answer in time, both phones stop at once. After a confirmed session each phone remembers the
+//! other phone's key and warns if that device later presents a different key. The two people can
+//! then type short test messages to each other inside the same MLS group; they are shown on screen
 //! only, never stored, and only their counts reach the report. This tests those steps. It is not
 //! a production trust policy or a chat app, and it is not suitable for real/private messages.
 
@@ -21,7 +22,7 @@ use mls_rs_crypto_awslc::AwsLcCryptoProvider;
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -45,20 +46,24 @@ const HOST_TO_GUEST: &[u8] = b"MLS-LAN-SMOKE-HOST-TO-GUEST-2ce840";
 const GUEST_ACK: &[u8] = b"MLS-LAN-SMOKE-GUEST-ACK-55b0e2";
 const CODE_CONFIRMED: &[u8] = b"MLS-LAN-SAFETY-CODE-CONFIRMED-3b9e41";
 const CODE_REJECTED: &[u8] = b"MLS-LAN-SAFETY-CODE-REJECTED-c47d02";
+const CODE_UNANSWERED: &[u8] = b"MLS-LAN-SAFETY-CODE-UNANSWERED-81f5a6";
 /// The joining phone's first frame starts with this, so a host can name a version mismatch.
-const PROTOCOL_TAG: &str = "secretmessage-lan-test/5";
+const PROTOCOL_TAG: &str = "secretmessage-lan-test/6";
 const PROTOCOL_FAMILY: &str = "secretmessage-lan-test/";
-/// How long the typed test waits for socket data before checking this phone's screen again.
-const CHAT_POLL: Duration = Duration::from_millis(150);
+/// How long a socket read waits before this phone's screen is checked again, both while the
+/// people compare the safety code and during the typed test.
+const SCREEN_POLL: Duration = Duration::from_millis(150);
 /// The typed test ends by itself this long after it opens.
 const CHAT_LIMIT: Duration = Duration::from_secs(10 * 60);
-/// After sending the end marker, how long to let the other phone read it before closing.
+/// After this phone's last message (the typed test's end marker, or an answer that stops the
+/// test), how long to let the other phone read it before closing.
 const END_LINGER: Duration = Duration::from_secs(2);
 /// Longest typed test message, in UTF-8 bytes.
 const MAX_TYPED_MESSAGE_BYTES: usize = 1000;
 /// Most typed messages one phone may send in one test.
 const MAX_TYPED_MESSAGES: u32 = 200;
-const MAX_CHAT_FRAME_BYTES: usize = 16 * 1024;
+/// Largest frame accepted for a safety-code answer or a typed-test message.
+const MAX_SHORT_FRAME_BYTES: usize = 16 * 1024;
 /// Kind bytes that start each typed-test payload inside an MLS application message.
 const CHAT_TEXT: u8 = b'T';
 const CHAT_ACK: u8 = b'A';
@@ -70,6 +75,10 @@ const LOCAL_REJECTED_STATUS: &str =
     "STOPPED: you reported that the safety codes differ, so no test messages were exchanged. If the two phones really showed different codes, another device may have intercepted the connection. TEST ONLY.";
 const PEER_REJECTED_STATUS: &str =
     "STOPPED: the other phone reported that the safety codes differ, so no test messages were exchanged. TEST ONLY.";
+const LOCAL_UNANSWERED_STATUS: &str =
+    "STOPPED: the safety code was not answered on this phone within two minutes, so no test messages were exchanged. TEST ONLY.";
+const PEER_UNANSWERED_STATUS: &str =
+    "STOPPED: the safety code was not answered on the other phone within two minutes, so no test messages were exchanged. TEST ONLY.";
 
 /// One test install's persistent MLS signing identity.
 struct LanIdentity {
@@ -138,6 +147,64 @@ struct PendingVerification {
 
 static PENDING_VERIFICATION: Mutex<Option<PendingVerification>> = Mutex::new(None);
 static LAST_VERIFIED_PEER: Mutex<Option<String>> = Mutex::new(None);
+
+/// One person's answer to the safety-code comparison.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Answer {
+    Confirmed,
+    Rejected,
+    /// The time to compare ran out without an answer.
+    Unanswered,
+}
+
+impl Answer {
+    /// The fixed marker a phone sends inside MLS for this answer.
+    fn marker(self) -> &'static [u8] {
+        match self {
+            Answer::Confirmed => CODE_CONFIRMED,
+            Answer::Rejected => CODE_REJECTED,
+            Answer::Unanswered => CODE_UNANSWERED,
+        }
+    }
+
+    fn from_marker(data: &[u8]) -> Option<Self> {
+        [Answer::Confirmed, Answer::Rejected, Answer::Unanswered]
+            .into_iter()
+            .find(|answer| answer.marker() == data)
+    }
+}
+
+/// Where this phone's person's answer arrives, and how long they have to give it. Dropping it
+/// withdraws an on-screen comparison, so a late tap is refused.
+struct LocalAnswer {
+    answers: Receiver<bool>,
+    time_limit: Duration,
+    on_screen: bool,
+}
+
+impl LocalAnswer {
+    /// The person's answer, once they have given it.
+    fn given(&self) -> Option<Answer> {
+        match self.answers.try_recv() {
+            Ok(true) => Some(Answer::Confirmed),
+            Ok(false) => Some(Answer::Rejected),
+            Err(TryRecvError::Empty) => None,
+            // Nobody can answer any more, so the comparison stays unanswered.
+            Err(TryRecvError::Disconnected) => Some(Answer::Unanswered),
+        }
+    }
+}
+
+impl Drop for LocalAnswer {
+    fn drop(&mut self) {
+        if !self.on_screen {
+            return;
+        }
+        if let Ok(mut pending) = PENDING_VERIFICATION.lock() {
+            *pending = None;
+        }
+    }
+}
 
 /// The comparison waiting for this phone's user as `code|status|device`, if any.
 pub fn lan_safety_prompt() -> Option<String> {
@@ -315,9 +382,10 @@ pub fn lan_chat_poll() -> Option<String> {
     CHAT_EVENTS.lock().ok()?.pop_front()
 }
 
-/// Offer the comparison to the test APK's screen and wait for this phone's user to answer.
-fn ask_local_user(prompt: &SafetyPrompt) -> Result<bool, String> {
-    let (answer, response) = mpsc::channel();
+/// Offer the comparison to the test APK's screen; this phone's person's answer arrives through
+/// the result, which withdraws the comparison when dropped.
+fn ask_local_user(prompt: &SafetyPrompt) -> Result<LocalAnswer, String> {
+    let (answer, answers) = mpsc::channel();
     {
         let mut pending = PENDING_VERIFICATION
             .lock()
@@ -327,13 +395,10 @@ fn ask_local_user(prompt: &SafetyPrompt) -> Result<bool, String> {
             answer,
         });
     }
-    let result = response.recv_timeout(VERIFY_TIMEOUT);
-    if let Ok(mut pending) = PENDING_VERIFICATION.lock() {
-        *pending = None;
-    }
-    result.map_err(|_| {
-        "No safety-code answer was given within two minutes, so no test messages were exchanged."
-            .to_owned()
+    Ok(LocalAnswer {
+        answers,
+        time_limit: VERIFY_TIMEOUT,
+        on_screen: true,
     })
 }
 
@@ -707,11 +772,82 @@ fn encrypt_test_message<C: MlsConfig>(
     Ok(wire)
 }
 
-/// Ask this phone's user to compare the safety code, then exchange both answers inside MLS.
+/// Reads one length-prefixed frame across short socket reads without reading past its end, so
+/// the session can go on reading later frames from the stream directly.
+#[derive(Default)]
+struct PartialFrame {
+    length: [u8; 4],
+    length_read: usize,
+    body: Vec<u8>,
+    body_read: usize,
+}
+
+impl PartialFrame {
+    /// Read what arrives within the stream's read timeout; the frame once it is complete.
+    fn poll(&mut self, stream: &mut TcpStream) -> Result<Option<Vec<u8>>, String> {
+        loop {
+            if self.length_read == self.length.len() && self.body_read == self.body.len() {
+                return Ok(Some(std::mem::take(self).body));
+            }
+            let unread = if self.length_read < self.length.len() {
+                &mut self.length[self.length_read..]
+            } else {
+                &mut self.body[self.body_read..]
+            };
+            let read = match stream.read(unread) {
+                Ok(0) => {
+                    return Err(format!(
+                        "The other phone closed the connection during the safety-code comparison. {KEEP_APP_OPEN_HINT}"
+                    ))
+                }
+                Ok(read) => read,
+                Err(error) if is_wait(&error) => return Ok(None),
+                Err(error) => {
+                    return Err(connection_failure(
+                        "read the other phone's safety-code answer",
+                        &error,
+                    ))
+                }
+            };
+            if self.length_read < self.length.len() {
+                self.length_read += read;
+                if self.length_read == self.length.len() {
+                    let length = u32::from_be_bytes(self.length) as usize;
+                    if length > MAX_SHORT_FRAME_BYTES {
+                        return Err("The other phone sent an oversized safety-code answer.".into());
+                    }
+                    self.body = vec![0; length];
+                }
+            } else {
+                self.body_read += read;
+            }
+        }
+    }
+}
+
+/// Decrypt the other phone's answer to the comparison.
+fn read_peer_answer<C: MlsConfig>(
+    group: &mut mls_rs::group::Group<C>,
+    frame: &[u8],
+) -> Result<Answer, String> {
+    let message = parse_mls_message(frame, "peer safety-code answer")?;
+    let received = group
+        .process_incoming_message(message)
+        .map_err(|error| format!("Rejected the peer's MLS safety-code answer: {error}"))?;
+    match received {
+        ReceivedMessage::ApplicationMessage(application) => Answer::from_marker(application.data()),
+        _ => None,
+    }
+    .ok_or_else(|| "The peer's safety-code answer was not recognized.".to_owned())
+}
+
+/// Ask this phone's person to compare the safety code while watching for the other phone's
+/// answer, and exchange both answers inside MLS.
 ///
-/// Returns a STOPPED status if either person reported different codes. Each phone always reads
-/// the other answer before going on or closing, so neither resets the connection while the other
-/// person is still comparing.
+/// Returns a STOPPED status unless both people confirmed. If the other phone reports different
+/// codes (or no answer) first, this phone stops at once and withdraws its own question. A phone
+/// whose person does not confirm sends that answer and closes after a short linger, without
+/// waiting for the other person; a phone whose person confirms waits for the other answer.
 fn verify_safety_code<C, D>(
     stream: &mut TcpStream,
     group: &mut mls_rs::group::Group<C>,
@@ -720,42 +856,63 @@ fn verify_safety_code<C, D>(
 ) -> Result<Option<String>, String>
 where
     C: MlsConfig,
-    D: FnOnce(&SafetyPrompt) -> Result<bool, String>,
+    D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
 {
-    let codes_match = decide(prompt)?;
-    let answer = if codes_match {
-        CODE_CONFIRMED
-    } else {
-        CODE_REJECTED
+    let local = decide(prompt)?;
+    let deadline = Instant::now() + local.time_limit;
+    set_read_timeout(stream, SCREEN_POLL)?;
+    let mut incoming = PartialFrame::default();
+    let mut peer = None;
+    let mine = loop {
+        if let Some(answer) = local.given() {
+            break answer;
+        }
+        if Instant::now() >= deadline {
+            break Answer::Unanswered;
+        }
+        let Some(frame) = incoming.poll(stream)? else {
+            continue;
+        };
+        if peer.is_some() {
+            return Err("The other phone sent a second safety-code answer.".into());
+        }
+        match read_peer_answer(group, &frame)? {
+            Answer::Confirmed => peer = Some(Answer::Confirmed),
+            Answer::Rejected => return Ok(Some(PEER_REJECTED_STATUS.into())),
+            Answer::Unanswered => return Ok(Some(PEER_UNANSWERED_STATUS.into())),
+        }
     };
-    let answer_wire = encrypt_test_message(group, answer, "safety-code answer")?;
-    send_frame(stream, &answer_wire)?;
+    drop(local);
 
-    set_read_timeout(stream, VERIFY_TIMEOUT + IO_TIMEOUT)?;
-    let peer_wire = receive_frame(stream)?;
-    set_read_timeout(stream, IO_TIMEOUT)?;
-    let peer_answer = parse_mls_message(&peer_wire, "peer safety-code answer")?;
-    let received = group
-        .process_incoming_message(peer_answer)
-        .map_err(|error| format!("Rejected the peer's MLS safety-code answer: {error}"))?;
-    let peer_confirmed = match received {
-        ReceivedMessage::ApplicationMessage(application)
-            if application.data() == CODE_CONFIRMED =>
-        {
-            true
-        }
-        ReceivedMessage::ApplicationMessage(application) if application.data() == CODE_REJECTED => {
-            false
-        }
-        _ => return Err("The peer's safety-code answer was not recognized.".into()),
+    let answer_wire = encrypt_test_message(group, mine.marker(), "safety-code answer")?;
+    send_frame(stream, &answer_wire)?;
+    let stopped = match mine {
+        Answer::Confirmed => None,
+        Answer::Rejected => Some(LOCAL_REJECTED_STATUS),
+        Answer::Unanswered => Some(LOCAL_UNANSWERED_STATUS),
     };
-    if !codes_match {
-        Ok(Some(LOCAL_REJECTED_STATUS.into()))
-    } else if peer_confirmed {
-        Ok(None)
-    } else {
-        Ok(Some(PEER_REJECTED_STATUS.into()))
+    if let Some(status) = stopped {
+        linger_before_close(stream);
+        return Ok(Some(status.into()));
     }
+
+    let peer = match peer {
+        Some(answer) => answer,
+        None => loop {
+            if let Some(frame) = incoming.poll(stream)? {
+                break read_peer_answer(group, &frame)?;
+            }
+            if Instant::now() >= deadline + IO_TIMEOUT {
+                return Err("The other phone did not send its safety-code answer in time.".into());
+            }
+        },
+    };
+    set_read_timeout(stream, IO_TIMEOUT)?;
+    Ok(match peer {
+        Answer::Confirmed => None,
+        Answer::Rejected => Some(PEER_REJECTED_STATUS.into()),
+        Answer::Unanswered => Some(PEER_UNANSWERED_STATUS.into()),
+    })
 }
 
 /// One typed-test payload inside an MLS application message: a kind byte, the message number
@@ -857,7 +1014,7 @@ impl FrameReader {
             return Ok(None);
         };
         let length = u32::from_be_bytes([*a, *b, *c, *d]) as usize;
-        if length > MAX_CHAT_FRAME_BYTES {
+        if length > MAX_SHORT_FRAME_BYTES {
             return Err("The other phone sent an oversized typed-test frame.".into());
         }
         if self.buffered.len() < 4 + length {
@@ -917,7 +1074,7 @@ where
     C: MlsConfig,
     S: ChatSide,
 {
-    set_read_timeout(stream, CHAT_POLL)?;
+    set_read_timeout(stream, SCREEN_POLL)?;
     let mut frames = FrameReader::default();
     loop {
         while let Some(command) = chat.next_command() {
@@ -968,10 +1125,16 @@ where
 /// Tell the other phone the typed test is over, then let it read that before closing.
 fn end_for_both<C: MlsConfig>(stream: &mut TcpStream, group: &mut mls_rs::group::Group<C>) {
     let sent = encrypt_chat(group, &ChatPayload::End).and_then(|wire| send_frame(stream, &wire));
-    if sent.is_err() {
-        return;
+    if sent.is_ok() {
+        linger_before_close(stream);
     }
+}
+
+/// After this phone's last message, stop sending and give the other phone a moment to read
+/// everything before the connection closes, discarding anything that still arrives.
+fn linger_before_close(stream: &mut TcpStream) {
     let _ = stream.shutdown(Shutdown::Write);
+    let _ = stream.set_read_timeout(Some(SCREEN_POLL));
     let deadline = Instant::now() + END_LINGER;
     let mut discarded = [0u8; 512];
     while Instant::now() < deadline {
@@ -1022,7 +1185,7 @@ fn host_session<D, S>(
     mut chat: S,
 ) -> Result<SessionOutcome, String>
 where
-    D: FnOnce(&SafetyPrompt) -> Result<bool, String>,
+    D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
     S: ChatSide,
 {
     configure_stream(&stream)?;
@@ -1093,7 +1256,7 @@ fn guest_session<D, S>(
     mut chat: S,
 ) -> Result<SessionOutcome, String>
 where
-    D: FnOnce(&SafetyPrompt) -> Result<bool, String>,
+    D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
     S: ChatSide,
 {
     configure_stream(&stream)?;
@@ -1204,15 +1367,18 @@ mod tests {
         ask_local_user, check_guest_hello, classify_peer, connection_failure, encrypt_chat,
         from_hex, generate_lan_identity, group_safety_code, guest_hello, guest_session,
         host_session, identity_client, lan_chat_end, lan_chat_poll, lan_chat_send,
-        lan_safety_prompt, parse_lan_identity, peer_identity, reset_screen_chat, run_typed_test,
-        safety_code_from_authenticator, submit_lan_safety_decision, take_lan_verified_peer, to_hex,
-        ChatCommand, ChatEvent, ChatPayload, ChatSide, PeerStatus, SafetyPrompt, ScreenChat,
-        SessionOutcome, CHAT_ACK, CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS,
-        LOCAL_REJECTED_STATUS, MAX_TYPED_MESSAGES, MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS,
+        lan_safety_prompt, parse_lan_identity, peer_identity, receive_frame, reset_screen_chat,
+        run_typed_test, safety_code_from_authenticator, submit_lan_safety_decision,
+        take_lan_verified_peer, to_hex, Answer, ChatCommand, ChatEvent, ChatPayload, ChatSide,
+        LocalAnswer, PartialFrame, PeerStatus, SafetyPrompt, ScreenChat, SessionOutcome, CHAT_ACK,
+        CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS, LOCAL_REJECTED_STATUS,
+        LOCAL_UNANSWERED_STATUS, MAX_TYPED_MESSAGES, MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS,
+        PEER_UNANSWERED_STATUS, VERIFY_TIMEOUT,
     };
     use mls_rs::client_builder::MlsConfig;
     use mls_rs::group::{Group, ReceivedMessage};
     use mls_rs::{Client, ExtensionList, MlsMessage};
+    use std::io::Write;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
     use std::sync::mpsc;
     use std::thread;
@@ -1222,11 +1388,16 @@ mod tests {
     const HOST_DEVICE: &str = "00112233445566aa";
     const GUEST_DEVICE: &str = "8899aabbccddeeff";
 
-    /// One phone in a loopback run: its identity text, remembered peers and scripted answer.
+    /// One phone in a loopback run: its identity text, remembered peers and scripted person.
     struct Side {
         identity: String,
         pins: String,
-        answer: bool,
+        /// The person's answer, or `None` if they never answer.
+        answer: Option<bool>,
+        /// How long the person takes to answer.
+        delay: Duration,
+        /// How long the person has to answer.
+        time_limit: Duration,
     }
 
     impl Side {
@@ -1234,8 +1405,51 @@ mod tests {
             Self {
                 identity: identity.to_owned(),
                 pins: pins.to_owned(),
-                answer,
+                answer: Some(answer),
+                delay: Duration::ZERO,
+                time_limit: VERIFY_TIMEOUT,
             }
+        }
+
+        /// This person never answers; their comparison times out after `time_limit`.
+        fn silent(identity: &str, pins: &str, time_limit: Duration) -> Self {
+            Self {
+                answer: None,
+                time_limit,
+                ..Self::new(identity, pins, false)
+            }
+        }
+
+        /// This person answers only after `delay`.
+        fn after(self, delay: Duration) -> Self {
+            Self { delay, ..self }
+        }
+
+        /// The scripted person's answers, and the sender that must outlive the session so a
+        /// silent person stays silent instead of disconnecting.
+        fn person(&self) -> (LocalAnswer, mpsc::Sender<bool>) {
+            let (answer, answers) = mpsc::channel();
+            match self.answer {
+                // An immediate answer is queued before the comparison starts, so it comes first.
+                Some(codes_match) if self.delay.is_zero() => {
+                    answer.send(codes_match).expect("queue the scripted answer")
+                }
+                Some(codes_match) => {
+                    let later = answer.clone();
+                    let delay = self.delay;
+                    thread::spawn(move || {
+                        thread::sleep(delay);
+                        let _ = later.send(codes_match);
+                    });
+                }
+                None => {}
+            }
+            let local = LocalAnswer {
+                answers,
+                time_limit: self.time_limit,
+                on_screen: false,
+            };
+            (local, answer)
         }
     }
 
@@ -1347,6 +1561,7 @@ mod tests {
                     Err(error) => panic!("loopback accept failed: {error}"),
                 }
             };
+            let (local, _person) = host.person();
             let mut prompt = None;
             let outcome = host_session(
                 stream,
@@ -1355,7 +1570,7 @@ mod tests {
                 &host.pins,
                 |seen: &SafetyPrompt| {
                     prompt = shown(seen);
-                    Ok(host.answer)
+                    Ok(local)
                 },
                 host_chat,
             )
@@ -1367,6 +1582,7 @@ mod tests {
         let guest_thread = thread::spawn(move || {
             let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))
                 .expect("connect the independent guest to the local test host");
+            let (local, _person) = guest.person();
             let mut prompt = None;
             let outcome = guest_session(
                 stream,
@@ -1375,7 +1591,7 @@ mod tests {
                 &guest.pins,
                 |seen: &SafetyPrompt| {
                     prompt = shown(seen);
-                    Ok(guest.answer)
+                    Ok(local)
                 },
                 guest_chat,
             )
@@ -1654,35 +1870,167 @@ mod tests {
         assert_eq!(lan_safety_prompt(), None);
         assert!(!submit_lan_safety_decision(true), "nothing is waiting yet");
 
-        let asking = thread::spawn(|| {
-            ask_local_user(&SafetyPrompt {
-                code: "12345 67890 13579 24680".into(),
-                peer_device: GUEST_DEVICE.into(),
-                peer_status: PeerStatus::KeyChanged,
-            })
-        });
-        let deadline = Instant::now() + Duration::from_secs(5);
-        while lan_safety_prompt().is_none() {
-            assert!(
-                Instant::now() < deadline,
-                "the prompt never reached the screen"
-            );
-            thread::sleep(Duration::from_millis(10));
-        }
+        let prompt = SafetyPrompt {
+            code: "12345 67890 13579 24680".into(),
+            peer_device: GUEST_DEVICE.into(),
+            peer_status: PeerStatus::KeyChanged,
+        };
+        let local = ask_local_user(&prompt).expect("offer the comparison to the screen");
+        assert_eq!(local.time_limit, VERIFY_TIMEOUT);
         assert_eq!(
             lan_safety_prompt().as_deref(),
             Some("12345 67890 13579 24680|CHANGED|8899aabbccddeeff")
         );
+        assert_eq!(local.given(), None, "the person has not answered yet");
         assert!(submit_lan_safety_decision(true));
-        assert_eq!(
-            asking.join().expect("the prompt thread did not panic"),
-            Ok(true)
-        );
+        assert_eq!(local.given(), Some(Answer::Confirmed));
         assert_eq!(lan_safety_prompt(), None, "an answered prompt is cleared");
         assert!(
             !submit_lan_safety_decision(false),
             "an answer is accepted only once"
         );
+        drop(local);
+
+        // When the other phone stops the test first, the question leaves the screen.
+        let local = ask_local_user(&prompt).expect("offer the comparison again");
+        assert!(lan_safety_prompt().is_some());
+        drop(local);
+        assert_eq!(lan_safety_prompt(), None, "a withdrawn prompt is cleared");
+        assert!(
+            !submit_lan_safety_decision(false),
+            "a withdrawn prompt refuses a late answer"
+        );
+    }
+
+    #[test]
+    fn a_mismatch_report_stops_the_other_phone_before_its_person_answers() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+
+        // The other person never answers, yet their phone stops as soon as the report arrives
+        // (well before its two minutes run out), and the reporting phone does not wait for them.
+        for host_reports in [true, false] {
+            let started = Instant::now();
+            let (host, guest) = if host_reports {
+                run_loopback(
+                    Side::new(&host_identity, "", false),
+                    Side::silent(&guest_identity, "", VERIFY_TIMEOUT),
+                )
+            } else {
+                run_loopback(
+                    Side::silent(&host_identity, "", VERIFY_TIMEOUT),
+                    Side::new(&guest_identity, "", false),
+                )
+            };
+            let (reporter, other) = if host_reports {
+                (host, guest)
+            } else {
+                (guest, host)
+            };
+            assert!(
+                started.elapsed() < Duration::from_secs(10),
+                "both phones stopped at once, not after the time limit"
+            );
+            assert_eq!(reporter.outcome.status, LOCAL_REJECTED_STATUS);
+            assert_eq!(other.outcome.status, PEER_REJECTED_STATUS);
+            assert_eq!(reporter.code, other.code);
+            assert!(reporter.outcome.verified_peer.is_none());
+            assert!(other.outcome.verified_peer.is_none());
+            assert!(!reporter.typing_opened && !other.typing_opened);
+        }
+
+        // A person who reports a mismatch after the other phone confirmed also stops both.
+        let (host, guest) = run_loopback(
+            Side::new(&host_identity, "", true),
+            Side::new(&guest_identity, "", false).after(Duration::from_millis(400)),
+        );
+        assert_eq!(guest.outcome.status, LOCAL_REJECTED_STATUS);
+        assert_eq!(host.outcome.status, PEER_REJECTED_STATUS);
+        assert!(!host.typing_opened && !guest.typing_opened);
+    }
+
+    #[test]
+    fn an_unanswered_comparison_stops_both_phones_and_says_which_phone_did_not_answer() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+        let short_limit = Duration::from_millis(400);
+
+        let (host, guest) = run_loopback(
+            Side::new(&host_identity, "", true),
+            Side::silent(&guest_identity, "", short_limit),
+        );
+        assert_eq!(guest.outcome.status, LOCAL_UNANSWERED_STATUS);
+        assert_eq!(host.outcome.status, PEER_UNANSWERED_STATUS);
+        assert!(host.outcome.verified_peer.is_none() && guest.outcome.verified_peer.is_none());
+
+        let (host, guest) = run_loopback(
+            Side::silent(&host_identity, "", short_limit),
+            Side::new(&guest_identity, "", true),
+        );
+        assert_eq!(host.outcome.status, LOCAL_UNANSWERED_STATUS);
+        assert_eq!(guest.outcome.status, PEER_UNANSWERED_STATUS);
+        assert!(!host.typing_opened && !guest.typing_opened);
+    }
+
+    #[test]
+    fn a_late_confirmation_still_passes_after_the_other_phone_confirmed() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+        let pause = Duration::from_millis(400);
+        for (host_delay, guest_delay) in [(pause, Duration::ZERO), (Duration::ZERO, pause)] {
+            let (host, guest) = run_loopback(
+                Side::new(&host_identity, "", true).after(host_delay),
+                Side::new(&guest_identity, "", true).after(guest_delay),
+            );
+            assert_eq!(host.outcome.status, LAN_PASS_STATUS);
+            assert_eq!(guest.outcome.status, LAN_PASS_STATUS);
+            assert!(host.typing_opened && guest.typing_opened);
+        }
+    }
+
+    #[test]
+    fn a_safety_code_answer_is_read_in_pieces_without_taking_the_next_frame() {
+        let listener =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind a loopback listener");
+        let mut writer = TcpStream::connect(listener.local_addr().expect("read the address"))
+            .expect("connect the other phone");
+        let (mut reader, _) = listener.accept().expect("accept the other phone");
+        reader
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("use a short read timeout");
+        writer.set_nodelay(true).expect("send small pieces at once");
+
+        let mut answer = PartialFrame::default();
+        assert_eq!(answer.poll(&mut reader), Ok(None), "nothing has arrived");
+        for piece in [&[0u8, 0][..], &[0, 3, b'a'][..]] {
+            writer.write_all(piece).expect("send part of the answer");
+            thread::sleep(Duration::from_millis(20));
+            assert_eq!(
+                answer.poll(&mut reader),
+                Ok(None),
+                "the answer is incomplete"
+            );
+        }
+        // The rest of the answer arrives together with the start of the next frame.
+        writer
+            .write_all(&[b'b', b'c', 0, 0, 0, 1, b'z'])
+            .expect("send the rest and the next frame");
+        thread::sleep(Duration::from_millis(20));
+        assert_eq!(answer.poll(&mut reader), Ok(Some(b"abc".to_vec())));
+        reader
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("restore a normal read timeout");
+        assert_eq!(receive_frame(&mut reader), Ok(b"z".to_vec()));
+
+        drop(writer);
+        reader
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("use a short read timeout");
+        let mut next = PartialFrame::default();
+        let closed = next
+            .poll(&mut reader)
+            .expect_err("a closed connection is reported");
+        assert!(closed.contains(KEEP_APP_OPEN_HINT), "{closed}");
     }
 
     #[test]
