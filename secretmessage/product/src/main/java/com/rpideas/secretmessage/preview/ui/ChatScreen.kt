@@ -29,6 +29,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,7 +46,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rpideas.secretmessage.preview.chat.ChatTimerPolicy
-import com.rpideas.secretmessage.preview.chat.UNDELIVERED_TTL_MILLIS
 import com.rpideas.secretmessage.preview.model.EphemeralMessage
 import com.rpideas.secretmessage.preview.model.InlineSegment
 import com.rpideas.secretmessage.preview.model.MessageDeliveryState
@@ -69,6 +69,9 @@ internal fun ChatScreen(
     onOpenSettings: () -> Unit,
     onChatVisibilityChanged: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    wording: ChatWording = ChatWording.Preview,
+    /** Shows an End button in the header when a build can end a live session. */
+    onEndChat: (() -> Unit)? = null,
 ) {
     val listState = rememberLazyListState()
     val currentVisibilityCallback by rememberUpdatedState(onChatVisibilityChanged)
@@ -95,7 +98,7 @@ internal fun ChatScreen(
                 .fillMaxSize()
                 .padding(horizontal = 10.dp, vertical = 4.dp),
         ) {
-            PreviewHeader(onOpenSettings = onOpenSettings)
+            PreviewHeader(wording = wording, onOpenSettings = onOpenSettings, onEndChat = onEndChat)
 
             LazyColumn(
                 state = listState,
@@ -105,14 +108,21 @@ internal fun ChatScreen(
                 contentPadding = PaddingValues(vertical = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                item { LocalOnlyNotice() }
-                item { ConnectionStatusCard(sessionStatus = sessionStatus, statusDescription = statusDescription) }
+                item { LocalOnlyNotice(wording) }
+                item {
+                    ConnectionStatusCard(
+                        sessionStatus = sessionStatus,
+                        statusDescription = statusDescription,
+                        pairingLabel = wording.pairingLabel,
+                    )
+                }
                 if (notice != null) {
                     item { Text(text = notice, color = Warm, fontSize = 12.sp) }
                 }
                 if (messages.isEmpty()) {
                     item {
                         EmptyChatNotice(
+                            wording,
                             Modifier
                                 .fillMaxWidth()
                                 .heightIn(min = 96.dp),
@@ -125,8 +135,7 @@ internal fun ChatScreen(
                 }
                 item {
                     Text(
-                        text = "No connection in this preview · unsent messages are removed after " +
-                            "${UNDELIVERED_TTL_MILLIS / 1_000L} seconds · not encrypted",
+                        text = wording.footer,
                         modifier = Modifier.fillMaxWidth(),
                         color = Muted,
                         fontSize = 11.sp,
@@ -151,7 +160,7 @@ internal fun ChatScreen(
 }
 
 @Composable
-private fun PreviewHeader(onOpenSettings: () -> Unit) {
+private fun PreviewHeader(wording: ChatWording, onOpenSettings: () -> Unit, onEndChat: (() -> Unit)?) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -167,26 +176,29 @@ private fun PreviewHeader(onOpenSettings: () -> Unit) {
         }
         Column(modifier = Modifier.padding(start = 10.dp)) {
             Text("Secret Message", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Ink)
-            Text("LOCAL UI PREVIEW", fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
+            Text(wording.subtitle, fontSize = 10.sp, fontWeight = FontWeight.SemiBold, color = Muted)
         }
         Spacer(Modifier.weight(1f))
         Surface(shape = CircleShape, color = Color(0xFF3A3026)) {
             Text(
-                "NOT SECURE",
+                wording.badge,
                 modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
                 color = Warm,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.Bold,
             )
         }
+        if (onEndChat != null) {
+            TextButton(onClick = onEndChat) { Text("End", color = Warm, fontWeight = FontWeight.Bold) }
+        }
         IconButton(onClick = onOpenSettings) {
-            Icon(Icons.Outlined.Settings, contentDescription = "Preview settings", tint = Accent)
+            Icon(Icons.Outlined.Settings, contentDescription = wording.settingsButtonDescription, tint = Accent)
         }
     }
 }
 
 @Composable
-private fun LocalOnlyNotice() {
+private fun LocalOnlyNotice(wording: ChatWording) {
     Surface(
         shape = RoundedCornerShape(14.dp),
         color = Color(0xFF342B20),
@@ -194,13 +206,13 @@ private fun LocalOnlyNotice() {
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
             Text(
-                "NOT SECURE · LOCAL PREVIEW ONLY",
+                wording.noticeTitle,
                 color = Warm,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                "This build does not connect to another phone or encrypt messages. Do not enter sensitive content.",
+                wording.noticeBody,
                 modifier = Modifier.padding(top = 3.dp),
                 color = Color(0xFFFFE6C7),
                 fontSize = 12.sp,
@@ -211,7 +223,7 @@ private fun LocalOnlyNotice() {
 }
 
 @Composable
-private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescription: String) {
+private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescription: String, pairingLabel: String) {
     val label = when (sessionStatus) {
         MlsSessionStatus.DISCONNECTED -> "Not connected"
         MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE -> "Setting up session"
@@ -226,7 +238,8 @@ private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescript
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = Warm) {}
+                val connected = sessionStatus == MlsSessionStatus.CONNECTED_MLS_VERIFIED
+                Surface(modifier = Modifier.size(8.dp), shape = CircleShape, color = if (connected) SendGreen else Warm) {}
                 Text(
                     label,
                     modifier = Modifier.padding(start = 8.dp),
@@ -235,7 +248,7 @@ private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescript
                     fontWeight = FontWeight.Medium,
                 )
                 Spacer(Modifier.weight(1f))
-                Text("Pairing not enabled", color = Muted, fontSize = 11.sp)
+                Text(pairingLabel, color = Muted, fontSize = 11.sp)
             }
             Text(statusDescription, color = Muted, fontSize = 11.sp, modifier = Modifier.padding(top = 2.dp))
         }
@@ -243,16 +256,15 @@ private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescript
 }
 
 @Composable
-private fun EmptyChatNotice(modifier: Modifier = Modifier) {
+private fun EmptyChatNotice(wording: ChatWording, modifier: Modifier = Modifier) {
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Column(
             modifier = Modifier.widthIn(max = 300.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Text("Your preview chat", color = Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(wording.emptyTitle, color = Ink, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Text(
-                "Type with the built-in English keyboard, or open the drawing pad to draw letters in any " +
-                    "language or a picture. Nothing leaves this phone; unsent messages are removed after 30 seconds.",
+                wording.emptyBody,
                 modifier = Modifier.padding(top = 6.dp),
                 color = Muted,
                 fontSize = 13.sp,

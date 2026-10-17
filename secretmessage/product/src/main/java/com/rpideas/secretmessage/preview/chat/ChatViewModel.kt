@@ -26,12 +26,16 @@ import kotlinx.coroutines.launch
 
 /**
  * RAM-only chat state for the preview, adapted from the WhisperPad ChatViewModel. Messages and the
- * composer draft live only in memory, timers use elapsed realtime, and the only transport is
- * [UnavailableMlsTransport], so every message stays undelivered and is removed after 30 seconds.
+ * composer draft live only in memory and timers use elapsed realtime. The preview creates it with
+ * [UnavailableMlsTransport], so every message stays undelivered and is removed after 30 seconds. A
+ * separate test build may pass the transport that connects it to another phone; when that session
+ * ends, every message is removed from memory.
  */
-class ChatViewModel(application: Application) : AndroidViewModel(application) {
+class ChatViewModel @JvmOverloads constructor(
+    application: Application,
+    private val transport: SecretMessageMlsTransport = UnavailableMlsTransport(),
+) : AndroidViewModel(application) {
     private val settingsStore = PreviewSettingsStore(application)
-    private val transport: SecretMessageMlsTransport = UnavailableMlsTransport()
 
     private val mutableSettings = MutableStateFlow(settingsStore.load())
     val settings: StateFlow<PreviewSettings> = mutableSettings.asStateFlow()
@@ -61,6 +65,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 delay(TICK_MILLIS)
             }
         }
+        viewModelScope.launch {
+            // Nothing from an authenticated session may stay on screen after that session ends.
+            var wasConnected = false
+            transport.sessionStatus.collect { status ->
+                val connected = status == MlsSessionStatus.CONNECTED_MLS_VERIFIED
+                if (wasConnected && !connected) clearConversation()
+                wasConnected = connected
+            }
+        }
+    }
+
+    /** Removes every message from memory, for example when the session ends. */
+    fun clearConversation() {
+        mutableMessages.value = emptyList()
+        mutableNow.value = now()
     }
 
     fun typeText(text: String) {

@@ -360,8 +360,9 @@ pub mod spike_harness {
 
     mod lan_smoke;
     pub use lan_smoke::{
-        generate_lan_identity, lan_chat_end, lan_chat_poll, lan_chat_send, lan_safety_prompt,
-        run_lan_mls_host, run_lan_mls_join, submit_lan_safety_decision, take_lan_verified_peer,
+        generate_lan_identity, lan_cancel_host_wait, lan_chat_end, lan_chat_poll, lan_chat_send,
+        lan_safety_prompt, run_lan_mls_host, run_lan_mls_join, submit_lan_safety_decision,
+        take_lan_verified_peer, LanProfile, SMOKE_TEST, WIFI_CHAT,
     };
 
     #[cfg(test)]
@@ -591,8 +592,8 @@ pub mod spike_harness {
     }
 }
 
-// Reuse the existing narrowly scoped JNI method; it calls the matching
-// spike_harness function above and contains no cryptographic implementation.
+// Narrowly scoped JNI methods for the smoke test APK and the Wi-Fi test build of the app; they
+// call the matching spike_harness functions above and contain no cryptographic implementation.
 #[cfg(feature = "android-jni")]
 #[allow(unsafe_code)]
 mod android_jni;

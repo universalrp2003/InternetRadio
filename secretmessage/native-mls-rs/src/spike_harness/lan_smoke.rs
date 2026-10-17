@@ -10,6 +10,10 @@
 //! then type short test messages to each other inside the same MLS group; they are shown on screen
 //! only, never stored, and only their counts reach the report. This tests those steps. It is not
 //! a production trust policy or a chat app, and it is not suitable for real/private messages.
+//!
+//! The Wi-Fi test build of the Secret Message app runs the same sessions under its own protocol
+//! name and larger limits ([`WIFI_CHAT`]); its typed messages carry that app's encoded text and
+//! drawings and its delivery and view notices. It is a test build too, not a reviewed messenger.
 
 use super::{test_crypto_provider, test_signing_material, TEST_CIPHERSUITE};
 use mls_rs::client_builder::MlsConfig;
@@ -22,6 +26,7 @@ use mls_rs_crypto_awslc::AwsLcCryptoProvider;
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
 use std::thread;
@@ -47,22 +52,23 @@ const GUEST_ACK: &[u8] = b"MLS-LAN-SMOKE-GUEST-ACK-55b0e2";
 const CODE_CONFIRMED: &[u8] = b"MLS-LAN-SAFETY-CODE-CONFIRMED-3b9e41";
 const CODE_REJECTED: &[u8] = b"MLS-LAN-SAFETY-CODE-REJECTED-c47d02";
 const CODE_UNANSWERED: &[u8] = b"MLS-LAN-SAFETY-CODE-UNANSWERED-81f5a6";
-/// The joining phone's first frame starts with this, so a host can name a version mismatch.
+/// The smoke test APK's joining phone starts its first frame with this, so a host can name a
+/// version mismatch.
 const PROTOCOL_TAG: &str = "secretmessage-lan-test/6";
 const PROTOCOL_FAMILY: &str = "secretmessage-lan-test/";
 /// How long a socket read waits before this phone's screen is checked again, both while the
 /// people compare the safety code and during the typed test.
 const SCREEN_POLL: Duration = Duration::from_millis(150);
-/// The typed test ends by itself this long after it opens.
+/// The smoke test APK's typed test ends by itself this long after it opens.
 const CHAT_LIMIT: Duration = Duration::from_secs(10 * 60);
 /// After this phone's last message (the typed test's end marker, or an answer that stops the
 /// test), how long to let the other phone read it before closing.
 const END_LINGER: Duration = Duration::from_secs(2);
-/// Longest typed test message, in UTF-8 bytes.
+/// Longest smoke-test typed message, in UTF-8 bytes.
 const MAX_TYPED_MESSAGE_BYTES: usize = 1000;
-/// Most typed messages one phone may send in one test.
+/// Most typed messages one phone may send in one smoke test.
 const MAX_TYPED_MESSAGES: u32 = 200;
-/// Largest frame accepted for a safety-code answer or a typed-test message.
+/// Largest frame accepted for a safety-code answer, and for a smoke-test typed message.
 const MAX_SHORT_FRAME_BYTES: usize = 16 * 1024;
 /// Kind bytes that start each typed-test payload inside an MLS application message.
 const CHAT_TEXT: u8 = b'T';
@@ -79,6 +85,58 @@ const LOCAL_UNANSWERED_STATUS: &str =
     "STOPPED: the safety code was not answered on this phone within two minutes, so no test messages were exchanged. TEST ONLY.";
 const PEER_UNANSWERED_STATUS: &str =
     "STOPPED: the safety code was not answered on the other phone within two minutes, so no test messages were exchanged. TEST ONLY.";
+
+/// The protocol name and limits of one app that runs these LAN sessions. The smoke test APK and
+/// the Wi-Fi test build of the Secret Message app use different protocol names, so neither can
+/// join the other's invite.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LanProfile {
+    /// The joining phone's first frame starts with this, so a host can name a version mismatch.
+    protocol_tag: &'static str,
+    /// Earlier and later versions of the same app share this prefix.
+    protocol_family: &'static str,
+    /// Longest typed message, in UTF-8 bytes.
+    max_text_bytes: usize,
+    /// Most typed messages one phone may send in one session.
+    max_messages: u32,
+    /// The typed session ends by itself this long after it opens.
+    chat_limit: Duration,
+    /// Largest frame accepted while the typed session is open.
+    max_chat_frame_bytes: usize,
+}
+
+impl LanProfile {
+    /// The protocol name this app's joining phones send.
+    pub fn protocol_tag(&self) -> &'static str {
+        self.protocol_tag
+    }
+}
+
+/// The standalone smoke test APK: typed test messages of up to 300 characters on screen.
+pub const SMOKE_TEST: LanProfile = LanProfile {
+    protocol_tag: PROTOCOL_TAG,
+    protocol_family: PROTOCOL_FAMILY,
+    max_text_bytes: MAX_TYPED_MESSAGE_BYTES,
+    max_messages: MAX_TYPED_MESSAGES,
+    chat_limit: CHAT_LIMIT,
+    max_chat_frame_bytes: MAX_SHORT_FRAME_BYTES,
+};
+
+/// The Wi-Fi test build of the Secret Message app. Its typed messages carry encoded text and
+/// drawings, and every delivery and view notice is a message too, so its limits are larger.
+pub const WIFI_CHAT: LanProfile = LanProfile {
+    protocol_tag: "secretmessage-wifi-chat/1",
+    protocol_family: "secretmessage-wifi-chat/",
+    max_text_bytes: 96 * 1024,
+    max_messages: 20_000,
+    chat_limit: Duration::from_secs(60 * 60),
+    max_chat_frame_bytes: 256 * 1024,
+};
+
+/// Set while a host waits for the other phone to join.
+static HOST_WAITING: AtomicBool = AtomicBool::new(false);
+/// Set by the screen to stop that wait early.
+static HOST_CANCELLED: AtomicBool = AtomicBool::new(false);
 
 /// One test install's persistent MLS signing identity.
 struct LanIdentity {
@@ -280,12 +338,17 @@ struct ChatOutbox {
     open: bool,
     next_number: u32,
     commands: VecDeque<ChatCommand>,
+    /// The running session's limits for this phone's typed messages.
+    max_text_bytes: usize,
+    max_messages: u32,
 }
 
 static CHAT_OUTBOX: Mutex<ChatOutbox> = Mutex::new(ChatOutbox {
     open: false,
     next_number: 1,
     commands: VecDeque::new(),
+    max_text_bytes: MAX_TYPED_MESSAGE_BYTES,
+    max_messages: MAX_TYPED_MESSAGES,
 });
 static CHAT_EVENTS: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
 
@@ -321,21 +384,25 @@ fn set_chat_open(open: bool) {
     }
 }
 
-/// Forget any earlier typed test before a new LAN test starts.
-fn reset_screen_chat() {
+/// Forget any earlier typed test before a new LAN session starts, and use this app's limits.
+fn reset_screen_chat(profile: &LanProfile) {
     set_chat_open(false);
+    if let Ok(mut outbox) = CHAT_OUTBOX.lock() {
+        outbox.max_text_bytes = profile.max_text_bytes;
+        outbox.max_messages = profile.max_messages;
+    }
     if let Ok(mut events) = CHAT_EVENTS.lock() {
         events.clear();
     }
 }
 
-fn validate_typed_text(text: &str) -> Result<(), String> {
+fn validate_typed_text(text: &str, max_bytes: usize) -> Result<(), String> {
     if text.trim().is_empty() {
         return Err("Type a message first.".into());
     }
-    if text.len() > MAX_TYPED_MESSAGE_BYTES {
+    if text.len() > max_bytes {
         return Err(format!(
-            "A typed test message can be at most {MAX_TYPED_MESSAGE_BYTES} bytes."
+            "A typed test message can be at most {max_bytes} bytes."
         ));
     }
     Ok(())
@@ -343,18 +410,19 @@ fn validate_typed_text(text: &str) -> Result<(), String> {
 
 /// Queue a typed test message from this phone's screen; returns its number on this phone.
 pub fn lan_chat_send(text: &str) -> Result<u32, String> {
-    validate_typed_text(text)?;
     let mut outbox = CHAT_OUTBOX
         .lock()
         .map_err(|_| "The typed test is unavailable.".to_owned())?;
+    validate_typed_text(text, outbox.max_text_bytes)?;
     if !outbox.open {
         return Err(
             "No typed test is open; both phones must confirm the safety code first.".into(),
         );
     }
-    if outbox.next_number > MAX_TYPED_MESSAGES {
+    if outbox.next_number > outbox.max_messages {
         return Err(format!(
-            "This test allows {MAX_TYPED_MESSAGES} typed messages per phone; end it and start a new test."
+            "This test allows {} typed messages per phone; end it and start a new test.",
+            outbox.max_messages
         ));
     }
     let number = outbox.next_number;
@@ -625,9 +693,26 @@ fn validate_invite_token(token: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn accept_with_timeout(listener: &TcpListener, wait: Duration) -> Result<TcpStream, String> {
+/// Stop a host that is still waiting for the other phone; false if no host is waiting.
+pub fn lan_cancel_host_wait() -> bool {
+    if HOST_WAITING.load(Ordering::SeqCst) {
+        HOST_CANCELLED.store(true, Ordering::SeqCst);
+        true
+    } else {
+        false
+    }
+}
+
+fn accept_with_timeout(
+    listener: &TcpListener,
+    wait: Duration,
+    cancelled: &AtomicBool,
+) -> Result<TcpStream, String> {
     let deadline = Instant::now() + wait;
     loop {
+        if cancelled.load(Ordering::SeqCst) {
+            return Err("Stopped waiting for the other phone to join.".into());
+        }
         match listener.accept() {
             Ok((stream, _peer)) => return Ok(stream),
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
@@ -707,13 +792,13 @@ fn is_wait(error: &std::io::Error) -> bool {
     )
 }
 
-/// The joining phone's first frame: the protocol tag, a space, and the invite token.
-fn guest_hello(token: &str) -> String {
-    format!("{PROTOCOL_TAG} {token}")
+/// The joining phone's first frame: this app's protocol tag, a space, and the invite token.
+fn guest_hello(profile: &LanProfile, token: &str) -> String {
+    format!("{} {token}", profile.protocol_tag)
 }
 
 /// Check the joining phone's first frame, naming an older or different test APK clearly.
-fn check_guest_hello(hello: &[u8], token: &str) -> Result<(), String> {
+fn check_guest_hello(profile: &LanProfile, hello: &[u8], token: &str) -> Result<(), String> {
     if hello == token.as_bytes() {
         return Err("The other phone is running an older test APK. Install the same test APK version on both phones.".into());
     }
@@ -721,11 +806,15 @@ fn check_guest_hello(hello: &[u8], token: &str) -> Result<(), String> {
         .ok()
         .and_then(|text| text.split_once(' '))
     {
-        Some((PROTOCOL_TAG, supplied)) if supplied == token => Ok(()),
-        Some((tag, _)) if tag.starts_with(PROTOCOL_FAMILY) && tag != PROTOCOL_TAG => Err(
+        Some((tag, supplied)) if tag == profile.protocol_tag && supplied == token => Ok(()),
+        Some((tag, _))
+            if tag.starts_with(profile.protocol_family) && tag != profile.protocol_tag =>
+        {
+            Err(
             "The other phone is running a different test APK version. Install the same test APK version on both phones."
                 .into(),
-        ),
+        )
+        }
         _ => Err("The invite does not match the active host session.".into()),
     }
 }
@@ -938,7 +1027,7 @@ impl ChatPayload {
         bytes
     }
 
-    fn parse(bytes: &[u8]) -> Result<Self, String> {
+    fn parse(bytes: &[u8], max_text_bytes: usize) -> Result<Self, String> {
         let malformed = || "The other phone sent a malformed typed-test message.".to_owned();
         let [kind, a, b, c, d, body @ ..] = bytes else {
             return Err(malformed());
@@ -947,7 +1036,7 @@ impl ChatPayload {
         match *kind {
             CHAT_TEXT => {
                 let text = std::str::from_utf8(body).map_err(|_| malformed())?;
-                validate_typed_text(text).map_err(|_| malformed())?;
+                validate_typed_text(text, max_text_bytes).map_err(|_| malformed())?;
                 Ok(ChatPayload::Text(number, text.to_owned()))
             }
             CHAT_ACK if body.is_empty() => Ok(ChatPayload::Ack(number)),
@@ -984,18 +1073,25 @@ fn encrypt_chat<C: MlsConfig>(
 
 /// Collects length-prefixed frames from a socket read with a short timeout, keeping any partial
 /// frame for the next read.
-#[derive(Default)]
 struct FrameReader {
     buffered: Vec<u8>,
+    max_frame_bytes: usize,
 }
 
 impl FrameReader {
+    fn new(max_frame_bytes: usize) -> Self {
+        Self {
+            buffered: Vec::new(),
+            max_frame_bytes,
+        }
+    }
+
     /// The next complete frame, reading the socket at most once; `None` if none has arrived yet.
     fn next_frame(&mut self, stream: &mut TcpStream) -> Result<Option<Vec<u8>>, String> {
         if let Some(frame) = self.take_frame()? {
             return Ok(Some(frame));
         }
-        let mut chunk = [0u8; 4096];
+        let mut chunk = [0u8; 16 * 1024];
         match stream.read(&mut chunk) {
             Ok(0) => Err(format!(
                 "The other phone closed the connection without ending the typed test. {KEEP_APP_OPEN_HINT}"
@@ -1014,7 +1110,7 @@ impl FrameReader {
             return Ok(None);
         };
         let length = u32::from_be_bytes([*a, *b, *c, *d]) as usize;
-        if length > MAX_SHORT_FRAME_BYTES {
+        if length > self.max_frame_bytes {
             return Err("The other phone sent an oversized typed-test frame.".into());
         }
         if self.buffered.len() < 4 + length {
@@ -1030,7 +1126,8 @@ impl FrameReader {
 enum ChatEnd {
     ThisPhone,
     OtherPhone,
-    TimeLimit,
+    /// The session's time limit passed.
+    TimeLimit(Duration),
     Stopped(String),
 }
 
@@ -1045,6 +1142,7 @@ struct ChatTally {
 /// Run the typed test over the verified MLS group until a person ends it, the time limit
 /// passes, or the connection fails; returns the report line.
 fn run_typed_test<C, S>(
+    profile: &LanProfile,
     stream: &mut TcpStream,
     group: &mut mls_rs::group::Group<C>,
     chat: &mut S,
@@ -1057,13 +1155,15 @@ where
     chat.report(ChatEvent::Open { verified_peer });
     let started = Instant::now();
     let mut tally = ChatTally::default();
-    let end = chat_loop(stream, group, chat, started, &mut tally).unwrap_or_else(ChatEnd::Stopped);
+    let end = chat_loop(profile, stream, group, chat, started, &mut tally)
+        .unwrap_or_else(ChatEnd::Stopped);
     let summary = chat_summary(&end, started.elapsed(), &tally);
     chat.report(ChatEvent::Ended(summary.clone()));
     summary
 }
 
 fn chat_loop<C, S>(
+    profile: &LanProfile,
     stream: &mut TcpStream,
     group: &mut mls_rs::group::Group<C>,
     chat: &mut S,
@@ -1075,7 +1175,7 @@ where
     S: ChatSide,
 {
     set_read_timeout(stream, SCREEN_POLL)?;
-    let mut frames = FrameReader::default();
+    let mut frames = FrameReader::new(profile.max_chat_frame_bytes);
     loop {
         while let Some(command) = chat.next_command() {
             match command {
@@ -1090,9 +1190,9 @@ where
                 }
             }
         }
-        if started.elapsed() >= CHAT_LIMIT {
+        if started.elapsed() >= profile.chat_limit {
             end_for_both(stream, group);
-            return Ok(ChatEnd::TimeLimit);
+            return Ok(ChatEnd::TimeLimit(profile.chat_limit));
         }
         let Some(frame) = frames.next_frame(stream)? else {
             continue;
@@ -1106,7 +1206,7 @@ where
                 "The other phone sent something other than an MLS application message.".into(),
             );
         };
-        match ChatPayload::parse(application.data())? {
+        match ChatPayload::parse(application.data(), profile.max_text_bytes)? {
             ChatPayload::Text(number, text) => {
                 tally.received += 1;
                 chat.report(ChatEvent::Received(number, text));
@@ -1151,10 +1251,9 @@ fn chat_summary(end: &ChatEnd, elapsed: Duration, tally: &ChatTally) -> String {
     let how = match end {
         ChatEnd::ThisPhone => "Ended on this phone.".to_owned(),
         ChatEnd::OtherPhone => "Ended on the other phone.".to_owned(),
-        ChatEnd::TimeLimit => format!(
-            "Ended at the {}-minute test limit.",
-            CHAT_LIMIT.as_secs() / 60
-        ),
+        ChatEnd::TimeLimit(limit) => {
+            format!("Ended at the {}-minute test limit.", limit.as_secs() / 60)
+        }
         ChatEnd::Stopped(reason) if reason.ends_with('.') => format!("Stopped. {reason}"),
         ChatEnd::Stopped(reason) => format!("Stopped. {reason}."),
     };
@@ -1177,6 +1276,7 @@ fn format_elapsed(elapsed: Duration) -> String {
 }
 
 fn host_session<D, S>(
+    profile: &LanProfile,
     mut stream: TcpStream,
     token: &str,
     identity: LanIdentity,
@@ -1191,7 +1291,7 @@ where
     configure_stream(&stream)?;
 
     let hello = receive_frame(&mut stream)?;
-    check_guest_hello(&hello, token)?;
+    check_guest_hello(profile, &hello, token)?;
 
     let guest_key_package_wire = receive_frame(&mut stream)?;
     let guest_key_package = parse_mls_message(&guest_key_package_wire, "guest MLS KeyPackage")?;
@@ -1240,7 +1340,13 @@ where
     verify_application_message(received, GUEST_ACK, "Guest acknowledgement")?;
     send_frame(&mut stream, b"PASS")?;
 
-    run_typed_test(&mut stream, &mut host_group, &mut chat, pin.clone());
+    run_typed_test(
+        profile,
+        &mut stream,
+        &mut host_group,
+        &mut chat,
+        pin.clone(),
+    );
     Ok(SessionOutcome {
         status: LAN_PASS_STATUS.into(),
         verified_peer: Some(pin),
@@ -1248,6 +1354,7 @@ where
 }
 
 fn guest_session<D, S>(
+    profile: &LanProfile,
     mut stream: TcpStream,
     token: &str,
     identity: LanIdentity,
@@ -1260,7 +1367,7 @@ where
     S: ChatSide,
 {
     configure_stream(&stream)?;
-    send_frame(&mut stream, guest_hello(token).as_bytes())?;
+    send_frame(&mut stream, guest_hello(profile, token).as_bytes())?;
 
     let guest_client = identity_client(identity)?;
     let key_package = guest_client
@@ -1299,7 +1406,13 @@ where
         return Err("Host did not confirm the complete MLS test exchange.".into());
     }
 
-    run_typed_test(&mut stream, &mut guest_group, &mut chat, pin.clone());
+    run_typed_test(
+        profile,
+        &mut stream,
+        &mut guest_group,
+        &mut chat,
+        pin.clone(),
+    );
     Ok(SessionOutcome {
         status: LAN_PASS_STATUS.into(),
         verified_peer: Some(pin),
@@ -1313,9 +1426,11 @@ fn finish_session(outcome: SessionOutcome) -> String {
 }
 
 /// Start a one-peer MLS test host on a private IPv4 address with this install's identity.
-/// The listener closes when one test completes or after three minutes. After a PASS the typed
-/// test runs until a person ends it; the returned status covers the verified exchange.
+/// The listener closes when one test completes, after three minutes, or when the screen stops
+/// the wait ([`lan_cancel_host_wait`]). After a PASS the typed test runs until a person ends it;
+/// the returned status covers the verified exchange.
 pub fn run_lan_mls_host(
+    profile: &LanProfile,
     host_ip: &str,
     port: u16,
     token: &str,
@@ -1323,7 +1438,7 @@ pub fn run_lan_mls_host(
     pins: &str,
 ) -> Result<String, String> {
     set_verified_peer(None);
-    reset_screen_chat();
+    reset_screen_chat(profile);
     validate_invite_token(token)?;
     let identity = parse_lan_identity(identity)?;
     let host_ip = require_private_ipv4(host_ip)?;
@@ -1335,12 +1450,26 @@ pub fn run_lan_mls_host(
     listener
         .set_nonblocking(true)
         .map_err(|error| format!("Could not configure the local Wi-Fi listener: {error}"))?;
-    let stream = accept_with_timeout(&listener, HOST_WAIT)?;
-    host_session(stream, token, identity, pins, ask_local_user, ScreenChat).map(finish_session)
+    HOST_CANCELLED.store(false, Ordering::SeqCst);
+    HOST_WAITING.store(true, Ordering::SeqCst);
+    let accepted = accept_with_timeout(&listener, HOST_WAIT, &HOST_CANCELLED);
+    HOST_WAITING.store(false, Ordering::SeqCst);
+    let stream = accepted?;
+    host_session(
+        profile,
+        stream,
+        token,
+        identity,
+        pins,
+        ask_local_user,
+        ScreenChat,
+    )
+    .map(finish_session)
 }
 
 /// Join a one-peer test host on a private LAN IPv4 address with this install's identity.
 pub fn run_lan_mls_join(
+    profile: &LanProfile,
     host_ip: &str,
     port: u16,
     token: &str,
@@ -1348,7 +1477,7 @@ pub fn run_lan_mls_join(
     pins: &str,
 ) -> Result<String, String> {
     set_verified_peer(None);
-    reset_screen_chat();
+    reset_screen_chat(profile);
     validate_invite_token(token)?;
     let identity = parse_lan_identity(identity)?;
     let host_ip = require_private_ipv4(host_ip)?;
@@ -1358,29 +1487,40 @@ pub fn run_lan_mls_join(
     let address = SocketAddr::V4(SocketAddrV4::new(host_ip, port));
     let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
         .map_err(|error| format!("Could not connect to the local Wi-Fi test host: {error}"))?;
-    guest_session(stream, token, identity, pins, ask_local_user, ScreenChat).map(finish_session)
+    guest_session(
+        profile,
+        stream,
+        token,
+        identity,
+        pins,
+        ask_local_user,
+        ScreenChat,
+    )
+    .map(finish_session)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ask_local_user, check_guest_hello, classify_peer, connection_failure, encrypt_chat,
-        from_hex, generate_lan_identity, group_safety_code, guest_hello, guest_session,
-        host_session, identity_client, lan_chat_end, lan_chat_poll, lan_chat_send,
+        accept_with_timeout, ask_local_user, check_guest_hello, classify_peer, connection_failure,
+        encrypt_chat, from_hex, generate_lan_identity, group_safety_code, guest_hello,
+        guest_session, host_session, identity_client, lan_chat_end, lan_chat_poll, lan_chat_send,
         lan_safety_prompt, parse_lan_identity, peer_identity, receive_frame, reset_screen_chat,
         run_typed_test, safety_code_from_authenticator, submit_lan_safety_decision,
         take_lan_verified_peer, to_hex, Answer, ChatCommand, ChatEvent, ChatPayload, ChatSide,
-        LocalAnswer, PartialFrame, PeerStatus, SafetyPrompt, ScreenChat, SessionOutcome, CHAT_ACK,
-        CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS, LOCAL_REJECTED_STATUS,
-        LOCAL_UNANSWERED_STATUS, MAX_TYPED_MESSAGES, MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS,
-        PEER_UNANSWERED_STATUS, VERIFY_TIMEOUT,
+        LanProfile, LocalAnswer, PartialFrame, PeerStatus, SafetyPrompt, ScreenChat,
+        SessionOutcome, CHAT_ACK, CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS,
+        LOCAL_REJECTED_STATUS, LOCAL_UNANSWERED_STATUS, MAX_TYPED_MESSAGES,
+        MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS, PEER_UNANSWERED_STATUS, SMOKE_TEST,
+        VERIFY_TIMEOUT, WIFI_CHAT,
     };
     use mls_rs::client_builder::MlsConfig;
     use mls_rs::group::{Group, ReceivedMessage};
     use mls_rs::{Client, ExtensionList, MlsMessage};
     use std::io::Write;
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
-    use std::sync::mpsc;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{mpsc, Arc};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -1542,6 +1682,17 @@ mod tests {
         guest: Side,
         guest_chat: ScriptedChat,
     ) -> (thread::JoinHandle<Seen>, thread::JoinHandle<Seen>) {
+        start_loopback_with(&SMOKE_TEST, host, host_chat, guest, guest_chat)
+    }
+
+    /// Run both phones of one app (smoke test or Wi-Fi chat) over loopback.
+    fn start_loopback_with(
+        profile: &'static LanProfile,
+        host: Side,
+        host_chat: ScriptedChat,
+        guest: Side,
+        guest_chat: ScriptedChat,
+    ) -> (thread::JoinHandle<Seen>, thread::JoinHandle<Seen>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .expect("bind a host-only loopback MLS test listener");
         listener
@@ -1564,6 +1715,7 @@ mod tests {
             let (local, _person) = host.person();
             let mut prompt = None;
             let outcome = host_session(
+                profile,
                 stream,
                 LOOPBACK_TOKEN,
                 host_identity,
@@ -1585,6 +1737,7 @@ mod tests {
             let (local, _person) = guest.person();
             let mut prompt = None;
             let outcome = guest_session(
+                profile,
                 stream,
                 LOOPBACK_TOKEN,
                 guest_identity,
@@ -2137,12 +2290,15 @@ mod tests {
             panic!("a typed test message is an MLS application message");
         };
         assert_eq!(
-            ChatPayload::parse(application.data()),
+            ChatPayload::parse(application.data(), MAX_TYPED_MESSAGE_BYTES),
             Ok(ChatPayload::Text(7, text.into()))
         );
 
         for payload in [ChatPayload::Ack(7), ChatPayload::End] {
-            assert_eq!(ChatPayload::parse(&payload.to_bytes()), Ok(payload));
+            assert_eq!(
+                ChatPayload::parse(&payload.to_bytes(), MAX_TYPED_MESSAGE_BYTES),
+                Ok(payload)
+            );
         }
         let too_long = "a".repeat(MAX_TYPED_MESSAGE_BYTES + 1);
         for malformed in [
@@ -2156,13 +2312,16 @@ mod tests {
             vec![b'X', 0, 0, 0, 1],
             ChatPayload::Text(1, too_long).to_bytes(),
         ] {
-            assert!(ChatPayload::parse(&malformed).is_err(), "{malformed:?}");
+            assert!(
+                ChatPayload::parse(&malformed, MAX_TYPED_MESSAGE_BYTES).is_err(),
+                "{malformed:?}"
+            );
         }
     }
 
     #[test]
     fn the_screen_can_queue_typed_messages_only_while_typing_is_open() {
-        reset_screen_chat();
+        reset_screen_chat(&SMOKE_TEST);
         assert!(lan_chat_send("hello").is_err(), "nothing is open yet");
         assert!(!lan_chat_end());
 
@@ -2211,7 +2370,7 @@ mod tests {
             assert_eq!(lan_chat_send("again"), Ok(expected));
         }
         assert!(lan_chat_send("one too many").is_err());
-        reset_screen_chat();
+        reset_screen_chat(&SMOKE_TEST);
         assert_eq!(lan_chat_poll(), None);
         assert!(lan_chat_send("after reset").is_err());
         let _ = take_lan_verified_peer();
@@ -2230,7 +2389,13 @@ mod tests {
         drop(peer);
 
         let (mut chat, _commands, screen) = scripted_chat();
-        let summary = run_typed_test(&mut stream, &mut host_group, &mut chat, "peer pin".into());
+        let summary = run_typed_test(
+            &SMOKE_TEST,
+            &mut stream,
+            &mut host_group,
+            &mut chat,
+            "peer pin".into(),
+        );
         assert!(
             summary.starts_with(
                 "Stopped. The other phone closed the connection without ending the typed test."
@@ -2254,24 +2419,29 @@ mod tests {
     #[test]
     fn the_host_names_an_older_or_different_test_apk_and_closed_connections_get_a_hint() {
         assert_eq!(
-            check_guest_hello(guest_hello(LOOPBACK_TOKEN).as_bytes(), LOOPBACK_TOKEN),
+            check_guest_hello(
+                &SMOKE_TEST,
+                guest_hello(&SMOKE_TEST, LOOPBACK_TOKEN).as_bytes(),
+                LOOPBACK_TOKEN
+            ),
             Ok(())
         );
-        let older = check_guest_hello(LOOPBACK_TOKEN.as_bytes(), LOOPBACK_TOKEN)
+        let older = check_guest_hello(&SMOKE_TEST, LOOPBACK_TOKEN.as_bytes(), LOOPBACK_TOKEN)
             .expect_err("a guest from an older test APK");
         assert!(older.contains("older test APK"), "{older}");
         let newer = format!("secretmessage-lan-test/9 {LOOPBACK_TOKEN}");
-        let different = check_guest_hello(newer.as_bytes(), LOOPBACK_TOKEN)
+        let different = check_guest_hello(&SMOKE_TEST, newer.as_bytes(), LOOPBACK_TOKEN)
             .expect_err("a guest from another test APK version");
         assert!(different.contains("different test APK"), "{different}");
         assert_eq!(
             check_guest_hello(
-                guest_hello("ffffffffffffffffffffffffffffffff").as_bytes(),
+                &SMOKE_TEST,
+                guest_hello(&SMOKE_TEST, "ffffffffffffffffffffffffffffffff").as_bytes(),
                 LOOPBACK_TOKEN
             ),
             Err("The invite does not match the active host session.".into())
         );
-        assert!(check_guest_hello(&[0xff, 0xfe], LOOPBACK_TOKEN).is_err());
+        assert!(check_guest_hello(&SMOKE_TEST, &[0xff, 0xfe], LOOPBACK_TOKEN).is_err());
 
         let aborted = std::io::Error::from(std::io::ErrorKind::ConnectionAborted);
         assert!(
@@ -2281,5 +2451,113 @@ mod tests {
         assert!(
             !connection_failure("send the LAN test frame", &refused).contains(KEEP_APP_OPEN_HINT)
         );
+    }
+
+    #[test]
+    fn the_wifi_chat_build_carries_large_encoded_messages_both_ways() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+        let (host_chat, host_commands, host_screen) = scripted_chat();
+        let (guest_chat, guest_commands, guest_screen) = scripted_chat();
+        let (host_thread, guest_thread) = start_loopback_with(
+            &WIFI_CHAT,
+            Side::new(&host_identity, "", true),
+            host_chat,
+            Side::new(&guest_identity, "", true),
+            guest_chat,
+        );
+        assert!(matches!(next_event(&host_screen), ChatEvent::Open { .. }));
+        assert!(matches!(next_event(&guest_screen), ChatEvent::Open { .. }));
+
+        // The app sends a drawing as encoded text, far longer than a smoke-test message.
+        let drawing: String = (0..90_000u32)
+            .map(|index| char::from(b'A' + (index % 26) as u8))
+            .collect();
+        assert!(drawing.len() > MAX_TYPED_MESSAGE_BYTES * 50);
+        guest_commands
+            .send(ChatCommand::Send(1, drawing.clone()))
+            .expect("queue the guest's drawing");
+        assert_eq!(
+            next_event(&host_screen),
+            ChatEvent::Received(1, drawing.clone())
+        );
+        assert_eq!(next_event(&guest_screen), ChatEvent::Delivered(1));
+
+        let reply: String = drawing.chars().rev().take(70_000).collect();
+        host_commands
+            .send(ChatCommand::Send(1, reply.clone()))
+            .expect("queue the host's reply");
+        assert_eq!(next_event(&guest_screen), ChatEvent::Received(1, reply));
+        assert_eq!(next_event(&host_screen), ChatEvent::Delivered(1));
+
+        host_commands
+            .send(ChatCommand::End)
+            .expect("queue the host's end of the chat");
+        let ChatEvent::Ended(host_summary) = next_event(&host_screen) else {
+            panic!("the host's chat did not end");
+        };
+        let ChatEvent::Ended(guest_summary) = next_event(&guest_screen) else {
+            panic!("the guest's chat did not end");
+        };
+        assert!(
+            host_summary.starts_with("Ended on this phone. Sent 1 (1 delivered), received 1, in "),
+            "{host_summary}"
+        );
+        assert!(
+            guest_summary
+                .starts_with("Ended on the other phone. Sent 1 (1 delivered), received 1, in "),
+            "{guest_summary}"
+        );
+        let host = host_thread.join().expect("host thread did not panic");
+        let guest = guest_thread.join().expect("guest thread did not panic");
+        assert_eq!(host.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(guest.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(host.code, guest.code);
+    }
+
+    #[test]
+    fn the_smoke_test_and_the_wifi_chat_build_refuse_each_others_phones() {
+        let smoke = guest_hello(&SMOKE_TEST, LOOPBACK_TOKEN);
+        let wifi = guest_hello(&WIFI_CHAT, LOOPBACK_TOKEN);
+        assert_eq!(
+            check_guest_hello(&WIFI_CHAT, wifi.as_bytes(), LOOPBACK_TOKEN),
+            Ok(())
+        );
+        assert!(check_guest_hello(&WIFI_CHAT, smoke.as_bytes(), LOOPBACK_TOKEN).is_err());
+        assert!(check_guest_hello(&SMOKE_TEST, wifi.as_bytes(), LOOPBACK_TOKEN).is_err());
+        let later = format!("secretmessage-wifi-chat/2 {LOOPBACK_TOKEN}");
+        let different = check_guest_hello(&WIFI_CHAT, later.as_bytes(), LOOPBACK_TOKEN)
+            .expect_err("a guest from a later Wi-Fi test build");
+        assert!(different.contains("different test APK"), "{different}");
+
+        // The Wi-Fi build accepts encoded messages that the smoke test refuses, within its limit.
+        let long = ChatPayload::Text(1, "b".repeat(MAX_TYPED_MESSAGE_BYTES * 4)).to_bytes();
+        assert!(ChatPayload::parse(&long, SMOKE_TEST.max_text_bytes).is_err());
+        assert!(ChatPayload::parse(&long, WIFI_CHAT.max_text_bytes).is_ok());
+        let too_long = ChatPayload::Text(1, "b".repeat(WIFI_CHAT.max_text_bytes + 1)).to_bytes();
+        assert!(ChatPayload::parse(&too_long, WIFI_CHAT.max_text_bytes).is_err());
+        assert_eq!(WIFI_CHAT.protocol_tag(), "secretmessage-wifi-chat/1");
+    }
+
+    #[test]
+    fn a_host_waiting_for_the_other_phone_stops_when_asked() {
+        assert!(!super::lan_cancel_host_wait(), "no host is waiting");
+        let listener =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind a loopback listener");
+        listener
+            .set_nonblocking(true)
+            .expect("use non-blocking accept with a bounded wait");
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let flag = Arc::clone(&cancelled);
+        let canceller = thread::spawn(move || {
+            thread::sleep(Duration::from_millis(200));
+            flag.store(true, Ordering::SeqCst);
+        });
+        let started = Instant::now();
+        let stopped = accept_with_timeout(&listener, Duration::from_secs(20), &cancelled)
+            .expect_err("the wait was stopped");
+        assert!(stopped.contains("Stopped waiting"), "{stopped}");
+        assert!(started.elapsed() < Duration::from_secs(5));
+        canceller.join().expect("canceller thread did not panic");
     }
 }

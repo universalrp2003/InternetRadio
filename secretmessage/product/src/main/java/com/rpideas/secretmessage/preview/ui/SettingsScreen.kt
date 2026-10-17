@@ -52,6 +52,7 @@ internal fun SettingsScreen(
     onPreviewTone: (BuiltInNotificationSound) -> Unit,
     onAppLockChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    wording: SettingsWording = SettingsWording.Preview,
 ) {
     BackHandler(onBack = onBack)
     var sliderSeconds by remember(settings.viewSeconds) { mutableFloatStateOf(settings.viewSeconds.toFloat()) }
@@ -66,7 +67,7 @@ internal fun SettingsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Preview settings", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(wording.title, color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
             TextButton(onClick = onBack) { Text("Back to chat") }
         }
@@ -82,11 +83,7 @@ internal fun SettingsScreen(
                     onViewSecondsChange(ChatTimerPolicy.snapViewSeconds(sliderSeconds.roundToInt()))
                 },
             )
-            SettingsNote(
-                "Choose 60 to 300 seconds; the timer cannot be turned off. In the planned secure app the countdown " +
-                    "starts only when the other phone views an authenticated delivery. This preview cannot deliver " +
-                    "messages, so the countdown never starts here.",
-            )
+            SettingsNote(wording.timerNote)
         }
 
         SettingsSection(title = "Notification tone") {
@@ -107,10 +104,7 @@ internal fun SettingsScreen(
                     }
                 }
             }
-            SettingsNote(
-                "Six original tones generated on this phone. They play at the notification volume. " +
-                    "Message notifications are not enabled in this preview and would never show message content.",
-            )
+            SettingsNote(wording.toneNote)
         }
 
         SettingsSection(title = "App lock") {
@@ -134,12 +128,8 @@ internal fun SettingsScreen(
             )
         }
 
-        SettingsSection(title = "What this preview is") {
-            SettingsNote(
-                "Secret Message $versionLabel is a local-only debug preview of the WhisperPad product screens: " +
-                    "built-in keyboard, drawing pad, timers, tones and app lock. No MLS transport, pairing or network " +
-                    "permission is included, and no message is saved. It is not a secure messenger.",
-            )
+        SettingsSection(title = wording.aboutTitle) {
+            SettingsNote(wording.about(versionLabel))
         }
         Spacer(Modifier.height(12.dp))
     }

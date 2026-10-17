@@ -25,6 +25,7 @@ on:
       - ".github/workflows/secret-message-mls-rs-candidate.yml"
       - ".github/workflows/secret-message-mls-spike.yml"
       - ".github/workflows/secret-message-mls-upstream-candidate.yml"
+      - ".github/workflows/secret-message-wifi-test.yml"
   workflow_dispatch:
     inputs:
       release_tag:
