@@ -360,8 +360,8 @@ pub mod spike_harness {
 
     mod lan_smoke;
     pub use lan_smoke::{
-        generate_lan_identity, lan_safety_prompt, run_lan_mls_host, run_lan_mls_join,
-        submit_lan_safety_decision, take_lan_verified_peer,
+        generate_lan_identity, lan_chat_end, lan_chat_poll, lan_chat_send, lan_safety_prompt,
+        run_lan_mls_host, run_lan_mls_join, submit_lan_safety_decision, take_lan_verified_peer,
     };
 
     #[cfg(test)]

@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.net.Uri;
 import android.os.Build;
@@ -14,13 +15,18 @@ import android.os.Handler;
 import android.os.Looper;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
+import android.text.InputFilter;
 import android.util.Base64;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -32,7 +38,9 @@ import java.net.NetworkInterface;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -46,7 +54,11 @@ public final class MainActivity extends Activity {
     private static final String TAG_MLS = "MLS_SMOKE";
     private static final String TAG_LAN = "LAN_SMOKE";
     private static final String NATIVE_LIBRARY = "secretmessage_mls_spike";
-    private static final long SAFETY_POLL_MS = 400;
+    private static final long LAN_POLL_MS = 250;
+    /** Must match the protocol version in the native LAN test; older invites are refused. */
+    private static final String INVITE_VERSION = "5";
+    private static final int MAX_TYPED_CHARS = 300;
+    private static final int MAX_CHAT_LINES = 200;
     private static final String PREFS = "secretmessage_lan_test";
     private static final String PREF_DEVICE_ID = "device_id";
     private static final String PREF_IDENTITY = "identity_v1";
@@ -57,7 +69,7 @@ public final class MainActivity extends Activity {
 
     private final AtomicBoolean lanTaskRunning = new AtomicBoolean(false);
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
-    private final Runnable safetyCodePoller = this::pollSafetyCode;
+    private final Runnable lanPoller = this::pollLanTest;
     private ScrollView scrollView;
     private LinearLayout safetyPanel;
     private TextView safetyCodeView;
@@ -78,6 +90,19 @@ public final class MainActivity extends Activity {
     private String localResult = "Not run";
     private String lanResult = "Not run";
     private String inviteUri;
+    private LinearLayout chatPanel;
+    private TextView chatLogView;
+    private TextView chatStatusView;
+    private EditText chatInput;
+    private Button chatSendButton;
+    private Button chatEndButton;
+    /** Typed test messages live only here, in memory, until the next test or app exit. */
+    private final List<ChatLine> chatLines = new ArrayList<>();
+    private boolean chatOpen;
+    private int chatSent;
+    private int chatDelivered;
+    private int chatReceived;
+    private String typedTestResult = "Not reached";
 
     private native String runNativeSmoke();
     private native String runNativeLanHost(String hostIp, int port, String token, String identity, String pins);
@@ -86,10 +111,14 @@ public final class MainActivity extends Activity {
     private native String nativeSubmitLanSafetyDecision(int codesMatch);
     private native String nativeGenerateLanIdentity(String deviceId);
     private native String nativeTakeLanVerifiedPeer();
+    private native String nativeLanChatSend(String text);
+    private native String nativeLanChatPoll();
+    private native String nativeLanChatEnd();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         buildUi();
         acceptInviteFromIntent(getIntent());
 
@@ -101,7 +130,8 @@ public final class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
-        uiHandler.removeCallbacks(safetyCodePoller);
+        uiHandler.removeCallbacks(lanPoller);
+        chatLines.clear();
         super.onDestroy();
     }
 
@@ -131,14 +161,15 @@ public final class MainActivity extends Activity {
         TextView notice = new TextView(this);
         notice.setText(
                 "TEST ONLY — NOT A SECURE CHAT APP. The local MLS button runs synthetic members "
-                        + "on this device. The LAN test sends only fixed synthetic MLS messages "
-                        + "between devices on the same Wi-Fi, and only after both people confirm that "
-                        + "their phones show the same MLS safety code. Each phone keeps one test key, "
-                        + "stored encrypted with an Android Keystore key, remembers the phones it has "
-                        + "verified, and warns if a remembered phone's key changes. No messages are "
-                        + "saved, and it must not be used for private or real messages. SMS shares "
-                        + "only a short-lived local invite; the invite is not identity verification, "
-                        + "the safety-code comparison is.");
+                        + "on this device. The LAN test connects two phones on the same Wi-Fi. Only "
+                        + "after both people confirm that their phones show the same MLS safety code "
+                        + "does it exchange fixed MLS test messages and then let the two people type "
+                        + "short test messages, which are encrypted with MLS, shown only on the two "
+                        + "screens and never saved. Each phone keeps one test key, stored encrypted "
+                        + "with an Android Keystore key, remembers the phones it has verified, and "
+                        + "warns if a remembered phone's key changes. Do not type anything private. "
+                        + "SMS shares only a short-lived local invite; the invite is not identity "
+                        + "verification, the safety-code comparison is.");
         notice.setTextSize(15);
         addWithTopMargin(root, notice, 12);
 
@@ -170,7 +201,9 @@ public final class MainActivity extends Activity {
                             + "remembered, or has a changed key. Compare the codes side by side and "
                             + "tap Codes match on both phones only if every digit is the same. The invite "
                             + "expires after about 3 minutes. Router client isolation can block this "
-                            + "test.");
+                            + "test. Keep this app open on both phones until the test ends; the screen "
+                            + "stays on during the test. On Android 15 and later, leaving the app for a "
+                            + "few seconds (screen lock or another app) closes the connection.");
             lanNotice.setTextSize(14);
             addWithTopMargin(root, lanNotice, 8);
 
@@ -261,6 +294,55 @@ public final class MainActivity extends Activity {
             codesDifferButton.setText("Codes differ");
             addWithTopMargin(safetyPanel, codesDifferButton, 8);
             codesDifferButton.setOnClickListener(view -> answerSafetyCode(false));
+
+            chatPanel = new LinearLayout(this);
+            chatPanel.setOrientation(LinearLayout.VERTICAL);
+            chatPanel.setVisibility(View.GONE);
+            addWithTopMargin(root, chatPanel, 12);
+
+            TextView chatTitle = new TextView(this);
+            chatTitle.setText("Typed test messages");
+            chatTitle.setTextSize(18);
+            chatPanel.addView(chatTitle, matchWrap());
+
+            TextView chatNotice = new TextView(this);
+            chatNotice.setText(
+                    "Both people confirmed the safety code. What you type here is encrypted with MLS "
+                            + "and sent directly to the other phone over this Wi-Fi. Messages appear "
+                            + "only on these two screens and are not saved. The typed test ends after "
+                            + "10 minutes or when either person taps End typed test. TEST ONLY: do not "
+                            + "type passwords, bank details or anything private.");
+            chatNotice.setTextSize(14);
+            addWithTopMargin(chatPanel, chatNotice, 6);
+
+            chatLogView = new TextView(this);
+            chatLogView.setTextSize(16);
+            addWithTopMargin(chatPanel, chatLogView, 8);
+
+            chatInput = new EditText(this);
+            chatInput.setSingleLine(false);
+            chatInput.setMinLines(1);
+            chatInput.setMaxLines(4);
+            chatInput.setTextSize(16);
+            chatInput.setHint("Type a short test message");
+            chatInput.setFilters(new InputFilter[] {new InputFilter.LengthFilter(MAX_TYPED_CHARS)});
+            // Ask the keyboard not to learn from this test text (incognito where supported).
+            chatInput.setImeOptions(EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING);
+            addWithTopMargin(chatPanel, chatInput, 8);
+
+            chatSendButton = new Button(this);
+            chatSendButton.setText("Send");
+            addWithTopMargin(chatPanel, chatSendButton, 8);
+            chatSendButton.setOnClickListener(view -> sendTypedMessage());
+
+            chatEndButton = new Button(this);
+            chatEndButton.setText("End typed test");
+            addWithTopMargin(chatPanel, chatEndButton, 8);
+            chatEndButton.setOnClickListener(view -> endTypedTest());
+
+            chatStatusView = new TextView(this);
+            chatStatusView.setTextSize(14);
+            addWithTopMargin(chatPanel, chatStatusView, 8);
         }
 
         Button copyButton = new Button(this);
@@ -268,7 +350,20 @@ public final class MainActivity extends Activity {
         addWithTopMargin(root, copyButton, 18);
         copyButton.setOnClickListener(view -> copyDiagnostics());
 
-        setContentView(scroll);
+        FrameLayout container = new FrameLayout(this);
+        container.addView(scroll, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        if (Build.VERSION.SDK_INT >= 30) {
+            // With targetSdk 36, Android 15+ draws this app edge to edge: keep the content clear
+            // of the system bars and the keyboard so the typed-test box stays visible.
+            container.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets safe = insets.getInsets(WindowInsets.Type.systemBars()
+                        | WindowInsets.Type.displayCutout() | WindowInsets.Type.ime());
+                view.setPadding(safe.left, safe.top, safe.right, safe.bottom);
+                return WindowInsets.CONSUMED;
+            });
+        }
+        setContentView(container);
     }
 
     private void runLocalSmoke() {
@@ -308,6 +403,7 @@ public final class MainActivity extends Activity {
             return;
         }
         resetSafetyCheck();
+        keepScreenOn(true);
         final int port = 40000 + new SecureRandom().nextInt(20000);
         final String token = newInviteToken();
         inviteUri = new Uri.Builder()
@@ -316,6 +412,7 @@ public final class MainActivity extends Activity {
                 .appendQueryParameter("host", hostIp)
                 .appendQueryParameter("port", Integer.toString(port))
                 .appendQueryParameter("token", token)
+                .appendQueryParameter("v", INVITE_VERSION)
                 .build()
                 .toString();
         invitePreview.setText("Local invite (keep it private; valid only for this test):\n" + inviteUri);
@@ -337,7 +434,7 @@ public final class MainActivity extends Activity {
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-host").start();
-        startSafetyCodePolling();
+        startLanPolling();
     }
 
     private void shareInvite() {
@@ -367,6 +464,7 @@ public final class MainActivity extends Activity {
             return;
         }
         resetSafetyCheck();
+        keepScreenOn(true);
         lanResult = "Connecting directly to the private LAN host; no relay is used.";
         lanStatusView.setText("LAN MLS: " + lanResult);
         new Thread(() -> {
@@ -382,26 +480,22 @@ public final class MainActivity extends Activity {
             }
             finishLanTask(result);
         }, "secretmessage-mls-lan-join").start();
-        startSafetyCodePolling();
+        startLanPolling();
     }
 
     private void finishLanTask(String result) {
         runOnUiThread(() -> {
+            // Show the last typed-test events (such as its end summary) before closing the test.
+            drainChatEvents();
+            if (chatOpen) closeTypedTest("Stopped. The typed test ended without a summary.");
             lanResult = result;
             lanStatusView.setText("LAN MLS: " + result);
             Log.i(TAG_LAN, result);
             lanTaskRunning.set(false);
-            if (result.startsWith("PASS")) {
-                String peer = "";
-                try {
-                    peer = nativeTakeLanVerifiedPeer();
-                } catch (Throwable notAvailable) {
-                    // Without the verified peer there is nothing to remember.
-                }
-                if (peer != null && !peer.isEmpty()) rememberPeer(peer);
-            }
+            if (result.startsWith("PASS")) rememberVerifiedPeer();
             refreshIdentityView();
-            uiHandler.removeCallbacks(safetyCodePoller);
+            uiHandler.removeCallbacks(lanPoller);
+            keepScreenOn(false);
             if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
             shownSafetyCode = "";
             inviteUri = null;
@@ -416,20 +510,21 @@ public final class MainActivity extends Activity {
         safetyCheckResult = "Not reached";
         lastPeerStatus = "Not reached";
         if (safetyPanel != null) safetyPanel.setVisibility(View.GONE);
+        resetTypedTest();
     }
 
-    private void startSafetyCodePolling() {
+    private void startLanPolling() {
         try {
             // Idempotent; the worker thread reports any load failure as the test result.
             System.loadLibrary(NATIVE_LIBRARY);
         } catch (Throwable reportedByWorker) {
             // Polling keeps retrying until the worker finishes.
         }
-        uiHandler.removeCallbacks(safetyCodePoller);
-        uiHandler.postDelayed(safetyCodePoller, SAFETY_POLL_MS);
+        uiHandler.removeCallbacks(lanPoller);
+        uiHandler.postDelayed(lanPoller, LAN_POLL_MS);
     }
 
-    private void pollSafetyCode() {
+    private void pollLanTest() {
         if (!lanTaskRunning.get()) return;
         String prompt = "";
         try {
@@ -443,7 +538,8 @@ public final class MainActivity extends Activity {
                 showSafetyCode(parts[0], parts[1], parts[2]);
             }
         }
-        uiHandler.postDelayed(safetyCodePoller, SAFETY_POLL_MS);
+        drainChatEvents();
+        uiHandler.postDelayed(lanPoller, LAN_POLL_MS);
     }
 
     private void showSafetyCode(String code, String peerStatus, String peerDevice) {
@@ -500,6 +596,206 @@ public final class MainActivity extends Activity {
         String[] groups = code.trim().split(" ");
         if (groups.length != 4) return code;
         return groups[0] + " " + groups[1] + "\n" + groups[2] + " " + groups[3];
+    }
+
+    /** Android 15+ cuts an app's connections soon after it leaves the screen, so stay visible. */
+    private void keepScreenOn(boolean on) {
+        if (on) {
+            getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
+    }
+
+    private void rememberVerifiedPeer() {
+        String peer = "";
+        try {
+            peer = nativeTakeLanVerifiedPeer();
+        } catch (Throwable notAvailable) {
+            // Without the verified peer there is nothing to remember.
+        }
+        if (peer != null && !peer.isEmpty()) rememberPeer(peer);
+    }
+
+    private void drainChatEvents() {
+        for (int handled = 0; handled < 100; handled++) {
+            String event;
+            try {
+                event = nativeLanChatPoll();
+            } catch (Throwable notLoadedYet) {
+                return;
+            }
+            if (event == null || event.isEmpty()) return;
+            handleChatEvent(event);
+        }
+    }
+
+    /** Events are OPEN|status, DELIVERED|number, RECEIVED|number|text or ENDED|summary. */
+    private void handleChatEvent(String event) {
+        int bar = event.indexOf('|');
+        String kind = bar < 0 ? event : event.substring(0, bar);
+        String rest = bar < 0 ? "" : event.substring(bar + 1);
+        switch (kind) {
+            case "OPEN":
+                openTypedTest(rest);
+                break;
+            case "DELIVERED":
+                markDelivered(parseNumber(rest));
+                break;
+            case "RECEIVED": {
+                int split = rest.indexOf('|');
+                if (split > 0) {
+                    chatReceived++;
+                    addChatLine(new ChatLine(false, parseNumber(rest.substring(0, split)),
+                            rest.substring(split + 1)));
+                }
+                break;
+            }
+            case "ENDED":
+                closeTypedTest(rest);
+                break;
+            default:
+                break;
+        }
+    }
+
+    private void openTypedTest(String status) {
+        chatOpen = true;
+        chatLines.clear();
+        chatSent = 0;
+        chatDelivered = 0;
+        chatReceived = 0;
+        typedTestResult = "Open";
+        if (!status.isEmpty()) lanResult = status;
+        lanStatusView.setText("LAN MLS: " + lanResult + " Typed test messages are open below.");
+        rememberVerifiedPeer();
+        refreshIdentityView();
+        safetyPanel.setVisibility(View.GONE);
+        chatInput.setEnabled(true);
+        chatSendButton.setEnabled(true);
+        chatEndButton.setEnabled(true);
+        chatPanel.setVisibility(View.VISIBLE);
+        renderChat();
+        scrollView.post(() -> scrollView.smoothScrollTo(0, chatPanel.getTop()));
+    }
+
+    private void closeTypedTest(String summary) {
+        chatOpen = false;
+        typedTestResult = summary.isEmpty() ? "Ended." : summary;
+        if (chatPanel == null) return;
+        chatInput.setEnabled(false);
+        chatSendButton.setEnabled(false);
+        chatEndButton.setEnabled(false);
+        renderChat();
+    }
+
+    private void resetTypedTest() {
+        chatOpen = false;
+        chatLines.clear();
+        chatSent = 0;
+        chatDelivered = 0;
+        chatReceived = 0;
+        typedTestResult = "Not reached";
+        if (chatPanel == null) return;
+        chatPanel.setVisibility(View.GONE);
+        chatInput.setText("");
+        renderChat();
+    }
+
+    private void sendTypedMessage() {
+        if (!chatOpen) {
+            toast("The typed test is not open.");
+            return;
+        }
+        String text = chatInput.getText().toString();
+        if (text.trim().isEmpty()) {
+            toast("Type a message first.");
+            return;
+        }
+        String reply;
+        try {
+            reply = nativeLanChatSend(text);
+        } catch (Throwable failure) {
+            reply = "FAIL: " + failure.getClass().getSimpleName();
+        }
+        if (reply != null && reply.startsWith("OK|")) {
+            chatSent++;
+            addChatLine(new ChatLine(true, parseNumber(reply.substring(3)), text));
+            chatInput.setText("");
+        } else {
+            toast(reply == null ? "Could not send the message." : reply.replaceFirst("^FAIL: ", ""));
+        }
+    }
+
+    private void endTypedTest() {
+        String reply;
+        try {
+            reply = nativeLanChatEnd();
+        } catch (Throwable failure) {
+            reply = "Could not end the typed test: " + failure.getClass().getSimpleName();
+        }
+        chatInput.setEnabled(false);
+        chatSendButton.setEnabled(false);
+        chatEndButton.setEnabled(false);
+        chatStatusView.setText(reply);
+    }
+
+    private void markDelivered(int number) {
+        for (ChatLine line : chatLines) {
+            if (line.mine && line.number == number && !line.delivered) {
+                line.delivered = true;
+                chatDelivered++;
+                break;
+            }
+        }
+        renderChat();
+    }
+
+    private void addChatLine(ChatLine line) {
+        chatLines.add(line);
+        while (chatLines.size() > MAX_CHAT_LINES) chatLines.remove(0);
+        renderChat();
+        chatInput.post(() -> chatInput.requestRectangleOnScreen(
+                new Rect(0, 0, chatInput.getWidth(), chatInput.getHeight()), false));
+    }
+
+    private void renderChat() {
+        if (chatLogView == null) return;
+        StringBuilder text = new StringBuilder();
+        for (ChatLine line : chatLines) {
+            if (text.length() > 0) text.append("\n\n");
+            if (line.mine) {
+                text.append("You: ").append(line.text);
+                if (line.delivered) {
+                    text.append("  ✓ delivered");
+                } else {
+                    text.append(chatOpen ? "  … sending" : "  (not confirmed)");
+                }
+            } else {
+                text.append("Other phone: ").append(line.text);
+            }
+        }
+        chatLogView.setText(text.length() == 0 ? "No typed messages yet." : text.toString());
+        String counts = "Sent " + chatSent + " (" + chatDelivered + " delivered), received "
+                + chatReceived + ".";
+        chatStatusView.setText(chatOpen
+                ? counts + " Messages are shown only on these two screens and are not saved."
+                : typedTestResult + " These messages stay on this screen until you start another "
+                        + "test or close the app; they are not saved.");
+    }
+
+    private String typedTestReport() {
+        if (!chatOpen) return typedTestResult;
+        return "Open: sent " + chatSent + " (" + chatDelivered + " delivered), received "
+                + chatReceived + " so far.";
+    }
+
+    private static int parseNumber(String value) {
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException malformed) {
+            return -1;
+        }
     }
 
     private SharedPreferences prefs() {
@@ -674,8 +970,10 @@ public final class MainActivity extends Activity {
                 + "\nLAN MLS smoke: " + lanResult
                 + "\nSafety code check: " + safetyCheckResult
                 + "\nOther phone: " + lastPeerStatus
+                + "\nTyped text test: " + typedTestReport()
                 + "\nThis phone: " + identitySummary()
-                + "\nScope: fixed synthetic MLS messages only; no chat history or user text.";
+                + "\nScope: fixed synthetic MLS messages, then typed test messages shown only on the "
+                + "two screens; message text is not saved and is not included in this report.";
     }
 
     private void updateDiagnostics() {
@@ -695,6 +993,10 @@ public final class MainActivity extends Activity {
         Uri uri = Uri.parse(link);
         if (!"secretmessage".equals(uri.getScheme()) || !"join".equals(uri.getHost())) {
             throw new IllegalArgumentException("Paste or open a secretmessage://join invite.");
+        }
+        if (!INVITE_VERSION.equals(uri.getQueryParameter("v"))) {
+            throw new IllegalArgumentException("This invite comes from a different test APK version. "
+                    + "Install " + BuildConfig.VERSION_NAME + " on both phones and create a new invite.");
         }
         String host = uri.getQueryParameter("host");
         String portString = uri.getQueryParameter("port");
@@ -796,6 +1098,20 @@ public final class MainActivity extends Activity {
 
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
+    }
+
+    /** One typed test message on this screen; never written to storage or logs. */
+    private static final class ChatLine {
+        final boolean mine;
+        final int number;
+        final String text;
+        boolean delivered;
+
+        ChatLine(boolean mine, int number, String text) {
+            this.mine = mine;
+            this.number = number;
+            this.text = text;
+        }
     }
 
     private static final class Invite {

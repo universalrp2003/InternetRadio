@@ -181,3 +181,67 @@ pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeT
         })
         .resolve::<ThrowRuntimeExAndDefault>()
 }
+
+/// Queues a typed test message for the open typed test; returns `OK|<number>` or `FAIL: ...`.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeLanChatSend<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+    text: JString<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let text = text.try_to_string(env)?;
+            let reply = match catch_unwind(AssertUnwindSafe(|| {
+                crate::spike_harness::lan_chat_send(&text)
+            })) {
+                Ok(Ok(number)) => format!("OK|{number}"),
+                Ok(Err(error)) => format!("FAIL: {error}"),
+                Err(_) => "FAIL: queuing the typed test message panicked.".to_owned(),
+            };
+            env.new_string(reply).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Returns the next typed-test event for the screen, or "".
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeLanChatPoll<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let event = catch_unwind(crate::spike_harness::lan_chat_poll)
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            env.new_string(event).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Asks the open typed test to end for both phones.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_smoke_MainActivity_nativeLanChatEnd<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let ending = catch_unwind(crate::spike_harness::lan_chat_end).unwrap_or(false);
+            let status = if ending {
+                "Ending the typed test on both phones."
+            } else {
+                "No typed test is open."
+            };
+            env.new_string(status).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}

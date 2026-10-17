@@ -5,9 +5,10 @@
 //! both people compare a safety code derived from the RFC 9420 epoch authenticator of their shared
 //! group and confirm it on both phones; a relaying device would hold two different groups, so the
 //! phones would show different codes. After a confirmed session each phone remembers the other
-//! phone's key and warns if that device later presents a different key. This tests those
-//! verification steps. It is not a production trust policy, a chat implementation, or suitable
-//! for real/private messages.
+//! phone's key and warns if that device later presents a different key. The two people can then
+//! type short test messages to each other inside the same MLS group; they are shown on screen
+//! only, never stored, and only their counts reach the report. This tests those steps. It is not
+//! a production trust policy or a chat app, and it is not suitable for real/private messages.
 
 use super::{test_crypto_provider, test_signing_material, TEST_CIPHERSUITE};
 use mls_rs::client_builder::MlsConfig;
@@ -17,8 +18,9 @@ use mls_rs::identity::basic::{BasicCredential, BasicIdentityProvider};
 use mls_rs::identity::SigningIdentity;
 use mls_rs::{Client, ExtensionList, MlsMessage};
 use mls_rs_crypto_awslc::AwsLcCryptoProvider;
-use std::io::{Read, Write};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
+use std::collections::VecDeque;
+use std::io::{ErrorKind, Read, Write};
+use std::net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
 use std::sync::mpsc::{self, Sender};
 use std::sync::Mutex;
 use std::thread;
@@ -43,8 +45,27 @@ const HOST_TO_GUEST: &[u8] = b"MLS-LAN-SMOKE-HOST-TO-GUEST-2ce840";
 const GUEST_ACK: &[u8] = b"MLS-LAN-SMOKE-GUEST-ACK-55b0e2";
 const CODE_CONFIRMED: &[u8] = b"MLS-LAN-SAFETY-CODE-CONFIRMED-3b9e41";
 const CODE_REJECTED: &[u8] = b"MLS-LAN-SAFETY-CODE-REJECTED-c47d02";
+/// The joining phone's first frame starts with this, so a host can name a version mismatch.
+const PROTOCOL_TAG: &str = "secretmessage-lan-test/5";
+const PROTOCOL_FAMILY: &str = "secretmessage-lan-test/";
+/// How long the typed test waits for socket data before checking this phone's screen again.
+const CHAT_POLL: Duration = Duration::from_millis(150);
+/// The typed test ends by itself this long after it opens.
+const CHAT_LIMIT: Duration = Duration::from_secs(10 * 60);
+/// After sending the end marker, how long to let the other phone read it before closing.
+const END_LINGER: Duration = Duration::from_secs(2);
+/// Longest typed test message, in UTF-8 bytes.
+const MAX_TYPED_MESSAGE_BYTES: usize = 1000;
+/// Most typed messages one phone may send in one test.
+const MAX_TYPED_MESSAGES: u32 = 200;
+const MAX_CHAT_FRAME_BYTES: usize = 16 * 1024;
+/// Kind bytes that start each typed-test payload inside an MLS application message.
+const CHAT_TEXT: u8 = b'T';
+const CHAT_ACK: u8 = b'A';
+const CHAT_END: u8 = b'E';
+const KEEP_APP_OPEN_HINT: &str = "Keep the test app open on both phones until the test ends: on Android 15 and later, an app loses its connections a few seconds after it leaves the screen (screen lock or switching apps).";
 const LAN_PASS_STATUS: &str =
-    "PASS: both people confirmed the same MLS safety code, then two separate devices exchanged fixed MLS test messages directly over local Wi-Fi. This phone now remembers the other phone's test key. No user text was sent or stored. TEST ONLY.";
+    "PASS: both people confirmed the same MLS safety code, then two separate devices exchanged fixed MLS test messages directly over local Wi-Fi. This phone now remembers the other phone's test key. TEST ONLY.";
 const LOCAL_REJECTED_STATUS: &str =
     "STOPPED: you reported that the safety codes differ, so no test messages were exchanged. If the two phones really showed different codes, another device may have intercepted the connection. TEST ONLY.";
 const PEER_REJECTED_STATUS: &str =
@@ -145,6 +166,153 @@ fn set_verified_peer(peer: Option<String>) {
     if let Ok(mut last) = LAST_VERIFIED_PEER.lock() {
         *last = peer;
     }
+}
+
+/// Something this phone's person asked the typed test to do.
+#[derive(Debug, PartialEq, Eq)]
+enum ChatCommand {
+    /// Send this phone's typed message, numbered by this phone.
+    Send(u32, String),
+    /// End the typed test for both phones.
+    End,
+}
+
+/// Something the typed test tells this phone's screen.
+#[derive(Debug, PartialEq, Eq)]
+enum ChatEvent {
+    /// Both people confirmed the code and the fixed exchange passed; typing is open.
+    Open { verified_peer: String },
+    /// The other phone confirmed it received this phone's message with this number.
+    Delivered(u32),
+    /// The other phone's typed message and its number.
+    Received(u32, String),
+    /// The typed test ended; the text is the report line.
+    Ended(String),
+}
+
+impl ChatEvent {
+    /// The form the test APK's screen reads; typed text is always the last field.
+    fn screen_text(&self) -> String {
+        match self {
+            ChatEvent::Open { .. } => format!("OPEN|{LAN_PASS_STATUS}"),
+            ChatEvent::Delivered(number) => format!("DELIVERED|{number}"),
+            ChatEvent::Received(number, text) => format!("RECEIVED|{number}|{text}"),
+            ChatEvent::Ended(summary) => format!("ENDED|{summary}"),
+        }
+    }
+}
+
+/// This phone's person in the typed test: their requests in, what happened out.
+trait ChatSide {
+    fn next_command(&mut self) -> Option<ChatCommand>;
+    fn report(&mut self, event: ChatEvent);
+}
+
+/// Typed messages and end requests from the test APK's screen, waiting for the session.
+struct ChatOutbox {
+    open: bool,
+    next_number: u32,
+    commands: VecDeque<ChatCommand>,
+}
+
+static CHAT_OUTBOX: Mutex<ChatOutbox> = Mutex::new(ChatOutbox {
+    open: false,
+    next_number: 1,
+    commands: VecDeque::new(),
+});
+static CHAT_EVENTS: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
+
+/// The test APK's screen, reached through the queues its JNI calls use.
+struct ScreenChat;
+
+impl ChatSide for ScreenChat {
+    fn next_command(&mut self) -> Option<ChatCommand> {
+        CHAT_OUTBOX.lock().ok()?.commands.pop_front()
+    }
+
+    fn report(&mut self, event: ChatEvent) {
+        match &event {
+            ChatEvent::Open { verified_peer } => {
+                // The app remembers the verified phone as soon as typing opens.
+                set_verified_peer(Some(verified_peer.clone()));
+                set_chat_open(true);
+            }
+            ChatEvent::Ended(_) => set_chat_open(false),
+            ChatEvent::Delivered(_) | ChatEvent::Received(..) => {}
+        }
+        if let Ok(mut events) = CHAT_EVENTS.lock() {
+            events.push_back(event.screen_text());
+        }
+    }
+}
+
+fn set_chat_open(open: bool) {
+    if let Ok(mut outbox) = CHAT_OUTBOX.lock() {
+        outbox.open = open;
+        outbox.next_number = 1;
+        outbox.commands.clear();
+    }
+}
+
+/// Forget any earlier typed test before a new LAN test starts.
+fn reset_screen_chat() {
+    set_chat_open(false);
+    if let Ok(mut events) = CHAT_EVENTS.lock() {
+        events.clear();
+    }
+}
+
+fn validate_typed_text(text: &str) -> Result<(), String> {
+    if text.trim().is_empty() {
+        return Err("Type a message first.".into());
+    }
+    if text.len() > MAX_TYPED_MESSAGE_BYTES {
+        return Err(format!(
+            "A typed test message can be at most {MAX_TYPED_MESSAGE_BYTES} bytes."
+        ));
+    }
+    Ok(())
+}
+
+/// Queue a typed test message from this phone's screen; returns its number on this phone.
+pub fn lan_chat_send(text: &str) -> Result<u32, String> {
+    validate_typed_text(text)?;
+    let mut outbox = CHAT_OUTBOX
+        .lock()
+        .map_err(|_| "The typed test is unavailable.".to_owned())?;
+    if !outbox.open {
+        return Err(
+            "No typed test is open; both phones must confirm the safety code first.".into(),
+        );
+    }
+    if outbox.next_number > MAX_TYPED_MESSAGES {
+        return Err(format!(
+            "This test allows {MAX_TYPED_MESSAGES} typed messages per phone; end it and start a new test."
+        ));
+    }
+    let number = outbox.next_number;
+    outbox.next_number += 1;
+    outbox
+        .commands
+        .push_back(ChatCommand::Send(number, text.to_owned()));
+    Ok(number)
+}
+
+/// Ask the open typed test to end for both phones; false if none is open.
+pub fn lan_chat_end() -> bool {
+    let Ok(mut outbox) = CHAT_OUTBOX.lock() else {
+        return false;
+    };
+    if outbox.open {
+        outbox.commands.push_back(ChatCommand::End);
+    }
+    outbox.open
+}
+
+/// The next typed-test event for the screen: `OPEN|status`, `DELIVERED|number`,
+/// `RECEIVED|number|text` or `ENDED|summary`.
+pub fn lan_chat_poll() -> Option<String> {
+    CHAT_EVENTS.lock().ok()?.pop_front()
 }
 
 /// Offer the comparison to the test APK's screen and wait for this phone's user to answer.
@@ -433,14 +601,14 @@ fn send_frame(stream: &mut TcpStream, bytes: &[u8]) -> Result<(), String> {
         .write_all(&length.to_be_bytes())
         .and_then(|_| stream.write_all(bytes))
         .and_then(|_| stream.flush())
-        .map_err(|error| format!("Could not send the LAN test frame: {error}"))
+        .map_err(|error| connection_failure("send the LAN test frame", &error))
 }
 
 fn receive_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
     let mut length_bytes = [0u8; 4];
     stream
         .read_exact(&mut length_bytes)
-        .map_err(|error| format!("Could not read the LAN test frame length: {error}"))?;
+        .map_err(|error| connection_failure("read the LAN test frame length", &error))?;
     let length = u32::from_be_bytes(length_bytes) as usize;
     if length > MAX_FRAME_BYTES {
         return Err("Peer sent an oversized test frame.".into());
@@ -448,8 +616,53 @@ fn receive_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
     let mut bytes = vec![0u8; length];
     stream
         .read_exact(&mut bytes)
-        .map_err(|error| format!("Could not read the complete LAN test frame: {error}"))?;
+        .map_err(|error| connection_failure("read the complete LAN test frame", &error))?;
     Ok(bytes)
+}
+
+/// Describe a socket failure; a closed connection also gets the keep-the-app-open hint.
+fn connection_failure(action: &str, error: &std::io::Error) -> String {
+    match error.kind() {
+        ErrorKind::ConnectionAborted
+        | ErrorKind::ConnectionReset
+        | ErrorKind::BrokenPipe
+        | ErrorKind::NotConnected
+        | ErrorKind::UnexpectedEof => {
+            format!("Could not {action}: {error}. The connection was closed. {KEEP_APP_OPEN_HINT}")
+        }
+        _ => format!("Could not {action}: {error}"),
+    }
+}
+
+/// A read that timed out or was interrupted; the typed test simply checks again.
+fn is_wait(error: &std::io::Error) -> bool {
+    matches!(
+        error.kind(),
+        ErrorKind::WouldBlock | ErrorKind::TimedOut | ErrorKind::Interrupted
+    )
+}
+
+/// The joining phone's first frame: the protocol tag, a space, and the invite token.
+fn guest_hello(token: &str) -> String {
+    format!("{PROTOCOL_TAG} {token}")
+}
+
+/// Check the joining phone's first frame, naming an older or different test APK clearly.
+fn check_guest_hello(hello: &[u8], token: &str) -> Result<(), String> {
+    if hello == token.as_bytes() {
+        return Err("The other phone is running an older test APK. Install the same test APK version on both phones.".into());
+    }
+    match std::str::from_utf8(hello)
+        .ok()
+        .and_then(|text| text.split_once(' '))
+    {
+        Some((PROTOCOL_TAG, supplied)) if supplied == token => Ok(()),
+        Some((tag, _)) if tag.starts_with(PROTOCOL_FAMILY) && tag != PROTOCOL_TAG => Err(
+            "The other phone is running a different test APK version. Install the same test APK version on both phones."
+                .into(),
+        ),
+        _ => Err("The invite does not match the active host session.".into()),
+    }
 }
 
 fn parse_mls_message(bytes: &[u8], context: &str) -> Result<MlsMessage, String> {
@@ -545,22 +758,277 @@ where
     }
 }
 
-fn host_session<D>(
+/// One typed-test payload inside an MLS application message: a kind byte, the message number
+/// (big-endian), then the UTF-8 text for a typed message.
+#[derive(Debug, PartialEq, Eq)]
+enum ChatPayload {
+    Text(u32, String),
+    Ack(u32),
+    End,
+}
+
+impl ChatPayload {
+    fn to_bytes(&self) -> Vec<u8> {
+        let (kind, number, text) = match self {
+            ChatPayload::Text(number, text) => (CHAT_TEXT, *number, text.as_str()),
+            ChatPayload::Ack(number) => (CHAT_ACK, *number, ""),
+            ChatPayload::End => (CHAT_END, 0, ""),
+        };
+        let mut bytes = Vec::with_capacity(5 + text.len());
+        bytes.push(kind);
+        bytes.extend_from_slice(&number.to_be_bytes());
+        bytes.extend_from_slice(text.as_bytes());
+        bytes
+    }
+
+    fn parse(bytes: &[u8]) -> Result<Self, String> {
+        let malformed = || "The other phone sent a malformed typed-test message.".to_owned();
+        let [kind, a, b, c, d, body @ ..] = bytes else {
+            return Err(malformed());
+        };
+        let number = u32::from_be_bytes([*a, *b, *c, *d]);
+        match *kind {
+            CHAT_TEXT => {
+                let text = std::str::from_utf8(body).map_err(|_| malformed())?;
+                validate_typed_text(text).map_err(|_| malformed())?;
+                Ok(ChatPayload::Text(number, text.to_owned()))
+            }
+            CHAT_ACK if body.is_empty() => Ok(ChatPayload::Ack(number)),
+            CHAT_END if body.is_empty() && number == 0 => Ok(ChatPayload::End),
+            _ => Err(malformed()),
+        }
+    }
+}
+
+fn encrypt_chat<C: MlsConfig>(
+    group: &mut mls_rs::group::Group<C>,
+    payload: &ChatPayload,
+) -> Result<Vec<u8>, String> {
+    let message = group
+        .encrypt_application_message(&payload.to_bytes(), Vec::new())
+        .map_err(|error| format!("Could not encrypt a typed test message: {error}."))?;
+    let wire = message
+        .to_bytes()
+        .map_err(|error| format!("Could not serialize a typed test message: {error}."))?;
+    if let ChatPayload::Text(_, text) = payload {
+        // A cheap guard against an unencrypted transport; very short texts could match by chance.
+        if text.len() >= 16
+            && wire
+                .windows(text.len())
+                .any(|window| window == text.as_bytes())
+        {
+            return Err(
+                "The typed text appeared in the MLS wire bytes, so it was not sent.".into(),
+            );
+        }
+    }
+    Ok(wire)
+}
+
+/// Collects length-prefixed frames from a socket read with a short timeout, keeping any partial
+/// frame for the next read.
+#[derive(Default)]
+struct FrameReader {
+    buffered: Vec<u8>,
+}
+
+impl FrameReader {
+    /// The next complete frame, reading the socket at most once; `None` if none has arrived yet.
+    fn next_frame(&mut self, stream: &mut TcpStream) -> Result<Option<Vec<u8>>, String> {
+        if let Some(frame) = self.take_frame()? {
+            return Ok(Some(frame));
+        }
+        let mut chunk = [0u8; 4096];
+        match stream.read(&mut chunk) {
+            Ok(0) => Err(format!(
+                "The other phone closed the connection without ending the typed test. {KEEP_APP_OPEN_HINT}"
+            )),
+            Ok(read) => {
+                self.buffered.extend_from_slice(&chunk[..read]);
+                self.take_frame()
+            }
+            Err(error) if is_wait(&error) => Ok(None),
+            Err(error) => Err(connection_failure("read a typed test message", &error)),
+        }
+    }
+
+    fn take_frame(&mut self) -> Result<Option<Vec<u8>>, String> {
+        let [a, b, c, d, ..] = self.buffered.as_slice() else {
+            return Ok(None);
+        };
+        let length = u32::from_be_bytes([*a, *b, *c, *d]) as usize;
+        if length > MAX_CHAT_FRAME_BYTES {
+            return Err("The other phone sent an oversized typed-test frame.".into());
+        }
+        if self.buffered.len() < 4 + length {
+            return Ok(None);
+        }
+        let frame = self.buffered[4..4 + length].to_vec();
+        self.buffered.drain(..4 + length);
+        Ok(Some(frame))
+    }
+}
+
+/// How the typed test ended.
+enum ChatEnd {
+    ThisPhone,
+    OtherPhone,
+    TimeLimit,
+    Stopped(String),
+}
+
+/// What the typed test carried, for the report: counts only, never the text.
+#[derive(Default)]
+struct ChatTally {
+    sent: u32,
+    delivered: u32,
+    received: u32,
+}
+
+/// Run the typed test over the verified MLS group until a person ends it, the time limit
+/// passes, or the connection fails; returns the report line.
+fn run_typed_test<C, S>(
+    stream: &mut TcpStream,
+    group: &mut mls_rs::group::Group<C>,
+    chat: &mut S,
+    verified_peer: String,
+) -> String
+where
+    C: MlsConfig,
+    S: ChatSide,
+{
+    chat.report(ChatEvent::Open { verified_peer });
+    let started = Instant::now();
+    let mut tally = ChatTally::default();
+    let end = chat_loop(stream, group, chat, started, &mut tally).unwrap_or_else(ChatEnd::Stopped);
+    let summary = chat_summary(&end, started.elapsed(), &tally);
+    chat.report(ChatEvent::Ended(summary.clone()));
+    summary
+}
+
+fn chat_loop<C, S>(
+    stream: &mut TcpStream,
+    group: &mut mls_rs::group::Group<C>,
+    chat: &mut S,
+    started: Instant,
+    tally: &mut ChatTally,
+) -> Result<ChatEnd, String>
+where
+    C: MlsConfig,
+    S: ChatSide,
+{
+    set_read_timeout(stream, CHAT_POLL)?;
+    let mut frames = FrameReader::default();
+    loop {
+        while let Some(command) = chat.next_command() {
+            match command {
+                ChatCommand::Send(number, text) => {
+                    let wire = encrypt_chat(group, &ChatPayload::Text(number, text))?;
+                    send_frame(stream, &wire)?;
+                    tally.sent += 1;
+                }
+                ChatCommand::End => {
+                    end_for_both(stream, group);
+                    return Ok(ChatEnd::ThisPhone);
+                }
+            }
+        }
+        if started.elapsed() >= CHAT_LIMIT {
+            end_for_both(stream, group);
+            return Ok(ChatEnd::TimeLimit);
+        }
+        let Some(frame) = frames.next_frame(stream)? else {
+            continue;
+        };
+        let message = parse_mls_message(&frame, "the other phone's typed test message")?;
+        let received = group.process_incoming_message(message).map_err(|error| {
+            format!("Rejected the other phone's MLS typed test message: {error}.")
+        })?;
+        let ReceivedMessage::ApplicationMessage(application) = received else {
+            return Err(
+                "The other phone sent something other than an MLS application message.".into(),
+            );
+        };
+        match ChatPayload::parse(application.data())? {
+            ChatPayload::Text(number, text) => {
+                tally.received += 1;
+                chat.report(ChatEvent::Received(number, text));
+                let ack = encrypt_chat(group, &ChatPayload::Ack(number))?;
+                send_frame(stream, &ack)?;
+            }
+            ChatPayload::Ack(number) => {
+                tally.delivered += 1;
+                chat.report(ChatEvent::Delivered(number));
+            }
+            ChatPayload::End => return Ok(ChatEnd::OtherPhone),
+        }
+    }
+}
+
+/// Tell the other phone the typed test is over, then let it read that before closing.
+fn end_for_both<C: MlsConfig>(stream: &mut TcpStream, group: &mut mls_rs::group::Group<C>) {
+    let sent = encrypt_chat(group, &ChatPayload::End).and_then(|wire| send_frame(stream, &wire));
+    if sent.is_err() {
+        return;
+    }
+    let _ = stream.shutdown(Shutdown::Write);
+    let deadline = Instant::now() + END_LINGER;
+    let mut discarded = [0u8; 512];
+    while Instant::now() < deadline {
+        match stream.read(&mut discarded) {
+            Ok(0) => break,
+            Ok(_) => {}
+            Err(error) if is_wait(&error) => {}
+            Err(_) => break,
+        }
+    }
+}
+
+fn chat_summary(end: &ChatEnd, elapsed: Duration, tally: &ChatTally) -> String {
+    let how = match end {
+        ChatEnd::ThisPhone => "Ended on this phone.".to_owned(),
+        ChatEnd::OtherPhone => "Ended on the other phone.".to_owned(),
+        ChatEnd::TimeLimit => format!(
+            "Ended at the {}-minute test limit.",
+            CHAT_LIMIT.as_secs() / 60
+        ),
+        ChatEnd::Stopped(reason) if reason.ends_with('.') => format!("Stopped. {reason}"),
+        ChatEnd::Stopped(reason) => format!("Stopped. {reason}."),
+    };
+    format!(
+        "{how} Sent {} ({} delivered), received {}, in {}.",
+        tally.sent,
+        tally.delivered,
+        tally.received,
+        format_elapsed(elapsed)
+    )
+}
+
+fn format_elapsed(elapsed: Duration) -> String {
+    let seconds = elapsed.as_secs();
+    if seconds < 60 {
+        format!("{seconds} s")
+    } else {
+        format!("{} min {} s", seconds / 60, seconds % 60)
+    }
+}
+
+fn host_session<D, S>(
     mut stream: TcpStream,
     token: &str,
     identity: LanIdentity,
     pins: &str,
     decide: D,
+    mut chat: S,
 ) -> Result<SessionOutcome, String>
 where
     D: FnOnce(&SafetyPrompt) -> Result<bool, String>,
+    S: ChatSide,
 {
     configure_stream(&stream)?;
 
-    let supplied_token = receive_frame(&mut stream)?;
-    if supplied_token.as_slice() != token.as_bytes() {
-        return Err("The invite does not match the active host session.".into());
-    }
+    let hello = receive_frame(&mut stream)?;
+    check_guest_hello(&hello, token)?;
 
     let guest_key_package_wire = receive_frame(&mut stream)?;
     let guest_key_package = parse_mls_message(&guest_key_package_wire, "guest MLS KeyPackage")?;
@@ -609,24 +1077,27 @@ where
     verify_application_message(received, GUEST_ACK, "Guest acknowledgement")?;
     send_frame(&mut stream, b"PASS")?;
 
+    run_typed_test(&mut stream, &mut host_group, &mut chat, pin.clone());
     Ok(SessionOutcome {
         status: LAN_PASS_STATUS.into(),
         verified_peer: Some(pin),
     })
 }
 
-fn guest_session<D>(
+fn guest_session<D, S>(
     mut stream: TcpStream,
     token: &str,
     identity: LanIdentity,
     pins: &str,
     decide: D,
+    mut chat: S,
 ) -> Result<SessionOutcome, String>
 where
     D: FnOnce(&SafetyPrompt) -> Result<bool, String>,
+    S: ChatSide,
 {
     configure_stream(&stream)?;
-    send_frame(&mut stream, token.as_bytes())?;
+    send_frame(&mut stream, guest_hello(token).as_bytes())?;
 
     let guest_client = identity_client(identity)?;
     let key_package = guest_client
@@ -665,6 +1136,7 @@ where
         return Err("Host did not confirm the complete MLS test exchange.".into());
     }
 
+    run_typed_test(&mut stream, &mut guest_group, &mut chat, pin.clone());
     Ok(SessionOutcome {
         status: LAN_PASS_STATUS.into(),
         verified_peer: Some(pin),
@@ -678,7 +1150,8 @@ fn finish_session(outcome: SessionOutcome) -> String {
 }
 
 /// Start a one-peer MLS test host on a private IPv4 address with this install's identity.
-/// The listener closes when one test completes or after three minutes.
+/// The listener closes when one test completes or after three minutes. After a PASS the typed
+/// test runs until a person ends it; the returned status covers the verified exchange.
 pub fn run_lan_mls_host(
     host_ip: &str,
     port: u16,
@@ -687,6 +1160,7 @@ pub fn run_lan_mls_host(
     pins: &str,
 ) -> Result<String, String> {
     set_verified_peer(None);
+    reset_screen_chat();
     validate_invite_token(token)?;
     let identity = parse_lan_identity(identity)?;
     let host_ip = require_private_ipv4(host_ip)?;
@@ -699,7 +1173,7 @@ pub fn run_lan_mls_host(
         .set_nonblocking(true)
         .map_err(|error| format!("Could not configure the local Wi-Fi listener: {error}"))?;
     let stream = accept_with_timeout(&listener, HOST_WAIT)?;
-    host_session(stream, token, identity, pins, ask_local_user).map(finish_session)
+    host_session(stream, token, identity, pins, ask_local_user, ScreenChat).map(finish_session)
 }
 
 /// Join a one-peer test host on a private LAN IPv4 address with this install's identity.
@@ -711,6 +1185,7 @@ pub fn run_lan_mls_join(
     pins: &str,
 ) -> Result<String, String> {
     set_verified_peer(None);
+    reset_screen_chat();
     validate_invite_token(token)?;
     let identity = parse_lan_identity(identity)?;
     let host_ip = require_private_ipv4(host_ip)?;
@@ -720,22 +1195,26 @@ pub fn run_lan_mls_join(
     let address = SocketAddr::V4(SocketAddrV4::new(host_ip, port));
     let stream = TcpStream::connect_timeout(&address, CONNECT_TIMEOUT)
         .map_err(|error| format!("Could not connect to the local Wi-Fi test host: {error}"))?;
-    guest_session(stream, token, identity, pins, ask_local_user).map(finish_session)
+    guest_session(stream, token, identity, pins, ask_local_user, ScreenChat).map(finish_session)
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        ask_local_user, classify_peer, from_hex, generate_lan_identity, group_safety_code,
-        guest_session, host_session, identity_client, lan_safety_prompt, parse_lan_identity,
-        peer_identity, safety_code_from_authenticator, submit_lan_safety_decision, to_hex,
-        PeerStatus, SafetyPrompt, SessionOutcome, LAN_PASS_STATUS, LOCAL_REJECTED_STATUS,
-        PEER_REJECTED_STATUS,
+        ask_local_user, check_guest_hello, classify_peer, connection_failure, encrypt_chat,
+        from_hex, generate_lan_identity, group_safety_code, guest_hello, guest_session,
+        host_session, identity_client, lan_chat_end, lan_chat_poll, lan_chat_send,
+        lan_safety_prompt, parse_lan_identity, peer_identity, reset_screen_chat, run_typed_test,
+        safety_code_from_authenticator, submit_lan_safety_decision, take_lan_verified_peer, to_hex,
+        ChatCommand, ChatEvent, ChatPayload, ChatSide, PeerStatus, SafetyPrompt, ScreenChat,
+        SessionOutcome, CHAT_ACK, CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS,
+        LOCAL_REJECTED_STATUS, MAX_TYPED_MESSAGES, MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS,
     };
     use mls_rs::client_builder::MlsConfig;
-    use mls_rs::group::Group;
+    use mls_rs::group::{Group, ReceivedMessage};
     use mls_rs::{Client, ExtensionList, MlsMessage};
     use std::net::{Ipv4Addr, TcpListener, TcpStream};
+    use std::sync::mpsc;
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -760,12 +1239,52 @@ mod tests {
         }
     }
 
+    /// One phone's person in a loopback typed test, driven by the test through channels.
+    struct ScriptedChat {
+        commands: mpsc::Receiver<ChatCommand>,
+        events: mpsc::Sender<ChatEvent>,
+    }
+
+    impl ChatSide for ScriptedChat {
+        fn next_command(&mut self) -> Option<ChatCommand> {
+            self.commands.try_recv().ok()
+        }
+
+        fn report(&mut self, event: ChatEvent) {
+            // The test may already have stopped listening; the session must not care.
+            let _ = self.events.send(event);
+        }
+    }
+
+    /// A scripted person, plus the test's handles to give them commands and watch their screen.
+    fn scripted_chat() -> (
+        ScriptedChat,
+        mpsc::Sender<ChatCommand>,
+        mpsc::Receiver<ChatEvent>,
+    ) {
+        let (command_sender, commands) = mpsc::channel();
+        let (events, event_receiver) = mpsc::channel();
+        (
+            ScriptedChat { commands, events },
+            command_sender,
+            event_receiver,
+        )
+    }
+
+    fn next_event(events: &mpsc::Receiver<ChatEvent>) -> ChatEvent {
+        events
+            .recv_timeout(Duration::from_secs(20))
+            .expect("the typed test reported an event in time")
+    }
+
     /// What one phone showed and reported in a loopback run.
     struct Seen {
         outcome: SessionOutcome,
         code: String,
         peer_status: PeerStatus,
         peer_device: String,
+        typing_opened: bool,
+        typed_test: Option<String>,
     }
 
     impl Seen {
@@ -776,7 +1295,21 @@ mod tests {
                 code,
                 peer_status,
                 peer_device,
+                typing_opened: false,
+                typed_test: None,
             }
+        }
+
+        /// Add what this phone's typed-test screen was told during the run.
+        fn with_screen(mut self, events: &mpsc::Receiver<ChatEvent>) -> Self {
+            for event in events.try_iter() {
+                match event {
+                    ChatEvent::Open { .. } => self.typing_opened = true,
+                    ChatEvent::Ended(summary) => self.typed_test = Some(summary),
+                    ChatEvent::Delivered(_) | ChatEvent::Received(..) => {}
+                }
+            }
+            self
         }
     }
 
@@ -788,7 +1321,13 @@ mod tests {
         ))
     }
 
-    fn run_loopback(host: Side, guest: Side) -> (Seen, Seen) {
+    /// Start both phones on loopback, each in its own thread, with the given typed-test people.
+    fn start_loopback(
+        host: Side,
+        host_chat: ScriptedChat,
+        guest: Side,
+        guest_chat: ScriptedChat,
+    ) -> (thread::JoinHandle<Seen>, thread::JoinHandle<Seen>) {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .expect("bind a host-only loopback MLS test listener");
         listener
@@ -818,29 +1357,48 @@ mod tests {
                     prompt = shown(seen);
                     Ok(host.answer)
                 },
+                host_chat,
             )
             .expect("host finished the MLS LAN exchange");
             Seen::new(outcome, prompt)
         });
 
         let guest_identity = parse_lan_identity(&guest.identity).expect("parse the guest identity");
-        let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))
-            .expect("connect the independent guest to the local test host");
-        let mut prompt = None;
-        let outcome = guest_session(
-            stream,
-            LOOPBACK_TOKEN,
-            guest_identity,
-            &guest.pins,
-            |seen: &SafetyPrompt| {
-                prompt = shown(seen);
-                Ok(guest.answer)
-            },
-        )
-        .expect("guest finished the MLS LAN exchange");
-        let guest_seen = Seen::new(outcome, prompt);
+        let guest_thread = thread::spawn(move || {
+            let stream = TcpStream::connect_timeout(&address, Duration::from_secs(5))
+                .expect("connect the independent guest to the local test host");
+            let mut prompt = None;
+            let outcome = guest_session(
+                stream,
+                LOOPBACK_TOKEN,
+                guest_identity,
+                &guest.pins,
+                |seen: &SafetyPrompt| {
+                    prompt = shown(seen);
+                    Ok(guest.answer)
+                },
+                guest_chat,
+            )
+            .expect("guest finished the MLS LAN exchange");
+            Seen::new(outcome, prompt)
+        });
+        (host_thread, guest_thread)
+    }
+
+    /// Run both phones; if typing opens, the host's person ends it straight away.
+    fn run_loopback(host: Side, guest: Side) -> (Seen, Seen) {
+        let (host_chat, host_commands, host_screen) = scripted_chat();
+        let (guest_chat, _guest_commands, guest_screen) = scripted_chat();
+        host_commands
+            .send(ChatCommand::End)
+            .expect("queue the host's end of the typed test");
+        let (host_thread, guest_thread) = start_loopback(host, host_chat, guest, guest_chat);
         let host_seen = host_thread.join().expect("host thread did not panic");
-        (host_seen, guest_seen)
+        let guest_seen = guest_thread.join().expect("guest thread did not panic");
+        (
+            host_seen.with_screen(&host_screen),
+            guest_seen.with_screen(&guest_screen),
+        )
     }
 
     fn assert_safety_code_format(code: &str) {
@@ -980,6 +1538,21 @@ mod tests {
             .expect("the guest remembers the host");
         assert!(host_pins.starts_with(GUEST_DEVICE), "{host_pins}");
         assert!(guest_pins.starts_with(HOST_DEVICE), "{guest_pins}");
+        assert!(
+            host.typing_opened && guest.typing_opened,
+            "typing opens after a PASS"
+        );
+        let host_typed = host.typed_test.unwrap_or_default();
+        let guest_typed = guest.typed_test.unwrap_or_default();
+        assert!(
+            host_typed.starts_with("Ended on this phone. Sent 0 (0 delivered), received 0, in "),
+            "{host_typed}"
+        );
+        assert!(
+            guest_typed
+                .starts_with("Ended on the other phone. Sent 0 (0 delivered), received 0, in "),
+            "{guest_typed}"
+        );
 
         // Second meeting: each phone recognizes the key it verified before.
         let (host, guest) = run_loopback(
@@ -1002,6 +1575,8 @@ mod tests {
         assert_eq!(host.outcome.status, PEER_REJECTED_STATUS);
         assert!(guest.outcome.verified_peer.is_none());
         assert!(host.outcome.verified_peer.is_none());
+        assert!(!host.typing_opened && !guest.typing_opened);
+        assert!(host.typed_test.is_none() && guest.typed_test.is_none());
     }
 
     #[test]
@@ -1016,6 +1591,10 @@ mod tests {
         assert_eq!(host.outcome.status, LOCAL_REJECTED_STATUS);
         assert_eq!(guest.outcome.status, PEER_REJECTED_STATUS);
         assert_eq!(host.code, guest.code);
+        assert!(
+            !host.typing_opened && !guest.typing_opened,
+            "no typing after a reported mismatch"
+        );
 
         let (host, guest) = run_loopback(
             Side::new(&host_identity, "", false),
@@ -1111,5 +1690,248 @@ mod tests {
         assert!(super::require_private_ipv4("203.0.113.5").is_err());
         assert!(super::require_private_ipv4("192.168.1.5").is_ok());
         assert!(super::validate_invite_token("short").is_err());
+    }
+
+    #[test]
+    fn typed_messages_flow_both_ways_after_both_people_confirm() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+        let (host_chat, host_commands, host_screen) = scripted_chat();
+        let (guest_chat, guest_commands, guest_screen) = scripted_chat();
+        let (host_thread, guest_thread) = start_loopback(
+            Side::new(&host_identity, "", true),
+            host_chat,
+            Side::new(&guest_identity, "", true),
+            guest_chat,
+        );
+
+        let ChatEvent::Open { verified_peer } = next_event(&host_screen) else {
+            panic!("typing must open on the host before anything else");
+        };
+        assert!(verified_peer.starts_with(GUEST_DEVICE), "{verified_peer}");
+        assert!(matches!(next_event(&guest_screen), ChatEvent::Open { .. }));
+
+        // Tamil, an emoji, the event separator and a line break all arrive unchanged.
+        let greeting = "வணக்கம்! Typed test 👋 | with a second\nline";
+        guest_commands
+            .send(ChatCommand::Send(1, greeting.into()))
+            .expect("queue the guest's message");
+        assert_eq!(
+            next_event(&host_screen),
+            ChatEvent::Received(1, greeting.into())
+        );
+        assert_eq!(next_event(&guest_screen), ChatEvent::Delivered(1));
+
+        for (number, text) in [(1, "Reply from the host"), (2, "Second reply")] {
+            host_commands
+                .send(ChatCommand::Send(number, text.into()))
+                .expect("queue a host reply");
+        }
+        assert_eq!(
+            next_event(&guest_screen),
+            ChatEvent::Received(1, "Reply from the host".into())
+        );
+        assert_eq!(
+            next_event(&guest_screen),
+            ChatEvent::Received(2, "Second reply".into())
+        );
+        assert_eq!(next_event(&host_screen), ChatEvent::Delivered(1));
+        assert_eq!(next_event(&host_screen), ChatEvent::Delivered(2));
+
+        guest_commands
+            .send(ChatCommand::End)
+            .expect("queue the guest's end of the typed test");
+        let ChatEvent::Ended(guest_summary) = next_event(&guest_screen) else {
+            panic!("the guest's typed test did not end");
+        };
+        let ChatEvent::Ended(host_summary) = next_event(&host_screen) else {
+            panic!("the host's typed test did not end");
+        };
+        assert!(
+            guest_summary.starts_with("Ended on this phone. Sent 1 (1 delivered), received 2, in "),
+            "{guest_summary}"
+        );
+        assert!(
+            host_summary
+                .starts_with("Ended on the other phone. Sent 2 (2 delivered), received 1, in "),
+            "{host_summary}"
+        );
+        assert!(!guest_summary.contains("Typed test") && !host_summary.contains("Reply"));
+
+        let host = host_thread.join().expect("host thread did not panic");
+        let guest = guest_thread.join().expect("guest thread did not panic");
+        assert_eq!(host.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(guest.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(host.code, guest.code);
+    }
+
+    #[test]
+    fn typed_text_is_encrypted_and_malformed_payloads_are_refused() {
+        let host = client_from(&new_identity(HOST_DEVICE));
+        let guest = client_from(&new_identity(GUEST_DEVICE));
+        let (mut host_group, mut guest_group) = form_group(&host, &guest);
+
+        let text = "Typed test text வணக்கம் 👋 with | and\nline";
+        let wire = encrypt_chat(&mut host_group, &ChatPayload::Text(7, text.into()))
+            .expect("encrypt a typed test message");
+        assert!(
+            !wire
+                .windows(text.len())
+                .any(|window| window == text.as_bytes()),
+            "typed text must not appear in the MLS wire bytes"
+        );
+        let received = guest_group
+            .process_incoming_message(
+                MlsMessage::from_bytes(&wire).expect("parse the typed test message"),
+            )
+            .expect("decrypt the typed test message");
+        let ReceivedMessage::ApplicationMessage(application) = received else {
+            panic!("a typed test message is an MLS application message");
+        };
+        assert_eq!(
+            ChatPayload::parse(application.data()),
+            Ok(ChatPayload::Text(7, text.into()))
+        );
+
+        for payload in [ChatPayload::Ack(7), ChatPayload::End] {
+            assert_eq!(ChatPayload::parse(&payload.to_bytes()), Ok(payload));
+        }
+        let too_long = "a".repeat(MAX_TYPED_MESSAGE_BYTES + 1);
+        for malformed in [
+            Vec::new(),
+            vec![CHAT_TEXT, 0, 0],
+            vec![CHAT_TEXT, 0, 0, 0, 1],
+            vec![CHAT_TEXT, 0, 0, 0, 1, b' '],
+            vec![CHAT_TEXT, 0, 0, 0, 1, 0xff],
+            vec![CHAT_ACK, 0, 0, 0, 1, b'x'],
+            vec![CHAT_END, 0, 0, 0, 1],
+            vec![b'X', 0, 0, 0, 1],
+            ChatPayload::Text(1, too_long).to_bytes(),
+        ] {
+            assert!(ChatPayload::parse(&malformed).is_err(), "{malformed:?}");
+        }
+    }
+
+    #[test]
+    fn the_screen_can_queue_typed_messages_only_while_typing_is_open() {
+        reset_screen_chat();
+        assert!(lan_chat_send("hello").is_err(), "nothing is open yet");
+        assert!(!lan_chat_end());
+
+        let mut screen = ScreenChat;
+        let pin = format!("{GUEST_DEVICE} 0a0b");
+        screen.report(ChatEvent::Open {
+            verified_peer: pin.clone(),
+        });
+        assert_eq!(lan_chat_poll(), Some(format!("OPEN|{LAN_PASS_STATUS}")));
+        assert_eq!(take_lan_verified_peer(), Some(pin));
+        assert!(lan_chat_send(" \n ").is_err(), "blank messages are refused");
+        assert!(lan_chat_send(&"a".repeat(MAX_TYPED_MESSAGE_BYTES + 1)).is_err());
+        assert_eq!(lan_chat_send("வணக்கம்"), Ok(1));
+        assert_eq!(lan_chat_send("second"), Ok(2));
+        assert!(lan_chat_end());
+        assert_eq!(
+            screen.next_command(),
+            Some(ChatCommand::Send(1, "வணக்கம்".into()))
+        );
+        assert_eq!(
+            screen.next_command(),
+            Some(ChatCommand::Send(2, "second".into()))
+        );
+        assert_eq!(screen.next_command(), Some(ChatCommand::End));
+        assert_eq!(screen.next_command(), None);
+
+        screen.report(ChatEvent::Received(4, "hi | there\nline".into()));
+        screen.report(ChatEvent::Delivered(2));
+        assert_eq!(
+            lan_chat_poll().as_deref(),
+            Some("RECEIVED|4|hi | there\nline")
+        );
+        assert_eq!(lan_chat_poll().as_deref(), Some("DELIVERED|2"));
+        let summary = "Ended on this phone. Sent 2 (1 delivered), received 1, in 5 s.";
+        screen.report(ChatEvent::Ended(summary.into()));
+        assert!(lan_chat_send("too late").is_err());
+        assert!(!lan_chat_end());
+        assert_eq!(lan_chat_poll(), Some(format!("ENDED|{summary}")));
+        assert_eq!(lan_chat_poll(), None);
+
+        // Each phone may send a bounded number of messages in one test.
+        screen.report(ChatEvent::Open {
+            verified_peer: format!("{HOST_DEVICE} 0c0d"),
+        });
+        for expected in 1..=MAX_TYPED_MESSAGES {
+            assert_eq!(lan_chat_send("again"), Ok(expected));
+        }
+        assert!(lan_chat_send("one too many").is_err());
+        reset_screen_chat();
+        assert_eq!(lan_chat_poll(), None);
+        assert!(lan_chat_send("after reset").is_err());
+        let _ = take_lan_verified_peer();
+    }
+
+    #[test]
+    fn a_dropped_connection_stops_the_typed_test_with_the_keep_open_hint() {
+        let host = client_from(&new_identity(HOST_DEVICE));
+        let guest = client_from(&new_identity(GUEST_DEVICE));
+        let (mut host_group, _guest_group) = form_group(&host, &guest);
+        let listener =
+            TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("bind a loopback listener");
+        let peer = TcpStream::connect(listener.local_addr().expect("read the loopback address"))
+            .expect("connect the other phone");
+        let (mut stream, _) = listener.accept().expect("accept the other phone");
+        drop(peer);
+
+        let (mut chat, _commands, screen) = scripted_chat();
+        let summary = run_typed_test(&mut stream, &mut host_group, &mut chat, "peer pin".into());
+        assert!(
+            summary.starts_with(
+                "Stopped. The other phone closed the connection without ending the typed test."
+            ),
+            "{summary}"
+        );
+        assert!(summary.contains(KEEP_APP_OPEN_HINT), "{summary}");
+        assert!(
+            summary.contains(" Sent 0 (0 delivered), received 0, in "),
+            "{summary}"
+        );
+        assert_eq!(
+            screen.try_recv(),
+            Ok(ChatEvent::Open {
+                verified_peer: "peer pin".into()
+            })
+        );
+        assert_eq!(screen.try_recv(), Ok(ChatEvent::Ended(summary)));
+    }
+
+    #[test]
+    fn the_host_names_an_older_or_different_test_apk_and_closed_connections_get_a_hint() {
+        assert_eq!(
+            check_guest_hello(guest_hello(LOOPBACK_TOKEN).as_bytes(), LOOPBACK_TOKEN),
+            Ok(())
+        );
+        let older = check_guest_hello(LOOPBACK_TOKEN.as_bytes(), LOOPBACK_TOKEN)
+            .expect_err("a guest from an older test APK");
+        assert!(older.contains("older test APK"), "{older}");
+        let newer = format!("secretmessage-lan-test/9 {LOOPBACK_TOKEN}");
+        let different = check_guest_hello(newer.as_bytes(), LOOPBACK_TOKEN)
+            .expect_err("a guest from another test APK version");
+        assert!(different.contains("different test APK"), "{different}");
+        assert_eq!(
+            check_guest_hello(
+                guest_hello("ffffffffffffffffffffffffffffffff").as_bytes(),
+                LOOPBACK_TOKEN
+            ),
+            Err("The invite does not match the active host session.".into())
+        );
+        assert!(check_guest_hello(&[0xff, 0xfe], LOOPBACK_TOKEN).is_err());
+
+        let aborted = std::io::Error::from(std::io::ErrorKind::ConnectionAborted);
+        assert!(
+            connection_failure("send the LAN test frame", &aborted).contains(KEEP_APP_OPEN_HINT)
+        );
+        let refused = std::io::Error::from(std::io::ErrorKind::ConnectionRefused);
+        assert!(
+            !connection_failure("send the LAN test frame", &refused).contains(KEEP_APP_OPEN_HINT)
+        );
     }
 }
