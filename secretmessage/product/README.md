@@ -21,6 +21,7 @@ Version 0.2.1-preview (code 3) adapts the owner-approved **WhisperPad** product/
 - **Transport boundary (`transport/SecretMessageMlsTransport.kt`).** This interface comes from the blueprint, and messaging must go through it. Its **only implementation is `UnavailableMlsTransport`**: every send returns false and nothing can arrive.
   - In this preview, every message therefore stays "Not delivered" and disappears after 30 seconds.
   - The recipient-view countdown is implemented and unit-tested, but it never starts here.
+  - The separate Wi-Fi TEST build (`../wifi-test`) compiles these same sources and passes its own same-Wi-Fi MLS transport to `ChatViewModel`'s constructor. The chat and settings screens take their wording as a parameter, so this preview's wording and behaviour are unchanged.
 - **Optional local app lock (`security/`).** It uses AndroidX BiometricPrompt: fingerprint, face, or the phone's own screen-lock PIN, pattern or password.
   - It locks on launch and when you return to the app. A prompt you dismiss is not reopened in a loop.
   - Android 9–10 (API 28–29) use `BIOMETRIC_WEAK | DEVICE_CREDENTIAL`, because AndroidX Biometric rejects the blueprint's `BIOMETRIC_STRONG | DEVICE_CREDENTIAL` on those versions.

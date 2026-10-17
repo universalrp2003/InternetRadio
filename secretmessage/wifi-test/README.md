@@ -36,6 +36,8 @@ bash secretmessage/wifi-test/build-wifi-test.sh
 
 It builds the JNI library for arm64-v8a, armeabi-v7a, x86 and x86_64, runs the unit tests, builds the debug APK and lint report, and checks the packaged libraries, the JNI exports for every `NativeBridge` function, the label, the package and the exact permission set. The workflow `.github/workflows/secret-message-wifi-test.yml` does the same, uploads the APK as a 14-day test artifact (`secretmessage-wifi-test-apk-<run>`), reports its SHA-256, and runs `run-wifi-test-on-emulator.sh` on an API 35 emulator (notice, engine loaded, identity created, hosting with an invite, stopping, settings, no crash). One emulator cannot run both phones; the two-phone chat is covered by the Rust loopback tests and by device tests.
 
+Run [39030739655](https://github.com/universalrp2003/InternetRadio/actions/runs/39030739655) (commit `dfe61ef`) passed every step; its APK is artifact `secretmessage-wifi-test-apk-2` (a ZIP of about 24 MB, available until 31 October 2026) containing `app-debug.apk`, 34,241,431 bytes, SHA-256 `0c6c8f6860b9d97537cbd18338dc8f98499020ec57ee0f1147351156ee084359`. The ZIP's own digest is not the APK's.
+
 Each CI build has its own debug signing key, so uninstall an earlier Wi-Fi test APK before installing a newer one; that also resets this build's test identity and remembered phones.
 
 ## Limits
