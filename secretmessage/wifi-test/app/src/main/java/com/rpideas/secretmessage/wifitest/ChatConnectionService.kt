@@ -88,7 +88,7 @@ class ChatConnectionService : Service() {
             val manager = context.getSystemService(NotificationManager::class.java)
             if (manager != null && manager.getNotificationChannel(CHANNEL_ID) == null) {
                 val channel = NotificationChannel(CHANNEL_ID, "Chat connection", NotificationManager.IMPORTANCE_LOW)
-                channel.description = "Shown while a Secret Message Wi-Fi chat is starting or open. It never shows names or messages."
+                channel.description = "Shown while a Secret Message chat is starting or open. It never shows names or messages."
                 channel.setShowBadge(false)
                 manager.createNotificationChannel(channel)
             }

@@ -21,15 +21,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Where this phone is in setting up or holding a Wi-Fi chat. */
+/** Where this phone is in setting up or holding a chat. */
 internal sealed class ConnectionState {
     /** No chat; [lastResult] says how the previous one ended. */
     data class Idle(val lastResult: String?) : ConnectionState()
 
-    /** Waiting up to three minutes for the other phone to open [invite]. */
-    data class Hosting(val invite: String, val stopping: Boolean = false) : ConnectionState()
+    /**
+     * Waiting up to three minutes for the other phone to open [invite], over the Internet relay or
+     * on the same Wi-Fi; [link] says how the connection is doing.
+     */
+    data class Hosting(
+        val invite: String,
+        val internet: Boolean,
+        val link: String = "",
+        val stopping: Boolean = false,
+    ) : ConnectionState()
 
-    data object Joining : ConnectionState()
+    /** Connecting to the phone that sent the invite; [link] says how the connection is doing. */
+    data class Joining(val internet: Boolean, val link: String = "") : ConnectionState()
 
     /** Both people compare [prompt]'s code; [answer] is this person's answer once given. */
     data class Comparing(val prompt: SafetyPrompt, val answer: Boolean? = null) : ConnectionState()
@@ -41,8 +50,9 @@ internal sealed class ConnectionState {
 }
 
 /**
- * One Wi-Fi chat at a time between two phones, run by the native mls-rs session (Wi-Fi chat
- * profile) and offered to the WhisperPad chat as its [SecretMessageMlsTransport].
+ * One chat at a time between two phones, run by the native mls-rs session (Wi-Fi chat profile) and
+ * offered to the WhisperPad chat as its [SecretMessageMlsTransport]. The session runs the same way
+ * over a direct connection on the same Wi-Fi or through the owner's test relay ([RelayLink]).
  *
  * The native call that hosts or joins blocks a worker thread until the chat ends; a coroutine polls
  * the native session for the safety-code prompt and chat events. Payloads pass only after both
@@ -67,11 +77,32 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
 
     @Volatile
     private var stopRequested = false
+
+    /** How the open chat travels, for its status line. */
+    @Volatile
+    private var via = VIA_WIFI
     private val lock = Any()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** Starts hosting a chat; returns a message for the screen if it could not start. */
-    fun startHost(): String? {
+    /** Starts hosting a chat through the Internet relay; returns a message for the screen if it could not start. */
+    fun startInternetHost(): String? {
+        val room = IdentityStore.randomHex(16)
+        val token = IdentityStore.randomHex(16)
+        val invite = InviteLink.Internet(room, token).toUri()
+        val link = RelayLink(RelayLink.RELAY_URL, room, RelayLink.Role.HOST, ::showLink)
+        return begin(
+            ConnectionState.Hosting(invite, internet = true, link = RelayText.CONNECTING),
+            "host, Internet relay",
+            "Waiting for the other phone",
+        ) { identityText, pins ->
+            link.run(HOST_WAIT_MILLIS, { stopRequested }) {
+                NativeBridge.nativeRunRelayHost(token, identityText, pins)
+            }.also { report.connection(link.summary) }
+        }
+    }
+
+    /** Starts hosting a chat on the same Wi-Fi; returns a message for the screen if it could not start. */
+    fun startWifiHost(): String? {
         val hostIp = try {
             LocalNetwork.privateIpv4()
         } catch (noWifi: IllegalStateException) {
@@ -79,8 +110,13 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         }
         val port = 40_000 + SecureRandom().nextInt(20_000)
         val token = IdentityStore.randomHex(16)
-        val invite = InviteLink(hostIp, port, token).toUri()
-        return begin(ConnectionState.Hosting(invite), "host", "Waiting for the other phone") { identityText, pins ->
+        val invite = InviteLink.Wifi(hostIp, port, token).toUri()
+        return begin(
+            ConnectionState.Hosting(invite, internet = false, link = WIFI_LINK),
+            "host, same Wi-Fi",
+            "Waiting for the other phone",
+        ) { identityText, pins ->
+            report.connection(WIFI_CONNECTION)
             NativeBridge.nativeRunHost(hostIp, port, token, identityText, pins)
         }
     }
@@ -92,8 +128,27 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         } catch (bad: IllegalArgumentException) {
             return bad.message
         }
-        return begin(ConnectionState.Joining, "guest", "Connecting to the other phone") { identityText, pins ->
-            NativeBridge.nativeRunJoin(invite.host, invite.port, invite.token, identityText, pins)
+        return when (invite) {
+            is InviteLink.Internet -> {
+                val link = RelayLink(RelayLink.RELAY_URL, invite.room, RelayLink.Role.GUEST, ::showLink)
+                begin(
+                    ConnectionState.Joining(internet = true, link = RelayText.CONNECTING),
+                    "guest, Internet relay",
+                    "Connecting to the other phone",
+                ) { identityText, pins ->
+                    link.run(GUEST_WAIT_MILLIS, { false }) {
+                        NativeBridge.nativeRunRelayJoin(invite.token, identityText, pins)
+                    }.also { report.connection(link.summary) }
+                }
+            }
+            is InviteLink.Wifi -> begin(
+                ConnectionState.Joining(internet = false),
+                "guest, same Wi-Fi",
+                "Connecting to the other phone",
+            ) { identityText, pins ->
+                report.connection(WIFI_CONNECTION)
+                NativeBridge.nativeRunJoin(invite.host, invite.port, invite.token, identityText, pins)
+            }
         }
     }
 
@@ -192,6 +247,11 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         NativeBridge.load()?.let { return it }
         if (!running.compareAndSet(false, true)) return "A chat is already starting or open on this phone."
         stopRequested = false
+        via = if ((first as? ConnectionState.Hosting)?.internet == true || (first as? ConnectionState.Joining)?.internet == true) {
+            VIA_INTERNET
+        } else {
+            VIA_WIFI
+        }
         report.start(role)
         mutableConnection.value = first
         status.value = MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE
@@ -224,6 +284,18 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             if (!running.get()) return
             SafetyPrompt.parse(promptText)?.let { showPrompt(it) }
             drainEvents()
+        }
+    }
+
+    /** Shows how the relay connection is doing while this phone hosts or joins. */
+    private fun showLink(text: String) {
+        synchronized(lock) {
+            val current = mutableConnection.value
+            if (current is ConnectionState.Hosting && !current.stopping) {
+                mutableConnection.value = current.copy(link = text)
+            } else if (current is ConnectionState.Joining) {
+                mutableConnection.value = current.copy(link = text)
+            }
         }
     }
 
@@ -307,7 +379,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             PeerStatus.NEW -> "the new phone"
         }
         val device = if (prompt.peerDevice.isEmpty()) "" else " (device ${PeerPins.formatDeviceId(prompt.peerDevice)})"
-        return "Connected over Wi-Fi to $which$device after both people confirmed the safety code. " +
+        return "Connected $via to $which$device after both people confirmed the safety code. " +
             "TEST BUILD: not security-reviewed."
     }
 
@@ -315,6 +387,14 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         private const val POLL_MILLIS = 120L
         private const val MAX_EVENTS_PER_POLL = 200
         const val IDLE_DESCRIPTION = "Not connected."
+
+        /** A host waits as long as on the same Wi-Fi; a guest only until the relay pairs the phones. */
+        private const val HOST_WAIT_MILLIS = 3 * 60_000L
+        private const val GUEST_WAIT_MILLIS = 30_000L
+        private const val VIA_INTERNET = "over the Internet relay"
+        private const val VIA_WIFI = "over Wi-Fi"
+        const val WIFI_LINK = "Same Wi-Fi only: the other phone connects straight to this phone."
+        const val WIFI_CONNECTION = "Same Wi-Fi (direct connection)"
     }
 }
 

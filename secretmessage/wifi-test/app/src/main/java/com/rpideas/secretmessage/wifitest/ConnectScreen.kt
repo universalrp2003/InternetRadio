@@ -38,7 +38,11 @@ import com.rpideas.secretmessage.preview.ui.Warm
 
 /** What the connect screen asks the activity to do. */
 interface ConnectActions {
+    /** Starts a chat through the Internet relay. */
     fun startHost()
+
+    /** Starts a chat on the same Wi-Fi, without the relay. */
+    fun startWifiHost()
     fun shareInvite(invite: String)
     fun stopWaiting()
     fun pasteAndJoin()
@@ -51,7 +55,7 @@ interface ConnectActions {
 
 private val Danger = Color(0xFFFF8A80)
 
-/** Start or join a Wi-Fi chat, compare the safety code, and see this phone's test identity. */
+/** Start or join a chat, compare the safety code, and see this phone's test identity. */
 @Composable
 internal fun ConnectScreen(
     state: ConnectionState,
@@ -82,10 +86,17 @@ internal fun ConnectScreen(
         when (state) {
             is ConnectionState.Idle -> IdleSection(state, pendingInvite, actions)
             is ConnectionState.Hosting -> HostingSection(state, actions)
-            is ConnectionState.Joining -> InfoSection(
-                "Connecting to the other phone…",
-                "This takes a few seconds on the same Wi-Fi. Keep this screen open until the safety code appears.",
-            )
+            is ConnectionState.Joining -> {
+                val how = if (state.internet) {
+                    "Through the relay this takes a few seconds."
+                } else {
+                    "This takes a few seconds on the same Wi-Fi."
+                }
+                val text = listOf(state.link, "$how Keep this screen open until the safety code appears.")
+                    .filter { it.isNotEmpty() }
+                    .joinToString("\n")
+                InfoSection("Connecting to the other phone…", text)
+            }
             is ConnectionState.Comparing -> CompareSection(state, actions)
             is ConnectionState.Connected -> InfoSection("Connected", "Opening the chat…")
             is ConnectionState.Ending -> InfoSection(state.note, "Messages are removed from both phones.")
@@ -151,20 +162,22 @@ private fun IdleSection(state: ConnectionState.Idle, pendingInvite: String?, act
     if (pendingInvite != null) {
         Section {
             Title("Invite received")
-            Note("Join only an invite you expected. Both phones must be on the same Wi-Fi.")
+            Note("Join only an invite you expected.")
             Button(onClick = actions::joinPending, modifier = Modifier.fillMaxWidth()) { Text("Join this chat") }
         }
     }
     Section {
         Title("Start or join a chat")
         Note(
-            "Both phones must be on the same Wi-Fi (not a guest network). One phone starts the chat and sends the " +
-                "invite; the other phone joins it. Then you both compare a 20-digit safety code.",
+            "One phone starts the chat and sends the invite; the other phone joins it. Then you both compare a " +
+                "20-digit safety code. Works on mobile data or any Wi-Fi: both phones connect to the owner's test " +
+                "relay, which passes along only encrypted data.",
         )
         Button(onClick = actions::startHost, modifier = Modifier.fillMaxWidth()) { Text("Start a chat") }
         OutlinedButton(onClick = actions::pasteAndJoin, modifier = Modifier.fillMaxWidth()) {
             Text("Paste invite and join")
         }
+        TextButton(onClick = actions::startWifiHost) { Text("Start on the same Wi-Fi, without the relay") }
     }
 }
 
@@ -172,9 +185,11 @@ private fun IdleSection(state: ConnectionState.Idle, pendingInvite: String?, act
 private fun HostingSection(state: ConnectionState.Hosting, actions: ConnectActions) {
     Section {
         Title(if (state.stopping) "Stopping…" else "Waiting for the other phone (up to 3 minutes)")
+        if (state.link.isNotEmpty()) Note(state.link, color = Ink)
         Note(
             "Send this invite to the other phone by SMS or any messaging app. You can switch apps to send it; this " +
-                "phone keeps waiting. The invite works once, only on this Wi-Fi. Keep it private.",
+                "phone keeps waiting. The invite works once" +
+                (if (state.internet) "" else ", only on this Wi-Fi") + ". Keep it private.",
         )
         SelectionContainer {
             Text(state.invite, color = Muted, fontSize = 11.sp, fontFamily = FontFamily.Monospace)

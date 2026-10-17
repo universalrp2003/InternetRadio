@@ -24,9 +24,10 @@ import com.rpideas.secretmessage.preview.security.AppLockController
 import kotlin.concurrent.thread
 
 /**
- * TEST-ONLY Wi-Fi build of Secret Message: the WhisperPad product screens connected to another phone
- * on the same Wi-Fi through the mls-rs LAN session, after both people confirm the safety code.
- * It is labelled as not security-reviewed and is never published.
+ * TEST-ONLY build of Secret Message: the WhisperPad product screens connected to another phone through
+ * the mls-rs session, over the Internet via the owner's test relay or directly on the same Wi-Fi,
+ * after both people confirm the safety code. It is labelled as not security-reviewed and is never
+ * published.
  */
 class WifiTestActivity : FragmentActivity(), ConnectActions {
     private lateinit var session: LanChatSession
@@ -107,13 +108,19 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
 
     override fun startHost() {
         askForNotificationsOnce()
-        notice = session.startHost()
+        notice = session.startInternetHost()
+    }
+
+    override fun startWifiHost() {
+        askForNotificationsOnce()
+        notice = session.startWifiHost()
     }
 
     override fun shareInvite(invite: String) {
+        val scope = if (invite.contains("relay=")) "one chat" else "same Wi-Fi only, one chat"
         val send = Intent(Intent.ACTION_SEND)
             .setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, "Secret Message Wi-Fi TEST invite (same Wi-Fi only, one chat):\n$invite")
+            .putExtra(Intent.EXTRA_TEXT, "Secret Message TEST invite ($scope):\n$invite")
         startActivity(Intent.createChooser(send, "Send the invite"))
     }
 
@@ -142,7 +149,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
 
     override fun copyReport() {
         val clipboard = getSystemService(ClipboardManager::class.java) ?: return
-        clipboard.setPrimaryClip(ClipData.newPlainText("Secret Message Wi-Fi test report", buildReport()))
+        clipboard.setPrimaryClip(ClipData.newPlainText("Secret Message test report", buildReport()))
         notice = "Test report copied. Paste it into the chat."
     }
 
@@ -200,7 +207,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             "not allowed (the connection service runs without a visible notification)"
         }
         val lines = listOf(
-            "Secret Message Wi-Fi test: ${BuildConfig.VERSION_NAME}",
+            "Secret Message test: ${BuildConfig.VERSION_NAME}",
             "Device: ${Build.MANUFACTURER} ${Build.MODEL}",
             "Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})",
             "ABI: $abi",
@@ -208,7 +215,8 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         ) + session.report.lines(open) + listOf(
             "This phone: ${session.identity.summary()}",
             "Notifications: $notifications",
-            "Scope: TEST BUILD, not security-reviewed, same Wi-Fi only. Message text and drawings are not included.",
+            "Scope: TEST BUILD, not security-reviewed; Internet relay or same Wi-Fi. Message text and drawings are " +
+                "not included.",
         )
         return lines.joinToString("\n")
     }

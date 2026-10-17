@@ -2,8 +2,8 @@ package com.rpideas.secretmessage.wifitest
 
 /**
  * JNI entry points of the test-only mls-rs/AWS-LC library built from secretmessage/native-mls-rs.
- * Each call runs the Wi-Fi chat profile of the LAN session code; android_jni.rs documents the
- * replies. Keep these names in step with the `Java_com_rpideas_secretmessage_wifitest_NativeBridge_*`
+ * Each call runs the Wi-Fi chat profile of the LAN session code, directly on the same Wi-Fi or over
+ * the Internet relay's socket pair; android_jni.rs documents the replies. Keep these names in step with the `Java_com_rpideas_secretmessage_wifitest_NativeBridge_*`
  * exports (CI checks them against the built library).
  */
 internal object NativeBridge {
@@ -39,6 +39,19 @@ internal object NativeBridge {
 
     /** Joins one chat; blocks until it ends and returns the session's status line. */
     external fun nativeRunJoin(hostIp: String, port: Int, token: String, identity: String, pins: String): String
+
+    /**
+     * Prepares one chat through the Internet relay: the app's end of a local socket pair, as a file
+     * descriptor this app now owns (adopt it with ParcelFileDescriptor), or -1. The native session
+     * keeps the other end for the next [nativeRunRelayHost] or [nativeRunRelayJoin].
+     */
+    external fun nativeOpenRelayPipe(): Int
+
+    /** Hosts one chat over the prepared relay pipe once the other phone joined; blocks until it ends. */
+    external fun nativeRunRelayHost(token: String, identity: String, pins: String): String
+
+    /** Joins one chat over the prepared relay pipe once both phones are in; blocks until it ends. */
+    external fun nativeRunRelayJoin(token: String, identity: String, pins: String): String
 
     /** Stops a host that is still waiting for the other phone; 1 if one was waiting. */
     external fun nativeCancelHostWait(): Int

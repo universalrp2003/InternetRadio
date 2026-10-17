@@ -10,24 +10,34 @@ import org.junit.Test
 class InviteAndTextTest {
     private val token = "0123456789abcdef0123456789abcdef"
 
+    private val room = "fedcba9876543210fedcba9876543210"
+
     @Test
     fun invitesRoundTripAndAreFoundInSharedText() {
-        val invite = InviteLink("192.168.1.20", 45123, token)
-        assertEquals(invite, InviteLink.parse(invite.toUri()))
-        val shared = "Secret Message Wi-Fi TEST invite (same Wi-Fi only, one chat):\n${invite.toUri()}\nThanks"
-        assertEquals(invite, InviteLink.parse(shared))
-        assertEquals(invite, InviteLink.parse("Open ${invite.toUri()}."))
+        val wifi = InviteLink.Wifi("192.168.1.20", 45123, token)
+        assertEquals(wifi, InviteLink.parse(wifi.toUri()))
+        val shared = "Secret Message TEST invite (same Wi-Fi only, one chat):\n${wifi.toUri()}\nThanks"
+        assertEquals(wifi, InviteLink.parse(shared))
+        assertEquals(wifi, InviteLink.parse("Open ${wifi.toUri()}."))
+
+        val internet = InviteLink.Internet(room, token)
+        assertEquals("secretmessage://chat?relay=$room&token=$token&v=2", internet.toUri())
+        assertEquals(internet, InviteLink.parse("Secret Message TEST invite (one chat):\n${internet.toUri()}"))
     }
 
     @Test
     fun badInvitesAreRefusedWithAReason() {
         val cases = mapOf(
             "secretmessage://join?host=192.168.1.2&port=4000&token=$token&v=6" to "smoke test",
-            "hello" to "No Secret Message Wi-Fi invite",
-            "secretmessage://chat?host=192.168.1.2&port=4000&token=$token&v=2" to "different Wi-Fi test build",
-            "secretmessage://chat?host=8.8.8.8&port=4000&token=$token&v=1" to "private Wi-Fi address",
-            "secretmessage://chat?host=192.168.1.2&port=70000&token=$token&v=1" to "port",
-            "secretmessage://chat?host=192.168.1.2&port=4000&token=xyz&v=1" to "token",
+            "hello" to "No Secret Message invite",
+            "secretmessage://chat?host=192.168.1.2&port=4000&token=$token&v=1" to "different Secret Message test build",
+            "secretmessage://chat?relay=$room&token=$token&v=3" to "different Secret Message test build",
+            "secretmessage://chat?host=8.8.8.8&port=4000&token=$token&v=2" to "private Wi-Fi address",
+            "secretmessage://chat?host=192.168.1.2&port=70000&token=$token&v=2" to "port",
+            "secretmessage://chat?host=192.168.1.2&port=4000&token=xyz&v=2" to "token",
+            "secretmessage://chat?relay=$room&token=xyz&v=2" to "token",
+            "secretmessage://chat?relay=abc&token=$token&v=2" to "relay room",
+            "secretmessage://chat?relay=${room.uppercase()}&token=$token&v=2" to "relay room",
         )
         cases.forEach { (text, reason) ->
             try {
@@ -94,5 +104,28 @@ class InviteAndTextTest {
             SessionText.lastResult("FAIL: Stopped waiting for the other phone to join.", null),
         )
         assertTrue(SessionText.lastResult("FAIL: Timed out waiting for a LAN peer to join the test invite.", null).startsWith("Nobody joined"))
+        val relayTimeout = RelayText.timedOut(host = true, waitMillis = 180_000)
+        assertEquals("Nobody joined within 3 minutes. Start a new chat and send the new invite.", relayTimeout)
+        assertEquals(relayTimeout, SessionText.lastResult("FAIL: $relayTimeout", null))
+    }
+
+    @Test
+    fun relayEventsReadPlainly() {
+        assertTrue(RelayText.closed(4001, "The other phone left").startsWith("The other phone left"))
+        assertTrue(RelayText.closed(4002, "Time limit").contains("time limit"))
+        assertEquals("The relay connection closed (code 1011: oops).", RelayText.closed(1011, "oops"))
+        assertTrue(RelayText.failed(guest = true, httpCode = 404, error = "ProtocolException", message = null).contains("no longer waiting"))
+        assertTrue(RelayText.failed(guest = false, httpCode = 409, error = "ProtocolException", message = null).contains("already in use"))
+        val offline = RelayText.failed(guest = true, httpCode = null, error = "UnknownHostException", message = "no address")
+        assertEquals(
+            "Could not reach the Secret Message relay (UnknownHostException: no address). Check that this phone is online.",
+            offline,
+        )
+        assertEquals(
+            "Internet relay: connected in 0.4 s; other phone joined after 21.3 s; ended: The relay connection closed.",
+            RelayText.summary(400, 21_300, RelayText.closed(1000, "")),
+        )
+        assertEquals("Internet relay: not connected", RelayText.summary(null, null, null))
+        assertTrue(RelayLink.RELAY_URL.startsWith("wss://") && RelayLink.RELAY_URL.endsWith(".workers.dev"))
     }
 }

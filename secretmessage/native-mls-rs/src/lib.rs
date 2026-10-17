@@ -364,6 +364,8 @@ pub mod spike_harness {
         lan_safety_prompt, run_lan_mls_host, run_lan_mls_join, submit_lan_safety_decision,
         take_lan_verified_peer, LanProfile, SMOKE_TEST, WIFI_CHAT,
     };
+    #[cfg(unix)]
+    pub use lan_smoke::{open_relay_pipe, run_relay_mls_host, run_relay_mls_join};
 
     #[cfg(test)]
     mod tests {

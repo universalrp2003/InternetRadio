@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Hosted-emulator smoke test for the TEST-ONLY Wi-Fi build of Secret Message.
+# Hosted-emulator smoke test for the TEST-ONLY build of Secret Message (Internet relay and same Wi-Fi).
 #
 # It installs the debug APK on an Android 15 (API 35) emulator and drives the real UI through the
 # accessibility tree: the test-build notice, the loaded MLS engine (its protocol name on screen), a
@@ -189,16 +189,27 @@ STEP="install and launch"
 
 STEP="test-build notice and engine"
 wait_for text "TEST BUILD · NOT SECURITY-REVIEWED" equals 40
-wait_for text "WI-FI TEST BUILD"
+wait_for text "TEST BUILD"
 wait_for text "NOT REVIEWED"
-# The connect screen names the loaded MLS engine and the Wi-Fi protocol (from the native library).
+# The connect screen names the loaded MLS engine and the session protocol (from the native library).
 wait_for text "secretmessage-wifi-chat/1" contains 20
 
-STEP="host a chat and stop waiting"
+STEP="host a chat through the Internet relay and stop waiting"
 tap text "Start a chat"
 wait_for text "Waiting for the other phone (up to 3 minutes)" equals 40
-wait_for text "secretmessage://chat?host=" contains 10
+wait_for text "secretmessage://chat?relay=" contains 10
+# The emulator reached the deployed relay over TLS (OkHttp WebSocket) and the relay opened the room.
+wait_for text "Connected to the relay" contains 45
 wait_for text "Share invite"
+tap text "Stop waiting"
+wait_for text "You stopped waiting for the other phone." equals 20
+
+STEP="host a chat on the same Wi-Fi and stop waiting"
+scroll down
+tap text "Start on the same Wi-Fi, without the relay"
+scroll up
+wait_for text "secretmessage://chat?host=" contains 20
+wait_for text "Same Wi-Fi only" contains 10
 tap text "Stop waiting"
 wait_for text "You stopped waiting for the other phone." equals 20
 wait_for text "Start a chat"
@@ -227,4 +238,4 @@ app_alive || fail "The app exited during the smoke test"
 if "$ADB" logcat -d -b crash 2>/dev/null | grep -q "$PACKAGE"; then
   fail "The crash buffer contains an entry for $PACKAGE"
 fi
-echo "PASS: the Wi-Fi test build launched on API 35, showed its test-build notice, loaded the MLS engine (secretmessage-wifi-chat/1), created its Keystore-wrapped test identity, hosted a chat with a private-address invite, stopped waiting on request, opened settings, and did not crash."
+echo "PASS: the test build launched on API 35, showed its test-build notice, loaded the MLS engine (secretmessage-wifi-chat/1), created its Keystore-wrapped test identity, hosted a chat through the deployed Internet relay (connected over TLS) and on the same Wi-Fi, stopped waiting on request each time, opened settings, and did not crash."

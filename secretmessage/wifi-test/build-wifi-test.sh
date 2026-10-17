@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Builds the TEST-ONLY Wi-Fi build of Secret Message: the mls-rs/AWS-LC JNI library for four Android
-# ABIs, then the debug APK (product screens + Wi-Fi connection), and checks the result:
+# Builds the TEST-ONLY build of Secret Message (same Wi-Fi and Internet relay): the mls-rs/AWS-LC JNI
+# library for four Android ABIs, then the debug APK (product screens + connection), and checks it:
 #   - all four native libraries are packaged;
 #   - every NativeBridge `external fun` has a matching JNI export in the library;
 #   - the merged permissions are exactly the expected set;
@@ -21,7 +21,7 @@ SKIP_NATIVE="${SECRET_MESSAGE_WIFI_SKIP_NATIVE:-false}"
 BINDGEN_USER_ARGS="${BINDGEN_EXTRA_CLANG_ARGS:-}"
 LIB_NAME="libsecretmessage_mls_spike.so"
 PACKAGE="com.rpideas.secretmessage.wifitest"
-LABEL="Secret Message Wi-Fi TEST"
+LABEL="Secret Message TEST"
 
 [[ -n "$SDK_ROOT" ]] || { echo "Android SDK not found. Set ANDROID_HOME or ANDROID_SDK_ROOT." >&2; exit 2; }
 if [[ -z "$NDK_ROOT" || ! -d "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin" ]]; then

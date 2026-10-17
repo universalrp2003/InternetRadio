@@ -9,6 +9,7 @@ import com.rpideas.secretmessage.preview.model.InlineSegment
  */
 internal class SessionReport {
     private var role = "none"
+    private var connection = "Not reached"
     private var safety = "Not reached"
     private var peer = "Not reached"
     private var result = "No chat yet"
@@ -24,6 +25,7 @@ internal class SessionReport {
     @Synchronized
     fun start(role: String) {
         this.role = role
+        connection = "Not reached"
         safety = "Not reached"
         peer = "Not reached"
         result = "Running"
@@ -35,6 +37,12 @@ internal class SessionReport {
         engineAcknowledgements = 0
         sendFailures = 0
         lastSendFailure = null
+    }
+
+    /** How the chat travelled: the relay's timings and how it ended, or the direct Wi-Fi link. */
+    @Synchronized
+    fun connection(text: String) {
+        connection = text
     }
 
     @Synchronized
@@ -92,6 +100,7 @@ internal class SessionReport {
     @Synchronized
     fun lines(open: Boolean): List<String> = listOf(
         "Role: $role",
+        "Connection: $connection",
         "Last session: $result",
         "Safety code check: $safety",
         "Other phone: $peer",

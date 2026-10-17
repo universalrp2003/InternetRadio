@@ -1,9 +1,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
     <!--
-        TEST-ONLY Wi-Fi build. INTERNET is needed for the direct TCP connection between two phones on
-        the same Wi-Fi; the session code accepts only private IPv4 addresses and contacts no server.
-        The connectedDevice foreground service keeps that connection while a person briefly switches
+        TEST-ONLY build. INTERNET is needed for the direct TCP connection between two phones on the
+        same Wi-Fi (private IPv4 addresses only) and for the TLS WebSocket to the owner's test relay
+        (RelayLink.RELAY_URL), the only server the app contacts; the relay forwards only the MLS
+        session's bytes. The connectedDevice foreground service keeps the connection while a person briefly switches
         apps (owner decision, 17 October 2026); its notification never shows names or messages.
         Android 14+ requires CHANGE_NETWORK_STATE for that service type; the app changes no network
         settings. POST_NOTIFICATIONS lets the service's notification appear (Android 13+).
@@ -39,7 +40,7 @@
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:label="Secret Message Wi-Fi TEST"
+        android:label="Secret Message TEST"
         android:supportsRtl="true"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         tools:targetApi="31">

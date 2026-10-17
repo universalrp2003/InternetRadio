@@ -26,6 +26,8 @@ use mls_rs_crypto_awslc::AwsLcCryptoProvider;
 use std::collections::VecDeque;
 use std::io::{ErrorKind, Read, Write};
 use std::net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpListener, TcpStream};
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Mutex;
@@ -727,21 +729,64 @@ fn accept_with_timeout(
     }
 }
 
-fn configure_stream(stream: &TcpStream) -> Result<(), String> {
+/// The connection between the two phones: a TCP socket on the same Wi-Fi, or, through the
+/// Internet relay, the session's end of a local socket pair whose other end the app copies to and
+/// from the relay's WebSocket. The session uses only these operations, so it runs the same way
+/// over either.
+trait PeerStream: Read + Write {
+    /// Apply the session's usual read and write timeouts (TCP also sends small frames at once).
+    fn configure(&self) -> std::io::Result<()>;
+    /// How long a read may wait before it reports a timeout.
+    fn set_wait(&self, timeout: Duration) -> std::io::Result<()>;
+    /// Send nothing more: the other side reads what was sent, then the end of the stream.
+    fn stop_sending(&self) -> std::io::Result<()>;
+}
+
+impl PeerStream for TcpStream {
+    fn configure(&self) -> std::io::Result<()> {
+        self.set_read_timeout(Some(IO_TIMEOUT))?;
+        self.set_write_timeout(Some(IO_TIMEOUT))?;
+        self.set_nodelay(true)
+    }
+
+    fn set_wait(&self, timeout: Duration) -> std::io::Result<()> {
+        self.set_read_timeout(Some(timeout))
+    }
+
+    fn stop_sending(&self) -> std::io::Result<()> {
+        self.shutdown(Shutdown::Write)
+    }
+}
+
+#[cfg(unix)]
+impl PeerStream for UnixStream {
+    fn configure(&self) -> std::io::Result<()> {
+        self.set_read_timeout(Some(IO_TIMEOUT))?;
+        self.set_write_timeout(Some(IO_TIMEOUT))
+    }
+
+    fn set_wait(&self, timeout: Duration) -> std::io::Result<()> {
+        self.set_read_timeout(Some(timeout))
+    }
+
+    fn stop_sending(&self) -> std::io::Result<()> {
+        self.shutdown(Shutdown::Write)
+    }
+}
+
+fn configure_stream(stream: &impl PeerStream) -> Result<(), String> {
     stream
-        .set_read_timeout(Some(IO_TIMEOUT))
-        .and_then(|_| stream.set_write_timeout(Some(IO_TIMEOUT)))
-        .and_then(|_| stream.set_nodelay(true))
+        .configure()
         .map_err(|error| format!("Could not configure the LAN test socket: {error}"))
 }
 
-fn set_read_timeout(stream: &TcpStream, timeout: Duration) -> Result<(), String> {
+fn set_read_timeout(stream: &impl PeerStream, timeout: Duration) -> Result<(), String> {
     stream
-        .set_read_timeout(Some(timeout))
+        .set_wait(timeout)
         .map_err(|error| format!("Could not configure the LAN test socket: {error}"))
 }
 
-fn send_frame(stream: &mut TcpStream, bytes: &[u8]) -> Result<(), String> {
+fn send_frame(stream: &mut impl Write, bytes: &[u8]) -> Result<(), String> {
     if bytes.len() > MAX_FRAME_BYTES {
         return Err("Refusing an oversized test frame.".into());
     }
@@ -754,7 +799,7 @@ fn send_frame(stream: &mut TcpStream, bytes: &[u8]) -> Result<(), String> {
         .map_err(|error| connection_failure("send the LAN test frame", &error))
 }
 
-fn receive_frame(stream: &mut TcpStream) -> Result<Vec<u8>, String> {
+fn receive_frame(stream: &mut impl Read) -> Result<Vec<u8>, String> {
     let mut length_bytes = [0u8; 4];
     stream
         .read_exact(&mut length_bytes)
@@ -873,7 +918,7 @@ struct PartialFrame {
 
 impl PartialFrame {
     /// Read what arrives within the stream's read timeout; the frame once it is complete.
-    fn poll(&mut self, stream: &mut TcpStream) -> Result<Option<Vec<u8>>, String> {
+    fn poll(&mut self, stream: &mut impl Read) -> Result<Option<Vec<u8>>, String> {
         loop {
             if self.length_read == self.length.len() && self.body_read == self.body.len() {
                 return Ok(Some(std::mem::take(self).body));
@@ -937,8 +982,8 @@ fn read_peer_answer<C: MlsConfig>(
 /// codes (or no answer) first, this phone stops at once and withdraws its own question. A phone
 /// whose person does not confirm sends that answer and closes after a short linger, without
 /// waiting for the other person; a phone whose person confirms waits for the other answer.
-fn verify_safety_code<C, D>(
-    stream: &mut TcpStream,
+fn verify_safety_code<C, D, S>(
+    stream: &mut S,
     group: &mut mls_rs::group::Group<C>,
     prompt: &SafetyPrompt,
     decide: D,
@@ -946,6 +991,7 @@ fn verify_safety_code<C, D>(
 where
     C: MlsConfig,
     D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
+    S: PeerStream,
 {
     let local = decide(prompt)?;
     let deadline = Instant::now() + local.time_limit;
@@ -1087,7 +1133,7 @@ impl FrameReader {
     }
 
     /// The next complete frame, reading the socket at most once; `None` if none has arrived yet.
-    fn next_frame(&mut self, stream: &mut TcpStream) -> Result<Option<Vec<u8>>, String> {
+    fn next_frame(&mut self, stream: &mut impl Read) -> Result<Option<Vec<u8>>, String> {
         if let Some(frame) = self.take_frame()? {
             return Ok(Some(frame));
         }
@@ -1141,9 +1187,9 @@ struct ChatTally {
 
 /// Run the typed test over the verified MLS group until a person ends it, the time limit
 /// passes, or the connection fails; returns the report line.
-fn run_typed_test<C, S>(
+fn run_typed_test<C, S, T>(
     profile: &LanProfile,
-    stream: &mut TcpStream,
+    stream: &mut T,
     group: &mut mls_rs::group::Group<C>,
     chat: &mut S,
     verified_peer: String,
@@ -1151,6 +1197,7 @@ fn run_typed_test<C, S>(
 where
     C: MlsConfig,
     S: ChatSide,
+    T: PeerStream,
 {
     chat.report(ChatEvent::Open { verified_peer });
     let started = Instant::now();
@@ -1162,9 +1209,9 @@ where
     summary
 }
 
-fn chat_loop<C, S>(
+fn chat_loop<C, S, T>(
     profile: &LanProfile,
-    stream: &mut TcpStream,
+    stream: &mut T,
     group: &mut mls_rs::group::Group<C>,
     chat: &mut S,
     started: Instant,
@@ -1173,6 +1220,7 @@ fn chat_loop<C, S>(
 where
     C: MlsConfig,
     S: ChatSide,
+    T: PeerStream,
 {
     set_read_timeout(stream, SCREEN_POLL)?;
     let mut frames = FrameReader::new(profile.max_chat_frame_bytes);
@@ -1223,7 +1271,7 @@ where
 }
 
 /// Tell the other phone the typed test is over, then let it read that before closing.
-fn end_for_both<C: MlsConfig>(stream: &mut TcpStream, group: &mut mls_rs::group::Group<C>) {
+fn end_for_both<C: MlsConfig>(stream: &mut impl PeerStream, group: &mut mls_rs::group::Group<C>) {
     let sent = encrypt_chat(group, &ChatPayload::End).and_then(|wire| send_frame(stream, &wire));
     if sent.is_ok() {
         linger_before_close(stream);
@@ -1232,9 +1280,9 @@ fn end_for_both<C: MlsConfig>(stream: &mut TcpStream, group: &mut mls_rs::group:
 
 /// After this phone's last message, stop sending and give the other phone a moment to read
 /// everything before the connection closes, discarding anything that still arrives.
-fn linger_before_close(stream: &mut TcpStream) {
-    let _ = stream.shutdown(Shutdown::Write);
-    let _ = stream.set_read_timeout(Some(SCREEN_POLL));
+fn linger_before_close(stream: &mut impl PeerStream) {
+    let _ = stream.stop_sending();
+    let _ = stream.set_wait(SCREEN_POLL);
     let deadline = Instant::now() + END_LINGER;
     let mut discarded = [0u8; 512];
     while Instant::now() < deadline {
@@ -1275,9 +1323,9 @@ fn format_elapsed(elapsed: Duration) -> String {
     }
 }
 
-fn host_session<D, S>(
+fn host_session<D, S, T>(
     profile: &LanProfile,
-    mut stream: TcpStream,
+    mut stream: T,
     token: &str,
     identity: LanIdentity,
     pins: &str,
@@ -1287,6 +1335,7 @@ fn host_session<D, S>(
 where
     D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
     S: ChatSide,
+    T: PeerStream,
 {
     configure_stream(&stream)?;
 
@@ -1353,9 +1402,9 @@ where
     })
 }
 
-fn guest_session<D, S>(
+fn guest_session<D, S, T>(
     profile: &LanProfile,
-    mut stream: TcpStream,
+    mut stream: T,
     token: &str,
     identity: LanIdentity,
     pins: &str,
@@ -1365,6 +1414,7 @@ fn guest_session<D, S>(
 where
     D: FnOnce(&SafetyPrompt) -> Result<LocalAnswer, String>,
     S: ChatSide,
+    T: PeerStream,
 {
     configure_stream(&stream)?;
     send_frame(&mut stream, guest_hello(profile, token).as_bytes())?;
@@ -1499,26 +1549,110 @@ pub fn run_lan_mls_join(
     .map(finish_session)
 }
 
+/// The session's end of the local socket pair prepared for the next chat through the Internet
+/// relay (see [`open_relay_pipe`]).
+#[cfg(unix)]
+static RELAY_PIPE: Mutex<Option<UnixStream>> = Mutex::new(None);
+
+/// Prepare one chat through the Internet relay: a local socket pair. The session keeps one end
+/// for the next [`run_relay_mls_host`] or [`run_relay_mls_join`]; the caller gets the other end
+/// and copies bytes between it and the relay's WebSocket, in both directions, unchanged. A pair
+/// that was prepared but never used is closed and replaced.
+#[cfg(unix)]
+pub fn open_relay_pipe() -> Result<UnixStream, String> {
+    let (session_end, app_end) = UnixStream::pair()
+        .map_err(|error| format!("Could not prepare the connection to the relay: {error}"))?;
+    let mut prepared = RELAY_PIPE
+        .lock()
+        .map_err(|_| "Could not prepare the connection to the relay.".to_owned())?;
+    *prepared = Some(session_end);
+    Ok(app_end)
+}
+
+#[cfg(unix)]
+fn take_relay_pipe() -> Result<UnixStream, String> {
+    RELAY_PIPE
+        .lock()
+        .ok()
+        .and_then(|mut prepared| prepared.take())
+        .ok_or_else(|| "No relay connection was prepared for this chat.".to_owned())
+}
+
+/// Host one chat through the Internet relay, over the pipe from [`open_relay_pipe`]. The app
+/// calls this once the relay reports that the other phone has joined; from then on the session
+/// is the same as [`run_lan_mls_host`] after a phone connected, so the relay only ever carries
+/// the same frames as the Wi-Fi connection.
+#[cfg(unix)]
+pub fn run_relay_mls_host(
+    profile: &LanProfile,
+    token: &str,
+    identity: &str,
+    pins: &str,
+) -> Result<String, String> {
+    let stream = take_relay_pipe()?;
+    set_verified_peer(None);
+    reset_screen_chat(profile);
+    validate_invite_token(token)?;
+    let identity = parse_lan_identity(identity)?;
+    host_session(
+        profile,
+        stream,
+        token,
+        identity,
+        pins,
+        ask_local_user,
+        ScreenChat,
+    )
+    .map(finish_session)
+}
+
+/// Join one chat through the Internet relay, over the pipe from [`open_relay_pipe`], once the
+/// relay reports that both phones are in the room; otherwise the same as [`run_lan_mls_join`].
+#[cfg(unix)]
+pub fn run_relay_mls_join(
+    profile: &LanProfile,
+    token: &str,
+    identity: &str,
+    pins: &str,
+) -> Result<String, String> {
+    let stream = take_relay_pipe()?;
+    set_verified_peer(None);
+    reset_screen_chat(profile);
+    validate_invite_token(token)?;
+    let identity = parse_lan_identity(identity)?;
+    guest_session(
+        profile,
+        stream,
+        token,
+        identity,
+        pins,
+        ask_local_user,
+        ScreenChat,
+    )
+    .map(finish_session)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
         accept_with_timeout, ask_local_user, check_guest_hello, classify_peer, connection_failure,
         encrypt_chat, from_hex, generate_lan_identity, group_safety_code, guest_hello,
         guest_session, host_session, identity_client, lan_chat_end, lan_chat_poll, lan_chat_send,
-        lan_safety_prompt, parse_lan_identity, peer_identity, receive_frame, reset_screen_chat,
-        run_typed_test, safety_code_from_authenticator, submit_lan_safety_decision,
-        take_lan_verified_peer, to_hex, Answer, ChatCommand, ChatEvent, ChatPayload, ChatSide,
-        LanProfile, LocalAnswer, PartialFrame, PeerStatus, SafetyPrompt, ScreenChat,
-        SessionOutcome, CHAT_ACK, CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS,
-        LOCAL_REJECTED_STATUS, LOCAL_UNANSWERED_STATUS, MAX_TYPED_MESSAGES,
-        MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS, PEER_UNANSWERED_STATUS, SMOKE_TEST,
-        VERIFY_TIMEOUT, WIFI_CHAT,
+        lan_safety_prompt, open_relay_pipe, parse_lan_identity, peer_identity, receive_frame,
+        reset_screen_chat, run_relay_mls_host, run_relay_mls_join, run_typed_test,
+        safety_code_from_authenticator, submit_lan_safety_decision, take_lan_verified_peer,
+        take_relay_pipe, to_hex, Answer, ChatCommand, ChatEvent, ChatPayload, ChatSide, LanProfile,
+        LocalAnswer, PartialFrame, PeerStatus, SafetyPrompt, ScreenChat, SessionOutcome, CHAT_ACK,
+        CHAT_END, CHAT_TEXT, KEEP_APP_OPEN_HINT, LAN_PASS_STATUS, LOCAL_REJECTED_STATUS,
+        LOCAL_UNANSWERED_STATUS, MAX_TYPED_MESSAGES, MAX_TYPED_MESSAGE_BYTES, PEER_REJECTED_STATUS,
+        PEER_UNANSWERED_STATUS, SMOKE_TEST, VERIFY_TIMEOUT, WIFI_CHAT,
     };
     use mls_rs::client_builder::MlsConfig;
     use mls_rs::group::{Group, ReceivedMessage};
     use mls_rs::{Client, ExtensionList, MlsMessage};
-    use std::io::Write;
-    use std::net::{Ipv4Addr, TcpListener, TcpStream};
+    use std::io::{Read, Write};
+    use std::net::{Ipv4Addr, Shutdown, TcpListener, TcpStream};
+    use std::os::unix::net::UnixStream;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{mpsc, Arc};
     use std::thread;
@@ -2559,5 +2693,237 @@ mod tests {
         assert!(stopped.contains("Stopped waiting"), "{stopped}");
         assert!(started.elapsed() < Duration::from_secs(5));
         canceller.join().expect("canceller thread did not panic");
+    }
+
+    /// Stands in for both apps' bridges and the relay between them, in one direction: copies
+    /// what one phone's session writes to the other phone's session in uneven pieces, as
+    /// WebSocket messages arrive, and passes the end of the stream on, as the app does when its
+    /// WebSocket closes. Returns how many bytes it forwarded.
+    fn relay_one_way(mut from: UnixStream, mut to: UnixStream) -> thread::JoinHandle<usize> {
+        thread::spawn(move || {
+            const PIECES: [usize; 6] = [1, 7, 300, 4096, 16 * 1024, 64 * 1024];
+            let mut buffer = vec![0u8; 64 * 1024];
+            let mut forwarded = 0;
+            for piece in PIECES.iter().cycle() {
+                match from.read(&mut buffer[..*piece]) {
+                    Ok(0) | Err(_) => break,
+                    Ok(read) => {
+                        if to.write_all(&buffer[..read]).is_err() {
+                            break;
+                        }
+                        forwarded += read;
+                    }
+                }
+            }
+            let _ = to.shutdown(Shutdown::Write);
+            forwarded
+        })
+    }
+
+    /// Both phones of the Wi-Fi chat, joined through a stand-in relay instead of a direct
+    /// connection: each session gets its end of a socket pair, as from `open_relay_pipe`.
+    struct Relayed {
+        host: thread::JoinHandle<Seen>,
+        guest: thread::JoinHandle<Seen>,
+        /// The host app's end, to cut the relay as a lost connection would.
+        cut: UnixStream,
+        relay: [thread::JoinHandle<usize>; 2],
+    }
+
+    fn start_relayed(
+        host: Side,
+        host_chat: ScriptedChat,
+        guest: Side,
+        guest_chat: ScriptedChat,
+    ) -> Relayed {
+        let (host_end, host_app) = UnixStream::pair().expect("create the host's socket pair");
+        let (guest_end, guest_app) = UnixStream::pair().expect("create the guest's socket pair");
+        let cut = host_app.try_clone().expect("keep the host app's end");
+        let relay = [
+            relay_one_way(
+                host_app.try_clone().expect("clone the host app's end"),
+                guest_app.try_clone().expect("clone the guest app's end"),
+            ),
+            relay_one_way(guest_app, host_app),
+        ];
+        let host_identity = parse_lan_identity(&host.identity).expect("parse the host identity");
+        let host_thread = thread::spawn(move || {
+            let (local, _person) = host.person();
+            let mut prompt = None;
+            let outcome = host_session(
+                &WIFI_CHAT,
+                host_end,
+                LOOPBACK_TOKEN,
+                host_identity,
+                &host.pins,
+                |seen: &SafetyPrompt| {
+                    prompt = shown(seen);
+                    Ok(local)
+                },
+                host_chat,
+            )
+            .expect("host finished the relayed MLS exchange");
+            Seen::new(outcome, prompt)
+        });
+        let guest_identity = parse_lan_identity(&guest.identity).expect("parse the guest identity");
+        let guest_thread = thread::spawn(move || {
+            let (local, _person) = guest.person();
+            let mut prompt = None;
+            let outcome = guest_session(
+                &WIFI_CHAT,
+                guest_end,
+                LOOPBACK_TOKEN,
+                guest_identity,
+                &guest.pins,
+                |seen: &SafetyPrompt| {
+                    prompt = shown(seen);
+                    Ok(local)
+                },
+                guest_chat,
+            )
+            .expect("guest finished the relayed MLS exchange");
+            Seen::new(outcome, prompt)
+        });
+        Relayed {
+            host: host_thread,
+            guest: guest_thread,
+            cut,
+            relay,
+        }
+    }
+
+    #[test]
+    fn the_wifi_chat_runs_unchanged_through_a_relay_that_splits_the_bytes() {
+        let host_identity = new_identity(HOST_DEVICE);
+        let guest_identity = new_identity(GUEST_DEVICE);
+        let (host_chat, host_commands, host_screen) = scripted_chat();
+        let (guest_chat, guest_commands, guest_screen) = scripted_chat();
+        let relayed = start_relayed(
+            Side::new(&host_identity, "", true),
+            host_chat,
+            Side::new(&guest_identity, "", true),
+            guest_chat,
+        );
+        assert!(matches!(next_event(&host_screen), ChatEvent::Open { .. }));
+        assert!(matches!(next_event(&guest_screen), ChatEvent::Open { .. }));
+
+        let drawing: String = (0..90_000u32)
+            .map(|index| char::from(b'A' + (index % 26) as u8))
+            .collect();
+        guest_commands
+            .send(ChatCommand::Send(1, drawing.clone()))
+            .expect("queue the guest's drawing");
+        assert_eq!(
+            next_event(&host_screen),
+            ChatEvent::Received(1, drawing.clone())
+        );
+        assert_eq!(next_event(&guest_screen), ChatEvent::Delivered(1));
+        let reply: String = drawing.chars().rev().take(70_000).collect();
+        host_commands
+            .send(ChatCommand::Send(1, reply.clone()))
+            .expect("queue the host's reply");
+        assert_eq!(next_event(&guest_screen), ChatEvent::Received(1, reply));
+        assert_eq!(next_event(&host_screen), ChatEvent::Delivered(1));
+
+        host_commands
+            .send(ChatCommand::End)
+            .expect("queue the host's end of the chat");
+        let ChatEvent::Ended(host_summary) = next_event(&host_screen) else {
+            panic!("the host's chat did not end");
+        };
+        let ChatEvent::Ended(guest_summary) = next_event(&guest_screen) else {
+            panic!("the guest's chat did not end");
+        };
+        assert!(
+            host_summary.starts_with("Ended on this phone. Sent 1 (1 delivered), received 1, in "),
+            "{host_summary}"
+        );
+        assert!(
+            guest_summary
+                .starts_with("Ended on the other phone. Sent 1 (1 delivered), received 1, in "),
+            "{guest_summary}"
+        );
+        let host = relayed.host.join().expect("host thread did not panic");
+        let guest = relayed.guest.join().expect("guest thread did not panic");
+        assert_eq!(host.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(guest.outcome.status, LAN_PASS_STATUS);
+        assert_eq!(host.code, guest.code);
+        assert_eq!(host.peer_device, GUEST_DEVICE);
+        assert_eq!(guest.peer_device, HOST_DEVICE);
+        let [to_guest, to_host] = relayed.relay;
+        let forwarded = to_guest.join().expect("relay thread did not panic")
+            + to_host.join().expect("relay thread did not panic");
+        assert!(forwarded > 160_000, "the relay carried {forwarded} bytes");
+    }
+
+    #[test]
+    fn a_lost_relay_connection_stops_both_phones_with_the_connection_hint() {
+        let (host_chat, _host_commands, host_screen) = scripted_chat();
+        let (guest_chat, _guest_commands, guest_screen) = scripted_chat();
+        let relayed = start_relayed(
+            Side::new(&new_identity(HOST_DEVICE), "", true),
+            host_chat,
+            Side::new(&new_identity(GUEST_DEVICE), "", true),
+            guest_chat,
+        );
+        assert!(matches!(next_event(&host_screen), ChatEvent::Open { .. }));
+        assert!(matches!(next_event(&guest_screen), ChatEvent::Open { .. }));
+
+        relayed
+            .cut
+            .shutdown(Shutdown::Both)
+            .expect("cut the relay connection");
+        for screen in [&host_screen, &guest_screen] {
+            let ChatEvent::Ended(summary) = next_event(screen) else {
+                panic!("the chat did not end after the relay connection was lost");
+            };
+            assert!(summary.starts_with("Stopped. "), "{summary}");
+            assert!(summary.contains(KEEP_APP_OPEN_HINT), "{summary}");
+        }
+        relayed.host.join().expect("host thread did not panic");
+        relayed.guest.join().expect("guest thread did not panic");
+        for direction in relayed.relay {
+            direction.join().expect("relay thread did not panic");
+        }
+    }
+
+    #[test]
+    fn a_relay_chat_needs_its_prepared_pipe_and_uses_it_once() {
+        // Without a prepared pipe the chat stops before it touches the screen's state.
+        let identity = new_identity(HOST_DEVICE);
+        assert!(take_relay_pipe().is_err());
+        for result in [
+            run_relay_mls_host(&WIFI_CHAT, LOOPBACK_TOKEN, &identity, ""),
+            run_relay_mls_join(&WIFI_CHAT, LOOPBACK_TOKEN, &identity, ""),
+        ] {
+            let error = result.expect_err("no relay pipe was prepared");
+            assert!(
+                error.contains("No relay connection was prepared"),
+                "{error}"
+            );
+        }
+
+        // Preparing again closes an unused pair, which the app then reads as ended.
+        let mut replaced = open_relay_pipe().expect("prepare a relay pipe");
+        let mut app_end = open_relay_pipe().expect("prepare another relay pipe");
+        replaced
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("bound the read");
+        let mut byte = [0u8; 1];
+        assert_eq!(replaced.read(&mut byte).expect("read the replaced pipe"), 0);
+
+        let mut session_end = take_relay_pipe().expect("the second pipe is ready");
+        assert!(
+            take_relay_pipe().is_err(),
+            "a pipe is used for one chat only"
+        );
+        session_end
+            .write_all(b"x")
+            .expect("write from the session end");
+        app_end
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("bound the read");
+        app_end.read_exact(&mut byte).expect("read at the app end");
+        assert_eq!(&byte, b"x");
     }
 }

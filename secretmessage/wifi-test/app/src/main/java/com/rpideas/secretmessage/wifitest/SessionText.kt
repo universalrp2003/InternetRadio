@@ -50,7 +50,8 @@ internal data class SafetyPrompt(val code: String, val peerStatus: PeerStatus, v
 internal object SessionText {
     private const val NATIVE_KEEP_OPEN_HINT = "Keep the test app open on both phones until the test ends"
     const val CONNECTION_HINT =
-        "The other phone may have closed Secret Message, left this Wi-Fi network or lost its connection."
+        "The other phone may have closed Secret Message or lost its connection (for example, by leaving the Wi-Fi " +
+            "or losing mobile data)."
 
     /** The line shown after a session ends, from the native result and the chat's end summary. */
     fun lastResult(nativeResult: String, chatSummary: String?): String {

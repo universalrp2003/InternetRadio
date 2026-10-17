@@ -2,7 +2,8 @@
 //! (`com.rpideas.secretmessage.smoke.MainActivity`) and the Wi-Fi test build of the Secret
 //! Message app (`com.rpideas.secretmessage.wifitest.NativeBridge`).
 //!
-//! It uses jni-rs safe wrappers; no raw pointers are dereferenced here. The LAN entry points are
+//! It uses jni-rs safe wrappers; no raw pointers are dereferenced here. The Internet relay's
+//! socket pair reaches the app as a file descriptor handed over with the safe `IntoRawFd`. The LAN entry points are
 //! available only in these isolated test builds. Each export converts its arguments, calls one
 //! helper below and converts the reply, so both builds get the same behaviour.
 
@@ -11,6 +12,8 @@ use jni::errors::ThrowRuntimeExAndDefault;
 use jni::objects::{JObject, JString};
 use jni::sys::{jint, jstring};
 use jni::EnvUnowned;
+#[cfg(unix)]
+use std::os::fd::IntoRawFd;
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 const IN_MEMORY_PASS: &str =
@@ -64,6 +67,39 @@ fn join_status(
         Ok(Ok(result)) => result,
         Ok(Err(error)) => format!("FAIL: {error}"),
         Err(_) => "FAIL: the local MLS guest test panicked.".to_owned(),
+    }
+}
+
+/// Prepares the local socket pair for one chat through the Internet relay. Returns the app's end
+/// as a file descriptor that the caller now owns (the app adopts it with ParcelFileDescriptor),
+/// or -1. Handing over the descriptor needs no unsafe code; the session keeps the other end.
+#[cfg(unix)]
+fn relay_pipe_descriptor() -> jint {
+    match catch_unwind(crate::spike_harness::open_relay_pipe) {
+        Ok(Ok(app_end)) => app_end.into_raw_fd(),
+        _ => -1,
+    }
+}
+
+#[cfg(unix)]
+fn relay_host_status(profile: &LanProfile, token: &str, identity: &str, pins: &str) -> String {
+    match catch_unwind(AssertUnwindSafe(|| {
+        crate::spike_harness::run_relay_mls_host(profile, token, identity, pins)
+    })) {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => format!("FAIL: {error}"),
+        Err(_) => "FAIL: the relayed MLS host panicked.".to_owned(),
+    }
+}
+
+#[cfg(unix)]
+fn relay_join_status(profile: &LanProfile, token: &str, identity: &str, pins: &str) -> String {
+    match catch_unwind(AssertUnwindSafe(|| {
+        crate::spike_harness::run_relay_mls_join(profile, token, identity, pins)
+    })) {
+        Ok(Ok(result)) => result,
+        Ok(Err(error)) => format!("FAIL: {error}"),
+        Err(_) => "FAIL: the relayed MLS guest panicked.".to_owned(),
     }
 }
 
@@ -394,6 +430,65 @@ pub extern "system" fn Java_com_rpideas_secretmessage_wifitest_NativeBridge_nati
             let identity = identity.try_to_string(env)?;
             let pins = pins.try_to_string(env)?;
             let status = join_status(&WIFI_CHAT, &host_ip, port, &token, &identity, &pins);
+            env.new_string(status).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Prepares one chat through the Internet relay; the app's end of the local socket pair as a
+/// file descriptor the app now owns, or -1.
+#[cfg(unix)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_wifitest_NativeBridge_nativeOpenRelayPipe<
+    'caller,
+>(
+    _unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+) -> jint {
+    relay_pipe_descriptor()
+}
+
+/// Hosts one chat through the Internet relay over the prepared pipe; blocks until it ends.
+#[cfg(unix)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_wifitest_NativeBridge_nativeRunRelayHost<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+    token: JString<'caller>,
+    identity: JString<'caller>,
+    pins: JString<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let token = token.try_to_string(env)?;
+            let identity = identity.try_to_string(env)?;
+            let pins = pins.try_to_string(env)?;
+            let status = relay_host_status(&WIFI_CHAT, &token, &identity, &pins);
+            env.new_string(status).map(|value| value.into_raw())
+        })
+        .resolve::<ThrowRuntimeExAndDefault>()
+}
+
+/// Joins one chat through the Internet relay over the prepared pipe; blocks until it ends.
+#[cfg(unix)]
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_rpideas_secretmessage_wifitest_NativeBridge_nativeRunRelayJoin<
+    'caller,
+>(
+    mut unowned_env: EnvUnowned<'caller>,
+    _this: JObject<'caller>,
+    token: JString<'caller>,
+    identity: JString<'caller>,
+    pins: JString<'caller>,
+) -> jstring {
+    unowned_env
+        .with_env(|env| {
+            let token = token.try_to_string(env)?;
+            let identity = identity.try_to_string(env)?;
+            let pins = pins.try_to_string(env)?;
+            let status = relay_join_status(&WIFI_CHAT, &token, &identity, &pins);
             env.new_string(status).map(|value| value.into_raw())
         })
         .resolve::<ThrowRuntimeExAndDefault>()

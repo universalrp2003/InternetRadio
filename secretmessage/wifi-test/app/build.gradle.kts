@@ -1,8 +1,9 @@
-// TEST-ONLY Wi-Fi build of Secret Message: the WhisperPad product screens from ../../product, compiled
-// unchanged, plus the Wi-Fi connection in this directory, which uses the mls-rs/AWS-LC LAN session from
-// ../../native-mls-rs through JNI. Owner-approved on 17 October 2026 as a separate, clearly labelled
-// test build. It is debug-only, never signed for release and never published; the offline preview
-// (../../product) keeps its own build, permissions and checks.
+// TEST-ONLY build of Secret Message: the WhisperPad product screens from ../../product, compiled
+// unchanged, plus the connection in this directory, which uses the mls-rs/AWS-LC session from
+// ../../native-mls-rs through JNI, directly on the same Wi-Fi or over the Internet through the owner's
+// test relay (../relay). Owner-approved on 17 October 2026 as a separate, clearly labelled test build
+// (same-Wi-Fi first, then the Internet relay). It is debug-only, never signed for release and never
+// published; the offline preview (../../product) keeps its own build, permissions and checks.
 plugins {
     id("com.android.application") version "8.13.0"
     id("org.jetbrains.kotlin.android") version "2.2.21"
@@ -21,8 +22,8 @@ android {
         applicationId = "com.rpideas.secretmessage.wifitest"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.3.0-wifi-test"
+        versionCode = 2
+        versionName = "0.4.0-internet-test"
     }
 
     sourceSets {
@@ -85,6 +86,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation(platform("androidx.compose:compose-bom:2025.08.00"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+    // WebSocket client for the Internet relay; it adds no permissions (INTERNET is already declared).
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
     testImplementation("junit:junit:4.13.2")
 }
