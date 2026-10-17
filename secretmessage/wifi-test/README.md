@@ -40,6 +40,10 @@ Run [39030739655](https://github.com/universalrp2003/InternetRadio/actions/runs/
 
 Each CI build has its own debug signing key, so uninstall an earlier Wi-Fi test APK before installing a newer one; that also resets this build's test identity and remembered phones.
 
+## Two-phone tests
+
+On 17 October 2026 the owner installed the APK from run 39030739655 on the Xiaomi 2406ERN9CI (Android 16/API 36, host, device ID `aed4 db91 1dd3 e645`) and a motorola moto g57 power (Android 17/API 37, guest, device ID `8e91 ab73 d045 861a`), both arm64-v8a, and shared both phones' copied reports. Both listed the other as new, confirmed `60287 06713 31275 51096` and reached PASS. In a chat of 3 min 5 s each phone sent three messages: the Motorola two with text and one with drawn letters, the Xiaomi two with text and one picture. Each phone counted the other's three messages as received, sent a delivery notice and a view notice for each, and got the same back. The removal notices (the Motorola sent 5 and received 2, the Xiaomi the reverse) show that all six messages reached the end of their view timers and disappeared from both phones before the chat ended; one was removed by both phones at the same moment. The Motorola then tapped **End**, and the Xiaomi reported "Ended on the other phone". The MLS session acknowledged every payload; none was refused and no send failed. Both phones now remember each other, and notifications were allowed on both. The reports hold counts only, so they do not show how the drawings looked, and they do not say whether a phone switched apps during the chat.
+
 ## Limits
 
 Same Wi-Fi only (no Internet connection, signaling server or relay). The MLS layer still accepts any BasicCredential; the safety-code comparison and remembered keys are the identity check. The signing key is a software key wrapped by Android Keystore, not a hardware-bound key. Message text lives in app memory as Java/Kotlin objects, which cannot be wiped. `FLAG_SECURE` is a best-effort screenshot deterrent. This build does not satisfy any release gate in `docs/secret-message-security-design.md`.
