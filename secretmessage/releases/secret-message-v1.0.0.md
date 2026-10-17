@@ -25,7 +25,7 @@ Like any server, the relay sees both phones' IP addresses, when they connect and
 ### Install
 
 - `Secret-Message-v1.0.0.apk`: Android 8.0 (API 26) or newer, arm64-v8a, armeabi-v7a, x86 and x86_64.
-- Package `com.rpideas.secretmessage`, signed with the project's own release key (certificate SHA-256 below). Test builds called "Secret Message TEST" or "Secret Message Wi-Fi TEST" are separate apps; uninstall them.
+- Package `com.rpideas.secretmessage`, signed with the project's own release key; signing certificate SHA-256 `58e370e417cf6f33234689acd5bf379474f5a8c55f79181d9e892a321bc04f08`. Test builds called "Secret Message TEST" or "Secret Message Wi-Fi TEST" are separate apps; uninstall them.
 - Permissions: Internet; foreground service (connected device) with change-network-state, which Android requires for that service type; notifications; fingerprint or biometric for the optional app lock.
 
 The same code was tested between phones as test builds on 17 October 2026: Xiaomi 2406ERN9CI (Android 16), motorola moto g57 power (Android 17) and Jio LS1542QWN (Android 12), on the same Wi-Fi, on mobile data and on mixed networks. This exact signed APK passed the automated checks (unit tests, native build, signature and package checks, and an Android 15 emulator run through the live relay); it was published at the owner's request without a separate phone test.
