@@ -37,9 +37,10 @@ their time limit). Cloudflare itself keeps its usual account-level request stati
 
 `.github/workflows/secret-message-relay.yml` runs on changes here: it runs
 `test/relay-test.mjs` against the relay in the local Workers runtime (`wrangler dev`), then
-deploys with the repository secrets `CLOUDFLARE_API_TOKEN` (template "Edit Cloudflare Workers")
-and `CLOUDFLARE_ACCOUNT_ID`, prints the relay address as a `relay-url` notice and runs the same
-checks against the deployed relay. Nobody needs to paste a token anywhere else.
+deploys with the repository secret `CLOUDFLARE_API_TOKEN` (an account API token from the template
+"Edit Cloudflare Workers"; wrangler finds the token's one account by itself, so the
+`CLOUDFLARE_ACCOUNT_ID` secret is not used), prints the relay address as a `relay-url` notice and
+runs the same checks against the deployed relay. Nobody needs to paste a token anywhere else.
 
 Local check: `npm ci`, `npm run dev` in one terminal, then
 `node test/relay-test.mjs ws://127.0.0.1:8787`.
