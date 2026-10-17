@@ -57,8 +57,8 @@ export default {
 export class Room extends DurableObject {
   async fetch(request) {
     const role = new URL(request.url).searchParams.get("role");
-    const hosts = this.ctx.getWebSockets("host").length;
-    const guests = this.ctx.getWebSockets("guest").length;
+    const hosts = this.open("host").length;
+    const guests = this.open("guest").length;
     if (role === "host" && hosts + guests > 0) {
       return plain(409, "This room is already in use\n");
     }
@@ -93,7 +93,7 @@ export class Room extends DurableObject {
       return;
     }
     const role = this.ctx.getTags(socket)[0];
-    const partner = this.ctx.getWebSockets(role === "host" ? "guest" : "host")[0];
+    const partner = this.open(role === "host" ? "guest" : "host")[0];
     if (!partner) {
       // Nothing may be sent before both phones are in; dropping it would corrupt the stream.
       this.closeAll(CLOSE_PROTOCOL, "Data before the other phone joined");
@@ -119,6 +119,11 @@ export class Room extends DurableObject {
 
   async alarm() {
     this.closeAll(CLOSE_TIME_LIMIT, "Time limit");
+  }
+
+  /** This room's sockets with `tag` that are still open; a phone that just left is not counted. */
+  open(tag) {
+    return this.ctx.getWebSockets(tag).filter((socket) => socket.readyState === WebSocket.OPEN);
   }
 
   closeAll(code, reason, except = null) {

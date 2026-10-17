@@ -15,6 +15,7 @@ const httpBase = base.replace(/^ws/, "http");
 const WAIT_MS = 15_000;
 const CLOSE_PARTNER_LEFT = 4001;
 const CLOSE_PROTOCOL = 4003;
+const CLOSE_TOO_BIG = 1009;
 
 const newRoom = () => randomBytes(16).toString("hex");
 const roomUrl = (room, role) => `${base}/v1/rooms/${room}?role=${role}`;
@@ -194,8 +195,10 @@ const checks = [
     const { host, guest } = await paired();
     host.socket.send(randomBytes(1024 * 1024 + 1), { binary: true });
     const [hostClosed, guestClosed] = await Promise.all([host.closedWith(), guest.closedWith()]);
-    assert.equal(hostClosed.code, CLOSE_PROTOCOL);
-    assert.equal(guestClosed.code, CLOSE_PROTOCOL);
+    // The relay closes the room itself (4003), unless Cloudflare's edge already cut the message
+    // (1009, too big), in which case the other phone hears that its partner left (4001).
+    assert.ok([CLOSE_PROTOCOL, CLOSE_TOO_BIG].includes(hostClosed.code), `host: ${hostClosed.code}`);
+    assert.ok([CLOSE_PROTOCOL, CLOSE_PARTNER_LEFT].includes(guestClosed.code), `guest: ${guestClosed.code}`);
   }],
 ];
 
