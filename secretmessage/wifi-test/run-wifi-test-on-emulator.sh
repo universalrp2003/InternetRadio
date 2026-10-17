@@ -211,8 +211,13 @@ scroll up
 
 STEP="settings"
 tap content-desc "Settings"
-wait_for text "What this test build is"
 wait_for text "Recipient view timer"
+# The Wi-Fi wording replaces the preview's ("This preview cannot deliver messages …").
+wait_for text "It starts on both phones when the other person views your message." contains
+scroll down
+scroll down
+wait_for text "What this test build is"
+wait_for text "has not been reviewed by a security expert" contains
 "$ADB" shell input keyevent 4
 sleep 1
 wait_for text "Start a chat"
