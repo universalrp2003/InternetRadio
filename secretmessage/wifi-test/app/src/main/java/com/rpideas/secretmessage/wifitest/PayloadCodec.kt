@@ -32,6 +32,9 @@ internal object PayloadCodec {
     private const val KIND_DELIVERED = 2
     private const val KIND_VIEWED = 3
     private const val KIND_PURGE = 4
+    /** A doorbell card (1.1.0), handled by the app and never shown in the chat; 1.0.0 refuses it. */
+    private const val KIND_CARD = 5
+    private const val CARD_BYTES = 2 + 16 + 32
     private const val CONTENT_INLINE = 1
     private const val CONTENT_PICTURE = 2
     private const val SEGMENT_TEXT = 1
@@ -98,6 +101,27 @@ internal object PayloadCodec {
         } catch (unreadable: IOException) {
             null
         }
+    }
+
+    /** [card] as payload text: format, kind 5, the 16-byte inbox ID and the 32-byte inbox key. */
+    fun encodeCard(card: ContactCard): String {
+        require(card.isValid()) { "contact card" }
+        val bytes = byteArrayOf(FORMAT.toByte(), KIND_CARD.toByte()) +
+            ContactBook.hexBytes(card.inboxId) + ContactBook.hexBytes(card.inboxKey)
+        return Base64.getEncoder().encodeToString(bytes)
+    }
+
+    /** The doorbell card in [text], or null if [text] is anything else. */
+    fun decodeCard(text: String): ContactCard? {
+        if (text.isEmpty() || text.length > 128) return null
+        val bytes = try {
+            Base64.getDecoder().decode(text)
+        } catch (malformed: IllegalArgumentException) {
+            return null
+        }
+        if (bytes.size != CARD_BYTES || bytes[0].toInt() != FORMAT || bytes[1].toInt() != KIND_CARD) return null
+        val card = ContactCard(ContactBook.hex(bytes.copyOfRange(2, 18)), ContactBook.hex(bytes.copyOfRange(18, CARD_BYTES)))
+        return card.takeIf { it.isValid() }
     }
 
     private fun writeId(out: DataOutputStream, id: String) {

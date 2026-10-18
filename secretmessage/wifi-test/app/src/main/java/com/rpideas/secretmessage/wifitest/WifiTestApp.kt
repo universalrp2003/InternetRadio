@@ -7,7 +7,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -22,26 +24,38 @@ import com.rpideas.secretmessage.preview.ui.LockScreen
 import com.rpideas.secretmessage.preview.ui.Night
 import com.rpideas.secretmessage.preview.ui.SecretMessageTheme
 import com.rpideas.secretmessage.preview.ui.SettingsScreen
+import com.rpideas.secretmessage.wifitest.updates.AppUpdates
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
- * Root of the app: lock screen, settings, the connect screen, or the WhisperPad chat
- * once both people have confirmed the safety code.
+ * Root of the app: lock screen, settings and guide, the connect screen with the remembered phones,
+ * or the WhisperPad chat once the chat is open.
  */
 @Composable
 internal fun WifiTestApp(
     viewModel: ChatViewModel,
     session: LanChatSession,
+    contactBook: ContactBook,
     appLock: AppLockController,
     versionLabel: String,
     engineInfo: String,
     pendingInvite: String?,
     notice: String?,
+    settingsMessage: String?,
+    readyEnabled: Boolean,
+    resumeCount: Int,
     actions: ConnectActions,
     onUnlockRequest: () -> Unit,
     onAppLockToggle: (Boolean) -> String?,
     onLeaveChatOpen: () -> Unit,
+    onSettingsClosed: () -> Unit,
 ) {
     val connection by session.connection.collectAsStateWithLifecycle()
+    val contacts by contactBook.contacts.collectAsStateWithLifecycle()
+    val ring by Rings.pending.collectAsStateWithLifecycle()
+    val doorbell by Doorbell.link.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val composer by viewModel.composer.collectAsStateWithLifecycle()
@@ -49,8 +63,10 @@ internal fun WifiTestApp(
     val sessionStatus by viewModel.sessionStatus.collectAsStateWithLifecycle()
     val statusDescription by viewModel.statusDescription.collectAsStateWithLifecycle()
     var showSettings by remember { mutableStateOf(false) }
-    var settingsMessage by remember { mutableStateOf<String?>(null) }
+    var showGuide by remember { mutableStateOf(false) }
+    var lockMessage by remember { mutableStateOf<String?>(null) }
     var chatNotice by remember { mutableStateOf<String?>(null) }
+    val presence = remember { mutableStateMapOf<String, Doorbell.Presence>() }
 
     // Keep the screen on while a chat starts or is open, as the LAN smoke test does.
     val view = LocalView.current
@@ -58,6 +74,19 @@ internal fun WifiTestApp(
     DisposableEffect(keepScreenOn) {
         view.keepScreenOn = keepScreenOn
         onDispose { view.keepScreenOn = false }
+    }
+
+    // While the start screen shows, ask the relay now and then which remembered phones are ready.
+    val onStartScreen = !appLock.locked && !showSettings && connection is ConnectionState.Idle
+    LaunchedEffect(onStartScreen, contacts, resumeCount) {
+        if (!onStartScreen) return@LaunchedEffect
+        while (true) {
+            contacts.forEach { contact ->
+                val inbox = contact.card?.inboxId ?: return@forEach
+                presence[contact.deviceId] = withContext(Dispatchers.IO) { Doorbell.presence(inbox) }
+            }
+            delay(PRESENCE_REFRESH_MILLIS)
+        }
     }
 
     SecretMessageTheme {
@@ -69,19 +98,38 @@ internal fun WifiTestApp(
             ) {
                 when {
                     appLock.locked -> LockScreen(message = appLock.lastMessage, onUnlock = onUnlockRequest)
+                    showSettings && showGuide -> GuideScreen(onBack = { showGuide = false })
                     showSettings -> SettingsScreen(
                         settings = settings,
-                        appLockMessage = settingsMessage ?: appLock.lastMessage,
+                        appLockMessage = lockMessage ?: appLock.lastMessage,
                         versionLabel = versionLabel,
                         onBack = {
                             showSettings = false
-                            settingsMessage = null
+                            lockMessage = null
+                            onSettingsClosed()
                         },
                         onViewSecondsChange = viewModel::setViewSeconds,
                         onSelectTone = viewModel::selectTone,
                         onPreviewTone = viewModel::previewTone,
-                        onAppLockChange = { enabled -> settingsMessage = onAppLockToggle(enabled) },
+                        onAppLockChange = { enabled -> lockMessage = onAppLockToggle(enabled) },
                         wording = WifiWording.settings,
+                        extraContent = {
+                            AppSettingsSections(
+                                info = AppSettingsInfo(
+                                    versionLabel = versionLabel,
+                                    identitySummary = session.identity.summary(),
+                                    engineInfo = engineInfo,
+                                    readyEnabled = readyEnabled,
+                                    doorbell = doorbell,
+                                    hasDoorbellContacts = contacts.any { it.card != null },
+                                    idle = connection is ConnectionState.Idle,
+                                    message = settingsMessage,
+                                    resumeCount = resumeCount,
+                                ),
+                                actions = actions,
+                                onOpenGuide = { showGuide = true },
+                            )
+                        },
                     )
                     connection is ConnectionState.Connected -> {
                         // Back leaves the chat open (the connection service keeps it); End closes it.
@@ -92,7 +140,7 @@ internal fun WifiTestApp(
                             canSend = ComposerPolicy.isSendable(composer),
                             nowElapsedMillis = nowElapsedMillis,
                             sessionStatus = sessionStatus,
-                            statusDescription = statusDescription,
+                            statusDescription = tr(statusDescription),
                             notice = chatNotice,
                             onTypeEnglishChar = { key ->
                                 chatNotice = null
@@ -104,14 +152,14 @@ internal fun WifiTestApp(
                                 chatNotice = if (viewModel.sendComposedMessage()) {
                                     null
                                 } else {
-                                    "This message is too large to send. Remove some drawings and try again."
+                                    tr("This message is too large to send. Remove some drawings and try again.")
                                 }
                             },
                             onSendFullPicture = { strokes ->
                                 chatNotice = if (viewModel.sendPicture(strokes)) {
                                     null
                                 } else {
-                                    "This picture is too large to send. Clear it and draw a simpler one."
+                                    tr("This picture is too large to send. Clear it and draw a simpler one.")
                                 }
                             },
                             onOpenSettings = { showSettings = true },
@@ -120,17 +168,34 @@ internal fun WifiTestApp(
                             onEndChat = session::endChat,
                         )
                     }
-                    else -> ConnectScreen(
-                        state = connection,
-                        identitySummary = session.identity.summary(),
-                        engineInfo = engineInfo,
-                        pendingInvite = pendingInvite,
-                        notice = notice,
-                        actions = actions,
-                        onOpenSettings = { showSettings = true },
-                    )
+                    else -> {
+                        ConnectScreen(
+                            state = connection,
+                            contacts = contacts,
+                            presence = presence,
+                            ring = ring?.takeIf { !it.expired() },
+                            pendingInvite = pendingInvite,
+                            notice = notice,
+                            actions = actions,
+                            onOpenSettings = { showSettings = true },
+                        )
+                        // As in Oor Arivippu: a verified update found at launch is offered once. The
+                        // check runs on the first start screen of this app start only.
+                        if (connection is ConnectionState.Idle && LaunchUpdateCheck.pending) {
+                            AppUpdates.Control("Secret-Message", automatic = true)
+                            DisposableEffect(Unit) { onDispose { LaunchUpdateCheck.pending = false } }
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private const val PRESENCE_REFRESH_MILLIS = 45_000L
+
+/** The launch update check runs until the first start screen of this app start goes away. */
+private object LaunchUpdateCheck {
+    @Volatile
+    var pending = true
 }

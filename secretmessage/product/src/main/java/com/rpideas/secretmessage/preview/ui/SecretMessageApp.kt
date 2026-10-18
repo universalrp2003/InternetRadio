@@ -74,14 +74,14 @@ internal fun SecretMessageApp(
                             chatNotice = if (viewModel.sendComposedMessage()) {
                                 null
                             } else {
-                                "This message is too large to send. Remove some drawings and try again."
+                                t("This message is too large to send. Remove some drawings and try again.")
                             }
                         },
                         onSendFullPicture = { strokes ->
                             chatNotice = if (viewModel.sendPicture(strokes)) {
                                 null
                             } else {
-                                "This picture is too large to send. Clear it and draw a simpler one."
+                                t("This picture is too large to send. Clear it and draw a simpler one.")
                             }
                         },
                         onOpenSettings = { showSettings = true },

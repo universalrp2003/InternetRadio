@@ -28,6 +28,14 @@ internal object PeerPins {
         return (kept + "${fields[0]} ${fields[1]}").joinToString(separator = "\n", postfix = "\n")
     }
 
+    fun forget(pins: String, deviceId: String): String {
+        val kept = pins.lineSequence()
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && !it.startsWith("$deviceId ") }
+            .toList()
+        return if (kept.isEmpty()) "" else kept.joinToString(separator = "\n", postfix = "\n")
+    }
+
     fun count(pins: String): Int = pins.lineSequence().count { it.isNotBlank() }
 
     /** `0123456789abcdef` as `0123 4567 89ab cdef`, as on the other phone's screen. */

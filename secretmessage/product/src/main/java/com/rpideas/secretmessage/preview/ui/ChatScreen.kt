@@ -198,7 +198,7 @@ private fun PreviewHeader(wording: ChatWording, onOpenSettings: () -> Unit, onEn
             }
         }
         if (onEndChat != null) {
-            TextButton(onClick = onEndChat) { Text("End", color = Warm, fontWeight = FontWeight.Bold) }
+            TextButton(onClick = onEndChat) { Text(t("End"), color = Warm, fontWeight = FontWeight.Bold) }
         }
         IconButton(onClick = onOpenSettings) {
             Icon(Icons.Outlined.Settings, contentDescription = wording.settingsButtonDescription, tint = Accent)
@@ -234,11 +234,11 @@ private fun LocalOnlyNotice(wording: ChatWording) {
 @Composable
 private fun ConnectionStatusCard(sessionStatus: MlsSessionStatus, statusDescription: String, pairingLabel: String) {
     val label = when (sessionStatus) {
-        MlsSessionStatus.DISCONNECTED -> "Not connected"
-        MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE -> "Setting up session"
-        MlsSessionStatus.VERIFYING_MLS_EPOCH_AUTHENTICATION -> "Verifying session"
-        MlsSessionStatus.CONNECTED_MLS_VERIFIED -> "Connected"
-        MlsSessionStatus.ERROR -> "Connection error"
+        MlsSessionStatus.DISCONNECTED -> t("Not connected")
+        MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE -> t("Setting up session")
+        MlsSessionStatus.VERIFYING_MLS_EPOCH_AUTHENTICATION -> t("Verifying session")
+        MlsSessionStatus.CONNECTED_MLS_VERIFIED -> t("Connected")
+        MlsSessionStatus.ERROR -> t("Connection error")
     }
     Surface(
         shape = RoundedCornerShape(12.dp),
@@ -301,7 +301,7 @@ private fun MessageBubble(message: EphemeralMessage, nowElapsedMillis: Long) {
                 VectorStrokeThumbnail(
                     strokes = content.fullPictureStrokes,
                     modifier = Modifier
-                        .semantics { contentDescription = "Drawn picture" }
+                        .semantics { contentDescription = t("Drawn picture") }
                         .widthIn(min = 160.dp, max = 240.dp)
                         .aspectRatio(PICTURE_ASPECT_RATIO)
                         .clip(RoundedCornerShape(10.dp))
@@ -340,10 +340,10 @@ private fun statusLine(message: EphemeralMessage, nowElapsedMillis: Long): Strin
     val deadline = message.deadlineElapsedMillis
     val remaining = if (deadline == null) 0 else ChatTimerPolicy.remainingSeconds(nowElapsedMillis, deadline)
     return when (message.deliveryState) {
-        MessageDeliveryState.SENDING_UNDELIVERED -> "Not delivered · removed in ${remaining}s"
+        MessageDeliveryState.SENDING_UNDELIVERED -> t("Not delivered · removed in {0}s", remaining)
         MessageDeliveryState.DELIVERED_WAITING_VIEW ->
-            if (message.isFromLocalUser) "Delivered · waiting to be viewed" else "New · countdown starts when viewed"
-        MessageDeliveryState.VIEWED_COUNTING_DOWN -> "Viewed · ${formatClock(remaining)} left"
+            if (message.isFromLocalUser) t("Delivered · waiting to be viewed") else t("New · countdown starts when viewed")
+        MessageDeliveryState.VIEWED_COUNTING_DOWN -> t("Viewed · {0} left", formatClock(remaining))
     }
 }
 

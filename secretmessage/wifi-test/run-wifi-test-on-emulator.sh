@@ -176,6 +176,20 @@ scroll() {
   sleep 1
 }
 
+# Scroll down until a node matches (at most 12 swipes), for the long settings screen.
+scroll_until() {
+  local attribute="$1" value="$2" mode="${3:-equals}" swipes=0
+  while (( swipes < 12 )); do
+    app_alive || fail "The app process is not running while looking for: $value"
+    if dump_ui && find_node "$attribute" "$value" "$mode" >/dev/null; then
+      return 0
+    fi
+    scroll down
+    swipes=$((swipes + 1))
+  done
+  fail "Could not find $attribute '$value' after scrolling. Visible text: $(visible_text)"
+}
+
 tap() {
   local attribute="$1" value="$2" mode="${3:-equals}" point
   wait_for "$attribute" "$value" "$mode" 15
@@ -192,8 +206,12 @@ STEP="install and launch"
 "$ADB" logcat -c
 "$ADB" shell am start -W -n "$PACKAGE/$ACTIVITY" > "$WORK/start.log" 2>&1 || fail "$(cat "$WORK/start.log")"
 
-STEP="start screen"
-wait_for text "Start or join a chat" equals 40
+STEP="start screen in Tamil, then English"
+# From 1.1.0 the app starts in Tamil (owner request); the rest of this test uses English.
+wait_for text "உரையாடலைத் தொடங்கு அல்லது இணை" equals 40
+wait_for text "முழுமையாகக் குறியாக்கப்பட்டது"
+tap text "English"
+wait_for text "Start or join a chat" equals 20
 wait_for text "End-to-end encrypted"
 # The app says plainly that it has not been independently security-reviewed.
 wait_for text "Not independently security-reviewed" contains 10
@@ -217,13 +235,6 @@ wait_for text "Same Wi-Fi only" contains 10
 tap text "Stop waiting"
 wait_for text "You stopped waiting for the other phone." equals 20
 wait_for text "Start a chat"
-# Hosting created this install's identity, stored encrypted under an Android Keystore key.
-scroll down
-wait_for text "key stored encrypted with an Android Keystore key" contains 10
-# The phone section names the loaded MLS engine and the session protocol (from the native library).
-wait_for text "secretmessage-wifi-chat/1" contains 10
-wait_for text "Copy connection report"
-scroll up
 scroll up
 
 STEP="settings"
@@ -231,10 +242,27 @@ tap content-desc "Settings"
 wait_for text "Recipient view timer"
 # The app's wording replaces the preview's ("This preview cannot deliver messages …").
 wait_for text "It starts on both phones when the other person views your message." contains
-scroll down
-scroll down
-wait_for text "About Secret Message"
+scroll_until text "About Secret Message"
 wait_for text "has not been independently security-reviewed" contains
+
+STEP="app settings (1.1.0): ready for chats, this phone, guide and About"
+scroll_until text "Ready for chats"
+scroll_until text "Remembered phones can call this phone"
+# Hosting created this install's identity, stored encrypted under an Android Keystore key.
+scroll_until text "key stored encrypted with an Android Keystore key" contains
+# This phone's section names the loaded MLS engine and the session protocol (from the native library).
+scroll_until text "secretmessage-wifi-chat/1" contains
+scroll_until text "Copy connection report"
+scroll_until text "Reset this phone's key"
+scroll_until text "Open the guide"
+tap text "Open the guide"
+wait_for text "1. Start a chat with a new phone" equals 15
+wait_for text "தமிழ்"
+"$ADB" shell input keyevent 4
+sleep 1
+scroll_until text "Verified GitHub APK updates"
+scroll_until text "Check for updates"
+scroll_until text "Source code — InternetRadio"
 "$ADB" shell input keyevent 4
 sleep 1
 wait_for text "Start a chat"
@@ -244,4 +272,4 @@ app_alive || fail "The app exited during the smoke test"
 if "$ADB" logcat -d -b crash 2>/dev/null | grep -q "$PACKAGE"; then
   fail "The crash buffer contains an entry for $PACKAGE"
 fi
-echo "PASS: $PACKAGE launched on API 35, showed its start screen and not-reviewed note, hosted a chat through the deployed Internet relay (connected over TLS) and on the same Wi-Fi, stopped waiting on request each time, created its Keystore-wrapped identity, loaded the MLS engine (secretmessage-wifi-chat/1), opened settings and About, and did not crash."
+echo "PASS: $PACKAGE launched on API 35, showed its start screen in Tamil and switched to English, showed the not-reviewed note, hosted a chat through the deployed Internet relay (connected over TLS) and on the same Wi-Fi, stopped waiting on request each time, created its Keystore-wrapped identity, loaded the MLS engine (secretmessage-wifi-chat/1), opened settings with ready mode, this phone, the guide and About with the verified updater, and did not crash."

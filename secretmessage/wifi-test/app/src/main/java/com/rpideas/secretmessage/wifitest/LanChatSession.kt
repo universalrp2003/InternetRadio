@@ -35,6 +35,8 @@ internal sealed class ConnectionState {
         val internet: Boolean,
         val link: String = "",
         val stopping: Boolean = false,
+        /** The remembered phone this phone is calling (1.1.0), instead of sharing [invite]. */
+        val calling: String? = null,
     ) : ConnectionState()
 
     /** Connecting to the phone that sent the invite; [link] says how the connection is doing. */
@@ -81,6 +83,19 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
     /** How the open chat travels, for its status line. */
     @Volatile
     private var via = VIA_WIFI
+
+    /** The other phone's device ID once the chat opened, for its doorbell card. */
+    @Volatile
+    private var peerDevice: String? = null
+
+    /** A doorbell card that arrived before this phone saw the chat open. */
+    @Volatile
+    private var pendingCard: ContactCard? = null
+
+    /** Shown instead of the native result when this phone stopped a call itself. */
+    @Volatile
+    private var stopNote: String? = null
+    private val contacts = Contacts.book(app)
     private val lock = Any()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -129,18 +144,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             return bad.message
         }
         return when (invite) {
-            is InviteLink.Internet -> {
-                val link = RelayLink(RelayLink.RELAY_URL, invite.room, RelayLink.Role.GUEST, ::showLink)
-                begin(
-                    ConnectionState.Joining(internet = true, link = RelayText.CONNECTING),
-                    "guest, Internet relay",
-                    "Connecting to the other phone",
-                ) { identityText, pins ->
-                    link.run(GUEST_WAIT_MILLIS, { false }) {
-                        NativeBridge.nativeRunRelayJoin(invite.token, identityText, pins)
-                    }.also { report.connection(link.summary) }
-                }
-            }
+            is InviteLink.Internet -> joinRelay(invite.room, invite.token, "guest, Internet relay")
             is InviteLink.Wifi -> begin(
                 ConnectionState.Joining(internet = false),
                 "guest, same Wi-Fi",
@@ -150,6 +154,75 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
                 NativeBridge.nativeRunJoin(invite.host, invite.port, invite.token, identityText, pins)
             }
         }
+    }
+
+    /** True while a chat is starting or open. */
+    fun busy(): Boolean = running.get()
+
+    /**
+     * Calls a remembered phone (1.1.0): waits in a new relay room and rings the phone's doorbell
+     * with the room and token, encrypted for that phone. Returns a message if it could not start.
+     */
+    fun callContact(contact: Contact): String? {
+        if (contact.card == null) {
+            return "This phone has not shared its doorbell yet. Chat once with an invite, then you can call it."
+        }
+        val room = IdentityStore.randomHex(16)
+        val token = IdentityStore.randomHex(16)
+        val invite = InviteLink.Internet(room, token).toUri()
+        val rang = AtomicBoolean(false)
+        val link = RelayLink(RelayLink.RELAY_URL, room, RelayLink.Role.HOST) { text ->
+            showLink(text)
+            // Ring once this phone waits in the room, so the other phone can join at once.
+            if (text == RelayText.WAITING && rang.compareAndSet(false, true)) {
+                thread(name = "secretmessage-ring") { ring(contact, room, token) }
+            }
+        }
+        return begin(
+            ConnectionState.Hosting(invite, internet = true, link = RelayText.CONNECTING, calling = contact.label),
+            "host, calling a remembered phone",
+            "Calling a remembered phone",
+        ) { identityText, pins ->
+            link.run(HOST_WAIT_MILLIS, { stopRequested }) {
+                NativeBridge.nativeRunRelayHost(token, identityText, pins)
+            }.also { report.connection(link.summary) }
+        }
+    }
+
+    /** Answers a chat request from a remembered phone; returns a message if it could not start. */
+    fun answerRing(ring: IncomingRing): String? =
+        joinRelay(ring.invite.room, ring.invite.token, "guest, answering a remembered phone")
+
+    private fun joinRelay(room: String, token: String, role: String): String? {
+        val link = RelayLink(RelayLink.RELAY_URL, room, RelayLink.Role.GUEST, ::showLink)
+        return begin(
+            ConnectionState.Joining(internet = true, link = RelayText.CONNECTING),
+            role,
+            "Connecting to the other phone",
+        ) { identityText, pins ->
+            link.run(GUEST_WAIT_MILLIS, { false }) {
+                NativeBridge.nativeRunRelayJoin(token, identityText, pins)
+            }.also { report.connection(link.summary) }
+        }
+    }
+
+    private fun ring(contact: Contact, room: String, token: String) {
+        val inboxId = contact.card?.inboxId
+        val sealed = runCatching { contacts.sealRing(contact, room, token, System.currentTimeMillis()) }.getOrNull()
+        val result = if (inboxId == null || sealed == null) Doorbell.RingResult.FAILED else Doorbell.ring(inboxId, sealed)
+        report.rang(result.name.lowercase(Locale.ROOT))
+        when (result) {
+            Doorbell.RingResult.DELIVERED -> showLink(RING_DELIVERED)
+            Doorbell.RingResult.OFFLINE -> stopCalling(RING_OFFLINE)
+            Doorbell.RingResult.BUSY -> stopCalling(RING_BUSY)
+            Doorbell.RingResult.FAILED -> stopCalling(RING_FAILED)
+        }
+    }
+
+    private fun stopCalling(note: String) {
+        stopNote = note
+        showLink(note)
+        stopWaiting()
     }
 
     /** Stops waiting for the other phone (hosting only). */
@@ -196,6 +269,9 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         NativeBridge.load()?.let { return it }
         return try {
             identity.loadOrCreate(newKey = true)
+            // A new key also gets a new doorbell; remembered phones learn it in the next chat.
+            contacts.renewOwnCard()
+            Doorbell.restart(app)
             "New key created. Phones that remembered this phone will show a key-change warning."
         } catch (failure: Exception) {
             "Could not reset the key: ${failure.javaClass.simpleName} ${failure.message.orEmpty()}"
@@ -205,6 +281,8 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
     fun forgetPhones(): String {
         if (running.get()) return "Wait until the chat has ended."
         identity.forgetPhones()
+        contacts.forgetAll()
+        ChatConnectionService.ensureReady(app)
         return "Remembered phones cleared."
     }
 
@@ -253,6 +331,9 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             VIA_WIFI
         }
         report.start(role)
+        peerDevice = null
+        pendingCard = null
+        stopNote = null
         mutableConnection.value = first
         status.value = MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE
         description.value = "$notice."
@@ -308,6 +389,9 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         description.value = "Compare the safety code with the other phone."
         report.prompted(prompt)
         ChatConnectionService.update(app, "Compare the safety code")
+        // Owner choice for 1.1.0: a remembered phone with an unchanged key connects without the
+        // comparison. A new phone or a changed key still needs both people to compare the code.
+        if (prompt.peerStatus == PeerStatus.KNOWN) answer(true)
     }
 
     private fun drainEvents() {
@@ -327,6 +411,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
                 if (verifiedPeer.isNotEmpty()) identity.remember(verifiedPeer)
                 val prompt = (mutableConnection.value as? ConnectionState.Comparing)?.prompt
                     ?: SafetyPrompt("", PeerStatus.NEW, verifiedPeer.substringBefore(' '))
+                openDoorbell(prompt.peerDevice.ifEmpty { verifiedPeer.substringBefore(' ') })
                 mutableConnection.value = ConnectionState.Connected(prompt)
                 status.value = MlsSessionStatus.CONNECTED_MLS_VERIFIED
                 description.value = connectedDescription(prompt)
@@ -335,6 +420,13 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             }
             "RECEIVED" -> {
                 val text = rest.substringAfter('|', "")
+                // A doorbell card is for this app, never for the chat.
+                PayloadCodec.decodeCard(text)?.let { card ->
+                    report.cardReceived()
+                    val device = peerDevice
+                    if (device == null) pendingCard = card else contacts.saveCard(device, card)
+                    return
+                }
                 val payload = PayloadCodec.decode(text)
                 if (payload != null && PayloadValidator.isValidPayload(payload)) {
                     report.received(payload)
@@ -365,11 +457,29 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
                     ?.let { identity.remember(it) }
             }
             report.finished(SessionText.forReport(result, internet = via == VIA_INTERNET))
-            mutableConnection.value = ConnectionState.Idle(SessionText.lastResult(result, report.chatSummary()))
+            val note = stopNote
+            val shown = if (note != null && !result.startsWith("PASS")) note else SessionText.lastResult(result, report.chatSummary())
+            mutableConnection.value = ConnectionState.Idle(shown)
+            contacts.refresh()
             status.value = if (result.startsWith("FAIL")) MlsSessionStatus.ERROR else MlsSessionStatus.DISCONNECTED
             description.value = IDLE_DESCRIPTION
         }
         ChatConnectionService.stop(app)
+    }
+
+    /**
+     * The chat opened with [device]: remember it in the contact list and send this phone's
+     * doorbell card inside the MLS session, so the two phones can call each other later.
+     */
+    private fun openDoorbell(device: String) {
+        if (device.isEmpty()) return
+        peerDevice = device
+        contacts.refresh()
+        pendingCard?.let { contacts.saveCard(device, it) }
+        pendingCard = null
+        val card = runCatching { PayloadCodec.encodeCard(contacts.ownCard()) }.getOrNull() ?: return
+        val reply = runCatching { NativeBridge.nativeChatSend(card) }.getOrDefault("")
+        if (reply.startsWith("OK|")) report.cardSent()
     }
 
     private fun connectedDescription(prompt: SafetyPrompt): String {
@@ -394,6 +504,11 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         private const val VIA_WIFI = "over Wi-Fi"
         const val WIFI_LINK = "Same Wi-Fi only: the other phone connects straight to this phone."
         const val WIFI_CONNECTION = "Same Wi-Fi (direct connection)"
+        const val RING_DELIVERED = "The other phone was notified. Waiting for it to answer…"
+        const val RING_OFFLINE =
+            "Not reachable now: the other phone is offline or not ready for chats. Try again later or send an invite."
+        const val RING_BUSY = "Too many calls to this phone. Wait a minute and try again."
+        const val RING_FAILED = "Could not reach the relay to call the other phone. Check that this phone is online."
     }
 }
 

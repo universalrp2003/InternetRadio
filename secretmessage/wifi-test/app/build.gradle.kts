@@ -24,10 +24,11 @@ android {
         applicationId = "com.rpideas.secretmessage"
         minSdk = 26
         targetSdk = 35
-        // Raise versionCode by one and the last versionName part for every published version, together
-        // with EXPECTED_VERSION/EXPECTED_CODE in .github/workflows/secret-message-wifi-test.yml.
-        versionCode = 1
-        versionName = "1.0.0"
+        // Raise versionCode by one and versionName (1.x.y: y for fixes, x for new features) for every
+        // published version, together with EXPECTED_VERSION/EXPECTED_CODE in
+        // .github/workflows/secret-message-wifi-test.yml.
+        versionCode = 2
+        versionName = "1.1.0"
         manifestPlaceholders["appLabel"] = "Secret Message"
     }
 

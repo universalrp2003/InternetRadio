@@ -21,6 +21,9 @@ internal class SessionReport {
     private var engineAcknowledgements = 0
     private var sendFailures = 0
     private var lastSendFailure: String? = null
+    private var cardSent = false
+    private var cardReceived = false
+    private var ring = "none"
 
     @Synchronized
     fun start(role: String) {
@@ -37,6 +40,26 @@ internal class SessionReport {
         engineAcknowledgements = 0
         sendFailures = 0
         lastSendFailure = null
+        cardSent = false
+        cardReceived = false
+        ring = "none"
+    }
+
+    /** This phone's doorbell went to the other phone inside the chat (from 1.1.0). */
+    @Synchronized
+    fun cardSent() {
+        cardSent = true
+    }
+
+    @Synchronized
+    fun cardReceived() {
+        cardReceived = true
+    }
+
+    /** How ringing a remembered phone went (calls only). */
+    @Synchronized
+    fun rang(result: String) {
+        ring = result
     }
 
     /** How the chat travelled: the relay's timings and how it ended, or the direct Wi-Fi link. */
@@ -114,6 +137,8 @@ internal class SessionReport {
         "Received: ${receivedCounts.describe()}",
         "Engine acknowledgements: $engineAcknowledgements; refused payloads: $refused; " +
             "send failures: $sendFailures" + (lastSendFailure?.let { " (last: $it)" } ?: ""),
+        "Doorbell cards: sent ${if (cardSent) "yes" else "no"}, received ${if (cardReceived) "yes" else "no"}; " +
+            "ring: $ring",
     )
 
     private class Counts {

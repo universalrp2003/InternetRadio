@@ -36,10 +36,12 @@ internal fun LockScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Icon(Icons.Outlined.Lock, contentDescription = null, tint = Accent, modifier = Modifier.size(44.dp))
-            Text("Secret Message is locked", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+            Text(t("Secret Message is locked"), color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Unlock with your fingerprint, face or screen-lock PIN. Messages stay hidden while locked " +
-                    "and their timers keep running.",
+                t(
+                    "Unlock with your fingerprint, face or screen-lock PIN. Messages stay hidden while locked " +
+                        "and their timers keep running.",
+                ),
                 color = Muted,
                 fontSize = 13.sp,
                 lineHeight = 18.sp,
@@ -48,7 +50,7 @@ internal fun LockScreen(
             if (message != null) {
                 Text(message, color = Warm, fontSize = 12.sp, textAlign = TextAlign.Center)
             }
-            Button(onClick = onUnlock) { Text("Unlock") }
+            Button(onClick = onUnlock) { Text(t("Unlock")) }
         }
     }
 }

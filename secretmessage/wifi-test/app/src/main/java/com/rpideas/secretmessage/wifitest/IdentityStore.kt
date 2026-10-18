@@ -49,6 +49,11 @@ internal class IdentityStore(context: Context) {
         prefs.edit().remove(PREF_PEER_PINS).apply()
     }
 
+    /** Forgets one remembered phone's key (from the contact list). */
+    fun forgetPhone(deviceId: String) {
+        prefs.edit().putString(PREF_PEER_PINS, PeerPins.forget(pins(), deviceId)).apply()
+    }
+
     fun summary(): String {
         val deviceId = prefs.getString(PREF_DEVICE_ID, null)
         val remembered = PeerPins.count(pins())

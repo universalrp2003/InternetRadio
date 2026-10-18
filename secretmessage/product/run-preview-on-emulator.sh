@@ -287,13 +287,15 @@ tap text "Back to chat"
 
 STEP="large drawing pads"
 tap text "Draw pad"
-# The pad controls must fit on a Pixel 2-sized screen (an earlier layout pushed them off-screen).
+# Owner request for 1.1.0: the pad opens in Picture mode. The pad controls must fit on a Pixel
+# 2-sized screen (an earlier layout pushed them off-screen).
+wait_for text "Send picture"
+wait_for text "Undo"
+check_large_pad "Picture drawing pad" "Send picture"
+tap text "Letter"
 wait_for text "+ Insert letter"
 wait_for content-desc "Medium letter size"
-wait_for text "Undo"
 check_large_pad "Letter drawing pad" "+ Insert letter"
-tap text "Picture"
-check_large_pad "Picture drawing pad" "Send picture"
 tap text "English keyboard"
 wait_for text "?123"
 if (( $(date +%s) - sent_at < 25 )); then

@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -102,7 +101,7 @@ internal fun CustomInputDeck(
     var deckMode by remember { mutableStateOf(InputDeckMode.ENGLISH_KEYBOARD) }
     var isShifted by remember { mutableStateOf(false) }
     var isSymbolLayer by remember { mutableStateOf(false) }
-    var drawSubMode by remember { mutableStateOf(DrawingPadSubMode.INLINE_LETTER) }
+    var drawSubMode by remember { mutableStateOf(DrawingPadSubMode.FULL_PICTURE) }
     var lineWidthDp by remember { mutableFloatStateOf(DEFAULT_LINE_WIDTH_DP) }
     var letterSizePreset by remember { mutableStateOf(DrawnLetterSizePreset.MEDIUM) }
     val completedStrokes = remember { mutableStateListOf<VectorStroke>() }
@@ -129,7 +128,7 @@ internal fun CustomInputDeck(
             ) {
                 if (composerSegments.isEmpty()) {
                     Text(
-                        text = "Type with the built-in English keyboard or draw letters in any language",
+                        text = t("Type with the built-in English keyboard or draw letters in any language"),
                         color = Muted,
                         fontSize = 13.sp,
                     )
@@ -159,7 +158,7 @@ internal fun CustomInputDeck(
                 colors = ButtonDefaults.buttonColors(containerColor = SendGreen, contentColor = Color.White),
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
             ) {
-                Text("Send", fontWeight = FontWeight.Bold)
+                Text(t("Send"), fontWeight = FontWeight.Bold)
             }
         }
 
@@ -192,32 +191,46 @@ internal fun CustomInputDeck(
             val pointsUsed = PayloadValidator.pointCount(completedStrokes)
             val acceptsStrokes = completedStrokes.size < strokeLimit && pointsUsed < pointLimit
 
+            // Owner request for 1.1.0: the pad stays as large as before, the controls around it are
+            // smaller (compact pills instead of full-size buttons and chips).
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DeckButton(
-                    label = "English keyboard",
+                    label = t("English keyboard"),
                     background = KeyBorder,
                     onClick = { deckMode = InputDeckMode.ENGLISH_KEYBOARD },
                 )
-                FilterChip(
-                    selected = drawSubMode == DrawingPadSubMode.INLINE_LETTER,
-                    onClick = {
-                        if (drawSubMode != DrawingPadSubMode.INLINE_LETTER) completedStrokes.clear()
-                        drawSubMode = DrawingPadSubMode.INLINE_LETTER
-                    },
-                    label = { Text("Letter", fontSize = 12.sp) },
-                )
-                FilterChip(
+                DeckToggle(
+                    label = t("Picture"),
                     selected = drawSubMode == DrawingPadSubMode.FULL_PICTURE,
                     onClick = {
                         if (drawSubMode != DrawingPadSubMode.FULL_PICTURE) completedStrokes.clear()
                         drawSubMode = DrawingPadSubMode.FULL_PICTURE
                     },
-                    label = { Text("Picture", fontSize = 12.sp) },
                 )
+                DeckToggle(
+                    label = t("Letter"),
+                    selected = drawSubMode == DrawingPadSubMode.INLINE_LETTER,
+                    onClick = {
+                        if (drawSubMode != DrawingPadSubMode.INLINE_LETTER) completedStrokes.clear()
+                        drawSubMode = DrawingPadSubMode.INLINE_LETTER
+                    },
+                )
+                Spacer(Modifier.weight(1f))
+                if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
+                    DrawnLetterSizePreset.entries.forEach { preset ->
+                        val sizeDescription = t("{0} letter size", t(preset.label))
+                        DeckToggle(
+                            label = preset.label.take(1),
+                            selected = letterSizePreset == preset,
+                            onClick = { letterSizePreset = preset },
+                            modifier = Modifier.semantics { contentDescription = sizeDescription },
+                        )
+                    }
+                }
             }
 
             Row(
@@ -225,29 +238,19 @@ internal fun CustomInputDeck(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Line ${lineWidthDp.toInt()}",
+                    text = t("Line {0}", lineWidthDp.toInt()),
                     color = Muted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.width(52.dp),
+                    fontSize = 11.sp,
+                    modifier = Modifier.width(56.dp),
                 )
                 Slider(
                     value = lineWidthDp,
                     onValueChange = { lineWidthDp = it },
                     valueRange = 2f..18f,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(30.dp),
                 )
-                if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
-                    DrawnLetterSizePreset.entries.forEach { preset ->
-                        FilterChip(
-                            selected = letterSizePreset == preset,
-                            onClick = { letterSizePreset = preset },
-                            label = { Text(preset.label.take(1), fontSize = 12.sp) },
-                            modifier = Modifier
-                                .padding(start = 4.dp)
-                                .semantics { contentDescription = "${preset.label} letter size" },
-                        )
-                    }
-                }
             }
 
             // The pad takes the room left between the control rows, up to [padSide]. The rows are
@@ -279,15 +282,15 @@ internal fun CustomInputDeck(
                             .background(CanvasBackground)
                             .border(1.dp, StrokeInk, RoundedCornerShape(12.dp))
                             .semantics {
-                                contentDescription = if (isLetterPad) "Letter drawing pad" else "Picture drawing pad"
+                                contentDescription = if (isLetterPad) t("Letter drawing pad") else t("Picture drawing pad")
                             },
                     )
                     // The hint sits inside the pad (it does not take touches) until the first stroke.
                     val padHint = when {
-                        !acceptsStrokes -> "Drawing limit reached: insert, send, undo or clear."
+                        !acceptsStrokes -> t("Drawing limit reached: insert, send, undo or clear.")
                         completedStrokes.isNotEmpty() -> null
-                        isLetterPad -> "Draw a letter or word in any language, then insert it."
-                        else -> "Draw a picture; it is sent on its own."
+                        isLetterPad -> t("Draw a letter or word in any language, then insert it.")
+                        else -> t("Draw a picture; it is sent on its own.")
                     }
                     if (padHint != null) {
                         Text(
@@ -305,20 +308,20 @@ internal fun CustomInputDeck(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(5.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 DeckButton(
-                    label = "Undo",
+                    label = t("Undo"),
                     background = ToolGrey,
                     onClick = { if (completedStrokes.isNotEmpty()) completedStrokes.removeAt(completedStrokes.lastIndex) },
                 )
-                DeckButton(label = "Clear", background = ToolGrey, onClick = { completedStrokes.clear() })
-                DeckButton(label = "⌫ Del", background = KeyDelete, onClick = onBackspace)
+                DeckButton(label = t("Clear"), background = ToolGrey, onClick = { completedStrokes.clear() })
+                DeckButton(label = t("⌫ Del"), background = KeyDelete, onClick = onBackspace)
                 Spacer(Modifier.weight(1f))
                 if (drawSubMode == DrawingPadSubMode.INLINE_LETTER) {
                     DeckButton(
-                        label = "+ Insert letter",
+                        label = t("+ Insert letter"),
                         background = InsertBlue,
                         bold = true,
                         enabled = completedStrokes.isNotEmpty(),
@@ -331,7 +334,7 @@ internal fun CustomInputDeck(
                     )
                 } else {
                     DeckButton(
-                        label = "Send picture",
+                        label = t("Send picture"),
                         background = SendGreen,
                         bold = true,
                         enabled = completedStrokes.isNotEmpty(),
@@ -353,7 +356,7 @@ internal fun InlineGlyph(glyph: InlineSegment.DrawnGlyph, modifier: Modifier = M
     VectorStrokeThumbnail(
         strokes = glyph.strokes,
         modifier = modifier
-            .semantics { contentDescription = "Drawn letter" }
+            .semantics { contentDescription = t("Drawn letter") }
             .size(glyph.displayHeightDp.dp)
             .background(GlyphBackground, RoundedCornerShape(4.dp))
             .border(0.5.dp, StrokeInk, RoundedCornerShape(4.dp))
@@ -431,7 +434,7 @@ private fun EnglishKeyboardLayout(
                 onClick = onToggleSymbols,
             )
             KeyButton(
-                label = "Draw pad",
+                label = t("Draw pad"),
                 modifier = Modifier.weight(1.9f),
                 background = DrawPurple,
                 onClick = onSwitchToDrawPad,
@@ -484,12 +487,49 @@ private fun DeckButton(
     bold: Boolean = false,
     enabled: Boolean = true,
 ) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        colors = ButtonDefaults.buttonColors(containerColor = background, contentColor = Color.White),
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+    Box(
+        modifier = Modifier
+            .height(30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .background(if (enabled) background else background.copy(alpha = 0.4f))
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(label, fontSize = 12.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal, maxLines = 1)
+        Text(
+            text = label,
+            color = if (enabled) Color.White else Color.White.copy(alpha = 0.6f),
+            fontSize = 11.sp,
+            fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
+    }
+}
+
+/** A compact on/off pill for the pad mode and letter size (smaller than a Material chip). */
+@Composable
+private fun DeckToggle(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .height(28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(if (selected) InsertBlue else Color.Transparent)
+            .border(1.dp, if (selected) InsertBlue else KeyBorder, RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color.White else Ink,
+            fontSize = 11.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1,
+        )
     }
 }

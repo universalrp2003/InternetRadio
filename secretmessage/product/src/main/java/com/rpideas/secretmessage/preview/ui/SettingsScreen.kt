@@ -53,6 +53,7 @@ internal fun SettingsScreen(
     onAppLockChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     wording: SettingsWording = SettingsWording.Preview,
+    extraContent: (@Composable () -> Unit)? = null,
 ) {
     BackHandler(onBack = onBack)
     var sliderSeconds by remember(settings.viewSeconds) { mutableFloatStateOf(settings.viewSeconds.toFloat()) }
@@ -69,11 +70,11 @@ internal fun SettingsScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(wording.title, color = Ink, fontSize = 20.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = onBack) { Text("Back to chat") }
+            TextButton(onClick = onBack) { Text(t("Back to chat")) }
         }
 
-        SettingsSection(title = "Recipient view timer") {
-            Text("$shownSeconds seconds", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        SettingsSection(title = t("Recipient view timer")) {
+            Text(t("{0} seconds", shownSeconds), color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             Slider(
                 value = sliderSeconds,
                 onValueChange = { sliderSeconds = it },
@@ -86,7 +87,7 @@ internal fun SettingsScreen(
             SettingsNote(wording.timerNote)
         }
 
-        SettingsSection(title = "Notification tone") {
+        SettingsSection(title = t("Notification tone")) {
             BuiltInNotificationSound.entries.forEach { sound ->
                 Row(
                     modifier = Modifier
@@ -97,22 +98,22 @@ internal fun SettingsScreen(
                     RadioButton(selected = settings.toneId == sound.id, onClick = { onSelectTone(sound) })
                     Column(modifier = Modifier.weight(1f)) {
                         Text(sound.displayName, color = Ink, fontSize = 14.sp)
-                        Text(sound.subtitle, color = Muted, fontSize = 11.sp)
+                        Text(t(sound.subtitle), color = Muted, fontSize = 11.sp)
                     }
                     IconButton(onClick = { onPreviewTone(sound) }) {
-                        Icon(Icons.Outlined.PlayArrow, contentDescription = "Play ${sound.displayName}", tint = Accent)
+                        Icon(Icons.Outlined.PlayArrow, contentDescription = t("Play {0}", sound.displayName), tint = Accent)
                     }
                 }
             }
             SettingsNote(wording.toneNote)
         }
 
-        SettingsSection(title = "App lock") {
+        SettingsSection(title = t("App lock")) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Require unlock to open", color = Ink, fontSize = 14.sp)
+                    Text(t("Require unlock to open"), color = Ink, fontSize = 14.sp)
                     Text(
-                        "Fingerprint, face or this phone's screen-lock PIN, pattern or password.",
+                        t("Fingerprint, face or this phone's screen-lock PIN, pattern or password."),
                         color = Muted,
                         fontSize = 11.sp,
                     )
@@ -123,14 +124,18 @@ internal fun SettingsScreen(
                 Text(appLockMessage, color = Warm, fontSize = 12.sp)
             }
             SettingsNote(
-                "The lock is local to this phone and hides the chat when you return to the app. " +
-                    "Biometric data stays with Android and is never sent anywhere.",
+                t(
+                    "The lock is local to this phone and hides the chat when you return to the app. " +
+                        "Biometric data stays with Android and is never sent anywhere.",
+                ),
             )
         }
 
         SettingsSection(title = wording.aboutTitle) {
             SettingsNote(wording.about(versionLabel))
         }
+        // The published app adds its own sections (language, contacts, guide, updates) here.
+        extraContent?.invoke()
         Spacer(Modifier.height(12.dp))
     }
 }

@@ -8,14 +8,28 @@
         apps (owner decision, 17 October 2026); its notification never shows names or messages.
         Android 14+ requires CHANGE_NETWORK_STATE for that service type; the app changes no network
         settings. POST_NOTIFICATIONS lets the service's notification appear (Android 13+).
+
+        From 1.1.0 (owner requests): the same service keeps the phone "ready for chats" from
+        remembered phones without Google services. ACCESS_NETWORK_STATE reconnects its doorbell when
+        the network changes; RECEIVE_BOOT_COMPLETED starts it again after a restart; WAKE_LOCK keeps
+        the CPU awake for a few seconds while the keep-alive alarm reconnects;
+        REQUEST_IGNORE_BATTERY_OPTIMIZATIONS shows Android's battery question only when the person
+        taps "Allow background use" in Settings. REQUEST_INSTALL_PACKAGES lets the verified updater
+        in About hand a checked APK to Android's installer, which still asks the person.
     -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission
+        android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+        tools:ignore="BatteryLife" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <!-- Never gain these through a library. -->
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
     <uses-permission
         android:name="android.permission.CAMERA"
@@ -67,5 +81,27 @@
             android:name="com.rpideas.secretmessage.wifitest.ChatConnectionService"
             android:exported="false"
             android:foregroundServiceType="connectedDevice" />
+        <!-- The system sends these broadcasts; other apps cannot reach the receivers. -->
+        <receiver
+            android:name="com.rpideas.secretmessage.wifitest.ReadyStartReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+        <receiver
+            android:name="com.rpideas.secretmessage.wifitest.KeepAliveReceiver"
+            android:exported="false" />
+        <!-- Verified update APKs are shared with Android's installer from the app's cache only. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updates.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/app_update_paths" />
+        </provider>
     </application>
 </manifest>

@@ -5,12 +5,16 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -31,11 +35,15 @@ import kotlin.concurrent.thread
  */
 class WifiTestActivity : FragmentActivity(), ConnectActions {
     private lateinit var session: LanChatSession
+    private lateinit var contactBook: ContactBook
     private lateinit var chatViewModel: ChatViewModel
     private lateinit var appLock: AppLockController
     private var pendingInvite by mutableStateOf<String?>(null)
     private var notice by mutableStateOf<String?>(null)
     private var engineInfo by mutableStateOf("")
+    private var settingsMessage by mutableStateOf<String?>(null)
+    private var readyEnabled by mutableStateOf(true)
+    private var resumeCount by mutableIntStateOf(0)
     private var askedForNotifications = false
     private val notificationPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -46,7 +54,10 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         super.onCreate(savedInstanceState)
         // Best-effort screenshot deterrent only, as in the product; it cannot prevent every capture path.
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        Tr.init(this)
         session = WifiChat.session(this)
+        contactBook = Contacts.book(this)
+        readyEnabled = ReadyMode.enabled(this)
         val factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
@@ -60,19 +71,28 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             ?: runCatching { NativeBridge.nativeEngineInfo() }
                 .getOrElse { "The MLS engine did not answer (${it.javaClass.simpleName})." }
         acceptInvite(intent)
+        // A configuration change re-creates the activity with the same intent: answer only once.
+        if (savedInstanceState == null) acceptRing(intent)
+        // The app is on screen, so Android allows starting ready mode now.
+        ChatConnectionService.ensureReady(this)
         setContent {
             WifiTestApp(
                 viewModel = chatViewModel,
                 session = session,
+                contactBook = contactBook,
                 appLock = appLock,
                 versionLabel = BuildConfig.VERSION_NAME,
                 engineInfo = engineInfo,
                 pendingInvite = pendingInvite,
                 notice = notice,
+                settingsMessage = settingsMessage,
+                readyEnabled = readyEnabled,
+                resumeCount = resumeCount,
                 actions = this,
                 onUnlockRequest = ::requestUnlock,
                 onAppLockToggle = ::toggleAppLock,
                 onLeaveChatOpen = { moveTaskToBack(true) },
+                onSettingsClosed = { settingsMessage = null },
             )
         }
     }
@@ -81,6 +101,7 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         super.onNewIntent(intent)
         setIntent(intent)
         acceptInvite(intent)
+        acceptRing(intent)
     }
 
     override fun onStart() {
@@ -90,6 +111,8 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
 
     override fun onResume() {
         super.onResume()
+        resumeCount++
+        contactBook.refresh()
         chatViewModel.setForeground(true)
         if (!appLock.onResume(chatViewModel.settings.value.appLockEnabled)) {
             turnOffUnavailableLock()
@@ -150,19 +173,67 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
     override fun copyReport() {
         val clipboard = getSystemService(ClipboardManager::class.java) ?: return
         clipboard.setPrimaryClip(ClipData.newPlainText("Secret Message connection report", buildReport()))
-        notice = "Connection report copied. It holds counts only, no messages."
+        settingsMessage = "Connection report copied. It holds counts only, no messages."
     }
 
     override fun resetKey() {
-        notice = "Creating a new key…"
+        settingsMessage = "Creating a new key…"
         thread(name = "secretmessage-wifi-reset-key") {
             val message = session.resetKey()
-            runOnUiThread { notice = message }
+            runOnUiThread { settingsMessage = message }
         }
     }
 
     override fun forgetPhones() {
-        notice = session.forgetPhones()
+        settingsMessage = session.forgetPhones()
+    }
+
+    override fun callContact(deviceId: String) {
+        val contact = contactBook.find(deviceId) ?: return
+        askForNotificationsOnce()
+        notice = session.callContact(contact)
+    }
+
+    override fun renameContact(deviceId: String, name: String) {
+        contactBook.rename(deviceId, name)
+    }
+
+    override fun forgetContact(deviceId: String) {
+        if (session.busy()) {
+            notice = "Wait until the chat has ended."
+            return
+        }
+        contactBook.forget(deviceId)
+        ChatConnectionService.ensureReady(this)
+        notice = "Phone forgotten."
+    }
+
+    override fun answerRing() {
+        val ring = Rings.take(this, null)
+        notice = if (ring == null) RING_EXPIRED else session.answerRing(ring)
+    }
+
+    override fun dismissRing() {
+        Rings.dismiss(this)
+    }
+
+    override fun setReady(enabled: Boolean) {
+        readyEnabled = enabled
+        if (enabled) askForNotificationsOnce()
+        ReadyMode.setEnabled(this, enabled)
+    }
+
+    override fun openBatterySettings() {
+        val power = getSystemService(PowerManager::class.java)
+        val request = if (power?.isIgnoringBatteryOptimizations(packageName) == true) {
+            Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+        } else {
+            // Asked only when the person taps the button in Settings.
+            Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:$packageName"))
+        }
+        val opened = runCatching { startActivity(request) }.isSuccess ||
+            runCatching { startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName"))) }.isSuccess
+        if (!opened) settingsMessage = "Android did not open its battery settings. Open Settings > Apps > Secret Message > Battery."
     }
 
     private fun join(inviteText: String) {
@@ -176,6 +247,13 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             pendingInvite = data.toString()
             notice = "Invite received. Tap Join this chat."
         }
+    }
+
+    /** Answers the chat request that the person tapped in the notification. */
+    private fun acceptRing(intent: Intent?) {
+        if (intent?.action != RingNotifier.ACTION_ANSWER) return
+        val ring = Rings.take(this, intent.getStringExtra(RingNotifier.EXTRA_RING_ID))
+        notice = if (ring == null) RING_EXPIRED else session.answerRing(ring)
     }
 
     private fun clipboardText(): String? {
@@ -206,6 +284,17 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         } else {
             "not allowed (the connection service runs without a visible notification)"
         }
+        val contacts = contactBook.contacts.value
+        val battery = if (getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(packageName) == true) {
+            "not restricted"
+        } else {
+            "optimized (Android may delay chat requests)"
+        }
+        val ready = when {
+            !ReadyMode.enabled(this) -> "off"
+            !ReadyMode.wanted(this) -> "on, waiting for a remembered phone with a doorbell"
+            else -> "on, doorbell ${Doorbell.link.value.name.lowercase()}"
+        }
         val lines = listOf(
             "Secret Message report: ${BuildConfig.VERSION_NAME}",
             "Device: ${Build.MANUFACTURER} ${Build.MODEL}",
@@ -214,6 +303,10 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             "Engine: $engineInfo",
         ) + session.report.lines(open) + listOf(
             "This phone: ${session.identity.summary()}",
+            "Remembered phones: ${contacts.size} (with a doorbell: ${contacts.count { it.card != null }})",
+            "Ready for chats: $ready; connects ${Doorbell.connects}, chat requests received ${Doorbell.ringsReceived}, " +
+                "refused ${Doorbell.ringsDropped}" + Doorbell.lastProblem.takeIf { it.isNotEmpty() }?.let { "; last problem: $it" }.orEmpty(),
+            "Battery: $battery",
             "Notifications: $notifications",
             "Not independently security-reviewed. Message text and drawings are not included.",
         )
@@ -236,6 +329,10 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
         }
         chatViewModel.setAppLockEnabled(true)
         return null
+    }
+
+    private companion object {
+        const val RING_EXPIRED = "That chat request has expired. Ask the other phone to call again."
     }
 
     private fun turnOffUnavailableLock() {

@@ -121,13 +121,18 @@ PY
   fi
   permissions="$(grep -oE "uses-permission: name='[^']+'" <<<"$badging" | sed "s/uses-permission: name='//; s/'$//" | sort -u)"
   expected_permissions="$(printf '%s\n' \
+    android.permission.ACCESS_NETWORK_STATE \
     android.permission.CHANGE_NETWORK_STATE \
     android.permission.FOREGROUND_SERVICE \
     android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE \
     android.permission.INTERNET \
     android.permission.POST_NOTIFICATIONS \
+    android.permission.RECEIVE_BOOT_COMPLETED \
+    android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS \
+    android.permission.REQUEST_INSTALL_PACKAGES \
     android.permission.USE_BIOMETRIC \
     android.permission.USE_FINGERPRINT \
+    android.permission.WAKE_LOCK \
     "$package.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" | sort -u)"
   if [[ "$permissions" != "$expected_permissions" ]]; then
     echo "Unexpected merged permissions in $apk." >&2
