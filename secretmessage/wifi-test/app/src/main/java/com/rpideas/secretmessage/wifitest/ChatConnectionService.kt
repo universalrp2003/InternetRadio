@@ -112,16 +112,19 @@ class ChatConnectionService : Service() {
         fun ensureReady(context: Context) {
             val app = context.applicationContext
             if (ReadyMode.wanted(app)) {
-                if (running) {
+                // Starting again also when it already runs (for a chat), so that the service asks
+                // Android to restart it in ready mode if Android ends the app.
+                val started = try {
+                    ContextCompat.startForegroundService(app, Intent(app, ChatConnectionService::class.java))
+                    true
+                } catch (refused: RuntimeException) {
+                    // Android does not allow it now (for example from the background); the
+                    // keep-alive alarm or the next app start tries again.
+                    false
+                }
+                if (!started && running) {
                     Doorbell.start(app)
                     if (chatText == null) notifyText(app, readyText())
-                } else {
-                    try {
-                        ContextCompat.startForegroundService(app, Intent(app, ChatConnectionService::class.java))
-                    } catch (refused: RuntimeException) {
-                        // Android does not allow it now (for example from the background); the
-                        // keep-alive alarm or the next app start tries again.
-                    }
                 }
             } else {
                 Doorbell.stop()
