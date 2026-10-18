@@ -189,6 +189,12 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
     }
 
     override fun callContact(deviceId: String) {
+        // Chat on a phone that is calling this phone answers that call instead of calling back.
+        val ringing = Rings.pending.value?.takeIf { !it.expired() && it.invite.contact.deviceId == deviceId }
+        if (ringing != null) {
+            answerRing()
+            return
+        }
         val contact = contactBook.find(deviceId) ?: return
         askForNotificationsOnce()
         notice = session.callContact(contact)
@@ -306,6 +312,8 @@ class WifiTestActivity : FragmentActivity(), ConnectActions {
             "Remembered phones: ${contacts.size} (with a doorbell: ${contacts.count { it.card != null }})",
             "Ready for chats: $ready; connects ${Doorbell.connects}, chat requests received ${Doorbell.ringsReceived}, " +
                 "refused ${Doorbell.ringsDropped}" + Doorbell.lastProblem.takeIf { it.isNotEmpty() }?.let { "; last problem: $it" }.orEmpty(),
+            "Chat requests: shown ${Rings.shownCount}, answered ${Rings.answeredCount}, both phones calling " +
+                "${Rings.bothCallingCount}, while busy ${Rings.busyCount}",
             "Battery: $battery",
             "Notifications: $notifications",
             "Not independently security-reviewed. Message text and drawings are not included.",

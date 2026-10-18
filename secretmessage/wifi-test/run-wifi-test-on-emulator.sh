@@ -209,7 +209,7 @@ STEP="install and launch"
 STEP="start screen in Tamil, then English"
 # From 1.1.0 the app starts in Tamil (owner request); the rest of this test uses English.
 wait_for text "உரையாடலைத் தொடங்கு அல்லது இணை" equals 40
-wait_for text "முழுமையாகக் குறியாக்கப்பட்டது"
+wait_for text "முழுக் குறியாக்கம்"
 tap text "English"
 wait_for text "Start or join a chat" equals 20
 wait_for text "End-to-end encrypted"

@@ -50,6 +50,8 @@ internal object TamilText {
             "நினைவில் உள்ள தொலைபேசியை அழைக்கிறது",
         "Calling a remembered phone." to
             "நினைவில் உள்ள தொலைபேசியை அழைக்கிறது.",
+        "Calling you now" to
+            "இப்போது உங்களை அழைக்கிறது",
         "Calling {0}…" to
             "{0}-ஐ அழைக்கிறது…",
         "Cancel" to
@@ -133,7 +135,7 @@ internal object TamilText {
         "End" to
             "முடி",
         "End-to-end encrypted" to
-            "முழுமையாகக் குறியாக்கப்பட்டது",
+            "முழுக் குறியாக்கம்",
         "Ending the chat on both phones…" to
             "இரண்டு தொலைபேசிகளிலும் உரையாடலை முடிக்கிறது…",
         "Engine: {0}" to
@@ -218,6 +220,8 @@ internal object TamilText {
             "Secret Message அழைப்பிதழ் கிடைக்கவில்லை. முழு secretmessage://chat இணைப்பையும் நகலெடுத்து மீண்டும் முயலுங்கள்.",
         "No active network was found. Connect to Wi-Fi first." to
             "செயலில் உள்ள இணைப்பு இல்லை. முதலில் Wi-Fi-உடன் இணையுங்கள்.",
+        "No answer. Try again later or send an invite." to
+            "பதில் இல்லை. பிறகு முயலுங்கள் அல்லது அழைப்பிதழ் அனுப்புங்கள்.",
         "No connection right now; trying again." to
             "இப்போது இணைப்பு இல்லை; மீண்டும் முயல்கிறது.",
         "No private Wi-Fi address was found. Connect both phones to the same Wi-Fi and turn off any VPN." to
@@ -382,6 +386,8 @@ internal object TamilText {
             "மற்ற தொலைபேசி இணைந்தது. பாதுகாப்பான அமர்வைத் தொடங்குகிறது…",
         "The other phone left the chat or lost its connection." to
             "மற்ற தொலைபேசி உரையாடலிலிருந்து வெளியேறியது அல்லது இணைப்பை இழந்தது.",
+        "The other phone stopped calling. Tap Chat to call it back." to
+            "மற்ற தொலைபேசி அழைப்பை நிறுத்திவிட்டது. திரும்ப அழைக்க “உரையாடு” என்பதைத் தொடவும்.",
         "The other phone was notified. Waiting for it to answer…" to
             "மற்ற தொலைபேசிக்கு அறிவிக்கப்பட்டது. அதன் பதிலுக்காகக் காத்திருக்கிறது…",
         "The relay closed the chat because the data broke its rules." to

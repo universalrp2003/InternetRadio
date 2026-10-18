@@ -95,6 +95,18 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
     /** Shown instead of the native result when this phone stopped a call itself. */
     @Volatile
     private var stopNote: String? = null
+
+    /** The remembered phone this phone is calling, while it waits for the answer. */
+    @Volatile
+    private var callingDevice: String? = null
+
+    /** True while this phone answers another phone's call. */
+    @Volatile
+    private var answering = false
+
+    /** A call to answer as soon as this phone's own waiting (its call or invite) has stopped. */
+    @Volatile
+    private var queuedAnswer: IncomingRing? = null
     private val contacts = Contacts.book(app)
     private val lock = Any()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -182,6 +194,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             ConnectionState.Hosting(invite, internet = true, link = RelayText.CONNECTING, calling = contact.label),
             "host, calling a remembered phone",
             "Calling a remembered phone",
+            calling = contact.deviceId,
         ) { identityText, pins ->
             link.run(HOST_WAIT_MILLIS, { stopRequested }) {
                 NativeBridge.nativeRunRelayHost(token, identityText, pins)
@@ -189,16 +202,41 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         }
     }
 
-    /** Answers a chat request from a remembered phone; returns a message if it could not start. */
-    fun answerRing(ring: IncomingRing): String? =
-        joinRelay(ring.invite.room, ring.invite.token, "guest, answering a remembered phone")
+    /**
+     * Answers a chat request from a remembered phone; returns a message if it could not start. If
+     * this phone is itself waiting (for its own call or invite), that waiting stops first and the
+     * answer follows at once (1.1.0 phone test: both phones had tapped Chat and waited for each other).
+     */
+    fun answerRing(ring: IncomingRing): String? {
+        synchronized(lock) {
+            val current = mutableConnection.value
+            if (current is ConnectionState.Hosting) {
+                if (current.link == RelayText.PAIRED) return BUSY_NOTE
+                queuedAnswer = ring
+                stopRequested = true
+                runCatching { NativeBridge.nativeCancelHostWait() }
+                mutableConnection.value = current.copy(stopping = true)
+                Rings.countAnswer()
+                return null
+            }
+            if (current !is ConnectionState.Idle) return BUSY_NOTE
+        }
+        return joinRelay(ring.invite.room, ring.invite.token, ANSWER_ROLE, answeringRing = true)
+            .also { if (it == null) Rings.countAnswer() }
+    }
 
-    private fun joinRelay(room: String, token: String, role: String): String? {
+    /** What to do with a call from [callerDevice] that just arrived (see [RingPolicy]). */
+    fun ringDecision(callerDevice: String): RingPolicy.Decision = synchronized(lock) {
+        RingPolicy.decide(mutableConnection.value, running.get(), callingDevice, callerDevice, identity.deviceId())
+    }
+
+    private fun joinRelay(room: String, token: String, role: String, answeringRing: Boolean = false): String? {
         val link = RelayLink(RelayLink.RELAY_URL, room, RelayLink.Role.GUEST, ::showLink)
         return begin(
             ConnectionState.Joining(internet = true, link = RelayText.CONNECTING),
             role,
             "Connecting to the other phone",
+            answeringRing = answeringRing,
         ) { identityText, pins ->
             link.run(GUEST_WAIT_MILLIS, { false }) {
                 NativeBridge.nativeRunRelayJoin(token, identityText, pins)
@@ -320,6 +358,8 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         first: ConnectionState,
         role: String,
         notice: String,
+        calling: String? = null,
+        answeringRing: Boolean = false,
         run: (identityText: String, pins: String) -> String,
     ): String? {
         NativeBridge.load()?.let { return it }
@@ -334,6 +374,8 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
         peerDevice = null
         pendingCard = null
         stopNote = null
+        callingDevice = calling
+        answering = answeringRing
         mutableConnection.value = first
         status.value = MlsSessionStatus.AWAITING_MLS_WELCOME_OR_KEYPACKAGE
         description.value = "$notice."
@@ -447,7 +489,7 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
     }
 
     private fun finish(result: String) {
-        synchronized(lock) {
+        val answer = synchronized(lock) {
             drainEvents()
             running.set(false)
             stopRequested = false
@@ -457,14 +499,32 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
                     ?.let { identity.remember(it) }
             }
             report.finished(SessionText.forReport(result, internet = via == VIA_INTERNET))
-            val note = stopNote
-            val shown = if (note != null && !result.startsWith("PASS")) note else SessionText.lastResult(result, report.chatSummary())
-            mutableConnection.value = ConnectionState.Idle(shown)
+            val next = queuedAnswer?.takeIf { !it.expired() }
+            queuedAnswer = null
+            mutableConnection.value = ConnectionState.Idle(if (next != null) null else shownResult(result))
             contacts.refresh()
             status.value = if (result.startsWith("FAIL")) MlsSessionStatus.ERROR else MlsSessionStatus.DISCONNECTED
             description.value = IDLE_DESCRIPTION
+            next
+        }
+        // This phone stopped its own waiting to answer a call: join the caller now.
+        if (answer != null) {
+            val problem = joinRelay(answer.invite.room, answer.invite.token, ANSWER_ROLE, answeringRing = true)
+            if (problem == null) return
+            synchronized(lock) { mutableConnection.value = ConnectionState.Idle(problem) }
         }
         ChatConnectionService.stop(app)
+    }
+
+    /** The line the start screen shows after a session, with wording for calls. */
+    private fun shownResult(result: String): String {
+        val note = stopNote
+        return when {
+            note != null && !result.startsWith("PASS") -> note
+            callingDevice != null && result.contains("Nobody joined") -> CALL_NO_ANSWER
+            answering && result.contains("no longer waiting") -> ANSWER_TOO_LATE
+            else -> SessionText.lastResult(result, report.chatSummary())
+        }
     }
 
     /**
@@ -509,6 +569,10 @@ internal class LanChatSession(context: Context) : SecretMessageMlsTransport {
             "Not reachable now: the other phone is offline or not ready for chats. Try again later or send an invite."
         const val RING_BUSY = "Too many calls to this phone. Wait a minute and try again."
         const val RING_FAILED = "Could not reach the relay to call the other phone. Check that this phone is online."
+        const val CALL_NO_ANSWER = "No answer. Try again later or send an invite."
+        const val ANSWER_TOO_LATE = "The other phone stopped calling. Tap Chat to call it back."
+        private const val BUSY_NOTE = "A chat is already starting or open on this phone."
+        private const val ANSWER_ROLE = "guest, answering a remembered phone"
     }
 }
 

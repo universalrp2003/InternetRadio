@@ -4,7 +4,7 @@ Secret Message 1.1.0 lets remembered phones call each other, adds contact names,
 
 ### What's new
 
-- **Call a remembered phone.** After one chat with an invite, the phone appears under **Remembered phones**. Tap **Chat**: the other phone gets a notification, "Someone you remember wants to chat", and the chat opens on both phones when it is tapped. A remembered phone whose key is unchanged connects without comparing the safety code again; a new phone or a changed key still needs the comparison.
+- **Call a remembered phone.** After one chat with an invite, the phone appears under **Remembered phones**. Tap **Chat**: the other phone gets a notification, "Someone you remember wants to chat", and the app asks too; the chat opens on both phones when it is answered. If both phones tap **Chat** at the same time, they connect by themselves. A remembered phone whose key is unchanged connects without comparing the safety code again; a new phone or a changed key still needs the comparison.
 - **Names and status.** Give each remembered phone a name (kept on this phone only, until you forget the phone or reset). A green dot shows a phone that is ready for chats now; grey means not reachable now.
 - **Ready for chats** (Settings, on by default). The app keeps a small encrypted "doorbell" connection to the relay, shown by a notification that says only "Secret Message" and "Ready for chats". It needs no Google services. For reliable chat requests, tap **Allow background use**; on Xiaomi, Redmi and POCO phones also turn on Autostart (see the guide).
 - **Tamil and English.** The app starts in Tamil; switch at the top of the start screen or in Settings. The chat keyboard stays English; drawn letters work in any language.
@@ -37,7 +37,7 @@ Secret Message 1.1.0: நினைவில் உள்ள தொலைபே�
 
 **சுயாதீனப் பாதுகாப்பு மதிப்பாய்வு செய்யப்படவில்லை.** வெளிப் பாதுகாப்பு நிபுணர் யாரும் இந்தச் செயலியை மதிப்பாய்வு செய்யவில்லை; mls-rs முழுமையான மூன்றாம் தரப்புத் தணிக்கை செய்யப்படவில்லை.
 
-- **நினைவில் உள்ள தொலைபேசியை அழைக்கலாம்.** அழைப்பிதழ் மூலம் ஒருமுறை உரையாடிய பிறகு, அந்தத் தொலைபேசி “நினைவில் உள்ள தொலைபேசிகள்” பட்டியலில் வரும். “உரையாடு” என்பதைத் தொட்டால் மற்ற தொலைபேசிக்கு அறிவிப்பு செல்லும்; அதைத் தொட்டதும் உரையாடல் திறக்கும். சாவி மாறாத தொலைபேசிக்குக் குறியீட்டை மீண்டும் ஒப்பிட வேண்டாம்; புதிய தொலைபேசிக்கும் சாவி மாறிய தொலைபேசிக்கும் ஒப்பீடு தேவை.
+- **நினைவில் உள்ள தொலைபேசியை அழைக்கலாம்.** அழைப்பிதழ் மூலம் ஒருமுறை உரையாடிய பிறகு, அந்தத் தொலைபேசி “நினைவில் உள்ள தொலைபேசிகள்” பட்டியலில் வரும். “உரையாடு” என்பதைத் தொட்டால் மற்ற தொலைபேசிக்கு அறிவிப்பு செல்லும்; அதை அல்லது “பதிலளி” என்பதைத் தொட்டதும் உரையாடல் திறக்கும். இரண்டு தொலைபேசிகளும் ஒரே நேரத்தில் அழைத்தால் தானாகவே இணையும். சாவி மாறாத தொலைபேசிக்குக் குறியீட்டை மீண்டும் ஒப்பிட வேண்டாம்; புதிய தொலைபேசிக்கும் சாவி மாறிய தொலைபேசிக்கும் ஒப்பீடு தேவை.
 - **பெயர்களும் நிலையும்.** ஒவ்வொரு தொலைபேசிக்கும் பெயர் வைக்கலாம். பச்சைப் புள்ளி: இப்போது தயார்; சாம்பல்: இப்போது தொடர்பு கொள்ள முடியாது.
 - **உரையாடலுக்குத் தயார்** (அமைப்புகள், இயல்பாக இயக்கத்தில்). Google சேவைகள் தேவையில்லை. “பின்னணியில் இயங்க அனுமதி” என்பதைத் தொடவும்; Xiaomi, Redmi, POCO தொலைபேசிகளில் Autostart-ஐயும் இயக்கவும்.
 - **தமிழும் ஆங்கிலமும்.** செயலி தமிழில் தொடங்கும். உரையாடல் விசைப்பலகை ஆங்கிலத்திலேயே இருக்கும்.

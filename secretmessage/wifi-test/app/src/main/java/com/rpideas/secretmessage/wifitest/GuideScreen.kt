@@ -51,8 +51,9 @@ private val ENGLISH_GUIDE = listOf(
         "only if every digit is the same on both phones.",
     "2. Call a remembered phone" to
         "After the first chat the phone appears under \"Remembered phones\". Tap its name to give it a name. Tap " +
-        "\"Chat\": the other phone gets a notification, \"Someone you remember wants to chat\". When it is tapped, " +
-        "the chat opens on both phones without comparing the code again, because the key is unchanged. A green dot " +
+        "\"Chat\": the other phone gets a notification, \"Someone you remember wants to chat\", and the app asks there " +
+        "too. Tap it or \"Answer\": the chat opens on both phones without comparing the code again, because the key " +
+        "is unchanged. If both phones tap Chat at the same time, they connect by themselves. A green dot " +
         "means the phone is ready now; grey means it is not reachable now. Both phones need Secret Message 1.1.0 " +
         "or newer and must have chatted once with it.",
     "3. Messages" to
@@ -83,8 +84,10 @@ private val TAMIL_GUIDE = listOf(
     "2. நினைவில் உள்ள தொலைபேசியை அழைக்க" to
         "முதல் உரையாடலுக்குப் பிறகு அந்தத் தொலைபேசி “நினைவில் உள்ள தொலைபேசிகள்” பட்டியலில் வரும். பெயர் வைக்க " +
         "அதன் பெயரைத் தொடவும். “உரையாடு” என்பதைத் தொட்டால், மற்ற தொலைபேசிக்கு “நீங்கள் நினைவில் வைத்த " +
-        "ஒருவர் உரையாட அழைக்கிறார்” என்ற அறிவிப்பு வரும். அதைத் தொட்டதும், சாவி மாறாததால் குறியீட்டை மீண்டும் " +
-        "ஒப்பிடாமலே இரண்டு தொலைபேசிகளிலும் உரையாடல் திறக்கும். பச்சைப் புள்ளி: இப்போது தயார். சாம்பல் புள்ளி: " +
+        "ஒருவர் உரையாட அழைக்கிறார்” என்ற அறிவிப்பு வரும்; செயலியிலும் கேட்கும். அதை அல்லது “பதிலளி” என்பதைத் " +
+        "தொட்டதும், சாவி மாறாததால் குறியீட்டை மீண்டும் ஒப்பிடாமலே இரண்டு தொலைபேசிகளிலும் உரையாடல் திறக்கும். " +
+        "இரண்டு தொலைபேசிகளும் ஒரே நேரத்தில் “உரையாடு” என்பதைத் தொட்டால், அவை தானாகவே இணையும். பச்சைப் புள்ளி: " +
+        "இப்போது தயார். சாம்பல் புள்ளி: " +
         "இப்போது தொடர்பு கொள்ள முடியாது. இரண்டு தொலைபேசிகளிலும் Secret Message 1.1.0 அல்லது புதிய பதிப்பு " +
         "இருக்க வேண்டும்; அதில் ஒருமுறை உரையாடியிருக்க வேண்டும்.",
     "3. செய்திகள்" to

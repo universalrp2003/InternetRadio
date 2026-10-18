@@ -41,6 +41,9 @@ internal class IdentityStore(context: Context) {
 
     fun pins(): String = prefs.getString(PREF_PEER_PINS, "") ?: ""
 
+    /** This install's device ID, or null before the first chat created it. */
+    fun deviceId(): String? = prefs.getString(PREF_DEVICE_ID, null)
+
     fun remember(pin: String) {
         prefs.edit().putString(PREF_PEER_PINS, PeerPins.remember(pins(), pin)).apply()
     }

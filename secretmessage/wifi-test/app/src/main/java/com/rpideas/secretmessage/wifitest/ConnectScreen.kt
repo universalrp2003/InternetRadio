@@ -113,7 +113,7 @@ internal fun ConnectScreen(
         when (state) {
             is ConnectionState.Idle -> {
                 IdleSection(state, pendingInvite, actions)
-                ContactsSection(contacts, presence, actions)
+                ContactsSection(contacts, presence, ring?.invite?.contact?.deviceId, actions)
                 StartSection(actions, hasContacts = contacts.isNotEmpty())
             }
             is ConnectionState.Hosting -> if (state.calling != null) CallingSection(state, actions) else HostingSection(state, actions)
@@ -201,14 +201,37 @@ private fun IdleSection(state: ConnectionState.Idle, pendingInvite: String?, act
     }
 }
 
+/** A remembered phone is calling: Answer, Ignore, or decide later (the banner and the list stay). */
 @Composable
-private fun ContactsSection(contacts: List<Contact>, presence: Map<String, Doorbell.Presence>, actions: ConnectActions) {
+internal fun IncomingRingDialog(ring: IncomingRing, onAnswer: () -> Unit, onIgnore: () -> Unit, onLater: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onLater,
+        title = { Text(tr("{0} wants to chat", ring.invite.contact.label)) },
+        text = { Text(tr("A remembered phone is calling. Answer within about 3 minutes.")) },
+        confirmButton = { Button(onClick = onAnswer) { Text(tr("Answer")) } },
+        dismissButton = { TextButton(onClick = onIgnore) { Text(tr("Ignore")) } },
+    )
+}
+
+@Composable
+private fun ContactsSection(
+    contacts: List<Contact>,
+    presence: Map<String, Doorbell.Presence>,
+    ringingDevice: String?,
+    actions: ConnectActions,
+) {
     if (contacts.isEmpty()) return
     var editing by remember { mutableStateOf<Contact?>(null) }
     Section {
         Title(tr("Remembered phones"))
         contacts.forEach { contact ->
-            ContactRow(contact, presence[contact.deviceId], actions, onEdit = { editing = contact })
+            ContactRow(
+                contact = contact,
+                presence = presence[contact.deviceId],
+                callingYou = contact.deviceId == ringingDevice,
+                actions = actions,
+                onEdit = { editing = contact },
+            )
         }
         Note(tr("Tap a name to rename it. Names stay on this phone only."))
     }
@@ -229,8 +252,15 @@ private fun ContactsSection(contacts: List<Contact>, presence: Map<String, Doorb
 }
 
 @Composable
-private fun ContactRow(contact: Contact, presence: Doorbell.Presence?, actions: ConnectActions, onEdit: () -> Unit) {
+private fun ContactRow(
+    contact: Contact,
+    presence: Doorbell.Presence?,
+    callingYou: Boolean,
+    actions: ConnectActions,
+    onEdit: () -> Unit,
+) {
     val (dot, status) = when {
+        callingYou -> Online to tr("Calling you now")
         contact.card == null -> Offline to tr("Chat once with an invite to call this phone")
         presence == Doorbell.Presence.ONLINE -> Online to tr("Online · ready for chats")
         presence == Doorbell.Presence.OFFLINE -> Offline to tr("Not reachable now")
@@ -261,11 +291,12 @@ private fun ContactRow(contact: Contact, presence: Doorbell.Presence?, actions: 
             }
             Text(status, color = Muted, fontSize = 11.sp, lineHeight = 14.sp)
         }
+        // While this phone calls you, the same button answers (the activity routes it to Answer).
         Button(
             onClick = { actions.callContact(contact.deviceId) },
-            enabled = contact.card != null,
+            enabled = contact.card != null || callingYou,
             modifier = Modifier.semantics { contentDescription = "Chat with ${contact.label}" },
-        ) { Text(tr("Chat")) }
+        ) { Text(if (callingYou) tr("Answer") else tr("Chat")) }
     }
 }
 

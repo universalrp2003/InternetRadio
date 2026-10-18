@@ -1,5 +1,6 @@
 package com.rpideas.secretmessage.wifitest
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +10,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -67,6 +69,17 @@ internal fun WifiTestApp(
     var lockMessage by remember { mutableStateOf<String?>(null) }
     var chatNotice by remember { mutableStateOf<String?>(null) }
     val presence = remember { mutableStateMapOf<String, Doorbell.Presence>() }
+
+    // A chat request is shown until it expires; this tick removes it from the screen on time.
+    var ringClock by remember { mutableIntStateOf(0) }
+    LaunchedEffect(ring?.id) {
+        val waiting = ring ?: return@LaunchedEffect
+        val left = Rings.ANSWER_WINDOW_MILLIS - (SystemClock.elapsedRealtime() - waiting.receivedAtElapsed)
+        if (left > 0) delay(left + 500)
+        ringClock++
+    }
+    val currentRing = ring?.takeIf { ringClock >= 0 && !it.expired() }
+    var laterRingId by remember { mutableStateOf<String?>(null) }
 
     // Keep the screen on while a chat starts or is open, as the LAN smoke test does.
     val view = LocalView.current
@@ -173,7 +186,7 @@ internal fun WifiTestApp(
                             state = connection,
                             contacts = contacts,
                             presence = presence,
-                            ring = ring?.takeIf { !it.expired() },
+                            ring = currentRing,
                             pendingInvite = pendingInvite,
                             notice = notice,
                             actions = actions,
@@ -186,6 +199,18 @@ internal fun WifiTestApp(
                             DisposableEffect(Unit) { onDispose { LaunchUpdateCheck.pending = false } }
                         }
                     }
+                }
+                // A remembered phone is calling: ask on top of the start screen or Settings, also
+                // while this phone waits for its own call or invite (answering stops that waiting).
+                // Not while locked, so the name appears only after unlocking.
+                val canAnswer = connection is ConnectionState.Idle || connection is ConnectionState.Hosting
+                if (currentRing != null && canAnswer && !appLock.locked && currentRing.id != laterRingId) {
+                    IncomingRingDialog(
+                        ring = currentRing,
+                        onAnswer = actions::answerRing,
+                        onIgnore = actions::dismissRing,
+                        onLater = { laterRingId = currentRing.id },
+                    )
                 }
             }
         }

@@ -34,15 +34,47 @@ internal object Rings {
     private val mutablePending = MutableStateFlow<IncomingRing?>(null)
     val pending: StateFlow<IncomingRing?> = mutablePending.asStateFlow()
 
+    /** Counts for the copied report (no names, no content). */
+    @Volatile
+    var shownCount = 0
+        private set
+
+    @Volatile
+    var answeredCount = 0
+        private set
+
+    @Volatile
+    var bothCallingCount = 0
+        private set
+
+    @Volatile
+    var busyCount = 0
+        private set
+
     /** Handles a ring from the relay; returns false if it was not a valid ring from a remembered phone. */
     fun received(context: Context, ring: ByteArray): Boolean {
         val invite = Contacts.book(context).openRing(ring, System.currentTimeMillis()) ?: return false
-        // One chat at a time: while a chat starts or is open, the caller just hears no answer.
-        if (WifiChat.session(context).busy()) return true
+        val session = WifiChat.session(context)
         val incoming = IncomingRing(IdentityStore.randomHex(8), invite, SystemClock.elapsedRealtime())
-        mutablePending.value = incoming
-        RingNotifier.show(context.applicationContext, incoming)
+        when (session.ringDecision(invite.contact.deviceId)) {
+            RingPolicy.Decision.SHOW -> {
+                shownCount++
+                mutablePending.value = incoming
+                RingNotifier.show(context.applicationContext, incoming)
+            }
+            RingPolicy.Decision.ANSWER_NOW -> {
+                bothCallingCount++
+                session.answerRing(incoming)
+            }
+            RingPolicy.Decision.KEEP_CALLING -> bothCallingCount++
+            // One chat at a time: while a chat starts or is open, the caller just hears no answer.
+            RingPolicy.Decision.BUSY -> busyCount++
+        }
         return true
+    }
+
+    fun countAnswer() {
+        answeredCount++
     }
 
     /** The waiting request with [id] (or any, if [id] is null) if it has not expired; it is then cleared. */
@@ -57,6 +89,41 @@ internal object Rings {
         mutablePending.value = null
         RingNotifier.cancel(context.applicationContext)
     }
+}
+
+/**
+ * What a phone does with a call that arrives, from its own state. In the 1.1.0 phone test both
+ * phones tapped Chat at about the same time, and each waited for the other while ignoring the
+ * other's call. Now the phone with the lower device ID joins the other's call and the other keeps
+ * waiting for it, so the two phones decide the same way without talking to each other.
+ */
+internal object RingPolicy {
+    enum class Decision {
+        /** Show the request: dialog, banner and notification. */
+        SHOW,
+
+        /** Both phones are calling each other and this one has the lower device ID: join the other's call. */
+        ANSWER_NOW,
+
+        /** Both phones are calling each other and this one has the higher device ID: the other phone joins. */
+        KEEP_CALLING,
+
+        /** A chat is starting or open: the caller hears no answer. */
+        BUSY,
+    }
+
+    fun decide(state: ConnectionState, running: Boolean, calling: String?, caller: String, own: String?): Decision =
+        when (state) {
+            is ConnectionState.Idle -> if (running) Decision.BUSY else Decision.SHOW
+            is ConnectionState.Hosting -> when {
+                // Someone already joined this phone's room; the chat is starting.
+                state.link == RelayText.PAIRED -> Decision.BUSY
+                state.stopping -> Decision.SHOW
+                calling == caller && own != null -> if (own < caller) Decision.ANSWER_NOW else Decision.KEEP_CALLING
+                else -> Decision.SHOW
+            }
+            else -> Decision.BUSY
+        }
 }
 
 internal object RingNotifier {
@@ -98,6 +165,7 @@ internal object RingNotifier {
             .setContentTitle("Secret Message")
             .setContentText(tr("Someone you remember wants to chat. Tap to answer."))
             .setContentIntent(answer)
+            .addAction(0, tr("Answer"), answer)
             .setAutoCancel(true)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
