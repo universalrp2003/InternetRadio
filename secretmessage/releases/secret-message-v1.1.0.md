@@ -29,7 +29,7 @@ As before, the relay sees both phones' IP addresses, when they connect and how m
 - Package `com.rpideas.secretmessage`, signed with the project's own release key; signing certificate SHA-256 `58e370e417cf6f33234689acd5bf379474f5a8c55f79181d9e892a321bc04f08`.
 - Permissions: Internet and network state; foreground service (connected device) with change-network-state, which Android requires for that service type; notifications; start after restart; keep awake briefly; ask to ignore battery optimization (only when you tap the button); install updates (Android still asks you); fingerprint or biometric for the optional app lock.
 
-Phone test: pending.
+The 1.1.0 test builds were tested between two phones on 18 October 2026: Xiaomi 2406ERN9CI (Android 16) and motorola moto g57 power (Android 17), on mobile data. The first test build exchanged the doorbells in an invite chat, then connected the remembered phones without the code comparison and delivered every call; but both phones had tapped **Chat** at once, and neither could answer the other. That was fixed, and the owner confirmed that calling and answering work correctly in the fixed build. This signed APK is a fresh build of that code; it passed the automated checks (23 unit tests, native build, signature and package checks, and an Android 15 emulator run through the live relay).
 
 ## தமிழ்
 
