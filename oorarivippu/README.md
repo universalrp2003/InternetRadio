@@ -55,6 +55,8 @@ When internet access is unavailable, GPS tracking may continue, but place-name, 
 - Long explanations are folded behind **விவரம் / Details**, and each language is chosen on one compact line.
 - About lists the new RP Ideas app **இரகசிய செய்தி (Secret Message)**.
 
+The owner asked to publish 1.1.0 as soon as the automatic checks pass. Oor test [run 39105368624](https://github.com/universalrp2003/InternetRadio/actions/runs/39105368624) passed on the 1.1.0 source: the bilingual UI and About-link check, the unit tests, Android lint and the debug build.
+
 ## Build and CI
 
 ```bash
