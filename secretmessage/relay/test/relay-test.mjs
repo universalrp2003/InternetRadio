@@ -3,7 +3,7 @@
 //   node test/relay-test.mjs wss://secretmessage-relay.<subdomain>.workers.dev
 // Every run uses fresh random rooms and sends only random test bytes.
 import assert from "node:assert/strict";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { WebSocket } from "ws";
 
 const base = (process.argv[2] ?? "").replace(/\/+$/, "");
@@ -17,17 +17,29 @@ const CLOSE_PARTNER_LEFT = 4001;
 const CLOSE_PROTOCOL = 4003;
 const CLOSE_TOO_BIG = 1009;
 
+const CLOSE_REPLACED = 4004;
+
 const newRoom = () => randomBytes(16).toString("hex");
 const roomUrl = (room, role) => `${base}/v1/rooms/${room}?role=${role}`;
 
+/** A fresh inbox as the app makes one: a random secret and the ID the relay derives from it. */
+function newInbox() {
+  const secret = randomBytes(32);
+  const id = createHash("sha256").update("secretmessage inbox id v1").update(secret).digest().subarray(0, 16).toString("hex");
+  return { id, secret: secret.toString("hex") };
+}
+const inboxUrl = (id) => `${base}/v1/inbox/${id}`;
+const ring = (id, body) => fetch(`${httpBase}/v1/inbox/${id}/ring`, { method: "POST", body });
+const presence = async (id) => (await (await fetch(`${httpBase}/v1/inbox/${id}/presence`)).text()).trim();
+
 /** One phone's WebSocket, collecting what it receives. */
 class Phone {
-  constructor(url) {
+  constructor(url, headers = {}) {
     this.texts = [];
     this.chunks = [];
     this.received = 0;
     this.waiters = new Set();
-    this.socket = new WebSocket(url, { handshakeTimeout: WAIT_MS });
+    this.socket = new WebSocket(url, { handshakeTimeout: WAIT_MS, headers });
     this.opened = new Promise((resolve, reject) => {
       this.socket.once("open", resolve);
       this.socket.once("unexpected-response", (_request, response) => {
@@ -103,8 +115,8 @@ function withTimeout(promise, what) {
   ]).finally(() => clearTimeout(timer));
 }
 
-async function refused(url) {
-  const phone = new Phone(url);
+async function refused(url, headers = {}) {
+  const phone = new Phone(url, headers);
   try {
     await phone.opened;
   } catch (error) {
@@ -199,6 +211,59 @@ const checks = [
     // (1009, too big), in which case the other phone hears that its partner left (4001).
     assert.ok([CLOSE_PROTOCOL, CLOSE_TOO_BIG].includes(hostClosed.code), `host: ${hostClosed.code}`);
     assert.ok([CLOSE_PROTOCOL, CLOSE_PARTNER_LEFT].includes(guestClosed.code), `guest: ${guestClosed.code}`);
+  }],
+  ["an inbox opens only with its own key", async () => {
+    const inbox = newInbox();
+    const other = newInbox();
+    assert.equal(await refused(inboxUrl(inbox.id)), 403);
+    assert.equal(await refused(inboxUrl(inbox.id), { "x-inbox-key": other.secret }), 403);
+    assert.equal(await refused(inboxUrl(inbox.id), { "x-inbox-key": inbox.secret.toUpperCase() }), 403);
+    assert.equal((await fetch(`${httpBase}/v1/inbox/${inbox.id}`)).status, 426);
+    assert.equal(await presence(inbox.id), "offline");
+  }],
+  ["a ring reaches the ready phone unchanged, and pings are answered", async () => {
+    const inbox = newInbox();
+    const owner = new Phone(inboxUrl(inbox.id), { "x-inbox-key": inbox.secret });
+    await owner.opened;
+    await owner.text("ready");
+    assert.equal(await presence(inbox.id), "online");
+    const sent = randomBytes(76);
+    const response = await ring(inbox.id, sent);
+    assert.equal(response.status, 200);
+    assert.ok((await owner.bytes(sent.length)).equals(sent), "the ring arrived unchanged");
+    owner.socket.send("ping");
+    await owner.text("pong");
+    owner.close();
+    await owner.closedWith();
+    assert.equal(await presence(inbox.id), "offline");
+    assert.equal((await ring(inbox.id, randomBytes(76))).status, 404);
+  }],
+  ["a newer connection replaces the older one", async () => {
+    const inbox = newInbox();
+    const first = new Phone(inboxUrl(inbox.id), { "x-inbox-key": inbox.secret });
+    await first.opened;
+    await first.text("ready");
+    const second = new Phone(inboxUrl(inbox.id), { "x-inbox-key": inbox.secret });
+    await second.opened;
+    await second.text("ready");
+    assert.equal((await first.closedWith()).code, CLOSE_REPLACED);
+    assert.equal(await presence(inbox.id), "online");
+    const sent = randomBytes(76);
+    assert.equal((await ring(inbox.id, sent)).status, 200);
+    assert.ok((await second.bytes(sent.length)).equals(sent), "the newer connection got the ring");
+    second.close();
+  }],
+  ["empty, oversized and repeated rings are refused", async () => {
+    const inbox = newInbox();
+    assert.equal((await ring(inbox.id, new Uint8Array(0))).status, 400);
+    assert.equal((await ring(inbox.id, randomBytes(1025))).status, 413);
+    assert.equal((await fetch(`${httpBase}/v1/inbox/${inbox.id}/ring`)).status, 405);
+    const statuses = [];
+    for (let index = 0; index < 11; index += 1) {
+      statuses.push((await ring(inbox.id, randomBytes(76))).status);
+    }
+    assert.deepEqual(statuses.slice(0, 10), Array(10).fill(404));
+    assert.equal(statuses[10], 429);
   }],
 ];
 

@@ -8,12 +8,28 @@
 //
 // One Durable Object per room holds the two WebSockets with the hibernation API, so an idle room
 // costs nothing. A room is single-use: when either phone leaves, the other is disconnected.
+//
+// From app 1.1.0 each phone that is "ready for chats" also keeps one WebSocket open to its own
+// inbox (one Durable Object per inbox, also hibernating). A remembered phone that wants to chat
+// posts a small ring there, encrypted with a key only the two phones share; the inbox passes it
+// to the open socket and keeps nothing. If nobody is listening, the caller hears "not reachable".
 import { DurableObject } from "cloudflare:workers";
 
 const PROTOCOL = "secretmessage-relay/1";
 
 /** Rooms are 16 random bytes from the host phone, as 32 lowercase hex digits. */
 const ROOM_PATH = /^\/v1\/rooms\/([0-9a-f]{32})$/;
+
+/** An inbox ID is SHA-256("secretmessage inbox id v1" ‖ secret), first 16 bytes, as hex. */
+const INBOX_PATH = /^\/v1\/inbox\/([0-9a-f]{32})(?:\/(ring|presence))?$/;
+const INBOX_SECRET = /^[0-9a-f]{64}$/;
+const INBOX_LABEL = "secretmessage inbox id v1";
+
+/** A ring is 76 bytes; anything over 1 KiB is refused. */
+const MAX_RING_BYTES = 1024;
+
+/** Rings per inbox per minute, so a leaked inbox ID cannot be used to flood a phone. */
+const RINGS_PER_MINUTE = 10;
 
 /** A host may wait this long for the other phone to join. */
 const HOST_WAIT_MS = 10 * 60 * 1000;
@@ -31,12 +47,17 @@ const MAX_MESSAGE_BYTES = 1024 * 1024;
 const CLOSE_PARTNER_LEFT = 4001;
 const CLOSE_TIME_LIMIT = 4002;
 const CLOSE_PROTOCOL = 4003;
+const CLOSE_REPLACED = 4004;
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === "/") {
       return plain(200, `${PROTOCOL}\n`);
+    }
+    const inbox = INBOX_PATH.exec(url.pathname);
+    if (inbox) {
+      return inboxRequest(request, env, inbox[1], inbox[2]);
     }
     const room = ROOM_PATH.exec(url.pathname)?.[1];
     if (!room) {
@@ -137,6 +158,124 @@ export class Room extends DurableObject {
         // Already closing.
       }
     }
+  }
+}
+
+/** Routes an inbox request: the owner's WebSocket, a ring, or a presence check. */
+async function inboxRequest(request, env, id, action) {
+  const inbox = env.INBOXES.getByName(id);
+  if (action === "ring") {
+    if (request.method !== "POST") {
+      return plain(405, "Use POST\n");
+    }
+    if (Number(request.headers.get("content-length") ?? "0") > MAX_RING_BYTES) {
+      return plain(413, "Ring too large\n");
+    }
+    const ring = await request.arrayBuffer();
+    if (ring.byteLength === 0) {
+      return plain(400, "Empty ring\n");
+    }
+    if (ring.byteLength > MAX_RING_BYTES) {
+      return plain(413, "Ring too large\n");
+    }
+    return inbox.fetch("https://inbox/ring", { method: "POST", body: ring });
+  }
+  if (action === "presence") {
+    if (request.method !== "GET") {
+      return plain(405, "Use GET\n");
+    }
+    return inbox.fetch("https://inbox/presence");
+  }
+  if (request.method !== "GET" || request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
+    return plain(426, "Expected a WebSocket upgrade\n");
+  }
+  const secret = request.headers.get("x-inbox-key") ?? "";
+  if (!INBOX_SECRET.test(secret) || (await inboxIdFor(secret)) !== id) {
+    return plain(403, "This key does not open this inbox\n");
+  }
+  return inbox.fetch(request);
+}
+
+async function inboxIdFor(secretHex) {
+  const label = new TextEncoder().encode(INBOX_LABEL);
+  const data = new Uint8Array(label.length + 32);
+  data.set(label);
+  for (let index = 0; index < 32; index += 1) {
+    data[label.length + index] = parseInt(secretHex.slice(index * 2, index * 2 + 2), 16);
+  }
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", data));
+  return Array.from(digest.slice(0, 16), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * One phone's doorbell. The phone keeps a WebSocket open here while it is ready for chats; a
+ * newer connection replaces an older one (4004). Rings are passed to the open socket unchanged
+ * and never stored. "ping" is answered with "pong" by the runtime without waking this object.
+ */
+export class Inbox extends DurableObject {
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair("ping", "pong"));
+    /** When recent rings arrived (memory only; reset whenever the object sleeps). */
+    this.recentRings = [];
+  }
+
+  async fetch(request) {
+    const path = new URL(request.url).pathname;
+    if (path === "/ring") {
+      return this.ring(await request.arrayBuffer());
+    }
+    if (path === "/presence") {
+      return plain(200, this.owner() ? "online\n" : "offline\n");
+    }
+    for (const older of this.ctx.getWebSockets("owner")) {
+      try {
+        older.close(CLOSE_REPLACED, "Replaced by a newer connection");
+      } catch {
+        // Already closing.
+      }
+    }
+    const [client, server] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(server, ["owner"]);
+    server.send("ready");
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  ring(bytes) {
+    const now = Date.now();
+    this.recentRings = this.recentRings.filter((at) => now - at < 60_000);
+    if (this.recentRings.length >= RINGS_PER_MINUTE) {
+      return plain(429, "Too many rings; try again in a minute\n");
+    }
+    this.recentRings.push(now);
+    const owner = this.owner();
+    if (!owner) {
+      return plain(404, "Not reachable\n");
+    }
+    owner.send(bytes);
+    return plain(200, "delivered\n");
+  }
+
+  /** The newest open owner socket, or null if the phone is not ready for chats now. */
+  owner() {
+    const open = this.ctx.getWebSockets("owner").filter((socket) => socket.readyState === WebSocket.OPEN);
+    return open.length > 0 ? open[open.length - 1] : null;
+  }
+
+  async webSocketMessage() {
+    // The phone sends only pings, which the runtime answers; anything else is ignored.
+  }
+
+  async webSocketClose(socket) {
+    try {
+      socket.close(1000, "Closed");
+    } catch {
+      // Already closed.
+    }
+  }
+
+  async webSocketError() {
+    // The phone reconnects by itself.
   }
 }
 
