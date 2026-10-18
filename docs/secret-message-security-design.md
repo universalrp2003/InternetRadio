@@ -180,6 +180,8 @@ After testing 1.0.0 on two phones the owner asked that remembered phones can sta
 - **Auto-confirm:** when the native session reports the other phone's key as KNOWN, the app answers the safety-code prompt itself; NEW and CHANGED keys still need both people. This removes the human check for remembered keys only; key continuity is the identity check.
 - **Presence:** `GET /v1/inbox/<id>/presence` tells anyone who knows an inbox ID whether that phone is ready now. Inbox IDs are shared only with remembered phones.
 - **Notifications:** the chat request says only “Someone you remember wants to chat” (public version “New chat request”); the caller's name appears inside the app. The room and token stay in the app process; the notification refers to the request by a random ID.
+- **Both phones calling:** in the owner's first two-phone test both phones tapped Chat at once and each dropped the other's call. Now the phone with the lower device ID joins the other's call (`RingPolicy`), and answering stops a phone's own waiting first.
+- **Release:** 1.1.0 was published on 18 October 2026 by [run 39101002517](https://github.com/universalrp2003/InternetRadio/actions/runs/39101002517) after the owner confirmed the fixed test build works: `Secret-Message-v1.1.0.apk`, 29,443,977 bytes, SHA-256 `cc9a69d0022e49c1f653291e033bca8de0e1c4e0477731df1741cc3ddfbc5e10`, the same bytes as the phone-tested build.
 - **Background:** the connectedDevice foreground service also holds the doorbell (notification “Ready for chats”), with a keep-alive alarm, a boot receiver and an optional battery-optimization exemption that the person grants in Android's own dialog.
 
 ### Candidate transport
