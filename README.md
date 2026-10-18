@@ -58,7 +58,7 @@ For the **non-shipping Secret Message preview only**, run `./gradlew :secretmess
 
 There are five active products: the four legacy batch apps listed above plus Oor Arivippu, which uses its own standalone stable release workflow. Secret Message remains a separate local-only development preview. Earlier app modules were retired from the active source tree; their already-published GitHub Releases and tags are retained as historical records and are not built by current CI.
 
-`RP-Android-Apps` is the primary updater source and `InternetRadio` is the verified fallback. The four legacy bridge clients check the new repository first and keep the old endpoint during the agreed migration grace period that began 14 October 2026; do not archive or rename `InternetRadio` until the migration checks are complete. Oor Arivippu 1.0.0 and 1.0.1 were published to both repositories separately and are not part of that four-app bridge batch. See [`docs/repository-migration.md`](docs/repository-migration.md).
+`RP-Android-Apps` is the primary updater source and `InternetRadio` is the verified fallback. The four legacy bridge clients check the new repository first and keep the old endpoint during the agreed migration grace period that began 14 October 2026; do not archive or rename `InternetRadio` until the migration checks are complete. On 18 October 2026 the owner decided to move the source and future development to `RP-Android-Apps`, keeping `InternetRadio` as the update backup; see [`docs/source-migration.md`](docs/source-migration.md). Oor Arivippu 1.0.0 and 1.0.1 were published to both repositories separately and are not part of that four-app bridge batch. See [`docs/repository-migration.md`](docs/repository-migration.md).
 
 ## Project documents
 

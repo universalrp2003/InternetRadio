@@ -48,6 +48,10 @@ The initial bridge batch was intentionally published on `InternetRadio` so alrea
 
 Bridge publication run [38501139771](https://github.com/universalrp2003/InternetRadio/actions/runs/38501139771) passed its build, unit/regression, package/version/signer, digest and Live Guard permission-delta checks. The owner confirmed on 14 October that all four bridge apps work and manual update checks finish without errors. This remains owner-reported feedback: the CI did not install hash-identified APK bytes on a phone, and no device model/OS or exact-build digest evidence was provided. Android's per-app **Install unknown apps** access and confirmation remain required for direct APK installs.
 
+## Source move to RP-Android-Apps (owner decision, 18 October 2026)
+
+The owner chose to move the code and future development to `RP-Android-Apps` now, while `InternetRadio` keeps serving as the update backup until the review below. The apps and `InternetRadio`'s releases do not change; Phases 3 and 4 below are unchanged. The import is done by a new Arena session on `RP-Android-Apps`, following [`source-migration.md`](source-migration.md) (secrets, import without tags, workflow changes, verification).
+
 ## Phase 3 — grace period (in progress)
 
 The one-to-two-month grace period starts **14 October 2026**, the owner's bridge-app confirmation date. Review no earlier than around **14 November**; plan a migration decision around **14 December 2026 or later** if any check remains incomplete. Extend the period if needed.
