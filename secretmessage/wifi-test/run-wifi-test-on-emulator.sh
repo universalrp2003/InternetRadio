@@ -260,9 +260,10 @@ wait_for text "1. Start a chat with a new phone" equals 15
 wait_for text "தமிழ்"
 "$ADB" shell input keyevent 4
 sleep 1
+# About lists the links first and the verified updater last (the helper only scrolls down).
+scroll_until text "Source code — InternetRadio"
 scroll_until text "Verified GitHub APK updates"
 scroll_until text "Check for updates"
-scroll_until text "Source code — InternetRadio"
 "$ADB" shell input keyevent 4
 sleep 1
 wait_for text "Start a chat"
