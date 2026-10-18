@@ -2,11 +2,11 @@
 
 **Owner decision, 18 October 2026:** move the code and future development to `universalrp2003/RP-Android-Apps` now, and keep `InternetRadio` as the update backup until the grace-period review (ask_user answer: “Move the code now; keep the backup until November”).
 
-**Status:** prepared in `InternetRadio`; the import itself is done by a new Arena session opened on `RP-Android-Apps` (an Arena session pushes only to its own branch).
+**Status:** prepared in `InternetRadio`. On 18 October 2026 the owner added the three secrets below to `RP-Android-Apps` (names checked from the owner's screenshot; the `InternetRadio` token is limited to that one repository with Contents read and write and expires on 15 February 2027). Next: the import, done by a new Arena session opened on `RP-Android-Apps` (an Arena session pushes only to its own branch).
 
 ## What changes and what does not
 
-- **Moves:** all source, workflows, docs, release notes and the committed (password-protected or already public) keystores, with full history, from the `InternetRadio` branch `arena/d4fb2344-internetradio`. That branch is 268 commits ahead of `InternetRadio`'s outdated `main` (`69c117e`); import the branch, not `main`. Import its latest commit (the one that added this document; the commit before it is `7d826d0`).
+- **Moves:** all source, workflows, docs, release notes and the committed (password-protected or already public) keystores, with full history, from the `InternetRadio` branch `arena/d4fb2344-internetradio`. That branch is 268 commits ahead of `InternetRadio`'s outdated `main` (`69c117e`); import the branch, not `main`. Import the branch's latest commit.
 - **Does not change for anyone using the apps:** all six apps (Live Guard, Ramesh Radio, PulseEQ, RP Vocal Remover Studio, Oor Arivippu, Secret Message) keep checking `RP-Android-Apps` first and `InternetRadio` second. `InternetRadio` stays public and unarchived with every release, tag and APK.
 - **Unchanged plan:** Phase 3 and Phase 4 of [`repository-migration.md`](repository-migration.md) still apply: review around 14 November 2026; only then, with the owner's confirmation, updater-only versions without the `InternetRadio` source, and archiving (never deleting) `InternetRadio`.
 
