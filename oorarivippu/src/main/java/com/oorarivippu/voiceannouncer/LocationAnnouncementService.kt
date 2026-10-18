@@ -122,6 +122,8 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
     // Track previously announced City/Village and Sub-Locality so we never repeat the same place
     private var lastAnnouncedCity: String = ""
     private var lastAnnouncedSubArea: String = ""
+    // Towns announced in the last minutes, so a town border does not repeat "A… B… A…".
+    private val recentCities = RecentPlaces()
     private var hasMadeInitialStartAnnouncement: Boolean = false
     private var reverseGeocodeJob: Job? = null
     private var lastGeocodedLocation: Location? = null
@@ -357,6 +359,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         AppPreferences.setLocationUpdateIntervalMillis(AdaptiveLocationPollingPolicy.HIGHWAY_INTERVAL_MS)
         lastAnnouncedCity = ""
         lastAnnouncedSubArea = ""
+        recentCities.clear()
         hasMadeInitialStartAnnouncement = false
         latestReceivedLocation = null
         lastGeocodedLocation = null
@@ -680,7 +683,17 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     hasEstablishedPlaceBaseline = true
                 }
 
-                val isNewCityOrVillage = !PlaceDataPolicy.samePlaceName(cityOrVillage, lastAnnouncedCity)
+                val nowElapsedMs = SystemClock.elapsedRealtime()
+                val differsFromLastCity = !PlaceDataPolicy.samePlaceName(cityOrVillage, lastAnnouncedCity)
+                // Near a town border the geocoder can alternate between two neighbouring towns:
+                // a town announced in the last few minutes is not announced again.
+                val backInRecentCity = differsFromLastCity &&
+                    recentCities.wasAnnouncedRecently(cityOrVillage, nowElapsedMs)
+                if (backInRecentCity) {
+                    lastAnnouncedCity = cityOrVillage
+                    lastAnnouncedSubArea = subArea
+                }
+                val isNewCityOrVillage = differsFromLastCity && !backInRecentCity
                 val isNewSubAreaInSameCity = !isNewCityOrVillage &&
                     subArea.isNotBlank() &&
                     !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage) &&
@@ -716,6 +729,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                     )
                     lastAnnouncedCity = cityOrVillage
                     lastAnnouncedSubArea = subArea
+                    recentCities.remember(cityOrVillage, nowElapsedMs)
                     logTitle = if (subArea.isNotBlank() &&
                         !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage)
                     ) "$cityOrVillage ($subArea)" else cityOrVillage
@@ -859,6 +873,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
         )
         lastAnnouncedCity = cityOrVillage
         lastAnnouncedSubArea = subArea
+        recentCities.remember(cityOrVillage, SystemClock.elapsedRealtime())
         lastAnnouncedDistrict = district
         lastAnnouncedHighwayLandmark = highwayLandmark
         hasEstablishedPlaceBaseline = true
@@ -936,7 +951,8 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
 
         // Extract Village / Town / City name reliably across rural and urban India
         val cityOrVillage = PlaceDataPolicy.cleanCityOrVillage(
-            listOf(address.locality, address.subAdminArea, address.adminArea)
+            // The state (adminArea) is never announced as a town.
+            listOf(address.locality, address.subAdminArea)
         )
 
         // Prefer a geocoder's named feature (e.g. a hospital or bus stand) to its road field.
@@ -1047,7 +1063,7 @@ class LocationAnnouncementService : Service(), TextToSpeech.OnInitListener {
                 if (voiceToUse != null) engine.voice = voiceToUse
                 if (requireOnDeviceVoice && engine.voice?.isNetworkConnectionRequired != false) continue
 
-                engine.setSpeechRate(0.95f)
+                engine.setSpeechRate(SpeechRatePolicy.androidRate(AppPreferences.state.value.speechRatePercent))
                 val voiceStatus = when {
                     languageCode != requestedLanguage -> TtsVoiceStatus.FALLBACK_LANGUAGE
                     !requireOnDeviceVoice && selectedVoiceName.isNotBlank() && selectedVoice == null ->

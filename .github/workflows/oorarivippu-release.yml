@@ -3,7 +3,7 @@ name: Oor Arivippu stable release
 # The push path is restricted to the authorized session branch. Build/release publication runs
 # only when a commit explicitly contains [publish-oorarivippu]; ordinary pushes cannot publish.
 # 1.0.0 was published from arena/a56e1b40-internetradio (run 38748688974); 1.0.1 was published
-# from arena/d4fb2344-internetradio (run 38826899278), which is also authorized for 1.0.2.
+# from arena/d4fb2344-internetradio (run 38826899278), which is also authorized for 1.0.2 and 1.1.0.
 on:
   push:
     branches: [arena/d4fb2344-internetradio]
@@ -65,8 +65,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_version="1.0.2"
-          expected_code="4"
+          expected_version="1.1.0"
+          expected_code="5"
           expected_package="com.oorarivippu.voiceannouncer"
           expected_signer="9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55"
           tag="oor-arivippu-v${expected_version}"

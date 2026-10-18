@@ -8,7 +8,9 @@ data class TtsVoiceOption(
     val name: String,
     val languageCode: String,
     val displayName: String,
-    val requiresNetworkConnection: Boolean
+    val requiresNetworkConnection: Boolean,
+    /** Android's quality rating ([Voice.QUALITY_NORMAL] 300 … [Voice.QUALITY_VERY_HIGH] 500). */
+    val quality: Int = Voice.QUALITY_NORMAL
 )
 
 internal object TtsVoicePolicy {
@@ -23,6 +25,8 @@ internal object TtsVoicePolicy {
                 compareBy<Voice>(
                     { if (it.locale.language == "ta") 0 else 1 },
                     { if (it.locale.country.equals("IN", ignoreCase = true)) 0 else 1 },
+                    // Best quality first (owner request for 1.1.0), then voices that work offline.
+                    { -it.quality },
                     { it.isNetworkConnectionRequired },
                     { it.name.lowercase(Locale.ROOT) }
                 )
@@ -37,12 +41,16 @@ internal object TtsVoicePolicy {
                 name = voice.name,
                 languageCode = language,
                 displayName = displayName(voice, number, displayLocale),
-                requiresNetworkConnection = voice.isNetworkConnectionRequired
+                requiresNetworkConnection = voice.isNetworkConnectionRequired,
+                quality = voice.quality
             )
         }
     }
 
-    /** Show up to four alternatives, retaining a chosen voice and including online voices when present. */
+    /**
+     * Every voice of the language that the phone offers, best quality first (owner request for
+     * 1.1.0: more voices to choose from; 1.0.x showed at most four). The chosen voice stays listed.
+     */
     fun choicesForLanguage(
         voices: List<TtsVoiceOption>,
         languageCode: String,
@@ -50,11 +58,17 @@ internal object TtsVoicePolicy {
     ): List<TtsVoiceOption> {
         val matching = voices.filter { it.languageCode == languageCode }
         val selected = matching.firstOrNull { it.name == selectedVoiceName }
-        val offline = matching.filterNot { it.requiresNetworkConnection }.take(2)
-        val online = matching.filter { it.requiresNetworkConnection }.take(2)
-        return (listOfNotNull(selected) + offline + online + matching)
-            .distinctBy { it.name }
-            .take(MAX_VOICE_CHOICES)
+        val ordered = matching.sortedWith(
+            compareBy<TtsVoiceOption>({ -it.quality }, { it.requiresNetworkConnection })
+        )
+        return (listOfNotNull(selected) + ordered).distinctBy { it.name }.take(MAX_VOICE_CHOICES)
+    }
+
+    /** Which of the three quality labels a voice gets. */
+    fun qualityLevel(quality: Int): Int = when {
+        quality >= Voice.QUALITY_VERY_HIGH -> 2
+        quality >= Voice.QUALITY_HIGH -> 1
+        else -> 0
     }
 
     private fun displayName(voice: Voice, number: Int, displayLocale: Locale): String {
@@ -74,5 +88,5 @@ internal object TtsVoicePolicy {
         return "${voice.locale.getDisplayName(displayLocale)} · $variant"
     }
 
-    private const val MAX_VOICE_CHOICES = 4
+    private const val MAX_VOICE_CHOICES = 40
 }

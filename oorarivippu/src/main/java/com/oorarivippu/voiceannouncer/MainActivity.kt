@@ -15,6 +15,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,9 +34,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DirectionsBike
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.GpsOff
 import androidx.compose.material.icons.filled.LocationCity
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Translate
@@ -49,7 +54,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Divider
 import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -68,6 +72,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -254,6 +259,7 @@ fun OorArivippuScreen(
     var voiceChoicesExpanded by remember { mutableStateOf(false) }
     var destinationLookupMessage by remember { mutableStateOf("") }
     var isResolvingDestination by remember { mutableStateOf(false) }
+    var destinationCandidates by remember { mutableStateOf<List<DestinationCandidate>>(emptyList()) }
     val coroutineScope = rememberCoroutineScope()
 
     var hasPermissions by remember {
@@ -386,11 +392,12 @@ fun OorArivippuScreen(
                         color = Color(0xFFE2E8F0),
                         fontSize = 13.sp
                     )
-                    Text(
+                    CollapsibleNote(
                         text = ui.locationDisclosure,
+                        showLabel = ui.detailsShow,
+                        hideLabel = ui.detailsHide,
                         color = Color(0xFFD1FAE5),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        toggleColor = Color.White
                     )
                 }
             }
@@ -411,11 +418,12 @@ fun OorArivippuScreen(
                             fontWeight = FontWeight.Bold,
                             fontSize = 14.sp
                         )
-                        Text(
+                        CollapsibleNote(
                             text = ui.internetUnavailableDetails,
+                            showLabel = ui.detailsShow,
+                            hideLabel = ui.detailsHide,
                             color = Color(0xFF92400E),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp
+                            toggleColor = Color(0xFF92400E)
                         )
                     }
                 }
@@ -444,7 +452,6 @@ fun OorArivippuScreen(
                             onRefreshVoiceCatalog()
                         }
                     )
-                    Divider(color = Color(0xFFE2E8F0))
                     LanguageSelectorRow(
                         icon = Icons.Default.VolumeUp,
                         label = ui.voiceLanguageLabel,
@@ -483,11 +490,10 @@ fun OorArivippuScreen(
                             fontWeight = FontWeight.SemiBold,
                             fontSize = 14.sp
                         )
-                        Text(
+                        CollapsibleNote(
                             text = ui.voiceChoiceSubtitle,
-                            color = Color(0xFF64748B),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp
+                            showLabel = ui.detailsShow,
+                            hideLabel = ui.detailsHide
                         )
                         Box(modifier = Modifier.fillMaxWidth()) {
                             OutlinedButton(
@@ -522,12 +528,18 @@ fun OorArivippuScreen(
                                                     maxLines = 1,
                                                     overflow = TextOverflow.Ellipsis
                                                 )
+                                                val qualityLabel = when (TtsVoicePolicy.qualityLevel(voice.quality)) {
+                                                    2 -> ui.voiceQualityVeryHigh
+                                                    1 -> ui.voiceQualityHigh
+                                                    else -> ui.voiceQualityStandard
+                                                }
+                                                val reach = if (voice.requiresNetworkConnection) {
+                                                    ui.voiceChoiceOnline
+                                                } else {
+                                                    ui.voiceChoiceOnDevice
+                                                }
                                                 Text(
-                                                    text = if (voice.requiresNetworkConnection) {
-                                                        ui.voiceChoiceOnline
-                                                    } else {
-                                                        ui.voiceChoiceOnDevice
-                                                    },
+                                                    text = "$qualityLabel · $reach",
                                                     color = Color(0xFF64748B),
                                                     fontSize = 11.sp
                                                 )
@@ -540,10 +552,41 @@ fun OorArivippuScreen(
                                             )
                                             voiceChoicesExpanded = false
                                             if (state.isTrackingEnabled) onSettingsChanged()
+                                            // Play the chosen voice at once, so voices can be compared.
+                                            onTestVoice()
                                         }
                                     )
                                 }
                             }
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = ui.speechSpeedLabel,
+                                modifier = Modifier.weight(1f),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            listOf(
+                                SpeechRatePolicy.SLOW_PERCENT to ui.speechSpeedSlow,
+                                SpeechRatePolicy.DEFAULT_PERCENT to ui.speechSpeedNormal,
+                                SpeechRatePolicy.FAST_PERCENT to ui.speechSpeedFast
+                            ).forEach { (percent, label) ->
+                                CompactChoice(
+                                    label = label,
+                                    selected = state.speechRatePercent == percent,
+                                    onClick = {
+                                        AppPreferences.setSpeechRatePercent(percent)
+                                        onTestVoice()
+                                    }
+                                )
+                            }
+                        }
+                        TextButton(onClick = { openTtsSettings(context) }) {
+                            Text(ui.moreVoicesButton, fontSize = 13.sp)
                         }
                         if (!state.isTtsVoiceCatalogLoaded) {
                             Text(
@@ -787,17 +830,17 @@ fun OorArivippuScreen(
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp
                     )
-                    Text(
+                    CollapsibleNote(
                         text = ui.destinationAlertExplanation,
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        showLabel = ui.detailsShow,
+                        hideLabel = ui.detailsHide
                     )
                     OutlinedTextField(
                         value = destinationQuery,
                         onValueChange = {
                             destinationQuery = it
                             destinationLookupMessage = ""
+                            destinationCandidates = emptyList()
                         },
                         label = { Text(ui.destinationFieldLabel) },
                         singleLine = true,
@@ -815,22 +858,22 @@ fun OorArivippuScreen(
                                 } else {
                                     isResolvingDestination = true
                                     destinationLookupMessage = ui.destinationLookupInProgress
+                                    destinationCandidates = emptyList()
                                     coroutineScope.launch {
-                                        val result = resolveDestination(
+                                        val found = findDestinationCandidates(
                                             context = context,
                                             query = destinationQuery,
-                                            voiceLanguage = state.voiceLanguage
+                                            voiceLanguage = state.voiceLanguage,
+                                            origin = lastKnownLocation(context)
                                         )
                                         isResolvingDestination = false
-                                        if (result == null) {
-                                            destinationLookupMessage = ui.destinationNotFoundMessage
+                                        // Every match is shown, even a single one, so the person
+                                        // confirms the district before relying on the alerts.
+                                        destinationCandidates = found
+                                        destinationLookupMessage = if (found.isEmpty()) {
+                                            ui.destinationNotFoundMessage
                                         } else {
-                                            AppPreferences.setDestination(
-                                                name = result.displayName,
-                                                latitude = result.latitude,
-                                                longitude = result.longitude
-                                            )
-                                            destinationLookupMessage = ui.destinationSetMessage
+                                            ""
                                         }
                                     }
                                 }
@@ -852,18 +895,65 @@ fun OorArivippuScreen(
                             TextButton(onClick = {
                                 AppPreferences.clearDestination()
                                 destinationLookupMessage = ""
+                                destinationCandidates = emptyList()
                             }) {
                                 Text(ui.destinationClearButton)
                             }
                         }
                     }
-                    if (state.destinationName.isNotBlank()) {
-                        Text(
-                            text = "${ui.destinationFieldLabel}: ${state.destinationName}",
-                            color = Color(0xFF0F766E),
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
+                    if (destinationCandidates.isNotEmpty()) {
+                        DestinationChooser(
+                            candidates = destinationCandidates,
+                            title = ui.destinationChooseTitle,
+                            hint = ui.destinationChooseHint,
+                            distanceSuffix = ui.distanceKmSuffix,
+                            cancelLabel = ui.destinationChooseCancel,
+                            onChoose = { chosen ->
+                                AppPreferences.setDestination(
+                                    name = chosen.name,
+                                    latitude = chosen.latitude,
+                                    longitude = chosen.longitude,
+                                    details = chosen.details
+                                )
+                                destinationQuery = chosen.name
+                                destinationCandidates = emptyList()
+                                destinationLookupMessage = ui.destinationSetMessage
+                            },
+                            onCancel = { destinationCandidates = emptyList() }
                         )
+                    }
+                    val destinationLat = state.destinationLatitude
+                    val destinationLon = state.destinationLongitude
+                    if (state.destinationName.isNotBlank() && destinationCandidates.isEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                text = "${ui.destinationFieldLabel}: ${state.destinationName}",
+                                color = Color(0xFF0F766E),
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            if (state.destinationDetails.isNotBlank()) {
+                                Text(
+                                    text = state.destinationDetails,
+                                    color = Color(0xFF334155),
+                                    fontSize = 12.sp,
+                                    lineHeight = 16.sp
+                                )
+                            }
+                            if (destinationLat != null && destinationLon != null) {
+                                TextButton(onClick = {
+                                    openMap(context, destinationLat, destinationLon, state.destinationName)
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Map,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(ui.destinationViewOnMap, fontSize = 13.sp)
+                                }
+                            }
+                        }
                     }
                     if (destinationLookupMessage.isNotBlank()) {
                         Text(
@@ -896,6 +986,8 @@ fun OorArivippuScreen(
                         icon = Icons.Default.LocationCity,
                         title = ui.sameCityOptionTitle,
                         subtitle = ui.sameCityOptionSubtitle,
+                        detailsShow = ui.detailsShow,
+                        detailsHide = ui.detailsHide,
                         checked = state.announceSameCitySubArea,
                         onCheckedChange = { AppPreferences.setAnnounceSameCitySubArea(it) }
                     )
@@ -907,6 +999,8 @@ fun OorArivippuScreen(
                         icon = Icons.Default.DirectionsBike,
                         title = ui.bikeCarModeTitle,
                         subtitle = ui.bikeCarModeSubtitle,
+                        detailsShow = ui.detailsShow,
+                        detailsHide = ui.detailsHide,
                         checked = state.bikeCarDetectionEnabled,
                         onCheckedChange = { AppPreferences.setBikeCarDetectionEnabled(it) }
                     )
@@ -918,6 +1012,8 @@ fun OorArivippuScreen(
                         icon = Icons.Default.VolumeUp,
                         title = ui.announceOnStartTitle,
                         subtitle = ui.announceOnStartSubtitle,
+                        detailsShow = ui.detailsShow,
+                        detailsHide = ui.detailsHide,
                         checked = state.announceImmediatelyOnStart,
                         onCheckedChange = { AppPreferences.setAnnounceImmediatelyOnStart(it) }
                     )
@@ -928,6 +1024,8 @@ fun OorArivippuScreen(
                         icon = Icons.Default.VolumeUp,
                         title = ui.headsetWhereAmITitle,
                         subtitle = ui.headsetWhereAmISubtitle,
+                        detailsShow = ui.detailsShow,
+                        detailsHide = ui.detailsHide,
                         checked = state.headsetWhereAmIEnabled,
                         onCheckedChange = {
                             AppPreferences.setHeadsetWhereAmIEnabled(it)
@@ -939,11 +1037,10 @@ fun OorArivippuScreen(
 
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(ui.offlineReminderTitle, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                        Text(
+                        CollapsibleNote(
                             text = ui.offlineReminderSubtitle,
-                            color = Color(0xFF64748B),
-                            fontSize = 12.sp,
-                            lineHeight = 17.sp
+                            showLabel = ui.detailsShow,
+                            hideLabel = ui.detailsHide
                         )
                         listOf(listOf(0, 5, 10), listOf(15, 30)).forEach { rowOptions ->
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -982,11 +1079,10 @@ fun OorArivippuScreen(
                             steps = 13
                         )
                     }
-                    Text(
+                    CollapsibleNote(
                         text = ui.adaptiveBatteryNote,
-                        color = Color(0xFF64748B),
-                        fontSize = 12.sp,
-                        lineHeight = 17.sp
+                        showLabel = ui.detailsShow,
+                        hideLabel = ui.detailsHide
                     )
                 }
             }
@@ -1099,7 +1195,8 @@ fun OorArivippuScreen(
                         ui.radioReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
                         ui.pulseEqReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
                         ui.vocalRemoverReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
-                        ui.oorArivippuReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2"
+                        ui.oorArivippuReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2",
+                        ui.secretMessageReleaseLabel to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/secret-message-v1.1.0"
                     )
                     releaseLinks.forEach { (label, url) ->
                         TextButton(
@@ -1124,41 +1221,155 @@ private fun LanguageSelectorRow(
     englishLabel: String,
     onSelect: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    // One line per language (owner request for 1.1.0: the language buttons took too much space).
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color(0xFF0F766E),
+            modifier = Modifier.size(18.dp)
+        )
+        Text(
+            text = label,
+            modifier = Modifier.weight(1f),
+            fontWeight = FontWeight.SemiBold,
+            fontSize = 13.sp,
+            lineHeight = 16.sp
+        )
+        CompactChoice(label = tamilLabel, selected = selectedLang == "ta", onClick = { onSelect("ta") })
+        CompactChoice(label = englishLabel, selected = selectedLang == "en", onClick = { onSelect("en") })
+    }
+}
+
+/** A small rounded choice button, smaller than a Material chip. */
+@Composable
+private fun CompactChoice(label: String, selected: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .height(32.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(if (selected) Color(0xFFCCFBF1) else Color.White)
+            .border(1.dp, if (selected) Color(0xFF0F766E) else Color(0xFFCBD5E1), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = label,
+            color = if (selected) Color(0xFF134E4A) else Color(0xFF334155),
+            fontSize = 13.sp,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            maxLines = 1
+        )
+    }
+}
+
+/** A long explanation, hidden until the person taps "Details" (owner request for 1.1.0). */
+@Composable
+private fun CollapsibleNote(
+    text: String,
+    showLabel: String,
+    hideLabel: String,
+    color: Color = Color(0xFF64748B),
+    toggleColor: Color = Color(0xFF0F766E)
+) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .clickable { expanded = !expanded }
+                .padding(vertical = 2.dp, horizontal = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Icon(
-                imageVector = icon,
+                imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                 contentDescription = null,
-                tint = Color(0xFF0F766E),
-                modifier = Modifier.size(20.dp)
+                tint = toggleColor,
+                modifier = Modifier.size(18.dp)
             )
             Text(
-                text = label,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 14.sp
+                text = if (expanded) hideLabel else showLabel,
+                color = toggleColor,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
             )
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            FilterChip(
-                selected = selectedLang == "ta",
-                onClick = { onSelect("ta") },
-                label = { Text(text = tamilLabel, fontWeight = FontWeight.Bold) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFFCCFBF1),
-                    selectedLabelColor = Color(0xFF134E4A)
+        if (expanded) {
+            Text(text = text, color = color, fontSize = 12.sp, lineHeight = 17.sp)
+        }
+    }
+}
+
+/** The places that match the typed destination; the person picks the right one. */
+@Composable
+private fun DestinationChooser(
+    candidates: List<DestinationCandidate>,
+    title: String,
+    hint: String,
+    distanceSuffix: String,
+    cancelLabel: String,
+    onChoose: (DestinationCandidate) -> Unit,
+    onCancel: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = title, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF0F172A))
+        Text(text = hint, color = Color(0xFF64748B), fontSize = 12.sp, lineHeight = 16.sp)
+        candidates.forEach { candidate ->
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFF1F5F9))
+                    .clickable { onChoose(candidate) }
+                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
+                Text(
+                    text = candidate.name,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 14.sp,
+                    color = Color(0xFF0F766E)
                 )
-            )
-            FilterChip(
-                selected = selectedLang == "en",
-                onClick = { onSelect("en") },
-                label = { Text(text = englishLabel, fontWeight = FontWeight.Bold) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = Color(0xFFCCFBF1),
-                    selectedLabelColor = Color(0xFF134E4A)
-                )
+                if (candidate.details.isNotBlank()) {
+                    Text(text = candidate.details, fontSize = 12.sp, lineHeight = 16.sp, color = Color(0xFF334155))
+                }
+                candidate.distanceKm?.let { km ->
+                    Text(text = "$km $distanceSuffix", fontSize = 12.sp, color = Color(0xFF64748B))
+                }
+            }
+        }
+        TextButton(onClick = onCancel) { Text(cancelLabel) }
+    }
+}
+
+/** Opens the place in a maps app, so the person can check it before relying on the alerts. */
+private fun openMap(context: android.content.Context, latitude: Double, longitude: Double, label: String) {
+    val query = Uri.encode("$latitude,$longitude($label)")
+    runCatching {
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW, Uri.parse("geo:$latitude,$longitude?q=$query"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }.onFailure {
+        openExternalLink(context, "https://www.google.com/maps/search/?api=1&query=$latitude,$longitude")
+    }
+}
+
+/** Android's text-to-speech settings, where more voices can be downloaded. */
+private fun openTtsSettings(context: android.content.Context) {
+    val opened = runCatching {
+        context.startActivity(Intent("com.android.settings.TTS_SETTINGS").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }.isSuccess
+    if (!opened) {
+        runCatching {
+            context.startActivity(
+                Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             )
         }
     }
@@ -1194,6 +1405,8 @@ private fun SettingToggleItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     title: String,
     subtitle: String,
+    detailsShow: String,
+    detailsHide: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -1218,12 +1431,7 @@ private fun SettingToggleItem(
                     fontWeight = FontWeight.SemiBold,
                     fontSize = 14.sp
                 )
-                Text(
-                    text = subtitle,
-                    color = Color(0xFF64748B),
-                    fontSize = 12.sp,
-                    lineHeight = 17.sp
-                )
+                CollapsibleNote(text = subtitle, showLabel = detailsShow, hideLabel = detailsHide)
             }
         }
         Switch(

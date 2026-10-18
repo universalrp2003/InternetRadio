@@ -99,6 +99,18 @@ class BilingualStringsTest {
     }
 
     @Test
+    fun districtWordIsSpokenOnceAndOneTownIsNotSpokenInTwoScripts() {
+        assertEquals("Karur district.", BilingualStrings.buildDistrictAnnouncement("en", "Karur District"))
+        assertEquals("கரூர் மாவட்டம்.", BilingualStrings.buildDistrictAnnouncement("ta", "கரூர் மாவட்டம்"))
+        assertEquals("Alangudi.", place("en", newTown = true, town = "Alangudi", area = "ஆலங்குடி"))
+        assertEquals("ஆலங்குடி.", place("ta", newTown = true, town = "ஆலங்குடி", area = "Alangudi"))
+        assertEquals(
+            "It is 5:20 PM. Your current location is Alangudi.",
+            BilingualStrings.buildWhereAmIAnnouncement("en", "Alangudi", "ஆலங்குடி", "5:20 PM")
+        )
+    }
+
+    @Test
     fun repeatedPlaceAnnouncementsHaveNoFillerWords() {
         val fillerWords = listOf(
             "Entering", "தற்போது", "வந்துள்ளீர்கள்", "ஊருக்குள்", "பகுதிக்கு",

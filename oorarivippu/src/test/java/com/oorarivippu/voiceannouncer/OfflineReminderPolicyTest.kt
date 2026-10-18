@@ -23,4 +23,19 @@ class OfflineReminderPolicyTest {
         assertFalse(OfflineReminderPolicy.shouldSchedule(true, null, 15))
         assertFalse(OfflineReminderPolicy.shouldSchedule(true, false, 0))
     }
+
+    @Test
+    fun defaultsFollowTheOwnersRequestForOnePointOne() {
+        assertEquals(5, OfflineReminderPolicy.DEFAULT_INTERVAL_MINUTES)
+        assertEquals(5, AppStateSnapshot().offlineReminderIntervalMinutes)
+        assertFalse(AppStateSnapshot().announceSameCitySubArea)
+    }
+
+    @Test
+    fun speechSpeedHasThreeChoicesAndKeepsTheOldRateAsNormal() {
+        assertEquals(0.95f, SpeechRatePolicy.androidRate(SpeechRatePolicy.DEFAULT_PERCENT), 0.0001f)
+        assertEquals(SpeechRatePolicy.DEFAULT_PERCENT, SpeechRatePolicy.normalize(123))
+        assertEquals(80, SpeechRatePolicy.normalize(80))
+        assertEquals(110, SpeechRatePolicy.normalize(110))
+    }
 }

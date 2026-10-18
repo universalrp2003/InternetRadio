@@ -26,7 +26,7 @@ Earlier test APKs were debug-signed. Android may not allow a debug-signed test i
 
 ## Connectivity and offline reminders
 
-When internet access is unavailable, GPS tracking may continue, but place-name, district, highway/landmark and destination speech announcements are paused. The interface and ongoing notification state that the internet is unavailable. If enabled, an offline-status reminder is sent immediately when tracking starts offline or connectivity is lost, then at the selected interval: **Off, 5, 10, 15 or 30 minutes** (15 minutes by default). It uses an installed on-device TTS voice when available, otherwise a short local beep; it does not use online voice services. Destination lookup and place names depend on Android's Geocoder and may also fail when its service is unavailable.
+When internet access is unavailable, GPS tracking may continue, but place-name, district, highway/landmark and destination speech announcements are paused. The interface and ongoing notification state that the internet is unavailable. If enabled, an offline-status reminder is sent immediately when tracking starts offline or connectivity is lost, then at the selected interval: **Off, 5, 10, 15 or 30 minutes** (5 minutes by default from 1.1.0; 15 before). It uses an installed on-device TTS voice when available, otherwise a short local beep; it does not use online voice services. Destination lookup and place names depend on Android's Geocoder and may also fail when its service is unavailable.
 
 ## Device-test checklist
 
@@ -37,19 +37,23 @@ When internet access is unavailable, GPS tracking may continue, but place-name, 
 - Confirm the ongoing notification appears and its stop action stops tracking. Also test the in-app OFF button. On OPPO and Xiaomi, note any battery/background restrictions that stop or delay the service; do not disable OEM safeguards globally just for the test.
 - Confirm Plus Codes such as `9X5H+3HF`, coordinate-only labels, and numeric address fragments such as `1/242` are not announced as place names. A Plus Code changing within Alangudi should stay silent; a real named change such as **Alangudi Hospital → Alangudi Bus Stand** should still announce when same-city announcements are enabled. Long multi-stop road descriptions should not replace a named place, and the speed/motion label should appear on separate lines.
 - Test connectivity deliberately while tracking: switch off Wi-Fi and mobile data. Confirm the UI/notification clearly says there is **no internet**, place/district/highway/destination speech stops, and the selected offline reminder still uses local TTS or a beep. GPS status can continue updating. Reconnect and check that place lookup resumes. Android's network-validation signal and geocoder service can vary, so report any false status or lookup failure.
-- Set a destination while online using a town/city name. Confirm the 10 km, 5 km, 2 km and approximately 500 m arrival alerts, then clear or change it. The Android Geocoder's first match is used; verify the selected place before relying on the alert. Destination speech remains paused without internet; the separate offline-status reminder may continue.
+- Set a destination while online using a town/city name. Confirm the 10 km, 5 km, 2 km and approximately 500 m arrival alerts, then clear or change it. From 1.1.0 every match is listed with its district, state, PIN code and distance, and the person chooses the right one (many villages share a name); **View on map** opens the chosen place in a maps app. Destination speech remains paused without internet; the separate offline-status reminder may continue.
 - Test a phone or VoIP call while tracking. The app uses Android's audio mode as a privacy-minimal, best-effort call signal; it should pause new speech and speak the latest queued place after the mode returns to normal. Some call apps/OEMs may not expose a detectable mode.
 - The optional headset **Next/skip** media-button trigger is off by default. Enable it in settings, start tracking, and test the headset button. Media-button routing varies by headset/OEM and may conflict with music controls; disable it if it does.
 - District alerts use the Geocoder's `subAdminArea`; highway/toll/junction announcements occur only when returned road/feature names match recognized highway or landmark terms. Neither is a complete offline map database, and some locations will not provide these fields.
 - Observe the displayed adaptive GPS interval: about 45 seconds while stationary, 15 seconds in ordinary traffic, and 5 seconds at highway speeds. These are requested intervals, not a measured battery-saving percentage; Android/OEM batching, GPS quality and movement detection can change real behavior. Reverse geocoding is limited to at most once per 30 seconds and generally requires at least 100 m displacement.
 - Continuous GPS tracking can still use substantial battery. Stop tracking when finished.
 
-## Planned for the next update
+## 1.1.0 (owner requests of 16 and 18 October 2026)
 
-The owner asked for these fixes in the next version; they are not in 1.0.2:
-
-- Do not announce Google's “Unnamed Road” placeholder (Tamil “பெயரில்லாத சாலை”) as an area name.
-- Do not announce the same town twice when the geocoder switches between Tamil and English script, for example “ஆலங்குடி” and then “Alangudi” about a minute and a half later.
+- Never announces geocoder placeholders such as “Unnamed Road” / “பெயரில்லாத சாலை”, a bare “Road”/“சாலை” or a highway “Service Road”, nor the state or country as a town or area. Door numbers (“12/3, …”) and PIN codes are removed from names.
+- A Tamil name and its English spelling count as one place (“ஆலங்குடி” then “Alangudi” is not announced twice): names are compared by their consonant sounds when the scripts differ, and must match exactly within one script. Near a town border, a town announced in the last 10 minutes is not announced again.
+- The district word is spoken once even when the geocoder's name already contains it (“Karur District” → “Karur district.”).
+- Destination: every match is listed with district, state, PIN code and distance; the chosen place's name (not the typed text, such as “pallapatti/karur”) is spoken in the alerts; **View on map** checks it.
+- Defaults: next area within the same town **off**; no-internet reminder every **5 minutes**. Choices made earlier are kept.
+- Voices: every Android voice of the language is offered, best quality first, with its quality shown; choosing a voice plays it; speech speed slow/normal/fast; a button opens Android's voice downloads.
+- Long explanations are folded behind **விவரம் / Details**, and each language is chosen on one compact line.
+- About lists the new RP Ideas app **இரகசிய செய்தி (Secret Message)**.
 
 ## Build and CI
 

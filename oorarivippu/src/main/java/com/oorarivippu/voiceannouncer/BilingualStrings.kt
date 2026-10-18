@@ -90,6 +90,22 @@ data class UiStrings(
     val continueWithoutBackgroundButton: String,
     val notificationChannelName: String,
     val notificationStopAction: String,
+    val detailsShow: String,
+    val detailsHide: String,
+    val voiceQualityVeryHigh: String,
+    val voiceQualityHigh: String,
+    val voiceQualityStandard: String,
+    val speechSpeedLabel: String,
+    val speechSpeedSlow: String,
+    val speechSpeedNormal: String,
+    val speechSpeedFast: String,
+    val moreVoicesButton: String,
+    val destinationChooseTitle: String,
+    val destinationChooseHint: String,
+    val distanceKmSuffix: String,
+    val destinationViewOnMap: String,
+    val destinationChooseCancel: String,
+    val secretMessageReleaseLabel: String,
     val unknownPlace: String
 )
 
@@ -102,7 +118,7 @@ object BilingualStrings {
         appLanguageLabel = "செயலி மொழி (App Language)",
         voiceLanguageLabel = "குரல் அறிவிப்பு மொழி (Voice Language)",
         voiceChoiceLabel = "குரல் தேர்வு (Android TTS)",
-        voiceChoiceSubtitle = "Android வழங்கும் தமிழ்/ஆங்கிலக் குரல்களில் அதிகபட்சம் நான்கைத் தேர்வு செய்யலாம். Online குரல்களுக்கு இணையம் தேவை; பேசப்படும் உரை TTS வழங்குநருக்கு அனுப்பப்படலாம். இணையமில்லா நினைவூட்டல் சாதனக் குரல் அல்லது பீப் பயன்படுத்தும்.",
+        voiceChoiceSubtitle = "இந்தத் தொலைபேசியில் உள்ள இந்த மொழியின் எல்லா Android குரல்களும், சிறந்தவை முதலில். ‘இணையம் தேவை’ குரல்கள் பொதுவாக மிகத் தெளிவாக ஒலிக்கும்; அவை பேசும் உரையை அவற்றின் TTS சேவைக்கு அனுப்பலாம். குரலைத் தேர்ந்தெடுத்ததும் அது ஒலிக்கும். இணையமில்லா நினைவூட்டல்கள் எப்போதும் சாதனக் குரல் அல்லது பீப் ஒலியைப் பயன்படுத்தும்.",
         voiceChoiceSystemDefault = "Android இயல்புக் குரல் (இணையம் தேவைப்படலாம்)",
         voiceChoiceLoading = "சாதனக் குரல்கள் ஏற்றப்படுகின்றன…",
         voiceChoicesUnavailable = "இந்த மொழிக்கான கூடுதல் குரல்கள் இல்லை. Android Text-to-Speech அமைப்பில் குரல் தரவை நிறுவவும்.",
@@ -181,6 +197,22 @@ object BilingualStrings {
         continueWithoutBackgroundButton = "இப்போது வேண்டாம் — தொடர் (Continue)",
         notificationChannelName = "பயண ஊர் அறிவிப்பு சேவை",
         notificationStopAction = "நிறுத்து (OFF)",
+        detailsShow = "விவரம்",
+        detailsHide = "மறை",
+        voiceQualityVeryHigh = "மிக உயர் தரம்",
+        voiceQualityHigh = "உயர் தரம்",
+        voiceQualityStandard = "சாதாரண தரம்",
+        speechSpeedLabel = "பேச்சு வேகம்",
+        speechSpeedSlow = "மெதுவாக",
+        speechSpeedNormal = "இயல்பு",
+        speechSpeedFast = "வேகமாக",
+        moreVoicesButton = "மேலும் குரல்களைப் பெறு (Android அமைப்பு)",
+        destinationChooseTitle = "சரியான இடத்தைத் தேர்ந்தெடுக்கவும்",
+        destinationChooseHint = "ஒரே பெயரில் பல இடங்கள் இருக்கலாம். மாவட்டம், அஞ்சல் குறியீடு மற்றும் தூரத்தைப் பார்த்துத் தேர்வு செய்யவும்.",
+        distanceKmSuffix = "கி.மீ. தொலைவில்",
+        destinationViewOnMap = "வரைபடத்தில் பார்",
+        destinationChooseCancel = "ரத்துசெய்",
+        secretMessageReleaseLabel = "இரகசிய செய்தி (Secret Message)",
         unknownPlace = "கண்டறியப்படவில்லை"
     )
 
@@ -191,7 +223,7 @@ object BilingualStrings {
         appLanguageLabel = "App Language (செயலி மொழி)",
         voiceLanguageLabel = "Voice Language (குரல் மொழி)",
         voiceChoiceLabel = "Spoken voice (Android TTS)",
-        voiceChoiceSubtitle = "Choose up to four Tamil or English voices offered by Android. Online voices need Internet and may send spoken text to their TTS provider; offline reminders always use an on-device voice or a beep.",
+        voiceChoiceSubtitle = "All Android voices on this phone for this language, best first. Online voices usually sound the clearest and may send the spoken text to their TTS provider. Choosing a voice plays it. Offline reminders always use an on-device voice or a beep.",
         voiceChoiceSystemDefault = "Android system default (may use Internet)",
         voiceChoiceLoading = "Loading Android voices…",
         voiceChoicesUnavailable = "No additional voices are available for this language. Install voice data in Android Text-to-Speech settings.",
@@ -270,6 +302,22 @@ object BilingualStrings {
         continueWithoutBackgroundButton = "Continue without it",
         notificationChannelName = "Background Place Announcer",
         notificationStopAction = "Turn OFF",
+        detailsShow = "Details",
+        detailsHide = "Hide",
+        voiceQualityVeryHigh = "Very high quality",
+        voiceQualityHigh = "High quality",
+        voiceQualityStandard = "Standard quality",
+        speechSpeedLabel = "Speech speed",
+        speechSpeedSlow = "Slow",
+        speechSpeedNormal = "Normal",
+        speechSpeedFast = "Fast",
+        moreVoicesButton = "Get more voices (Android settings)",
+        destinationChooseTitle = "Choose the right place",
+        destinationChooseHint = "Several places can share a name. Check the district, PIN code and distance before you choose.",
+        distanceKmSuffix = "km away",
+        destinationViewOnMap = "View on map",
+        destinationChooseCancel = "Cancel",
+        secretMessageReleaseLabel = "Secret Message",
         unknownPlace = "Not detected yet"
     )
 
@@ -293,7 +341,7 @@ object BilingualStrings {
     ): String {
         val includesDistinctSubArea = includeSubArea &&
             !subArea.isNullOrBlank() &&
-            !subArea.equals(cityOrVillage, ignoreCase = true)
+            !PlaceDataPolicy.samePlaceName(subArea, cityOrVillage)
         return when {
             // A new town, village or city reads the same in both languages: "Alangudi, Santhappettai."
             isNewCityOrVillage && includesDistinctSubArea -> "$cityOrVillage, $subArea."
@@ -327,9 +375,10 @@ object BilingualStrings {
         }
 
     /** Names the new district without filler, matching the place announcements. */
-    fun buildDistrictAnnouncement(voiceLang: String, district: String): String =
-        if (voiceLang == "en") "$district district."
-        else "$district மாவட்டம்."
+    fun buildDistrictAnnouncement(voiceLang: String, district: String): String {
+        val name = PlaceDataPolicy.withoutDistrictSuffix(district)
+        return if (voiceLang == "en") "$name district." else "$name மாவட்டம்."
+    }
 
     fun buildHighwayLandmarkAnnouncement(voiceLang: String, landmark: String): String =
         if (voiceLang == "en") "Approaching $landmark."
@@ -341,7 +390,7 @@ object BilingualStrings {
         subArea: String,
         timeText: String
     ): String {
-        val place = if (subArea.isBlank() || subArea.equals(cityOrVillage, ignoreCase = true)) {
+        val place = if (subArea.isBlank() || PlaceDataPolicy.samePlaceName(subArea, cityOrVillage)) {
             cityOrVillage
         } else {
             "$subArea, $cityOrVillage"

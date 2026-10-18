@@ -28,14 +28,15 @@ data class AppStateSnapshot(
     val isTrackingEnabled: Boolean = false,
     val appLanguage: String = "ta",        // Default Tamil ("ta")
     val voiceLanguage: String = "ta",      // Default Tamil ("ta")
-    val announceSameCitySubArea: Boolean = true,
+    // Owner request after 1.0.2: the next area within the same town is off unless chosen.
+    val announceSameCitySubArea: Boolean = false,
     val bikeCarDetectionEnabled: Boolean = true,
     val announceImmediatelyOnStart: Boolean = true,
     val minDistanceMeters: Int = 500,      // Minimum distance before re-evaluating same-area drift
     val isGpsEnabled: Boolean = true,
     val isInternetAvailable: Boolean? = null,
     val isCallAudioPaused: Boolean = false,
-    val offlineReminderIntervalMinutes: Int = 15,
+    val offlineReminderIntervalMinutes: Int = OfflineReminderPolicy.DEFAULT_INTERVAL_MINUTES,
     val currentCityOrVillage: String = "",
     val currentSubArea: String = "",
     val currentDistrict: String = "",
@@ -48,10 +49,14 @@ data class AppStateSnapshot(
     val availableTtsVoices: List<TtsVoiceOption> = emptyList(),
     val isTtsVoiceCatalogLoaded: Boolean = false,
     val destinationName: String = "",
+    /** The chosen place's district, state and PIN code, so the person can see which place it is. */
+    val destinationDetails: String = "",
     val destinationLatitude: Double? = null,
     val destinationLongitude: Double? = null,
     val destinationAlertMask: Int = 0,
     val headsetWhereAmIEnabled: Boolean = false,
+    /** Speech speed in percent of Android's normal rate (80 slow, 95 normal, 110 fast). */
+    val speechRatePercent: Int = SpeechRatePolicy.DEFAULT_PERCENT,
     val history: List<AnnouncementLogItem> = emptyList()
 ) {
     fun selectedTtsVoiceNameFor(languageCode: String): String =
@@ -71,6 +76,8 @@ object AppPreferences {
     private const val KEY_ANNOUNCE_ON_START = "announce_immediately_on_start"
     private const val KEY_MIN_DISTANCE_METERS = "min_distance_meters"
     private const val KEY_DESTINATION_NAME = "destination_name"
+    private const val KEY_DESTINATION_DETAILS = "destination_details"
+    private const val KEY_SPEECH_RATE = "speech_rate_percent"
     private const val KEY_DESTINATION_LATITUDE = "destination_latitude"
     private const val KEY_DESTINATION_LONGITUDE = "destination_longitude"
     private const val KEY_DESTINATION_ALERT_MASK = "destination_alert_mask"
@@ -90,15 +97,17 @@ object AppPreferences {
             voiceLanguage = prefs.getString(KEY_VOICE_LANG, "ta") ?: "ta",
             tamilTtsVoiceName = prefs.getString(KEY_TAMIL_TTS_VOICE, "") ?: "",
             englishTtsVoiceName = prefs.getString(KEY_ENGLISH_TTS_VOICE, "") ?: "",
-            announceSameCitySubArea = prefs.getBoolean(KEY_SAME_CITY_SUB_AREA, true),
+            announceSameCitySubArea = prefs.getBoolean(KEY_SAME_CITY_SUB_AREA, false),
             bikeCarDetectionEnabled = prefs.getBoolean(KEY_BIKE_CAR_MODE, true),
             announceImmediatelyOnStart = prefs.getBoolean(KEY_ANNOUNCE_ON_START, true),
             minDistanceMeters = prefs.getInt(KEY_MIN_DISTANCE_METERS, 500).coerceIn(200, 3000),
             destinationName = prefs.getString(KEY_DESTINATION_NAME, "") ?: "",
+            destinationDetails = prefs.getString(KEY_DESTINATION_DETAILS, "") ?: "",
             destinationLatitude = prefs.getString(KEY_DESTINATION_LATITUDE, null)?.toDoubleOrNull(),
             destinationLongitude = prefs.getString(KEY_DESTINATION_LONGITUDE, null)?.toDoubleOrNull(),
             destinationAlertMask = prefs.getInt(KEY_DESTINATION_ALERT_MASK, 0),
             headsetWhereAmIEnabled = prefs.getBoolean(KEY_HEADSET_WHERE_AM_I, false),
+            speechRatePercent = SpeechRatePolicy.normalize(prefs.getInt(KEY_SPEECH_RATE, SpeechRatePolicy.DEFAULT_PERCENT)),
             offlineReminderIntervalMinutes = OfflineReminderPolicy.normalizeInterval(
                 prefs.getInt(
                     KEY_OFFLINE_REMINDER_INTERVAL_MINUTES,
@@ -177,16 +186,19 @@ object AppPreferences {
         _state.value = _state.value.copy(headsetWhereAmIEnabled = enabled)
     }
 
-    fun setDestination(name: String, latitude: Double, longitude: Double) {
+    fun setDestination(name: String, latitude: Double, longitude: Double, details: String = "") {
         val cleanName = name.trim()
+        val cleanDetails = details.trim()
         prefs.edit()
             .putString(KEY_DESTINATION_NAME, cleanName)
+            .putString(KEY_DESTINATION_DETAILS, cleanDetails)
             .putString(KEY_DESTINATION_LATITUDE, latitude.toString())
             .putString(KEY_DESTINATION_LONGITUDE, longitude.toString())
             .putInt(KEY_DESTINATION_ALERT_MASK, 0)
             .apply()
         _state.value = _state.value.copy(
             destinationName = cleanName,
+            destinationDetails = cleanDetails,
             destinationLatitude = latitude,
             destinationLongitude = longitude,
             destinationAlertMask = 0
@@ -196,12 +208,14 @@ object AppPreferences {
     fun clearDestination() {
         prefs.edit()
             .remove(KEY_DESTINATION_NAME)
+            .remove(KEY_DESTINATION_DETAILS)
             .remove(KEY_DESTINATION_LATITUDE)
             .remove(KEY_DESTINATION_LONGITUDE)
             .remove(KEY_DESTINATION_ALERT_MASK)
             .apply()
         _state.value = _state.value.copy(
             destinationName = "",
+            destinationDetails = "",
             destinationLatitude = null,
             destinationLongitude = null,
             destinationAlertMask = 0
@@ -212,6 +226,12 @@ object AppPreferences {
         val normalized = mask and 0x0F
         prefs.edit().putInt(KEY_DESTINATION_ALERT_MASK, normalized).apply()
         _state.value = _state.value.copy(destinationAlertMask = normalized)
+    }
+
+    fun setSpeechRatePercent(percent: Int) {
+        val normalized = SpeechRatePolicy.normalize(percent)
+        prefs.edit().putInt(KEY_SPEECH_RATE, normalized).apply()
+        _state.value = _state.value.copy(speechRatePercent = normalized)
     }
 
     fun setAnnounceSameCitySubArea(enabled: Boolean) {
