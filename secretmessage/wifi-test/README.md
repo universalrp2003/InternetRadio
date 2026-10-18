@@ -18,6 +18,8 @@ Owner requests after testing 1.0.0 on two phones, with the owner's choices of 17
 - **Tamil first, English on request** (`Tr.kt`, `TamilText.kt`); the chat keyboard stays English. **Guide** in both languages.
 - **Drawing pad:** unchanged pad, compact controls around it, Picture as the default mode.
 
+**Phone test build (18 October 2026):** [run 39095609582](https://github.com/universalrp2003/InternetRadio/actions/runs/39095609582) (commit `129801b`) passed every step: 19 unit tests, lint report, signing and package checks, and the emulator smoke on the signed APK (Tamil start screen, switch to English, hosting through the live relay and on the same Wi-Fi, ready mode, this phone, the guide, About with the updater). Artifact `secretmessage-release-apk-8` (a ZIP, available until 1 November 2026) holds `Secret-Message-v1.1.0.apk`, 29,443,977 bytes, SHA-256 `d337a519f74f2cd1b1a722316a97ed24ed77b9151c72966fb4bdcf8741f2d192`, signed with the release key, so it installs over 1.0.0. The relay with doorbell inboxes was deployed by [run 39094980366](https://github.com/universalrp2003/InternetRadio/actions/runs/39094980366) (11/11 live checks). Not published; the owner tests it on phones first.
+
 ## How a chat works
 
 1. **Start a chat** on one phone. It picks a random room on the relay, connects to it and shows a one-time `secretmessage://chat?relay=…` invite; it waits up to three minutes. (**Start on the same Wi-Fi, without the relay** instead listens on the phone's private Wi-Fi address and a random port, as in 0.3.0, and shows a `secretmessage://chat?host=…` invite.) **Share invite** sends it by SMS or any app; you may switch apps to send it, because the connection service keeps the app reachable.
