@@ -1,6 +1,6 @@
 # Oor Arivippu — Tamil/English place announcer
 
-**Current stable release:** 1.0.2 / code 4
+**Current stable release:** 1.1.0 / code 5
 
 **Package:** `com.oorarivippu.voiceannouncer`
 
@@ -10,11 +10,13 @@ Oor Arivippu is a GPS place and destination announcer. It is a fifth active RP I
 
 ## Download the stable release
 
-- [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2) — primary updater source.
-- [InternetRadio release](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.2) — verified fallback.
-- [Release notes](../releases/oor-arivippu-v1.0.2.md) · [published APK size and SHA-256 ledger](../docs/published-release-digests.md).
+- [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.1.0) — primary updater source.
+- [InternetRadio release](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.1.0) — verified fallback.
+- [Release notes](../releases/oor-arivippu-v1.1.0.md) · [published APK size and SHA-256 ledger](../docs/published-release-digests.md).
 
-Both public releases carry `Oor-Arivippu-v1.0.2.apk`, 12,195,401 bytes, SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`. Standalone release [run 38840264469](https://github.com/universalrp2003/InternetRadio/actions/runs/38840264469) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks, then verified that the two public assets have identical size and digest at canonical URLs; a separate post-publication API check confirmed the same. Before publication, the Oor test workflow passed on the exact 1.0.2 source in [run 38840000191](https://github.com/universalrp2003/InternetRadio/actions/runs/38840000191).
+Both public releases carry `Oor-Arivippu-v1.1.0.apk`, 12,211,781 bytes, SHA-256 `34858e8c6e4831e725ac7503f6613c96bcb896d659ebbdb588dcd139afc7c8b3`. Standalone release [run 39105539892](https://github.com/universalrp2003/InternetRadio/actions/runs/39105539892) (commit `fbdcc1b`) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks, then verified that the two public assets have identical size and digest at canonical URLs. Before publication, the Oor test workflow passed on the 1.1.0 source in [run 39105368624](https://github.com/universalrp2003/InternetRadio/actions/runs/39105368624). At the owner's request, 1.1.0 was published as soon as these automatic checks passed, without a device test; see **1.1.0** below for what changed.
+
+The previous stable release, 1.0.2 / code 4, remains available unchanged on both repositories: `Oor-Arivippu-v1.0.2.apk`, 12,195,401 bytes, SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`. Standalone release [run 38840264469](https://github.com/universalrp2003/InternetRadio/actions/runs/38840264469) passed the release unit tests, lint, signed build and package/version/minimum-SDK/signature checks, then verified that the two public assets have identical size and digest at canonical URLs; a separate post-publication API check confirmed the same. Before publication, the Oor test workflow passed on the exact 1.0.2 source in [run 38840000191](https://github.com/universalrp2003/InternetRadio/actions/runs/38840000191).
 
 1.0.2 shortens place and district announcements to the place names alone, without the repeated filler words: for example “Alangudi.” instead of “Entering Alangudi.”, and “ஆலங்குடி.” instead of “தற்போது ஆலங்குடி ஊருக்குள் வந்துள்ளீர்கள்.” The Tamil next-area form (“…, அடுத்த பகுதி …”) is unchanged. At the owner's request, 1.0.2 was published without a device test; no build of the 1.0.2 source has been installed on a phone yet.
 
