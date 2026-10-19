@@ -205,7 +205,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             ) {
                 Icon(
                     if (state.voiceOn) Icons.Outlined.VolumeUp else Icons.Outlined.VolumeOff,
-                    contentDescription = "Voice",
+                    contentDescription = tr("Voice"),
                     tint = if (state.voiceOn) AccentCyan else TextSecondary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -216,7 +216,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             ) {
                 Icon(
                     Icons.Outlined.Settings,
-                    contentDescription = "Settings",
+                    contentDescription = tr("Settings"),
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -227,7 +227,7 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
             ) {
                 Icon(
                     Icons.Outlined.Info,
-                    contentDescription = "About",
+                    contentDescription = tr("About"),
                     tint = TextSecondary,
                     modifier = Modifier.size(20.dp),
                 )
@@ -323,7 +323,8 @@ fun HomeScreen(state: UiState, vm: MainViewModel, listState: LazyListState) {
                                     Text(
                                         buildString {
                                             append(health.battery.statusLabel)
-                                            health.battery.powerW?.let { append(" • ${"%.1f".format(it)} W") }
+                                            com.universalrp.cleansweep.data.ChargingHonestyPolicy.wattsText(health.battery.powerW)
+                                                ?.let { append(" • $it") }
                                             health.cpuTempC?.let { append(" • CPU ${"%.0f".format(it)} °C") }
                                             append(" • uptime ${formatUptime(health.device.uptimeMs)}")
                                         },
@@ -577,7 +578,7 @@ private fun AssistantCard(state: UiState, vm: MainViewModel) {
                 ) {
                     Icon(
                         Icons.Outlined.Search,
-                        contentDescription = "Ask",
+                        contentDescription = tr("Ask"),
                         tint = Color(0xFF04202A),
                         modifier = Modifier.size(20.dp),
                     )
@@ -887,7 +888,7 @@ private fun HomeMobileDataCard(state: UiState, vm: MainViewModel) {
                     )
                 }
                 IconButton(onClick = { vm.loadUsage() }, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary, modifier = Modifier.size(18.dp))
                 }
             }
 

@@ -12,8 +12,8 @@ class LanguageSourcePolicyTest {
     @Test fun aSavedChoiceBeatsTheProcessDefault() {
         assertEquals(AppLang.TA, LanguageSourcePolicy.resolve("ta", AppLang.EN))
         assertEquals(AppLang.EN, LanguageSourcePolicy.resolve("en", AppLang.TA))
-        // An unknown/garbage id resolves through AppLang, never to a half-translated screen.
-        assertEquals(AppLang.EN, LanguageSourcePolicy.resolve("fr", AppLang.TA))
+        // An unknown/garbage id resolves to the Tamil first-run default, never a half-translated screen.
+        assertEquals(AppLang.TA, LanguageSourcePolicy.resolve("fr", AppLang.TA))
         assertEquals(AppLang.EN, LanguageSourcePolicy.resolve("", AppLang.EN))
         assertEquals(AppLang.EN, LanguageSourcePolicy.resolve("   ", AppLang.EN))
     }
@@ -21,8 +21,8 @@ class LanguageSourcePolicyTest {
     @Test fun noSavedChoiceKeepsWhatTheProcessAlreadyResolved() {
         assertEquals(AppLang.TA, LanguageSourcePolicy.resolve(null, AppLang.TA))
         assertEquals(AppLang.EN, LanguageSourcePolicy.resolve(null, AppLang.EN))
-        // A fresh process with nothing saved and nothing resolved yet is English, not blank.
-        assertEquals(AppLang.EN, LanguageSourcePolicy.resolve(null, null))
+        // A fresh install with nothing saved defaults to Tamil, not blank English controls.
+        assertEquals(AppLang.TA, LanguageSourcePolicy.resolve(null, null))
     }
 
     @Test fun theMirrorAndTheAuthorityMustAgreeBeforeAnythingIsComposed() {

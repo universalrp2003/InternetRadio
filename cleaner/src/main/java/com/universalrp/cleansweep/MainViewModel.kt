@@ -66,6 +66,7 @@ import com.universalrp.cleansweep.data.StorageInfo
 import com.universalrp.cleansweep.data.StorageInfoProvider
 import com.universalrp.cleansweep.data.hasAllFilesAccess
 import com.universalrp.cleansweep.notify.ChargeMonitorService
+import com.universalrp.cleansweep.notify.FloatingVolumeControl
 import com.universalrp.cleansweep.notify.StatusPill
 import com.universalrp.cleansweep.voice.Announcer
 import com.universalrp.cleansweep.voice.AnswerVoicePolicy
@@ -195,6 +196,8 @@ data class UiState(
     // Status-bar watt reading: CleanSweep draws it itself (needs "Display over other apps")
     val statusPill: Boolean = false,
     val statusPillAllowed: Boolean = false,
+    /** Independent, optional button that opens Android's native media-volume panel. */
+    val floatingVolumeButton: Boolean = false,
     // True while the user is placing the status-bar reading with their finger
     val pillDragging: Boolean = false,
     // Wi-Fi permission (Nearby-devices on Android 13+, Location below)
@@ -279,6 +282,8 @@ data class UiState(
     // 2.42 owner decision: "include pre installed system application button turn on default".
     val malwareIncludeSystem: Boolean = MonitorDefaultsPolicy.MALWARE_INCLUDE_SYSTEM,
     val vtKeySaved: Boolean = false,
+    val vtKeyStored: Boolean = false,
+    val vtKeyStorageProtected: Boolean = true,
     val tamilInfoItems: List<NewsHeadline> = emptyList(),
     val newsShown: Set<String> = emptySet(),
     val newsLoading: Boolean = false,
@@ -432,6 +437,13 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 ChargeMonitorService.sync(ctx, _state.value.chargeMonitor)
             }
         }
+        viewModelScope.launch {
+            settingsRepo.floatingVolumeButton.collect { on ->
+                prefs.edit().putBoolean(FloatingVolumeControl.KEY_ENABLED, on).apply()
+                mutate { it.copy(floatingVolumeButton = on, statusPillAllowed = FloatingVolumeControl.canDraw(ctx)) }
+                FloatingVolumeControl.sync(ctx, on)
+            }
+        }
         // A key that is already saved is enough: fill in its provider and model so the
         // app can use it without another trip to the AI settings screen.
         viewModelScope.launch {
@@ -461,7 +473,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 aiConfig = completed,
                 aiEngineLabel = completed.engineLabel,
                 aiWebLookup = AiSettings.webLookup(ctx),
-                vtKeySaved = AiSettings.vtKey(ctx).isNotBlank(),
+                vtKeySaved = AiSettings.hasSavedVtKey(ctx),
+                vtKeyStored = AiSettings.hasStoredVtCredential(ctx),
+                vtKeyStorageProtected = AiSettings.vtKeyStorageProtected(ctx),
             )
         }
         // Voice + daily watch: read the switches, and make sure the hourly worker is alive
@@ -742,6 +756,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                 statusPillAllowed = StatusPill.canDraw(ctx),
             )
         }
+        // Re-check the shared overlay permission after returning from Android Settings.
+        FloatingVolumeControl.sync(ctx, prefs.getBoolean(FloatingVolumeControl.KEY_ENABLED, false))
         // Coming back from the AI settings screen (or any other) re-tests the provider,
         // but at most every 15 minutes so the app is not chatty.
         if (System.currentTimeMillis() - lastAiCheckMs > 15 * 60_000L) refreshAiStatus()
@@ -1671,6 +1687,20 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun setFloatingVolumeButton(enabled: Boolean) {
+        viewModelScope.launch { settingsRepo.setFloatingVolumeButton(enabled) }
+        prefs.edit().putBoolean(FloatingVolumeControl.KEY_ENABLED, enabled).apply()
+        val allowed = FloatingVolumeControl.canDraw(ctx)
+        mutate { it.copy(floatingVolumeButton = enabled, statusPillAllowed = allowed) }
+        FloatingVolumeControl.sync(ctx, enabled)
+        if (enabled && !allowed) {
+            mutate { it.copy(message = "Allow “Display over other apps” to show the separate floating volume button.") }
+            openOverlaySettings()
+        } else if (enabled) {
+            mutate { it.copy(message = "Floating volume button on. Tap it to open Android's media-volume controls.") }
+        }
+    }
+
     fun openOverlaySettings() {
         try {
             ctx.startActivity(
@@ -1684,8 +1714,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun refreshStatusPillPermission() =
-        mutate { it.copy(statusPillAllowed = StatusPill.canDraw(ctx)) }
+    fun refreshStatusPillPermission() {
+        val allowed = FloatingVolumeControl.canDraw(ctx)
+        mutate { it.copy(statusPillAllowed = allowed) }
+        FloatingVolumeControl.sync(ctx, prefs.getBoolean(FloatingVolumeControl.KEY_ENABLED, false))
+    }
 
     fun setAssistantOnline(enabled: Boolean) {
         if (_state.value.assistantTyping) cancelAssistant()
@@ -1913,16 +1946,23 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setMalwareIncludeSystem(on: Boolean) = mutate { it.copy(malwareIncludeSystem = on) }
 
-    /** Saves the user's own free VirusTotal key (blank clears it). Stored like the AI keys. */
+    /** Saves the user's optional VirusTotal key encrypted, or forgets it when blank. */
     fun saveVtKey(key: String) {
-        AiSettings.setVtKey(ctx, key.trim())
+        val value = key.trim()
+        val operationSucceeded = if (value.isBlank()) AiSettings.forgetVtKey(ctx) else AiSettings.setVtKey(ctx, value)
+        val usable = AiSettings.hasSavedVtKey(ctx)
+        val stored = AiSettings.hasStoredVtCredential(ctx)
+        val storageProtected = AiSettings.vtKeyStorageProtected(ctx)
         mutate {
             it.copy(
-                vtKeySaved = key.trim().isNotBlank(),
-                message = if (key.trim().isNotBlank()) {
-                    "VirusTotal key saved — flagged apps now get a second opinion."
-                } else {
-                    "VirusTotal key removed — MalwareBazaar only."
+                vtKeySaved = usable,
+                vtKeyStored = stored,
+                vtKeyStorageProtected = storageProtected,
+                message = when {
+                    !operationSucceeded && value.isNotBlank() -> tr("VirusTotal key could not be saved encrypted. Please check secure storage and try again.")
+                    !operationSucceeded -> tr("Could not remove the saved key. Please retry.")
+                    value.isNotBlank() -> tr("VirusTotal key saved — flagged apps now get a second opinion.")
+                    else -> tr("VirusTotal key removed — MalwareBazaar only.")
                 },
             )
         }
@@ -2202,25 +2242,33 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun saveAiConfig(apiKey: String, model: String, baseUrl: String) {
         cancelAiReport(showMessage = false); cancelDeviceIdentification(showMessage = false)
         invalidateAiChecks()
-        // Per-provider copy first, so the next switch finds it even if the app is closed now.
-        AiSettings.saveFor(ctx, _state.value.aiConfig.provider, apiKey.trim(), model.trim())
-        val typed = _state.value.aiConfig.copy(
-            apiKey = apiKey.trim(),
+        val current = _state.value.aiConfig
+        val currentProvider = current.provider
+        // The UI never fills the password field with an existing secret. An empty field means
+        // “keep the provider's saved key”, not “delete it”; the explicit Forget key action deletes it.
+        val savedKey = AiSettings.savedFor(ctx, currentProvider).first
+        val effectiveKey = apiKey.trim().ifBlank {
+            savedKey.ifBlank { current.apiKey.takeIf { current.provider == currentProvider }.orEmpty() }
+        }
+        val typed = current.copy(
+            apiKey = effectiveKey,
             model = model.trim(),
             baseUrl = baseUrl.trim(),
         )
         // A pasted key carries its own provider prefix and a model id that works, so the
         // user never has to guess either one — and the assistant switches to it at once.
-        val updated = AiSettings.autoComplete(typed)
-        AiSettings.save(ctx, updated)
+        val completed = AiSettings.autoComplete(typed)
+        val storedSecurely = AiSettings.save(ctx, completed)
+        val updated = completed.copy(keyStorageProtected = storedSecurely)
         mutate {
             it.copy(
                 aiConfig = updated,
                 aiEngineLabel = updated.engineLabel,
-                message = if (updated.hasSavedKey) {
-                    "${updated.provider.shortLabel} saved — checking it now…"
-                } else {
-                    "AI settings saved"
+                message = when {
+                    effectiveKey.isNotBlank() && !storedSecurely ->
+                        tr("The API key could not be saved encrypted. It remains available only for this session; check secure storage and enter it again.")
+                    updated.hasSavedKey -> tr("%s saved — checking it now…", updated.provider.shortLabel)
+                    else -> tr("AI settings saved")
                 },
             )
         }
@@ -2228,6 +2276,29 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         if (updated.ready) {
             if (!_state.value.assistantOnline) setAssistantOnline(true)
             refreshAiStatus(announce = true)
+        }
+    }
+
+    /** Removes the selected provider's saved key; the masked draft is not used as storage. */
+    fun forgetAiKey(provider: AiProvider = _state.value.aiConfig.provider) {
+        cancelAiReport(showMessage = false); cancelDeviceIdentification(showMessage = false)
+        invalidateAiChecks()
+        val removed = AiSettings.forgetKey(ctx, provider)
+        val current = _state.value.aiConfig
+        if (provider == current.provider) {
+            val updated = current.copy(apiKey = "", keyStorageProtected = true)
+            mutate {
+                it.copy(
+                    aiConfig = updated,
+                    aiEngineLabel = updated.engineLabel,
+                    aiStatusOk = false,
+                    aiStatusText = if (provider.needsKey) tr("No key saved for %s yet.", provider.shortLabel) else tr("Free AI needs no key."),
+                    message = if (removed) tr("Saved %s key forgotten.", provider.shortLabel) else tr("Could not remove the saved key. Please retry."),
+                )
+            }
+            refreshAssistantWelcome()
+        } else {
+            mutate { it.copy(message = if (removed) tr("Saved %s key forgotten.", provider.shortLabel) else tr("Could not remove the saved key. Please retry.")) }
         }
     }
 

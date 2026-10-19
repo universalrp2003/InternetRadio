@@ -1,0 +1,1 @@
+Fixed the 0–10 dB boost on modern and fallback audio engines. Tamil station lists use verified-first, vote-ranked ordering; vote counts are shown.

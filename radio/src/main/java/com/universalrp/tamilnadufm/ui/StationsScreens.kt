@@ -40,7 +40,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,6 +51,7 @@ import com.universalrp.tamilnadufm.MainViewModel
 import com.universalrp.tamilnadufm.UiState
 import com.universalrp.tamilnadufm.data.Category
 import com.universalrp.tamilnadufm.data.RadioStation
+import com.universalrp.updates.AppStrings
 
 // --------------------------------------------------------------------- radio
 
@@ -192,6 +192,16 @@ fun RadioScreen(vm: MainViewModel, state: UiState, listState: LazyListState) {
                     modifier = Modifier.weight(1f),
                 )
                 IconChip(Icons.Filled.Language, "Live directory") { vm.searchDirectory() }
+            }
+        }
+
+        if (state.query.isBlank() && state.category in setOf(Category.ALL, Category.TAMIL, Category.TAMIL_FM)) {
+            item {
+                Text(
+                    "Verified streams stay first; the all-stations list prioritizes Tamil, and Radio Browser votes sort each group.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
             }
         }
 
@@ -347,7 +357,7 @@ fun StationRow(
             if (station.isCustom) {
                 Icon(
                     Icons.Filled.Delete,
-                    contentDescription = "Remove",
+                    contentDescription = AppStrings.translate("Remove"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(18.dp)
@@ -358,7 +368,7 @@ fun StationRow(
 
             Icon(
                 if (favourite) Icons.Filled.Star else Icons.Filled.StarBorder,
-                contentDescription = if (favourite) "Remove favourite" else "Add favourite",
+                contentDescription = AppStrings.translate(if (favourite) "Remove favourite" else "Add favourite"),
                 tint = if (favourite) Gold else TextSecondary,
                 modifier = Modifier
                     .size(24.dp)
@@ -522,7 +532,7 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                 }
                 Icon(
                     Icons.Filled.Close,
-                    contentDescription = "Close",
+                    contentDescription = AppStrings.translate("Close"),
                     tint = TextSecondary,
                     modifier = Modifier
                         .size(24.dp)
@@ -542,7 +552,9 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                     .padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.directoryResults, key = { it.url }) { station ->
+                // url+name: still stable across refreshes, but two entries that share a
+                // stream URL can no longer collide and crash the list.
+                items(state.directoryResults, key = { it.url + "|" + it.name }) { station ->
                     PanelCard(Modifier.fillMaxWidth()) {
                         Row(
                             Modifier
@@ -575,7 +587,7 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                             Spacer(Modifier.width(6.dp))
                             Icon(
                                 Icons.Filled.Add,
-                                contentDescription = "Save",
+                                contentDescription = AppStrings.translate("Save"),
                                 tint = Teal,
                                 modifier = Modifier
                                     .size(22.dp)

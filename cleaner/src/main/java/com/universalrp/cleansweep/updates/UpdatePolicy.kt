@@ -1,6 +1,7 @@
 package com.universalrp.cleansweep.updates
 
 import java.net.URI
+import com.universalrp.updates.ReleaseRepositorySources
 
 object UpdatePolicy {
     const val PACKAGE = "com.universalrp.cleansweep"
@@ -18,12 +19,20 @@ object UpdatePolicy {
         }
         return false
     }
-    fun officialAsset(url: String, fileName: String): Boolean = try {
-        val uri = URI(url)
-        uri.scheme == "https" && uri.host == "github.com" && uri.port == -1 && uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
-            uri.path.startsWith("/universalrp2003/InternetRadio/releases/download/") && uri.path.substringAfterLast('/') == fileName &&
-            uri.path.removePrefix("/universalrp2003/InternetRadio/releases/download/").split('/').size == 2
-    } catch (_: Exception) { false }
+    fun officialAsset(url: String, fileName: String): Boolean =
+        ReleaseRepositorySources.ordered.any { source ->
+            runCatching {
+                val uri = URI(url)
+                val suffix = uri.path.removePrefix("${source.canonicalPath}/releases/download/")
+                uri.scheme == "https" && uri.host == "github.com" && uri.port == -1 &&
+                    uri.rawUserInfo == null && uri.rawQuery == null && uri.rawFragment == null &&
+                    uri.path.startsWith("${source.canonicalPath}/releases/download/") &&
+                    uri.path.substringAfterLast('/') == fileName && suffix.split('/').size == 2
+            }.getOrDefault(false)
+        }
+
+    fun officialAsset(url: String, fileName: String, tag: String, repository: ReleaseRepositorySources.Source): Boolean =
+        ReleaseRepositorySources.isOfficialAsset(url, repository, tag, fileName)
     fun digest(value: String?): String? = value?.removePrefix("sha256:")?.takeIf { it.matches(Regex("[a-f0-9]{64}")) }
     fun trustedSigner(signers: Set<String>, installed: Set<String>): Boolean = signers == setOf(SIGNER_SHA256) && signers == installed
     fun validSize(bytes: Long): Boolean = bytes in 1..MAX_APK_BYTES

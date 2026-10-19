@@ -16,6 +16,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.universalrp.tamilnadufm.audio.AudioFx
+import com.universalrp.updates.AppLanguageState
 import com.universalrp.tamilnadufm.player.PlaybackService
 import com.universalrp.tamilnadufm.ui.AppRoot
 import com.universalrp.tamilnadufm.ui.TamilFmTheme
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        AppLanguageState.initialize(this)
 
         AudioFx.load(this)
 

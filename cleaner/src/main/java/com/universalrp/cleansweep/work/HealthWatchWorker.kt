@@ -330,9 +330,9 @@ class HealthWatchWorker(
         val cpuTemp = health?.cpuTempC?.let { "%.0f".format(it) } ?: "?"
         val freeGb = storage?.free?.let { "%.1f".format(it / 1024.0 / 1024.0 / 1024.0) } ?: "?"
         val freeRam = health?.device?.availableRamBytes?.let { (it / 1024.0 / 1024.0).toInt().toString() } ?: "?"
-        val timeToFull = battery?.let { batteryTimeMinutes(it) }?.let { minutes ->
+        val timeToFull = battery?.takeIf { it.charging }?.let { batteryTimeMinutes(it) }?.let { minutes ->
             val duration = if (minutes >= 60) Lang.forContext(ctx, "%s h %s min", minutes / 60, minutes % 60) else Lang.forContext(ctx, "%s min", minutes)
-            Lang.forContext(ctx, "Estimated time to full: %s", duration)
+            Lang.forContext(ctx, "Estimated to 100% from recent charging: %s", duration)
         }
 
         // ---- the one line that is spoken (Strictly High/Medium security risk warnings)

@@ -1,5 +1,9 @@
 # Live Guard2.39 — verified release and remaining device review
 
+## Current active status (2026-10-14)
+
+This document preserves a historical Live Guard 2.39 release review. The LM Arena / Chatbot Arena rating-card proposal below is **superseded historical material, not an active requirement**: the card and active ratings data, policy and tests have been removed from the current app. Do not restore a rating feed or substitute rating card without the owner's explicit approval. Current AI settings show provider/key-configured status, not full API keys; diagnostic output also redacts credentials in custom endpoints. This status note does not rewrite historical release records, evidence or device-review notes below.
+
 Owner authorized build/publication on11 October2026. **2.39/code44 is now
 verified/published** as stable/latest`v2026.10.11-3`, **2026-10-11T13:38:57Z**.
 [CI38143638654](https://github.com/universalrp2003/InternetRadio/actions/runs/38143638654)

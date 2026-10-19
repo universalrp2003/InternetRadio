@@ -1,0 +1,24 @@
+[package]
+name = "secretmessage-mls-spike"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.91"
+license = "GPL-3.0-only"
+publish = false
+description = "Isolated OpenMLS Android integration feasibility spike for Secret Message"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+# Enables only the in-memory test harness used by this isolated integration spike.
+spike-harness = []
+# Exposes the smoke test through one JNI entry point for a separate, test-only APK.
+android-jni = ["spike-harness", "dep:jni"]
+
+[dependencies]
+openmls = { version = "=0.9.0", default-features = false, features = ["openmls_rust_crypto"] }
+openmls_basic_credential = "=0.6.0"
+openmls_rust_crypto = "=0.6.0"
+jni = { version = "=0.22.4", optional = true }

@@ -21,7 +21,6 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.Snackbar
@@ -37,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.universalrp.pulseeq.EqTab
 import com.universalrp.pulseeq.EqViewModel
+import com.universalrp.updates.AppStrings
 
 @Composable
 fun EqRoot(vm: EqViewModel) {
@@ -119,7 +119,7 @@ private fun BottomItem(
     ) {
         Icon(
             icon,
-            contentDescription = label,
+            contentDescription = AppStrings.translate(label),
             tint = if (selected) Cyan else TextSecondary,
             modifier = Modifier.size(22.dp),
         )

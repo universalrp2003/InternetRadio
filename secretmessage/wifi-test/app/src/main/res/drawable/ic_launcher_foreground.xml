@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Secret Message launcher foreground: a chat bubble with a keyhole, inside the 66 dp safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#B9D7FF"
+        android:pathData="M40,30 H68 A12,12 0 0,1 80,42 V58 A12,12 0 0,1 68,70 H48 L36,80 L40,70 A12,12 0 0,1 28,58 V42 A12,12 0 0,1 40,30 Z" />
+    <path
+        android:fillColor="#101922"
+        android:pathData="M48,46 A6,6 0 1,0 60,46 A6,6 0 1,0 48,46 Z" />
+    <path
+        android:fillColor="#101922"
+        android:pathData="M51.5,49 L56.5,49 L58,61 L50,61 Z" />
+</vector>

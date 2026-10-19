@@ -2,12 +2,11 @@ package com.universalrp.cleansweep.data
 
 import android.content.Context
 import android.content.pm.PackageManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
-import java.security.MessageDigest
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -27,7 +26,6 @@ class ScanEngine(private val context: Context) {
             "thumbs.db", ".ds_store", "desktop.ini", ".spotlight-v100", ".trashes"
         )
         private const val MAX_HASHED_FILES = 1500
-        private const val HASH_CHUNK = 65536L
     }
 
     /**
@@ -233,36 +231,76 @@ class ScanEngine(private val context: Context) {
             }
         }
 
-        // Duplicate detection: group by exact size, then hash head+tail of the file.
-        val digest = MessageDigest.getInstance("MD5")
+        // Partial hashes only narrow the candidate set. Every file proposed as a duplicate
+        // is SHA-256 hashed in full before the scanner labels anything as identical.
+        val scanContext = coroutineContext
         var hashed = 0
+        var duplicateScanCapped = false
         val sizeGroups = if (JunkKind.DUPLICATES in want) {
             bySize.entries.filter { it.value.size > 1 }.sortedByDescending { it.key }
         } else {
             emptyList()
         }
-        for ((size, paths) in sizeGroups) {
-            if (hashed >= MAX_HASHED_FILES) break
-            val byHash = HashMap<String, MutableList<String>>()
-            for (p in paths) {
-                if (hashed >= MAX_HASHED_FILES) break
-                if (p in junkPaths) continue
-                val h = partialHash(digest, File(p), size) ?: continue
+        sizeGroupLoop@ for ((size, paths) in sizeGroups) {
+            val byPartialHash = HashMap<String, MutableList<String>>()
+            for (path in paths) {
+                if (path in junkPaths) continue
+                if (hashed >= MAX_HASHED_FILES) {
+                    duplicateScanCapped = true
+                    break@sizeGroupLoop
+                }
                 hashed++
-                byHash.getOrPut(h) { mutableListOf() }.add(p)
+                val partial = DuplicateContentHash.partialCandidateHash(File(path), size) ?: continue
+                byPartialHash.getOrPut(partial) { mutableListOf() }.add(path)
             }
-            for (group in byHash.values) {
-                if (group.size < 2) continue
-                val sorted = group.map { File(it) }.sortedByDescending { it.lastModified() }
-                for (f in sorted.drop(1)) {
-                    if (junkPaths.add(f.absolutePath)) {
-                        addJunk(
-                            duplicates,
-                            JunkFile(
-                                f.absolutePath, f.length(), f.lastModified(),
-                                note = "Newest copy is kept"
-                            )
-                        )
+            for (candidatePaths in byPartialHash.values) {
+                if (candidatePaths.size < 2) continue
+                val byFullHash = HashMap<String, MutableList<File>>()
+                for (path in candidatePaths) {
+                    scanContext.ensureActive()
+                    val file = File(path)
+                    val fullHash = try {
+                        DuplicateContentHash.fullSha256(file, size) { scanContext.ensureActive() }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        null
+                    } ?: continue
+                    byFullHash.getOrPut(fullHash) { mutableListOf() }.add(file)
+                }
+                for (hashGroup in byFullHash.values) {
+                    if (hashGroup.size < 2) continue
+                    val exactGroups = mutableListOf<MutableList<File>>()
+                    for (candidate in hashGroup) {
+                        scanContext.ensureActive()
+                        val exact = exactGroups.firstOrNull { files ->
+                            val representative = files.first()
+                            try {
+                                DuplicateContentHash.sameContents(representative, candidate, size) {
+                                    scanContext.ensureActive()
+                                }
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (_: Exception) {
+                                false
+                            }
+                        }
+                        if (exact == null) exactGroups.add(mutableListOf(candidate)) else exact.add(candidate)
+                    }
+                    for (exactGroup in exactGroups) {
+                        if (exactGroup.size < 2) continue
+                        val sorted = exactGroup.sortedByDescending { it.lastModified() }
+                        for (file in sorted.drop(1)) {
+                            if (junkPaths.add(file.absolutePath)) {
+                                addJunk(
+                                    duplicates,
+                                    JunkFile(
+                                        file.absolutePath, file.length(), file.lastModified(),
+                                        note = "Newest identical copy is kept"
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -284,6 +322,7 @@ class ScanEngine(private val context: Context) {
             filesScanned = filesScanned,
             dirsScanned = dirsScanned,
             completedAt = System.currentTimeMillis(),
+            duplicateScanCapped = duplicateScanCapped,
         )
         // CleanSweep ticks nothing on its own: a fresh scan is a list for you to choose from.
         // Settings → "Preselect after a scan" is the opt-in shortcut, per category.
@@ -311,32 +350,4 @@ class ScanEngine(private val context: Context) {
         false
     }
 
-    /** MD5 over the first and last 64 KB — fast and reliable enough for duplicate detection. */
-    private fun partialHash(digest: MessageDigest, f: File, size: Long): String? = try {
-        FileInputStream(f).use { fis ->
-            digest.reset()
-            val buf = ByteArray(32 * 1024)
-            val head = minOf(size, HASH_CHUNK)
-            var read = 0L
-            while (read < head) {
-                val n = fis.read(buf, 0, minOf(buf.size.toLong(), head - read).toInt())
-                if (n <= 0) break
-                digest.update(buf, 0, n)
-                read += n
-            }
-            if (size > HASH_CHUNK * 2) {
-                fis.channel.position(size - HASH_CHUNK)
-                var tailRead = 0L
-                while (tailRead < HASH_CHUNK) {
-                    val n = fis.read(buf, 0, minOf(buf.size.toLong(), HASH_CHUNK - tailRead).toInt())
-                    if (n <= 0) break
-                    digest.update(buf, 0, n)
-                    tailRead += n
-                }
-            }
-            digest.digest().joinToString("") { "%02x".format(it) }
-        }
-    } catch (e: Exception) {
-        null
-    }
 }

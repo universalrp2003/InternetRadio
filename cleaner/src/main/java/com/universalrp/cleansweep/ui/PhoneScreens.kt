@@ -120,7 +120,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Installed apps"),
                 style = MaterialTheme.typography.titleLarge,
@@ -128,7 +128,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.loadAppInventory() }) {
-                Icon(Icons.Outlined.Sync, contentDescription = "Reload", tint = TextSecondary)
+                Icon(Icons.Outlined.Sync, contentDescription = tr("Reload"), tint = TextSecondary)
             }
         }
 
@@ -152,7 +152,7 @@ fun AppsScreen(state: UiState, vm: MainViewModel) {
                         if (state.appQuery.isNotEmpty()) {
                             Icon(
                                 Icons.Outlined.Close,
-                                contentDescription = "Clear",
+                                contentDescription = tr("Clear"),
                                 tint = TextSecondary,
                                 modifier = Modifier.clickable { vm.setAppQuery("") },
                             )
@@ -455,7 +455,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Security check"),
                 style = MaterialTheme.typography.titleLarge,
@@ -463,7 +463,7 @@ fun SecurityScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.loadSecurity() }) {
-                Icon(Icons.Outlined.Sync, contentDescription = "Rescan", tint = TextSecondary)
+                Icon(Icons.Outlined.Sync, contentDescription = tr("Rescan"), tint = TextSecondary)
             }
         }
 
@@ -849,17 +849,24 @@ private fun MalwareCard(state: UiState, vm: MainViewModel) {
             }
             Spacer(Modifier.height(10.dp))
             VirusTotalKeyHelp()
-            if (state.vtKeySaved) {
+            if (state.vtKeyStored) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        "VirusTotal key saved — flagged apps get a second opinion there.",
+                        tr(if (state.vtKeySaved) "VirusTotal key saved — flagged apps now get a second opinion." else "Saved VirusTotal key cannot be read. Remove it before entering a new key."),
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
+                        color = if (state.vtKeySaved) TextSecondary else DangerRed,
                         modifier = Modifier.weight(1f),
                     )
                     TextButton(onClick = { vm.saveVtKey("") }) {
                         Text(tr("Remove"), color = TextSecondary)
                     }
+                }
+                if (!state.vtKeyStorageProtected) {
+                    Text(
+                        tr("Secure key storage is unavailable. This key is not confirmed encrypted at rest; remove it or retry after secure storage is available."),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = DangerRed,
+                    )
                 }
             } else {
                 Text(
@@ -926,7 +933,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Wi-Fi & network"),
                 style = MaterialTheme.typography.titleLarge,
@@ -934,7 +941,7 @@ fun NetworkScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.refreshNetworkDetails() }) {
-                Icon(Icons.Outlined.Sync, contentDescription = "Refresh", tint = TextSecondary)
+                Icon(Icons.Outlined.Sync, contentDescription = tr("Refresh"), tint = TextSecondary)
             }
         }
 
@@ -1268,7 +1275,7 @@ private fun DeviceCard(
                 IconButton(onClick = { showRenameDialog = true }) {
                     Icon(
                         Icons.Outlined.Info,
-                        contentDescription = "Name device",
+                        contentDescription = tr("Name device"),
                         tint = if (device.customName != null) AccentCyan else TextSecondary.copy(alpha = 0.5f),
                         modifier = Modifier.size(20.dp),
                     )
@@ -1276,7 +1283,7 @@ private fun DeviceCard(
                 IconButton(onClick = onToggleVerified) {
                     Icon(
                         Icons.Outlined.CheckCircle,
-                        contentDescription = "Known device",
+                        contentDescription = tr("Known device"),
                         tint = if (device.isVerifiedKnown) GoodGreen else TextSecondary.copy(alpha = 0.35f),
                         modifier = Modifier.size(22.dp),
                     )
@@ -1352,7 +1359,7 @@ fun SecurityGuidanceCard(state: UiState, vm: MainViewModel) {
                 IconButton(onClick = { expanded = !expanded }) {
                     Icon(
                         if (expanded) Icons.Outlined.Close else Icons.Outlined.ChevronRight,
-                        contentDescription = "Expand",
+                        contentDescription = tr("Expand"),
                         tint = TextSecondary,
                     )
                 }

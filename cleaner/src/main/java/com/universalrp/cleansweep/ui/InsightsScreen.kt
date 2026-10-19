@@ -268,7 +268,7 @@ private fun SampleLineChart(title: String, points: List<Pair<Long, Double?>>, un
     val low = if (zeroBase) 0.0 else valid.minOrNull()!! - 1
     val high = maxOf(valid.maxOrNull()!! + if (zeroBase) 0.5 else 1.0, low + 1)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Notice(number(low, unit)); Notice(number(high, unit)) }
-    Canvas(Modifier.fillMaxWidth().height(130.dp).semantics { contentDescription = "$title: ${valid.size} ${tr("observed samples")}" }) {
+    Canvas(Modifier.fillMaxWidth().height(130.dp).semantics { contentDescription = "${tr(title)}: ${valid.size} ${tr("observed samples")}" }) {
         drawLine(TextSecondary.copy(alpha = 0.3f), Offset(0f, size.height), Offset(size.width, size.height))
         var previous: Pair<Long, Offset>? = null
         for ((time, value) in points) {

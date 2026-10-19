@@ -1,5 +1,7 @@
 # Live Guard 2.35 — six-feature real-device validation plan
 
+> Historical validation plan for the 2.35 release, written before the current four-module cleanup. Its build inventory is not the current CI pipeline.
+
 **Status:** required manual checks, not executed by the coding environment.
 Android 8/API 26+ is the compatibility target. The owner confirmed 2.34 charging/
 unplug display on Redmi 13 5G only; that is not evidence that 2.35 history, self-test,
@@ -144,7 +146,7 @@ Samsung, Oppo/Realme, Vivo/iQOO and stock/Pixel where available; include Android
 8/9/10, Android 11 overlay restrictions and Android 13+ notification permission.
 OEM background/autostart policies cannot be established by compilation or a flag snapshot.
 
-CI compiles all five modules/debug/release/AABs; runs both CleanSweep test variants
+CI compiled every app module then present, plus debug/release/AABs; it ran both CleanSweep test variants
 and existing Radio tests; enforces 113 required CleanSweep cases per variant,
 APK feature/manifest checks, version/minSDK and unchanged release-signing checks.
 Synthetic parser/test-gate fixtures and these pure policy tests are **not** an

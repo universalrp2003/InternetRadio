@@ -1,0 +1,24 @@
+[package]
+name = "secretmessage-mls-upstream-candidate"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.94"
+license = "GPL-3.0-only"
+publish = false
+description = "Test-only OpenMLS upstream dependency-migration candidate for Secret Message"
+
+[lib]
+name = "secretmessage_mls_spike"
+path = "../native/src/lib.rs"
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+spike-harness = []
+android-jni = ["spike-harness", "dep:jni"]
+
+[dependencies]
+openmls = { git = "https://github.com/openmls/openmls", rev = "e0b21a70a55a9014b8de2772b36bf3d638adad51", default-features = false, features = ["openmls_rust_crypto"] }
+openmls_basic_credential = { git = "https://github.com/openmls/openmls", rev = "e0b21a70a55a9014b8de2772b36bf3d638adad51" }
+openmls_rust_crypto = { git = "https://github.com/openmls/openmls", rev = "e0b21a70a55a9014b8de2772b36bf3d638adad51" }
+jni = { version = "=0.22.4", optional = true }

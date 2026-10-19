@@ -23,7 +23,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import com.universalrp.pulseeq.EqTab
 import com.universalrp.pulseeq.EqUiState
 import com.universalrp.pulseeq.EqViewModel
+import com.universalrp.updates.AppLanguage
+import com.universalrp.updates.AppLanguageState
+import com.universalrp.updates.AppLanguageToggle
 
 @Composable
 fun SettingsScreen(state: EqUiState, vm: EqViewModel) {
@@ -58,6 +60,25 @@ fun SettingsScreen(state: EqUiState, vm: EqViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
+                }
+            }
+        }
+
+        item {
+            PanelCard(Modifier.fillMaxWidth()) {
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text("App language", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (AppLanguageState.current == AppLanguage.TAMIL) "தமிழ்" else "English",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                        )
+                    }
+                    AppLanguageToggle()
                 }
             }
         }

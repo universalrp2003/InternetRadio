@@ -18,13 +18,21 @@ object StatusPillContent {
         batteryPercent: Int = -1,
         packPercent: Int? = null,
         hideDataOnWifiOrUnlimited: Boolean = false,
+        charging: Boolean = false,
+        chargeStatusText: String? = null,
+        estimatingText: String = "Estimating",
+        unavailableText: String = "Unavailable",
     ): Content {
         if (powerConnected) {
-            // A connected but paused/full charger still uses the watts-only mode. Never
-            // substitute amps, battery %, a data counter, or a made-up zero for a missing sensor.
-            val watts = powerW?.takeIf { it.isFinite() && it >= 0f }
+            // A zero/near-zero or unsupported sensor is not a watt reading. Use only a real
+            // battery-side measurement; otherwise show a measured-history ETA/status, never
+            // an empty number, an amp-for-watt substitution, or a made-up 0 W.
+            val watts = powerW?.takeIf { it.isFinite() && it > 0.05f }
+            val display = watts?.let { String.format(Locale.US, "%.1f W", it) }
+                ?: chargeStatusText?.takeIf { it.isNotBlank() }
+                ?: if (charging) estimatingText else unavailableText
             return Content(
-                text = watts?.let { String.format(Locale.US, "%.1f W", it) } ?: "— W",
+                text = display,
                 packPercent = null,
                 showNetworkMeter = false,
             )

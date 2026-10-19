@@ -1,67 +1,34 @@
-# Store assets
+# Store metadata and artwork — RP Ideas
 
-| File | What it is |
-|---|---|
-| `fdroid/REPORT.md` | The honest store-route verdict: which free store can take these apps and why. Read this one first. |
-| `fdroid/README.md` | IzzyOnDroid request text and the F-Droid step-by-step (the chosen route). |
-| `fdroid/metadata/*.yml` | The five recipe files that go into F-Droid's `fdroiddata` repository. |
-| `fdroid/RFP_ISSUE.md` | Paste-ready text for F-Droid's Requests-For-Packaging tracker. |
-| `fdroid/ISSUE_BODY.md` | The exact text that was filed as **fdroid/rfp#4512**, and the record of it. |
-| `incoming/README.md` | The folder to drop phone screenshots into from GitHub when chat attachments do not arrive, with the privacy rules for doing it. |
-| `PLAY_SUBMISSION.md` | The Google Play copy-paste pack: which apps qualify, why CleanSweep cannot go there, the Data safety and content-rating answers, and the upload steps. |
-| `../PRIVACY.md` | The privacy policy Play requires a public URL for. |
-| `<module>/fastlane/metadata/android/<locale>/` | The listing text every store reads: `title.txt`, `short_description.txt`, `full_description.txt` and `changelogs/<versionCode>.txt`. English everywhere, plus Tamil (`ta-IN`) for CleanSweep and Ramesh Radio. |
+The active store-art pipeline covers the three apps with store metadata: Live Guard (`cleaner`), Ramesh Radio (`radio`) and PulseEQ (`equalizer`). RP Vocal Remover Studio and Oor Arivippu are standalone GitHub-release APKs and are not included in the store-art pipeline.
 
-## Screenshots and graphics
+## What is in this directory
 
-Store pages want 2–8 phone screenshots per app, plus a 512×512 icon and a 1024×500 feature
-graphic. They go here, next to the text they belong to:
+- [`PLAY_SUBMISSION.md`](PLAY_SUBMISSION.md) — current artifact and submission-readiness notes; it does not imply that a listing is submitted or approved.
+- [`fdroid/README.md`](fdroid/README.md) and [`fdroid/metadata/`](fdroid/metadata/) — F-Droid build recipes for the three current store-art apps. Prepared metadata is not the same as an accepted or published listing.
+- [`fdroid/REPORT.md`](fdroid/REPORT.md) — current store-channel status and caveats.
+- [`incoming/README.md`](incoming/README.md) — safe handling rules for any future screenshot intake.
+- `<module>/fastlane/metadata/android/<locale>/` — listing text, changelogs, icons, feature graphics and available phone screenshots. English listings are present for all three; Tamil listings are present for Live Guard and Ramesh Radio.
 
-```
-<module>/fastlane/metadata/android/<locale>/images/
-    icon.png                     512 x 512    <- generated, do not edit by hand
-    featureGraphic.png           1024 x 500   <- generated, do not edit by hand
-    phoneScreenshots/1.png       portrait phone screenshots, numbered <- still to come
-    phoneScreenshots/2.png
+## Generated art
+
+The checked-in 512×512 icons and 1024×500 feature graphics are generated from each app's launcher/theme assets and listing text. The current scripts handle only `cleaner`, `radio` and `equalizer`:
+
+```sh
+python3 tools/make_store_assets.py icons
+bash tools/make_feature_graphics.sh
 ```
 
-**The icon and the feature graphic are generated from the real launcher vectors**, not drawn
-separately, so they can never drift from what the phone shows:
+Phone screenshots must come from real app screens. To place sanitized portrait screenshots in the appropriate metadata folder:
 
-```bash
-python3 tools/make_store_assets.py icons   # every app: 512x512 icons (+ bitmap fallbacks for
-                                           # Internet Radio, whose minSdk is 24)
-bash tools/make_feature_graphics.sh        # every app: 1024x500 graphics, text taken from the
-                                           # fastlane listings, colours from the app themes
+```sh
+python3 tools/make_screenshots.py cleaner screen1.png screen2.png
+python3 tools/make_screenshots.py radio --locale all screen1.png screen2.png
+python3 tools/make_screenshots.py equalizer screen1.png screen2.png
 ```
 
-Both scripts are pure Python / ImageMagick — no Pillow, no librsvg, and nothing to install.
-CI runs them on every push, so a fresh checkout always has a complete listing.
+Use only images approved for public release. Remove or redact personal information, installed-app lists, IP/network details, account identifiers and notifications on the phone before adding screenshots. Do not commit private diagnostic logs or user audio as store assets.
 
-### The screenshots, and the exact API we render them to
+## Build artifacts
 
-The phone screenshots are the only piece that still has to come from a real phone, and they
-are placed by `tools/make_screenshots.py`:
-
-```bash
-# a whole set, in the order the store should show them
-python3 tools/make_screenshots.py cleaner shot1.png shot2.png shot3.png shot4.png
-
-# hide a private number on the third screenshot only (x,y,w,h - or percentages)
-python3 tools/make_screenshots.py cleaner shot1.png shot2.png shot3.png shot4.png \
-        --redact 3:40,1120,1000,70
-
-# both locales at once, and a Google Play shape (Play rejects anything above 2:1)
-python3 tools/make_screenshots.py radio --locale all radio1.png radio2.png radio3.png
-python3 tools/make_screenshots.py radio --canvas 1080x2160 radio1.png radio2.png radio3.png
-```
-
-It numbers them in the order you pass them and writes `1.png`, `2.png`, ... into
-`<module>/fastlane/metadata/android/<locale>/images/phoneScreenshots/`. By default each file
-keeps the phone's own size, so nothing is invented and nothing is cut - no device frame, no
-filler. A redaction box paints over the region with the apps' card colour *before* the file is
-written, so hiding the public IP, the gateway or an app list never changes the image shape, and
-the command that produced the file records exactly what was hidden. Before writing anything it
-refuses files that are not readable portrait phone screenshots (minimum width 720,
-height/width 1.6-2.4) - that check is the one that catches a hand-crop, which is what a
-redaction becomes if it is done by scalpel rather than by a bar.
+The existing batch workflow builds the four legacy apps and AABs for `cleaner`, `radio` and `equalizer`; Oor Arivippu is built by a separate verified release workflow. RP Vocal Remover Studio and Oor Arivippu are distributed as standalone APKs. Exact current APK names and verified hashes are listed in [`../docs/published-release-digests.md`](../docs/published-release-digests.md); the GitHub Release pages remain the authoritative downloads.

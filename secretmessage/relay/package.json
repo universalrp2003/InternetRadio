@@ -1,0 +1,19 @@
+{
+  "name": "secretmessage-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test-only WebSocket relay for Secret Message TEST builds (Cloudflare Worker + Durable Object).",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --ip 127.0.0.1 --port 8787",
+    "test:relay": "node test/relay-test.mjs"
+  },
+  "devDependencies": {
+    "wrangler": "4.151.1",
+    "ws": "8.22.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

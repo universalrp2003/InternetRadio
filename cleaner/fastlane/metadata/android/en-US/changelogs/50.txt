@@ -1,0 +1,5 @@
+Live Guard 2.45
+• Duplicate detection confirms full file contents before classifying duplicates.
+• Charging values stay honest; ETA uses recent local observations only.
+• AI key status is shown without exposing secrets; the old rating card/data remain removed.
+• Connection and updater safeguards improved; InternetRadio remains the migration fallback.

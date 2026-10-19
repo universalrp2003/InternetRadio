@@ -18,8 +18,9 @@ import com.universalrp.cleansweep.data.ThermalWarningPolicy
 import com.universalrp.cleansweep.data.LiveNetworkQuality
 import com.universalrp.cleansweep.data.Lang
 import com.universalrp.cleansweep.data.DisplayTime
-import com.universalrp.cleansweep.data.batteryTimeLabel
+import com.universalrp.cleansweep.data.LiveChargingEta
 import com.universalrp.cleansweep.data.batteryTimeMinutes
+import com.universalrp.cleansweep.data.formatMinutes
 import com.universalrp.cleansweep.voice.Announcer
 
 /**
@@ -90,7 +91,19 @@ object ChargeNotifier {
         }
 
         val isUnlimited = dataUsage?.isUnlimited5g == true
-        val chargingContent = StatusPillContent.resolve(battery.powerConnected, battery.powerW)
+        val chargeStatusText = when {
+            battery.percent >= 100 -> t("Full")
+            battery.charging -> LiveChargingEta.estimate(battery)?.let { t("ETA %s", formatMinutes(it.minutesToFull)) }
+            else -> null
+        }
+        val chargingContent = StatusPillContent.resolve(
+            powerConnected = battery.powerConnected,
+            powerW = battery.powerW,
+            charging = battery.charging,
+            chargeStatusText = chargeStatusText,
+            estimatingText = t("Estimating"),
+            unavailableText = t("Unavailable"),
+        )
         val title = when {
             battery.powerConnected -> chargingContent.text // Measurement/unit, not an English-only sentence.
             dataUsage != null && !dataUsage.readingAvailable -> t("Mobile usage unavailable · Battery %s", percent)
@@ -99,12 +112,12 @@ object ChargeNotifier {
             else -> t("Battery %s · %s", percent, t(battery.statusLabel))
         }
         val minutes = runCatching { batteryTimeMinutes(battery) }.getOrNull()
-        val duration = minutes?.let { value ->
-            if (value >= 60) t("%s h %s min", value / 60, value % 60) else t("%s min", value)
-        }
+        val duration = minutes?.let { formatMinutes(it) }
         val timeLine = when {
             battery.percent == 100 -> t("Full")
-            duration != null -> t("Estimated time to full: %s", duration)
+            battery.charging && duration != null -> t("Estimated to 100% from recent charging: %s", duration)
+            battery.charging -> t("Estimating charging time; more observations are needed.")
+            battery.powerConnected -> t("Charging time unavailable while the battery is not charging.")
             else -> t("Battery %s · %s", percent, t(battery.statusLabel))
         }
         val netQuality = if (battery.powerConnected) null else runCatching { LiveNetworkQuality.measure(context) }.getOrNull()
@@ -142,12 +155,12 @@ object ChargeNotifier {
                 }
                 ChargingHonestyPolicy.voltsText(battery.voltageV)?.let {
                     appendLine()
-                    append(t("Battery voltage: %s", it))
+                    append(t("Battery voltage (Android broadcast): %s", it))
                 }
-                battery.temperatureC?.let { appendLine(); append(t("Battery temperature: %s", "%.1f °C".format(java.util.Locale.US, it))) }
+                battery.temperatureC?.let { appendLine(); append(t("Battery temperature (Android broadcast): %s", "%.1f °C".format(java.util.Locale.US, it))) }
             } else {
                 append(t("Battery %s · %s", percent, t(battery.statusLabel)))
-                battery.temperatureC?.let { append(" · %.1f °C".format(java.util.Locale.US, it)) }
+                battery.temperatureC?.let { append(" · "); append(t("Battery temperature (Android broadcast): %s", "%.1f °C".format(java.util.Locale.US, it))) }
             }
             append("\n" + t("Card updated: %s", DisplayTime.clock(System.currentTimeMillis(), seconds = true)))
         }
@@ -288,7 +301,21 @@ object ChargeNotifier {
             return
         }
         if (battery.powerConnected) {
-            val content = StatusPillContent.resolve(true, battery.powerW)
+            val language = Lang.languageIn(context)
+            fun t(text: String, vararg args: Any) = Lang.translate(language, text, *args)
+            val chargeStatusText = when {
+                battery.percent >= 100 -> t("Full")
+                battery.charging -> LiveChargingEta.estimate(battery)?.let { t("ETA %s", formatMinutes(it.minutesToFull)) }
+                else -> null
+            }
+            val content = StatusPillContent.resolve(
+                powerConnected = true,
+                powerW = battery.powerW,
+                charging = battery.charging,
+                chargeStatusText = chargeStatusText,
+                estimatingText = t("Estimating"),
+                unavailableText = t("Unavailable"),
+            )
             StatusPill.update(context, content.text, showNetworkMeter = false, stillCurrent = stillCurrent)
             // Keep accounting alive even though its text is hidden. Do this AFTER the
             // immediate mode switch, so a slow stats query cannot leave the old wide pill up.

@@ -77,6 +77,8 @@ data class ScanReport(
     val filesScanned: Long,
     val dirsScanned: Long,
     val completedAt: Long,
+    /** True when the duplicate candidate cap skipped one or more otherwise eligible files. */
+    val duplicateScanCapped: Boolean = false,
 ) {
     val totalBytes: Long get() = categories.sumOf { it.totalBytes }
     val totalCount: Int get() = categories.sumOf { it.files.size }

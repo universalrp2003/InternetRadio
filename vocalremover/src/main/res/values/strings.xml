@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RP VOCAL REMOVER STUDIO</string>
+    <string name="processing_channel_name">On-device vocal separation</string>
+    <string name="processing_channel_description">Shows local audio processing progress and controls</string>
+</resources>

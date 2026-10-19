@@ -1,25 +1,44 @@
-# GitHub Actions workflow: builds the Android APKs in the cloud, for free.
-# - Internet Radio  (:app)
-# - CleanSweep junk cleaner + on-device assistant (:cleaner)
-# - AppForge offline app builder (:builder)
-# - PulseEQ 20-band equalizer (:equalizer)
-# - Ramesh Radio (Tamilnadu FM Radio) — Tamil FM + world news + local audio + 10-band EQ (:radio)
+# GitHub Actions workflow: builds the four legacy-batch apps and compiles the isolated Secret Message preview (debug/test only). Oor Arivippu has a separate release workflow.
+# - Live Guard / CleanSweep (:cleaner)
+# - Ramesh Radio (:radio)
+# - PulseEQ (:equalizer)
+# - RP VOCAL REMOVER STUDIO (:vocalremover; direct-download APK)
 name: Build APK
 
 on:
   push:
     branches: [ main, "arena/**" ]
-    # A version tag publishes a permanent GitHub Release with the version-named APKs
-    # attached (see the "Publish a GitHub Release" step). One tag covers the whole
-    # workspace, so a datestamp is used instead of one app's version number: the file
-    # names still carry each app's own version.
+    # A dated workspace tag requests a verified batch publication; the resulting APKs
+    # receive separate, version-specific release tags for each of the four requested apps.
     tags: [ "v*" ]
+    # Oor Arivippu has a separate test/release flow, and the non-shipping Secret Message preview and
+    # MLS feasibility lanes have their own test-only workflows; skip their files and workflow-only edits.
+    paths-ignore:
+      - "oorarivippu/**"
+      - "secretmessage/**"
+      - "docs/secret-message-security-design.md"
+      - "tools/tests/test_secretmessage_preview_contract.py"
+      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/oorarivippu-release.yml"
+      - ".github/workflows/oorarivippu-test-apk.yml"
+      - ".github/workflows/secret-message-preview.yml"
+      - ".github/workflows/secret-message-mls-rs-candidate.yml"
+      - ".github/workflows/secret-message-mls-spike.yml"
+      - ".github/workflows/secret-message-mls-upstream-candidate.yml"
+      - ".github/workflows/secret-message-wifi-test.yml"
+      - ".github/workflows/secret-message-relay.yml"
+      - ".github/workflows/secret-message-signing-key.yml"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Publish the three maintained apps after verification (e.g. v2026.10.08); blank builds only'
+        description: 'New-release batch tag (e.g. v2026.10.13); blank for build-only or mirror_existing runs'
         required: false
         type: string
+      mirror_existing:
+        description: 'Mirror the current public InternetRadio APK releases to RP-Android-Apps without changing the old releases (requires the destination write secret)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -41,6 +60,39 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.14.3"
+
+      # The hosted Ubuntu images already contain Android SDK command-line tools. Use
+      # sdkmanager directly instead of the Node-based setup action; the latter failed
+      # before compilation on the current runner, so it never reached the NDK/build steps.
+      - name: Install Android NDK for native runtime packaging
+        shell: bash
+        run: |
+          set -eu
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$(command -v sdkmanager || true)"
+          if [ -z "$sdkmanager" ]; then
+            for candidate in \
+              "$sdk_root/cmdline-tools/latest/bin/sdkmanager" \
+              "$sdk_root/tools/bin/sdkmanager"; do
+              if [ -x "$candidate" ]; then
+                sdkmanager="$candidate"
+                break
+              fi
+            done
+          fi
+          if [ -z "$sdkmanager" ]; then
+            sdkmanager="$(find "$sdk_root/cmdline-tools" -type f -name sdkmanager 2>/dev/null | sort -V | tail -n 1)"
+          fi
+          if [ -z "$sdkmanager" ] || [ ! -x "$sdkmanager" ]; then
+            echo "::error::Android sdkmanager was not found under $sdk_root"
+            exit 1
+          fi
+          echo "Using $sdkmanager (SDK root: $sdk_root)"
+          license_answers="$(mktemp)"
+          trap 'rm -f "$license_answers"' EXIT
+          for _ in {1..100}; do printf 'y\n' >> "$license_answers"; done
+          "$sdkmanager" --sdk_root="$sdk_root" --licenses < "$license_answers" >/dev/null
+          "$sdkmanager" --sdk_root="$sdk_root" --install "ndk;27.2.12479018"
 
       - name: Generate Gradle wrapper
         run: gradle wrapper --gradle-version 8.14.3
@@ -98,7 +150,7 @@ jobs:
             echo ""
             echo "How to apply this licence to these apps"
             echo ""
-            echo "CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ"
+            echo "Live Guard (CleanSweep), Ramesh Radio, PulseEQ and RP Vocal Remover Studio"
             echo "Copyright (C) 2026 Ramesh prathap .R <universalrp2003@gmail.com>"
             echo ""
             echo "This program is free software: you can redistribute it and/or modify it under"
@@ -170,6 +222,7 @@ jobs:
       - name: Check Cleaner source contracts and localization
         run: |
           python3 tools/verify_cleaner_localization.py
+          python3 tools/verify_apps_localization.py
           # v2.40 core: the retired notification reader must not exist in the manifest,
           # the production tree or the build scripts. Historical 2.39 sources stay in
           # docs/archived-notification-reader-2.39 and are never compiled.
@@ -182,16 +235,17 @@ jobs:
       - name: Build the APKs
         run: |
           set -o pipefail
-          # Debug APKs stay the quick family channel. The release pair is what a store will
-          # take: app stores reject an APK with android:debuggable, and F-Droid builds the
-          # release variant as well. Both are signed with the same ci-keystore, so a phone
-          # that already has the debug build updates to the release one normally.
-          # The .aab bundles are what Google Play takes (Play has not accepted APKs for new
-          # apps since 2021); the APKs are what everyone else takes.
-          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest assembleDebug assembleRelease bundleRelease --no-daemon 2>&1 | tee build.log
+          # The four maintained apps get release APKs. Secret Message is a separate,
+          # local-only preview: run its policy tests and build only its debug APK. It is
+          # deliberately excluded from every release/bundle task below. Vocal Remover is
+          # standalone and distributed by direct APK download, so it has no Play bundle.
+          gradle :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest :radio:testDebugUnitTest :radio:testReleaseUnitTest :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest :secretmessage:testDebugUnitTest assembleDebug :cleaner:assembleRelease :radio:assembleRelease :equalizer:assembleRelease :vocalremover:assembleRelease :cleaner:bundleRelease :radio:bundleRelease :equalizer:bundleRelease --no-daemon 2>&1 | tee build.log
 
       - name: Verify required CleanSweep regression suites
         run: python3 tools/verify_cleaner_regressions.py
+
+      - name: Verify Vocal Remover recovery and export regression suites
+        run: python3 tools/verify_vocalremover_reliability.py
 
       - name: Upload unit-test reports
         if: always()
@@ -201,6 +255,8 @@ jobs:
           path: |
             cleaner/build/test-results/test*UnitTest/*.xml
             radio/build/test-results/test*UnitTest/*.xml
+            vocalremover/build/test-results/test*UnitTest/*.xml
+            secretmessage/product/build/test-results/testDebugUnitTest/*.xml
           if-no-files-found: warn
 
       - name: Verify built APKs
@@ -210,23 +266,37 @@ jobs:
           WORK=$(mktemp -d)
 
           echo "=== APK files ==="
-          for m in app cleaner builder equalizer radio; do
+          for m in cleaner equalizer radio vocalremover; do
             ls -la "$m/build/outputs/apk/debug/" || true
           done
+          ls -la secretmessage/product/build/outputs/apk/debug/
+
+          SECRET_MESSAGE_PREVIEW=$(ls secretmessage/product/build/outputs/apk/debug/*.apk | head -1)
+          test -n "$SECRET_MESSAGE_PREVIEW" || { echo "FAIL: Secret Message local preview debug APK was not produced"; exit 1; }
+          if compgen -G "secretmessage/product/build/outputs/apk/release/*.apk" >/dev/null; then
+            echo "FAIL: the Secret Message local preview must not produce a release APK"; exit 1
+          fi
 
           CLEANER=$(ls cleaner/build/outputs/apk/debug/*.apk | head -1)
-          BUILDER=$(ls builder/build/outputs/apk/debug/*.apk | head -1)
           EQ=$(ls equalizer/build/outputs/apk/debug/*.apk | head -1)
           RADIO=$(ls radio/build/outputs/apk/debug/*.apk | head -1)
+          VOCAL_REMOVER=$(ls vocalremover/build/outputs/apk/debug/*.apk | head -1)
+          VOCAL_REMOVER_REL=$(ls vocalremover/build/outputs/apk/release/*.apk | head -1)
+          test -n "$VOCAL_REMOVER" || { echo "FAIL: Vocal Remover debug APK was not produced"; exit 1; }
+          test -n "$VOCAL_REMOVER_REL" || { echo "FAIL: Vocal Remover signed release APK was not produced"; exit 1; }
+          if compgen -G "vocalremover/build/outputs/bundle/release/*.aab" >/dev/null; then
+            echo "FAIL: Vocal Remover is distributed as a standalone direct-download APK, not a Play bundle"
+            exit 1
+          fi
+          echo "OK: standalone Vocal Remover debug + release APKs: $VOCAL_REMOVER / $VOCAL_REMOVER_REL"
 
-          # --- v2.6: the release APKs. These are the store-facing pair.
-          APP_REL=$(ls app/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          # The user-facing updaters use these exact signed release APKs.
           CLEANER_REL=$(ls cleaner/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
-          BUILDER_REL=$(ls builder/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           EQ_REL=$(ls equalizer/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
           RADIO_REL=$(ls radio/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
-          echo "=== Google Play bundles (.aab) ==="
-          for b in "app|Internet-Radio" "cleaner|CleanSweep" "builder|AppForge" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
+          VOCAL_REMOVER_REL=$(ls vocalremover/build/outputs/apk/release/*.apk 2>/dev/null | head -1 || true)
+          echo "=== Google Play bundles (.aab) for the three store-packaged apps ==="
+          for b in "cleaner|CleanSweep" "equalizer|PulseEQ" "radio|Ramesh-Radio"; do
             mod="${b%%|*}"; pretty="${b##*|}"
             aab=$(ls "$mod"/build/outputs/bundle/release/*.aab 2>/dev/null | head -1 || true)
             if [ -z "$aab" ]; then
@@ -238,8 +308,8 @@ jobs:
             echo "OK: ${pretty}-v${ver}.aab inside the build"
           done
 
-          echo "=== release APKs (what the stores take) ==="
-          for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+          echo "=== signed release APKs ==="
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             if [ -z "$rel" ]; then
               echo "FAIL: a release APK was not produced - stores cannot use the debug build"
               exit 1
@@ -248,18 +318,35 @@ jobs:
           done
 
           echo "=== App icons inside the built APKs ==="
-          # The Internet Radio module used to borrow Android's stock play icon; a store listing
-          # cannot ship that, so every APK must now carry its own icon resource.
-          #
-          # This is checked through aapt2 badging and not by looking for a file name: release
-          # builds run Android's resource optimisations, which rename resource paths inside the
-          # APK, so `res/.../ic_launcher` legitimately disappears from the zip listing.
+          # Check the active APKs through aapt2 badging, not by looking for a file name:
+          # Android resource optimisation can rename paths inside a release APK.
           AAPT=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
           if [ -z "$AAPT" ]; then
             echo "FAIL: aapt2 not found, cannot verify the app icons"
             exit 1
           fi
-          for rel in "$CLEANER_REL" "$RADIO_REL" "$APP_REL" "$BUILDER_REL" "$EQ_REL"; do
+          PREVIEW_BADGING=$("$AAPT" dump badging "$SECRET_MESSAGE_PREVIEW")
+          echo "$PREVIEW_BADGING" | grep -Fq "application-label:'Secret Message Preview (NOT SECURE)'" || {
+            echo "FAIL: Secret Message preview APK is missing its explicit not-secure label"; exit 1;
+          }
+          AAPT_LEGACY="$(dirname "$AAPT")/aapt"
+          if [ ! -x "$AAPT_LEGACY" ]; then
+            echo "FAIL: legacy aapt is needed to verify merged APK permissions"; exit 1
+          fi
+          PREVIEW_PERMISSIONS=$("$AAPT_LEGACY" dump permissions "$SECRET_MESSAGE_PREVIEW")
+          echo "=== Secret Message preview merged APK permissions ==="
+          if [ -n "$PREVIEW_PERMISSIONS" ]; then printf '%s\n' "$PREVIEW_PERMISSIONS"; else echo "(none reported)"; fi
+          {
+            echo '### Secret Message preview merged APK permissions'
+            echo '```text'
+            if [ -n "$PREVIEW_PERMISSIONS" ]; then printf '%s\n' "$PREVIEW_PERMISSIONS"; else echo '(none reported)'; fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if printf '%s\n' "$PREVIEW_PERMISSIONS" | grep -Eq 'android.permission.(INTERNET|ACCESS_NETWORK_STATE|CHANGE_NETWORK_STATE)'; then
+            echo "FAIL: Secret Message local preview unexpectedly includes a network permission"; exit 1
+          fi
+          echo "OK: Secret Message debug preview is labelled NOT SECURE and includes no network permission"
+          for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
             bad=$("$AAPT" dump badging "$rel" || true)
             icon=$(printf '%s\n' "$bad" | sed -n "s/^application:.*icon='\([^']*\)'.*/\1/p" | head -1)
             dens=$(printf '%s\n' "$bad" | grep -c "^application-icon-" || true)
@@ -273,17 +360,11 @@ jobs:
             fi
             echo "OK: $rel icon=$icon ($dens density entries)"
           done
-          # And the stock icon must be gone from the source, which is where it used to live.
-          if grep -q "android:drawable/ic_media_play" app/src/main/AndroidManifest.xml; then
-            echo "FAIL: the app module still points at Android's stock play icon"
-            exit 1
-          fi
-          echo "OK: no module borrows a platform icon any more"
+          echo "OK: every active module declares its own launcher icon"
 
           echo "=== Package info ==="
           if [ -n "$AAPT" ]; then
             "$AAPT" dump badging "$CLEANER" | head -1 || true
-            "$AAPT" dump badging "$BUILDER" | head -1 || true
             "$AAPT" dump badging "$EQ" | head -1 || true
             "$AAPT" dump badging "$RADIO" | head -1 || true
             # The installed name must be the one the user asked for.
@@ -300,8 +381,14 @@ jobs:
                 exit 1
                 ;;
             esac
+            VOCAL_LABEL=$("$AAPT" dump badging "$VOCAL_REMOVER_REL" | grep -m1 "application-label:" || true)
+            echo "vocal-remover label: $VOCAL_LABEL"
+            case "$VOCAL_LABEL" in
+              *"RP VOCAL REMOVER STUDIO"*) echo "OK: the signed APK carries the standalone studio name" ;;
+              *) echo "FAIL: Vocal Remover release label is unexpected ($VOCAL_LABEL)"; exit 1 ;;
+            esac
             # A store will not accept a debuggable APK (IzzyOnDroid says so explicitly).
-            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+            for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
               if "$AAPT" dump badging "$rel" | grep -q "application-debuggable"; then
                 echo "FAIL: $rel carries the debuggable flag - app stores reject that"
                 exit 1
@@ -319,7 +406,7 @@ jobs:
             if [ "$EXPECTED_CERT" != "9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55" ]; then
               echo "FAIL: stable signing identity differs from previously published releases"; exit 1
             fi
-            for rel in "$APP_REL" "$CLEANER_REL" "$BUILDER_REL" "$EQ_REL" "$RADIO_REL"; do
+            for rel in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REMOVER_REL"; do
               # Do not mask signature failures with a pipeline or || true.
               "$APKSIGNER" verify --print-certs "$rel" > "$WORK/signature.txt"
               cat "$WORK/signature.txt"
@@ -355,6 +442,25 @@ jobs:
               echo "FAIL: CleanSweep release must declare minimum SDK 26"; exit 1
             fi
             echo "OK: CleanSweep release version matches source and still supports API 26"
+
+            verify_app_version() {
+              module="$1"; apk="$2"; required_min_sdk="$3"; app_label="$4"
+              badging_file="$WORK/${module}-release-badging.txt"
+              expected_code=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' "$module/build.gradle.kts" | head -1)
+              expected_name=$(grep -m1 'versionName' "$module/build.gradle.kts" | sed -E 's/.*"([^"]+)".*/\1/')
+              source_min_sdk=$(sed -nE 's/^[[:space:]]*minSdk = ([0-9]+).*/\1/p' "$module/build.gradle.kts" | head -1)
+              if [ "$source_min_sdk" != "$required_min_sdk" ]; then
+                echo "FAIL: $app_label source minSdk=$source_min_sdk; expected $required_min_sdk"; exit 1
+              fi
+              "$AAPT" dump badging "$apk" > "$badging_file"
+              grep -Fq "versionCode='$expected_code'" "$badging_file" || { echo "FAIL: $app_label versionCode differs from source"; exit 1; }
+              grep -Fq "versionName='$expected_name'" "$badging_file" || { echo "FAIL: $app_label versionName differs from source"; exit 1; }
+              grep -Eiq "(^|[[:space:]])(sdkVersion|minSdkVersion)[[:space:]]*[:=][[:space:]]*['\"]?$required_min_sdk(['\"]|[[:space:]]|$)" "$badging_file" || { echo "FAIL: $app_label minSdk in the APK is not $required_min_sdk"; exit 1; }
+              echo "OK: $app_label release version=$expected_name code=$expected_code minSdk=$required_min_sdk"
+            }
+            verify_app_version radio "$RADIO_REL" 26 "Ramesh Radio"
+            verify_app_version equalizer "$EQ_REL" 26 "PulseEQ"
+            verify_app_version vocalremover "$VOCAL_REMOVER_REL" 29 "RP VOCAL REMOVER STUDIO"
           else
             echo "(aapt2 not found; using the Gradle intermediates instead)"
           fi
@@ -372,6 +478,15 @@ jobs:
             echo "FAIL:2.40 delivery must fit2.39's50MiB updater cap"; exit 1
           fi
           echo "OK: actual2.40 APK also fits the previous2.39 client's50MiB cap"
+          SHARED_UPDATE_CAP_MB=$(sed -nE 's/.*MAX_APK_BYTES = ([0-9]+)L \* 1024 \* 1024.*/\1/p' shared/src/main/java/com/universalrp/updates/AppUpdates.kt)
+          test -n "$SHARED_UPDATE_CAP_MB"
+          for app_asset in "Ramesh Radio|$RADIO_REL" "PulseEQ|$EQ_REL" "RP VOCAL REMOVER STUDIO|$VOCAL_REMOVER_REL"; do
+            app_label="${app_asset%%|*}"; apk="${app_asset##*|}"; bytes=$(stat -c '%s' "$apk")
+            if [ "$bytes" -gt "$((SHARED_UPDATE_CAP_MB * 1024 * 1024))" ]; then
+              echo "FAIL: $app_label APK is larger than its verified-updater cap"; exit 1
+            fi
+            echo "OK: $app_label APK is $bytes bytes, within the updater cap ${SHARED_UPDATE_CAP_MB}MiB"
+          done
 
           # The manifests are read from Gradle's plain-text merged manifests —
           # parsing the binary manifest out of the APK with `strings` is not
@@ -379,9 +494,11 @@ jobs:
           MERGED_CLEANER=$(find cleaner/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           MERGED_EQ=$(find equalizer/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           MERGED_RADIO=$(find radio/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
+          MERGED_VOCAL=$(find vocalremover/build/intermediates -name AndroidManifest.xml -path "*merged*" | head -1 || true)
           echo "CleanSweep merged manifest: ${MERGED_CLEANER:-not found}"
           echo "PulseEQ merged manifest: ${MERGED_EQ:-not found}"
           echo "Ramesh Radio merged manifest: ${MERGED_RADIO:-not found}"
+          echo "RP Vocal Remover merged manifest: ${MERGED_VOCAL:-not found}"
           if [ -n "$AAPT" ]; then
             "$AAPT" dump permissions "$EQ" > "$WORK/eq-perms-aapt.txt" 2>/dev/null || true
             echo "--- aapt2 permissions for PulseEQ ---"
@@ -394,9 +511,10 @@ jobs:
           # v2.40: the release variant gets its own DEX blob so the retired reader classes
           # are rejected in BOTH shipped variants, not only in debug.
           unzip -p "$CLEANER_REL" "classes*.dex" > "$WORK/cleaner-release.dex"
-          unzip -p "$BUILDER" "classes*.dex" > "$WORK/builder.dex"
           unzip -p "$EQ" "classes*.dex" > "$WORK/eq.dex"
           unzip -p "$RADIO" "classes*.dex" > "$WORK/radio.dex"
+          unzip -p "$VOCAL_REMOVER" "classes*.dex" > "$WORK/vocal-remover-debug.dex"
+          unzip -p "$VOCAL_REMOVER_REL" "classes*.dex" > "$WORK/vocal-remover-release.dex"
           unzip -l "$RADIO" > "$WORK/radio-entries.txt"
 
           # The estimate must be on the ACTIVE Home layout, not only an unused storage card.
@@ -524,7 +642,7 @@ jobs:
                         AnswerVoicePreferences AnswerVoicesCard FeatureSetupScreen CorePrivacyMigrationPolicy \
                         CorePrivacyMigration LiveGuardUpdates VerifiedApkDownload UpdatePolicy \
                         LastUnplugRepo CompactWidgetPolicy CleanSweepDataWidget CleanSweepPhoneWidget \
-                        ArenaRatingPolicy ArenaRatings ArenaRatingCard LocalReadGate cancelAiReport cancelDeviceIdentification \
+                        LocalReadGate cancelAiReport cancelDeviceIdentification \
                         ChargingHonestyPolicy ThermalWarningPolicy AiOutputBudgetPolicy; do
             if grep -aq "$symbol" "$WORK/cleaner.dex"; then
               echo "OK: $symbol is in the CleanSweep APK"
@@ -532,6 +650,15 @@ jobs:
               echo "FAIL: $symbol is missing from the CleanSweep APK"
               exit 1
             fi
+          done
+
+          echo "=== removed LM Arena rating feature gate (debug DEX) ==="
+          for retired_rating in ArenaRatingPolicy ArenaRatings ArenaRatingCard; do
+            if grep -aq "$retired_rating" "$WORK/cleaner.dex"; then
+              echo "FAIL: retired model-rating symbol $retired_rating is compiled into CleanSweep"
+              exit 1
+            fi
+            echo "OK: $retired_rating is absent from the CleanSweep APK"
           done
 
           echo "=== v2.40 retired notification-reader gate (debug AND release) ==="
@@ -572,20 +699,6 @@ jobs:
               exit 1
             fi
           done
-
-          echo "=== AppForge checks ==="
-          if grep -aq "AppForge" "$WORK/builder.dex"; then
-            echo "OK: AppForge APK contains its code"
-          else
-            echo "FAIL: AppForge APK looks empty"
-            exit 1
-          fi
-          if grep -aq "AndroidCodeGen" "$WORK/builder.dex"; then
-            echo "OK: the Android project generator is present"
-          else
-            echo "FAIL: the code generator is missing"
-            exit 1
-          fi
 
           echo "=== PulseEQ checks ==="
           if [ -n "$MERGED_EQ" ]; then
@@ -707,11 +820,42 @@ jobs:
             exit 1
           fi
 
+          echo "=== RP VOCAL REMOVER STUDIO checks (debug and signed release) ==="
+          if [ -z "$MERGED_VOCAL" ]; then
+            echo "FAIL: could not find the merged manifest for :vocalremover"; exit 1
+          fi
+          for permission in android.permission.INTERNET android.permission.FOREGROUND_SERVICE \
+                            android.permission.FOREGROUND_SERVICE_DATA_SYNC \
+                            android.permission.FOREGROUND_SERVICE_MEDIA_PROCESSING \
+                            android.permission.WAKE_LOCK android.permission.REQUEST_INSTALL_PACKAGES; do
+            if grep -q "$permission" "$MERGED_VOCAL"; then
+              echo "OK: Vocal Remover declares $permission"
+            else
+              echo "FAIL: Vocal Remover is missing $permission"; exit 1
+            fi
+          done
+          grep -q 'com.universalrp.vocalremover.processing.SeparationService' "$MERGED_VOCAL" || { echo "FAIL: on-device processing foreground service is not declared"; exit 1; }
+          grep -q 'androidx.core.content.FileProvider' "$MERGED_VOCAL" || { echo "FAIL: verified APK hand-off FileProvider is not declared"; exit 1; }
+          grep -q 'android:exported="false"' "$MERGED_VOCAL" || { echo "FAIL: verified APK provider must not be exported"; exit 1; }
+          grep -q 'app_update_paths' "$MERGED_VOCAL" || { echo "FAIL: private verified-update cache paths are not declared"; exit 1; }
+          for dex in "$WORK/vocal-remover-debug.dex" "$WORK/vocal-remover-release.dex"; do
+            for symbol in ProcessingQueue ProcessingPolicy ChunkedSeparationProcessor \
+                          WavPlaybackController ModelRepository DeviceMonitor SeparationService \
+                          AppUpdates AppLanguage PcmWavToMp3Encoder; do
+              if grep -aq "$symbol" "$dex"; then
+                echo "OK: $symbol is present in $(basename "$dex")"
+              else
+                echo "FAIL: $symbol is missing from $(basename "$dex")"; exit 1
+              fi
+            done
+          done
+          echo "OK: Vocal Remover ships standalone signed bytes, local-processing runtime, and verified updater"
+
           # Store listing inventory. Warnings only: F-Droid shows a listing without
           # screenshots, it simply looks bare, and a missing icon is a polish problem, not a
           # broken build. Printed every run so the gap is always visible.
           echo "=== Store listing inventory (warnings) ==="
-          for m in app cleaner builder equalizer radio; do
+          for m in cleaner equalizer radio; do
             d="$m/fastlane/metadata/android"
             if [ ! -d "$d" ]; then
               echo "WARN: $m has no fastlane listing at all"
@@ -756,14 +900,12 @@ jobs:
           }
           rename_apk cleaner   CleanSweep      release ""
           rename_apk radio     Ramesh-Radio    release ""
-          rename_apk app       Internet-Radio  release ""
-          rename_apk builder   AppForge        release ""
           rename_apk equalizer PulseEQ         release ""
+          rename_apk vocalremover RP-Vocal-Remover-Studio release ""
           rename_apk cleaner   CleanSweep      debug   "-debug"
           rename_apk radio     Ramesh-Radio    debug   "-debug"
-          rename_apk app       Internet-Radio  debug   "-debug"
-          rename_apk builder   AppForge        debug   "-debug"
           rename_apk equalizer PulseEQ         debug   "-debug"
+          rename_apk vocalremover RP-Vocal-Remover-Studio debug "-debug"
           echo "=== APK file names ==="
           ls -la */build/outputs/apk/*/*.apk
 
@@ -771,6 +913,8 @@ jobs:
       # one APK digest instead of "roughly this version". The record is committed only on
       # candidate branches; a published release carries GitHub's own asset digests.
       - name: Record candidate APK digests
+        env:
+          RELEASE_REQUESTED: ${{ (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.mirror_existing)) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish]')) }}
         run: |
           set -e
           RECORD=docs/candidate-build-digests.md
@@ -800,7 +944,7 @@ jobs:
           done
           sed -n '1,20p' "$RECORD"
           { echo '```'; cat "$RECORD"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-          if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
+          if [[ "$GITHUB_REF" == refs/heads/arena/* && "$RELEASE_REQUESTED" != "true" ]]; then
             git config user.name "ci-bot"
             git config user.email "ci-bot@users.noreply.github.com"
             git add -f "$RECORD"
@@ -819,25 +963,65 @@ jobs:
               done
             fi
           else
-            echo "Not a candidate branch; digest record stays local to this run."
+            echo "Publication run or non-candidate ref; digest record stays local to this run."
           fi
 
-      # Publishing: when a version tag is pushed, the very APKs verified above are attached
-      # to a GitHub Release. That is what makes an install link that does not expire (Actions
-      # artifacts disappear after 90 days), it is what the Obtainium app watches for updates,
-      # and it is the download an alternative store such as IzzyOnDroid needs.
-      - name: Publish a GitHub Release (verified maintained apps)
-        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '') || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
+      # Publishing: after all checks pass, publish one stable, version-specific APK release
+      # for each app, or mirror the exact existing bridge APKs without altering old releases.
+      - name: Publish or mirror verified releases for four apps
+        if: startsWith(github.ref, 'refs/tags/') || (github.event_name == 'workflow_dispatch' && (inputs.release_tag != '' || inputs.mirror_existing)) || (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/arena/') && contains(github.event.head_commit.message, '[publish]'))
         env:
           GH_TOKEN: ${{ github.token }}
+          RP_ANDROID_APPS_RELEASE_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
           REQUESTED_TAG: ${{ inputs.release_tag }}
+          MIRROR_EXISTING: ${{ inputs.mirror_existing }}
         run: |
           set -euo pipefail
-          if [[ -n "${REQUESTED_TAG:-}" ]]; then TAG="$REQUESTED_TAG"
-          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then TAG="$GITHUB_REF_NAME"
-          else TAG="$(cat releases/latest-tag.txt)"; fi
-          [[ "$TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release tag"; exit 1; }
-          # Never promote a stale branch candidate after a newer fix has been pushed.
+          exec > >(tee -a "$RUNNER_TEMP/release-publication.log") 2>&1
+          if [[ -n "${REQUESTED_TAG:-}" ]]; then BATCH_TAG="$REQUESTED_TAG"
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then BATCH_TAG="$GITHUB_REF_NAME"
+          else BATCH_TAG="v$(date -u +%Y.%m.%d)"; fi
+          [[ "$BATCH_TAG" =~ ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(-[0-9]+)?$ ]] || { echo "Invalid release batch tag"; exit 1; }
+
+          # Preserve the old endpoint for installed clients and publish the same verified APK
+          # bytes to the new-first destination. Destination access and its scoped write secret are
+          # checked before any draft is created; fail closed rather than publish old-source only.
+          DESTINATION_REPO="universalrp2003/RP-Android-Apps"
+          if ! DESTINATION_INFO=$(gh api "repos/${DESTINATION_REPO}" --jq '[.private, .default_branch, .archived] | @tsv'); then
+            echo "FAIL: RP-Android-Apps is not reachable; refusing to publish bridge releases."
+            exit 1
+          fi
+          IFS=$'\t' read -r DESTINATION_PRIVATE DESTINATION_BRANCH DESTINATION_ARCHIVED <<< "$DESTINATION_INFO"
+          if [[ "$DESTINATION_PRIVATE" != "false" || -z "$DESTINATION_BRANCH" || "$DESTINATION_BRANCH" == "null" || "$DESTINATION_ARCHIVED" != "false" ]]; then
+            echo "FAIL: RP-Android-Apps must be public, initialized and unarchived before bridge publication."
+            exit 1
+          fi
+          if ! gh api "repos/${DESTINATION_REPO}/releases?per_page=1" >/dev/null; then
+            echo "FAIL: RP-Android-Apps release API is not readable; refusing to publish bridge releases."
+            exit 1
+          fi
+          TARGET_PUBLISH_ENABLED=false
+          if [[ -n "${RP_ANDROID_APPS_RELEASE_TOKEN:-}" ]]; then
+            TARGET_PUSH=$(GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api "repos/${DESTINATION_REPO}" --jq '.permissions.push // false') || {
+              echo "FAIL: the RP-Android-Apps release token cannot read its destination repository."
+              exit 1
+            }
+            if [[ "$TARGET_PUSH" != "true" ]]; then
+              echo "FAIL: RP-ANDROID_APPS_RELEASE_TOKEN must have contents:write access to RP-Android-Apps."
+              exit 1
+            fi
+            TARGET_PUBLISH_ENABLED=true
+            echo "OK: target release mirroring is enabled with write access."
+          else
+            echo "::error::Dual-repository release is blocked. Configure the InternetRadio Actions secret RP_ANDROID_APPS_RELEASE_TOKEN with contents:write access to RP-Android-Apps; no release drafts have been created. Do not paste the secret into chat."
+            exit 1
+          fi
+          if [[ "${MIRROR_EXISTING:-false}" == "true" && "$TARGET_PUBLISH_ENABLED" != "true" ]]; then
+            echo "FAIL: mirror_existing requires RP_ANDROID_APPS_RELEASE_TOKEN with RP-Android-Apps contents:write access."
+            exit 1
+          fi
+
+          # Never publish a stale branch candidate after a newer fix has been pushed.
           if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
             REMOTE_SOURCE=$(git ls-remote origin "$GITHUB_REF" | awk '{print $1}')
             if [[ "$REMOTE_SOURCE" != "$GITHUB_SHA" ]]; then
@@ -845,8 +1029,34 @@ jobs:
               exit 1
             fi
           fi
-          NOTES="releases/$TAG.md"
-          test -f "$NOTES"
+
+          version_of() { grep -m1 'versionName' "$1" | sed -E 's/.*"([^"]+)".*/\1/'; }
+          CLEANER_VERSION=$(version_of cleaner/build.gradle.kts)
+          RADIO_VERSION=$(version_of radio/build.gradle.kts)
+          EQ_VERSION=$(version_of equalizer/build.gradle.kts)
+          VOCAL_VERSION=$(version_of vocalremover/build.gradle.kts)
+          LIVE_GUARD_TAG="live-guard-v${CLEANER_VERSION}"
+          RADIO_TAG="ramesh-radio-v${RADIO_VERSION}"
+          EQ_TAG="pulseeq-v${EQ_VERSION}"
+          VOCAL_TAG="rp-vocal-remover-studio-v${VOCAL_VERSION}"
+          CLEANER_REL="cleaner/build/outputs/apk/release/CleanSweep-v${CLEANER_VERSION}.apk"
+          RADIO_REL="radio/build/outputs/apk/release/Ramesh-Radio-v${RADIO_VERSION}.apk"
+          EQ_REL="equalizer/build/outputs/apk/release/PulseEQ-v${EQ_VERSION}.apk"
+          VOCAL_REL="vocalremover/build/outputs/apk/release/RP-Vocal-Remover-Studio-v${VOCAL_VERSION}.apk"
+          LIVE_NOTES="releases/${LIVE_GUARD_TAG}.md"
+          RADIO_NOTES="releases/${RADIO_TAG}.md"
+          EQ_NOTES="releases/${EQ_TAG}.md"
+          VOCAL_NOTES="releases/${VOCAL_TAG}.md"
+
+          for file in "$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REL" \
+                      "$LIVE_NOTES" "$RADIO_NOTES" "$EQ_NOTES" "$VOCAL_NOTES"; do
+            test -f "$file" || { echo "Missing verified release input: $file"; exit 1; }
+          done
+          # The strict Live Guard permission/device-evidence check above remains mandatory;
+          # notes must also be explicit if these exact candidate bytes were not device-tested.
+          if ! grep -Eiq 'not installed on a phone|no physical-device test|no device test' "$LIVE_NOTES"; then
+            echo "FAIL: Live Guard notes must state honestly whether this exact build had a device test."; exit 1
+          fi
 
           # ---------------------------------------------------------------------------
           # Device-evidence gate. Revised by explicit owner decision on 12 October 2026
@@ -872,7 +1082,7 @@ jobs:
           CLEANER_CODE=$(sed -nE 's/^[[:space:]]*versionCode = ([0-9]+).*/\1/p' cleaner/build.gradle.kts)
           # This is a separate step from "Verify built APKs", so its tools are not inherited.
           AAPT2=$(ls "${ANDROID_HOME:-/usr/local/lib/android/sdk}"/build-tools/*/aapt2 2>/dev/null | tail -1 || true)
-          if [ "${CLEANER_CODE:-0}" -gt 44 ]; then
+          if [ "${CLEANER_CODE:-0}" -gt 44 ] && [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
             EVIDENCE="docs/live-guard-${CLEANER_VERSION}-device-evidence.md"
             # --- 2.42: does THIS release need a recorded device install? --------------
             if [ -z "$AAPT2" ]; then
@@ -884,8 +1094,8 @@ jobs:
             PREVIOUS_DIR="$RUNNER_TEMP/previous-release"
             PREVIOUS_BADGING=""
             mkdir -p "$PREVIOUS_DIR"
-            if [ "$PREVIOUS_TAG" = "$TAG" ]; then
-              echo "WARN: releases/latest-tag.txt already points at $TAG; there is no earlier release to compare."
+            if [ "$PREVIOUS_TAG" = "$LIVE_GUARD_TAG" ]; then
+              echo "WARN: releases/latest-tag.txt already points at $LIVE_GUARD_TAG; there is no earlier release to compare."
             elif gh release download "$PREVIOUS_TAG" --dir "$PREVIOUS_DIR" --pattern 'CleanSweep-*.apk' >/dev/null 2>&1; then
               PREVIOUS_APK=$(find "$PREVIOUS_DIR" -name 'CleanSweep-*.apk' | head -1)
               if [ -n "$PREVIOUS_APK" ] && "$AAPT2" dump badging "$PREVIOUS_APK" > "$RUNNER_TEMP/previous-badging.txt"; then
@@ -997,36 +1207,218 @@ jobs:
               fi
               echo "OK: device evidence in $EVIDENCE covers the published CleanSweep $CLEANER_VERSION APK ($TESTED_SHA)"
             fi
+          elif [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+            echo "Mirror-only mode: the freshly built candidate is not being released. The already-public InternetRadio APK must pass its own size and SHA-256 checks before copying."
           fi
-          # Companions have no source change: reuse exact previous verified assets.
-          # Do not give different rebuilt bytes the unchanged1.8/1.2 filenames.
-          git fetch --depth=1 origin refs/tags/v2026.10.11-1
-          if ! git diff --quiet FETCH_HEAD "$GITHUB_SHA" -- radio equalizer shared build.gradle.kts gradle.properties settings.gradle.kts; then
-            echo "Companion sources changed: bump their versions and review publication first."; exit 1
+          RELEASE_TAGS=("$LIVE_GUARD_TAG" "$RADIO_TAG" "$EQ_TAG" "$VOCAL_TAG")
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              if GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release view "$release_tag" --repo "$DESTINATION_REPO" >/dev/null 2>&1 || \
+                 GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api "repos/${DESTINATION_REPO}/git/ref/tags/${release_tag}" >/dev/null 2>&1; then
+                echo "Target release tag already exists: $release_tag; refusing to overwrite it."
+                exit 1
+              fi
+            done
           fi
-          COMPANIONS="$RUNNER_TEMP/unchanged-companions"
-          mkdir -p "$COMPANIONS"
-          gh release download v2026.10.11-1 --dir "$COMPANIONS" \
-            --pattern 'Ramesh-Radio-v1.8.apk' --pattern 'Ramesh-Radio-v1.8.aab' \
-            --pattern 'PulseEQ-v1.2.apk' --pattern 'PulseEQ-v1.2.aab'
-          (
-            cd "$COMPANIONS"
-            printf '%s\n' \
-              'b1514b0c2ef9de1a947a05487ab38759e5bae051a09385590b4e77c7ea3e3cda  Ramesh-Radio-v1.8.apk' \
-              '74268c9c78b34da35283db8d476e379f56e4d51927527ec1c2af4ef46604b273  Ramesh-Radio-v1.8.aab' \
-              '3e2f5bafcb99af97e3f276621f24324743bedeb783d5d7f5210638ad65aeff30  PulseEQ-v1.2.apk' \
-              '46f7f191a3bb63646856a2a5217e7d6f34f4fc09105db7aa1d107208df1c4b20  PulseEQ-v1.2.aab' | sha256sum --check --strict
-          )
-          FILES=(cleaner/build/outputs/apk/release/*.apk cleaner/build/outputs/bundle/release/*.aab "$COMPANIONS"/*.apk "$COMPANIONS"/*.aab)
-          for file in "${FILES[@]}"; do test -f "$file"; done
-          # Draft until every asset is uploaded. Never clobber an existing published release.
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release already exists; use a new version/tag instead of overwriting it."
-            exit 1
+          for release_tag in "${RELEASE_TAGS[@]}"; do
+            if [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+              if ! SOURCE_RELEASE_STATUS=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${release_tag}" --jq '[.draft, .prerelease] | @tsv'); then
+                echo "Mirror source release is missing on InternetRadio: $release_tag"; exit 1
+              fi
+              IFS=$'\t' read -r SOURCE_IS_DRAFT SOURCE_IS_PRERELEASE <<< "$SOURCE_RELEASE_STATUS"
+              if [[ "$SOURCE_IS_DRAFT" != "false" || "$SOURCE_IS_PRERELEASE" != "false" ]]; then
+                echo "Mirror source release must be stable and public: $release_tag"; exit 1
+              fi
+            else
+              if gh release view "$release_tag" >/dev/null 2>&1; then
+                echo "Release already exists: $release_tag; use new app versions/tags instead of overwriting it."; exit 1
+              fi
+              if git ls-remote --exit-code origin "refs/tags/$release_tag" >/dev/null 2>&1; then
+                echo "Git tag already exists without a release: $release_tag; refusing to repurpose it."; exit 1
+              fi
+            fi
+          done
+
+          RELEASE_APKS=("$CLEANER_REL" "$RADIO_REL" "$EQ_REL" "$VOCAL_REL")
+          RELEASE_NOTES=("$LIVE_NOTES" "$RADIO_NOTES" "$EQ_NOTES" "$VOCAL_NOTES")
+          RELEASE_TITLES=("Live Guard $CLEANER_VERSION" "Ramesh Radio $RADIO_VERSION" "PulseEQ $EQ_VERSION" "RP VOCAL REMOVER STUDIO $VOCAL_VERSION")
+          if [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              echo "Creating private draft: $release_tag (${RELEASE_APKS[$i]})"
+              gh release create "$release_tag" --target "$GITHUB_SHA" --draft \
+                --title "${RELEASE_TITLES[$i]}" --notes-file "${RELEASE_NOTES[$i]}"
+              gh release upload "$release_tag" "${RELEASE_APKS[$i]}"
+            done
+          else
+            echo "Mirror mode: leaving all existing InternetRadio releases, tags and assets unchanged."
           fi
-          gh release create "$TAG" --target "$GITHUB_SHA" --draft --title "Android app updates — $TAG" --notes-file "$NOTES"
-          gh release upload "$TAG" "${FILES[@]}"
-          gh release edit "$TAG" --draft=false --latest
+
+          verify_release_asset() {
+            release_tag="$1"
+            apk="$2"
+            expected_draft="$3"
+            response_pages="$RUNNER_TEMP/release-${release_tag}-pages.json"
+            # GitHub's release-by-tag endpoint intentionally hides draft releases (404).
+            # The authenticated release list includes drafts, so resolve the unique tag there.
+            if ! gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" > "$response_pages"; then
+              echo "FAIL: could not list GitHub releases while verifying $release_tag"
+              return 1
+            fi
+            python3 - "$response_pages" "$release_tag" "$apk" "$expected_draft" <<'PY'
+          import hashlib, json, pathlib, sys
+          response_path, tag, apk_path, expected_draft = sys.argv[1:]
+          pages = [json.loads(line) for line in pathlib.Path(response_path).read_text().splitlines() if line.strip()]
+          releases = [release for page in pages for release in page]
+          matches = [item for item in releases if item.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one release for {tag}, found {len(matches)}"
+          release = matches[0]
+          apk = pathlib.Path(apk_path)
+          name = apk.name
+          expected_url = f"https://github.com/universalrp2003/InternetRadio/releases/download/{tag}/{name}"
+          expected_page = f"https://github.com/universalrp2003/InternetRadio/releases/tag/{tag}"
+          expected_digest = "sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest()
+          is_draft = expected_draft == "true"
+          assert release.get("tag_name") == tag, f"wrong tag in release API response: {tag}"
+          assert release.get("draft") is is_draft, f"unexpected draft state: {release.get('draft')}"
+          assert release.get("prerelease") is False, "release is marked prerelease"
+          if is_draft:
+              # GitHub assigns an untagged-<id> URL to drafts until the tag is published.
+              assert release.get("html_url", "").startswith("https://github.com/universalrp2003/InternetRadio/releases/tag/")
+          else:
+              assert release.get("html_url") == expected_page, f"non-canonical release page: {release.get('html_url')}"
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+          assert len(assets) == 1, f"expected exactly one {name} asset"
+          asset = assets[0]
+          assert asset.get("state") == "uploaded", f"asset is not uploaded: {asset.get('state')}"
+          assert asset.get("size") == apk.stat().st_size, "release asset size differs from the locally verified APK"
+          assert asset.get("digest") == expected_digest, f"GitHub SHA-256 differs: {asset.get('digest')} != {expected_digest}"
+          download_url = asset.get("browser_download_url", "")
+          assert download_url.startswith("https://github.com/universalrp2003/InternetRadio/releases/download/") and download_url.endswith("/" + name), f"non-canonical download host or asset: {download_url}"
+          if not is_draft:
+              assert download_url == expected_url, f"published download URL is not canonical: {download_url}"
+          print(f"VERIFIED {'DRAFT' if is_draft else 'PUBLIC'} {tag}: {name}, {asset['size']} bytes, {expected_digest}")
+          PY
+          }
+
+          # Verify all old-source publication inputs. In mirror mode, download and validate the
+          # existing public release assets first, then mirror those exact bytes without editing
+          # any old release, tag or asset.
+          if [[ "${MIRROR_EXISTING:-false}" == "true" ]]; then
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              source_dir="$RUNNER_TEMP/mirror-source-${release_tag}"
+              mkdir -p "$source_dir"
+              apk_name=$(basename "${RELEASE_APKS[$i]}")
+              gh release download "$release_tag" --repo "$GITHUB_REPOSITORY" \
+                --dir "$source_dir" --pattern "$apk_name"
+              source_apk="$source_dir/$apk_name"
+              test -s "$source_apk" || { echo "Missing existing source asset: $release_tag/$apk_name"; exit 1; }
+              RELEASE_APKS[$i]="$source_apk"
+              verify_release_asset "$release_tag" "$source_apk" false
+            done
+          else
+            # Verify each old-source draft before publication; GitHub assigns canonical tag URLs on promotion.
+            for i in "${!RELEASE_TAGS[@]}"; do
+              verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
+            done
+          fi
+
+          verify_target_release_asset() {
+            release_tag="$1"
+            apk="$2"
+            expected_draft="$3"
+            response_pages="$RUNNER_TEMP/target-release-${release_tag}-pages.json"
+            if ! GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh api --paginate "repos/${DESTINATION_REPO}/releases?per_page=100" > "$response_pages"; then
+              echo "FAIL: could not list RP-Android-Apps releases while verifying $release_tag"
+              return 1
+            fi
+            python3 - "$response_pages" "$release_tag" "$apk" "$expected_draft" "$DESTINATION_REPO" <<'PY'
+          import hashlib, json, pathlib, sys
+          response_path, tag, apk_path, expected_draft, repo = sys.argv[1:]
+          pages = [json.loads(line) for line in pathlib.Path(response_path).read_text().splitlines() if line.strip()]
+          releases = [release for page in pages for release in page]
+          matches = [item for item in releases if item.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one {repo} release for {tag}, found {len(matches)}"
+          release = matches[0]
+          apk = pathlib.Path(apk_path)
+          name = apk.name
+          expected_url = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          expected_page = f"https://github.com/{repo}/releases/tag/{tag}"
+          expected_digest = "sha256:" + hashlib.sha256(apk.read_bytes()).hexdigest()
+          is_draft = expected_draft == "true"
+          assert release.get("draft") is is_draft, f"unexpected draft state: {release.get('draft')}"
+          assert release.get("prerelease") is False, "release is marked prerelease"
+          if is_draft:
+              assert release.get("html_url", "").startswith(f"https://github.com/{repo}/releases/tag/")
+          else:
+              assert release.get("html_url") == expected_page, f"non-canonical release page: {release.get('html_url')}"
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+          assert len(assets) == 1, f"expected exactly one {name} asset"
+          asset = assets[0]
+          assert asset.get("state") == "uploaded", f"asset is not uploaded: {asset.get('state')}"
+          assert asset.get("size") == apk.stat().st_size, "destination size differs from the verified APK"
+          assert asset.get("digest") == expected_digest, f"destination SHA-256 differs: {asset.get('digest')} != {expected_digest}"
+          download_url = asset.get("browser_download_url", "")
+          assert download_url.startswith(f"https://github.com/{repo}/releases/download/") and download_url.endswith("/" + name), f"non-canonical destination asset: {download_url}"
+          if not is_draft:
+              assert download_url == expected_url, f"destination download URL is not canonical: {download_url}"
+          print(f"VERIFIED {'DRAFT' if is_draft else 'PUBLIC'} {repo}/{tag}: {name}, {asset['size']} bytes, {expected_digest}")
+          PY
+          }
+
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            # Mirror the exact locally verified APK bytes; the destination repository contains
+            # releases/assets, while source/build ownership remains on InternetRadio for now.
+            for i in "${!RELEASE_TAGS[@]}"; do
+              release_tag="${RELEASE_TAGS[$i]}"
+              echo "Creating RP-Android-Apps draft: $release_tag (${RELEASE_APKS[$i]})"
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release create "$release_tag" \
+                --repo "$DESTINATION_REPO" --target "$DESTINATION_BRANCH" --draft \
+                --title "${RELEASE_TITLES[$i]}" --notes-file "${RELEASE_NOTES[$i]}"
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release upload "$release_tag" \
+                "${RELEASE_APKS[$i]}" --repo "$DESTINATION_REPO"
+            done
+            for i in "${!RELEASE_TAGS[@]}"; do
+              verify_target_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" true
+            done
+          fi
+
+          # Only publish after every old draft—and every configured target draft—has passed
+          # its updater-facing size, SHA-256, stable-state and canonical-release checks.
+          # Mirror mode deliberately leaves all existing InternetRadio releases untouched.
+          if [[ "${MIRROR_EXISTING:-false}" != "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              gh release edit "$release_tag" --draft=false
+            done
+          fi
+          if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+            for release_tag in "${RELEASE_TAGS[@]}"; do
+              GH_TOKEN="$RP_ANDROID_APPS_RELEASE_TOKEN" gh release edit "$release_tag" \
+                --repo "$DESTINATION_REPO" --draft=false
+            done
+          fi
+          for i in "${!RELEASE_TAGS[@]}"; do
+            verify_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" false
+            if [[ "$TARGET_PUBLISH_ENABLED" == "true" ]]; then
+              verify_target_release_asset "${RELEASE_TAGS[$i]}" "${RELEASE_APKS[$i]}" false
+            fi
+          done
+
+          # Keep the previous-release pointer aligned for the next Live Guard permission delta.
+          # This post-publication metadata commit does not change the just-verified APK bytes.
+          if [[ "$GITHUB_REF" == refs/heads/arena/* ]]; then
+            printf '%s\n' "$LIVE_GUARD_TAG" > releases/latest-tag.txt
+            git config user.name "ci-bot"
+            git config user.email "ci-bot@users.noreply.github.com"
+            git add releases/latest-tag.txt
+            if ! git diff --cached --quiet; then
+              git commit -m "CI: record latest Live Guard release $CLEANER_VERSION"
+              git push origin "HEAD:${GITHUB_REF_NAME}"
+            fi
+          fi
+          [[ "$TARGET_PUBLISH_ENABLED" == "true" ]] || { echo "FAIL: dual-repository publication was not enabled."; exit 1; }
+          echo "All four stable app releases are published and their assets are verified on InternetRadio and RP-Android-Apps."
 
       - name: Surface build errors
         if: failure()
@@ -1091,6 +1483,13 @@ jobs:
               tail -60 store-art.log || true
               echo '```'
             fi
+            if [ -f "$RUNNER_TEMP/release-publication.log" ]; then
+              echo ""
+              echo "## Release publication step"
+              echo '```'
+              tail -160 "$RUNNER_TEMP/release-publication.log" || true
+              echo '```'
+            fi
           } > ci-build-failure.md
           git config user.name "ci-bot"
           git config user.email "ci-bot@users.noreply.github.com"
@@ -1129,13 +1528,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: store-bundles
-          path: "*/build/outputs/bundle/release/*.aab"
-
-      - name: Upload Internet Radio APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: internet-radio-apk
-          path: app/build/outputs/apk/*/*.apk
+          path: |
+            cleaner/build/outputs/bundle/release/*.aab
+            equalizer/build/outputs/bundle/release/*.aab
+            radio/build/outputs/bundle/release/*.aab
 
       - name: Upload CleanSweep APK
         uses: actions/upload-artifact@v4
@@ -1144,12 +1540,6 @@ jobs:
           path: |
             cleaner/build/outputs/apk/*/*.apk
             cleaner/build/outputs/apk/*/*.apk.sha256
-
-      - name: Upload AppForge APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: appforge-apk
-          path: builder/build/outputs/apk/*/*.apk
 
       - name: Upload PulseEQ APK
         uses: actions/upload-artifact@v4
@@ -1162,3 +1552,13 @@ jobs:
         with:
           name: ramesh-radio-apk
           path: radio/build/outputs/apk/*/*.apk
+
+      - name: Upload RP Vocal Remover Studio APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: rp-vocal-remover-studio-apks
+          path: |
+            vocalremover/build/outputs/apk/release/*.apk
+            vocalremover/build/outputs/apk/release/*.apk.sha256
+            vocalremover/build/outputs/apk/debug/*.apk
+          if-no-files-found: error

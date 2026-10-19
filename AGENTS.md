@@ -1,186 +1,65 @@
-# Standing project requirements
+# Project guidance and owner decisions
 
-- Actively maintain CleanSweep, Ramesh Radio and PulseEQ. Preserve the two legacy
-  apps, AppForge and the original Internet Radio; do not delete them.
-- Target Android 8.0/API 26 and newer across all manufacturers, not one user's phone.
-  Use runtime guards/fallbacks and honestly label device-dependent capabilities.
-- Following the owner's 2026-10-08 instruction, prepare README, changelogs and
-  release notes for future app updates; publish the verified release APKs for the
-  three maintained apps to GitHub Releases rather than leaving only CI artifacts.
-  Do not publish failed builds, mislabel incomplete features or overwrite an
-  existing release asset with different code under the same version.
-- Include an honest validation summary and identify required real-device tests.
-- Never upload selected audio for karaoke without explicit approval; online and
-  offline AI separation are still unfinished (see docs/radio-karaoke-investigation.md).
-- Preserve the owner's phone-age estimate on the Home dashboard. On 2026-10-11
-  the owner explicitly requested its restoration and asked that future redesigns
-  not silently remove it. Keep it labelled as an estimate, not an exact manufacture/
-  purchase date; unsupported model/factory evidence must remain unavailable.
+## Active project scope
 
-- Following the owner's 2026-10-11 voice/news/widget choices: redesign the **launcher
-  home-screen widget**, not the floating pill; latest compact Battery/Data/Phone
-  profiles supersede the former large battery/watts layout. Keep floating
-  watts-only charging/unplug behaviour intact. Never invent five-decimal battery
-  precision or turn display decimal places into an accuracy claim.
-- Home news must be **today only in the phone's local timezone**, real publication
-  timestamps required, deduplicated and not automatically repeating read headlines.
-  No publisher ribbon/static safety tips/synthetic "today" fallback in the banner.
-  Retain article links/source metadata internally; keep security review separate.
-- The owner reports manual speech works but automatic alerts are silent on Redmi
-  13 5G (Android16/API36 screenshots, exact ROM unknown). Diagnose delivery gates,
-  callbacks/background paths honestly; never claim enabled switches or TTS engine
-  completion certify audible speech/OEM background survival.
+- Maintain five active Android products: `cleaner` (Live Guard / CleanSweep), `radio` (Ramesh Radio), `equalizer` (PulseEQ), `vocalremover` (RP Vocal Remover Studio), and `oorarivippu` (Oor Arivippu / Place Announcer). Oor Arivippu is owner-approved for its first stable release as a separate product and release workflow; do not add it to the existing four-app batch without revising that workflow's tag/version protections.
+- The isolated `secretmessage` preview remains a non-shipping local-only development target, not an active released app or secure messenger. Integrate only approved WhisperPad product modules after verifying their real boundaries; preserve MLS, signing and release requirements. Do not claim secure messaging or equate preview expiry with recipient-view expiry.
+- WhisperPad is the owner's product/UI specification for Secret Message, not a separate app. The owner's Drive document *New WhisperPad P2P Android Agent Blueprint (MLS-Compatible Edition)* is the current version.
+  - 0.2.0-preview integrated its input deck, synthesized tones, RAM-only timers, optional BiometricPrompt app lock and permission-removal rules behind `SecretMessageMlsTransport`.
+  - On 16 October 2026 the owner tested 0.2.0-preview on two phones (each on its own) and reported that it works as expected, then asked for a drawing pad about half the screen tall. 0.2.1-preview adds it; keep that size and make sure the pad controls stay on-screen. The owner then tested 0.2.1-preview and reported liking the larger pad.
+  - The test-only LAN APK (0.3.0-lan-test, run 38850979289) shows a 20-digit safety code from the MLS group's RFC 9420 epoch authenticator; both people must confirm it before any test message flows. It verifies the session only: identities are temporary and MLS validation still uses `BasicIdentityProvider`. Do not shorten the code without a reviewed commitment step, and keep persistent identity keys, Keystore protection, pinning and key-change warnings as open gates. On 16 October 2026 the owner ran it twice between the OPPO and the Xiaomi; both phones showed identical codes each time, and both phones' copied reports from a third run show the same confirmed code (48823 54812 01786 89819) and LAN PASS. The “Codes differ” stop path has not been tried on phones.
+  - Test APK 0.4.0-lan-test (run 38884976838) keeps one Keystore-wrapped software identity per install (random device ID in the credential label), remembers phones after a PASS, and shows new/remembered/changed-key status, with a red warning for a changed key. Never accept a changed key silently, and store a new key only after another confirmed comparison; the code is still compared every time in this test. Hardware-backed identity keys, a reviewed storage and recovery design, and product integration remain open. On 16 October 2026 the owner's copied reports from both phones showed: first run new/new, code 77142 61696 27037 77629, PASS; after the OPPO's key reset (device ID kept), the Xiaomi flagged the OPPO's key as changed, code 29646 94449 88457 19632, PASS, with the new key replacing the old one. The OPPO listed the Xiaomi as new in that run (its list was empty; a key reset does not clear it; whether “Forget remembered phones” was used was asked but not confirmed). A third run showed the remembered (KNOWN) status on both phones; its stop-path attempt failed because the connection had already closed during the comparison (the Android 16 Xiaomi reported a connection abort), so the stop path is still unconfirmed on phones.
+  - Test APK 0.5.0-lan-test (run 38984840619) adds typed test messages after a PASS: MLS application messages with encrypted delivery acknowledgments and an end marker, a 10-minute limit and at most 1,000 UTF-8 bytes (300 characters on screen). Never store or log typed text and never put it in the copied report (counts only); keep the TEST ONLY wording and the warning not to type anything private. The app keeps the screen on during a LAN test because Android 15+ cuts an app's connections a few seconds after it leaves the screen. When the LAN protocol changes, bump the native `PROTOCOL_TAG` (`secretmessage-lan-test/N`) and the Java `INVITE_VERSION` together. On 17 October 2026 it passed on a Samsung SM-M346B and the Xiaomi (both Android 16; the Xiaomi's reinstall gave it the new device ID bd5a 886f 1680 2fb5): code 43474 11998 54203 56034, new/new, and one typed message from the Xiaomi delivered to the Samsung and acknowledged. Two more runs that day, without reinstalling: KNOWN on both phones, PASS, and **End typed test** on the Samsung reported on both phones with matching counts after 11 s; a message from the Samsung to the Xiaomi is still not shown. In the third run the Xiaomi's person tapped Codes differ while the Samsung's had not answered, and the stop never reached the Samsung, because 0.5.0 read the other phone's answer only after its own person had answered. Leaving the app to share or paste the invite before **Join** is fine (the host must be back on screen when the other phone joins).
+  - Test APK 0.5.1-lan-test (run 39003431137, protocol `secretmessage-lan-test/6`) keeps reading the connection while the person compares the code, so Codes differ on either phone stops both phones at once and withdraws the other phone's question; a phone that does not confirm sends its answer, lingers at most two seconds and shows STOPPED, and an unanswered comparison sends an encrypted no-answer marker. Never show the other phone's confirmation before this phone's person answers (it could nudge them). Its in-app notice says that leaving the app before **Join** is fine. Each CI build still has its own debug signing key, so testers uninstall the old test APK first, which resets the identity and remembered phones. On 17 October 2026 a fixed test signing key was offered (a committed test keystore or a repository secret); it awaits the owner's decision, so do not add one without approval. On 17 October 2026 the owner ran 0.5.1 on the Xiaomi and a motorola moto g57 power (Android 17/API 37). First run: new/new, code 07186 64085 49114 69344, PASS, and one typed message delivered in each direction; 38 s into the typed test the Motorola reported a connection reset, most likely because the Xiaomi left the app to paste its report, so End was not reached. Second run (both phones' app data had been cleared, most likely by reinstalling): the Xiaomi tapped Codes differ, and the Motorola, whose person had not answered, showed the other phone's STOPPED status, so the stop path works on phones. The no-answer path is covered only by host tests. Any product chat must expect people to switch apps (a content-free foreground service, or a clear end of the chat).
+  - GitHub's `ubuntu-latest` runners move to Ubuntu 26 from 19 October 2026 (runner notice in run 38984840619); if a Secret Message lane breaks after that, check the runner image first.
+  - In the preview, that transport's only implementation (`UnavailableMlsTransport`) sends nothing.
+  - Keep the blueprint's excluded parts out: custom crypto, shared-secret pairing, WebRTC with its own encryption, signaling server, auto-release/generated signing keys, and hardware transcript signing.
+  - Keep notification posting deferred until an authenticated transport exists.
+  - Do not connect MLS or add network permissions to the preview (`secretmessage/product`) until the security-design gates pass. The one owner-approved exception is the Secret Message app built from `secretmessage/wifi-test` (below).
+  - Secret Message Wi-Fi TEST (`secretmessage/wifi-test`, `com.rpideas.secretmessage.wifitest`, 0.3.0-wifi-test) was approved by the owner on 17 October 2026: the unchanged product screens plus a same-Wi-Fi connection through the mls-rs LAN session (`WIFI_CHAT` profile, protocol `secretmessage-wifi-chat/1`, invites `secretmessage://chat?…&v=1`). Keep it debug-only, labelled not security-reviewed, unpublished and out of the release and bundle tasks. When its protocol changes, bump the native `WIFI_CHAT` tag and `InviteLink.VERSION` together. The owner chose to keep a chat connected while a person switches apps: a `connectedDevice` foreground service whose notification shows only "Secret Message" and the chat state, never names or messages. Its build script enforces the exact permission set and a JNI export for every `NativeBridge` function. Payloads are a versioned binary format, Base64 inside MLS application messages, bounded when decoded and checked by the product's `PayloadValidator`; never log or store message content. Run 39030739655 passed (APK SHA-256 0c6c8f6860b9d97537cbd18338dc8f98499020ec57ee0f1147351156ee084359). On 17 October 2026 the owner's first two-phone run passed (Xiaomi, Android 16, host; motorola moto g57 power, Android 17, guest; code 60287 06713 31275 51096): three messages each way, including drawn letters and a picture, all delivered, viewed and removed from both phones by their timers, and End reached both phones. The owner then confirmed that the drawings looked right and that the chat stayed open while a phone switched apps.
+  - Secret Message TEST 0.4.0-internet-test (same package, label "Secret Message TEST"; run 39045202127) adds the Internet path, relay-first by owner approval: a TLS WebSocket (OkHttp) to the test relay `secretmessage/relay` (Cloudflare Worker + Durable Object on the owner's free account, `wss://secretmessage-relay.universalrp2003.workers.dev`). The native session runs unchanged over a local socket pair (`open_relay_pipe`, no unsafe code), and invites are `v=2` (`relay=<room>` or `host`/`port`). The relay must only forward: never store, log or inspect payloads. It deploys only through `secret-message-relay.yml` with the `CLOUDFLARE_API_TOKEN` secret (an account token; wrangler finds the account, and the `CLOUDFLARE_ACCOUNT_ID` secret is not used). Never ask for Cloudflare tokens in chat. On 17 October 2026 the owner's first Internet run passed on a Jio LS1542QWN (Android 12, armeabi-v7a) and the Xiaomi (Android 16): two chats with each phone hosting once, codes 95508 24454 99188 19691 (NEW/NEW) and 22980 56377 50429 76070 (KNOWN/KNOWN), text and pictures both ways, all delivered and viewed, End reached the other phone, nothing refused. The networks used and app switching were not reported. The owner then confirmed both phones on mobile data and Wi-Fi with mobile data, and that switching apps kept the chat open. The report wording for relay chats was fixed in 1.0.0.
+  - Secret Message 1.0.0 (`com.rpideas.secretmessage`) was published on 17 October 2026 at the owner's explicit request (ask_user: "Publish it now" with "A new private key", then "Publish as soon as all automatic checks pass") without an independent security review. The app (start screen and About) and its release notes say so plainly: never call it secure, audited or independently reviewed. It is built from `secretmessage/wifi-test` (the Kotlin package `com.rpideas.secretmessage.wifitest` stays because of the JNI export names; debug builds are `com.rpideas.secretmessage.debug`, "Secret Message (debug)"). Releases come only from `.github/workflows/secret-message-wifi-test.yml`, on a push to `arena/d4fb2344-internetradio` whose commit message contains the Secret Message publish marker (`publish-secretmessage` in square brackets). Never write that marker in any other commit message: commit a8253a2 described it literally, and that run failed closed without publishing. For each release, raise `versionCode` by one and `versionName` (the last part for fixes, the middle part for new features), update `EXPECTED_CODE`/`EXPECTED_VERSION` in that workflow, and add `secretmessage/releases/secret-message-v<version>.md`. Tags are `secret-message-v<version>` and assets `Secret-Message-v<version>.apk`; never overwrite a tag. The release key (`secretmessage/signing/secretmessage-release.p12`, password in the owner's `SECRETMESSAGE_SIGNING_PASSWORD` secret, certificate SHA-256 `58e370e417cf6f33234689acd5bf379474f5a8c55f79181d9e892a321bc04f08`) was created once in CI and must never be replaced. 1.0.0 was published by [run 39052903146](https://github.com/universalrp2003/InternetRadio/actions/runs/39052903146): `Secret-Message-v1.0.0.apk`, 29,345,617 bytes, SHA-256 `17ecabe0af808a48c790f631c6a069d39d107ff948fe99ed5e2ee32f164038f7`. Changes from 0.4.0 (bigger keyboard, short texts, launcher icon, release package) were not phone-tested before release; the owner then confirmed 1.0.0 works on two phones. 1.1.0 / code 2 was published on 18 October 2026 by [run 39101002517](https://github.com/universalrp2003/InternetRadio/actions/runs/39101002517) (commit `e928819`) after the owner tested its test builds on two phones: remembered phones call each other through doorbell inboxes on the relay (encrypted rings; no Google services), KNOWN keys confirm the safety code automatically, local names and online status, Tamil-first interface (keyboard stays English), a Tamil and English guide, About with credits, RP Ideas links and a verified updater forked into the app and pinned to this app's certificate (the shared updater is unchanged), and compact drawing-pad controls with Picture as the default. `Secret-Message-v1.1.0.apk`: 29,443,977 bytes, SHA-256 `cc9a69d0022e49c1f653291e033bca8de0e1c4e0477731df1741cc3ddfbc5e10`, byte-identical to the phone-tested build of run 39098419129. The relay's inboxes (`/v1/inbox/<id>`) must, like its rooms, only forward: never store, log or inspect rings.
+- Retired standalone app modules have been removed from the active build, CI and store metadata at the owner's request. Preserve their already-published GitHub Releases, tags and APK assets as historical records; do not rebuild or publish them.
+- The owner chose **RP Ideas** as the umbrella brand and `RP-Android-Apps` as the destination repository slug. The four legacy bridge clients check `RP-Android-Apps` first and keep `InternetRadio` as a verified fallback during the grace period; older installed clients still require the exact `InternetRadio` URL and reject redirects. On 18 October 2026 the owner decided to move the code and future development to `RP-Android-Apps` now and keep `InternetRadio` as the update backup until the November review: follow `docs/source-migration.md` (import branch `arena/d4fb2344-internetradio` with history and no tags, in a new Arena session on `RP-Android-Apps`); after the move, publish only from `RP-Android-Apps`. Follow `docs/repository-migration.md`; do not rename, archive or delete the old repository until all four bridge updates and the later updater-only transition are confirmed. Oor Arivippu 1.0.0 and 1.0.1 were separately published to both repositories; its standalone releases are not part of that four-app migration batch.
+- The owner reported that the four existing apps worked on their phone on 13 October 2026. On 15 October, the owner reported successful Oor Arivippu testing on two devices, authorized publication, and later confirmed the stable app is working. Owner-provided screenshots show the 1.0.0 (code 2) package, Play Protect's “This app looks safe” screen, and the running app's version/update status. This is owner-reported device feedback, not independent certification or hash-linked validation: the screenshots do not show the APK SHA-256. Do not claim the exact stable APK bytes were device-tested unless that hash is matched. The owner then device-tested the debug APK from Actions run 38776902130 (Plus Code filtering and the Tamil/English Android TTS voice picker; it reported 1.0.0) and authorized a new release; 1.0.1 / code 3 was published from the same app source by run 38826899278. After publication, the owner also installed the debug APK from Oor test run 38826564762 (exact 1.0.1 source; package 1.0.1 (3); Play Protect “This app looks safe”; updater showed no newer release) and reported it works. Debug builds cannot share the stable bytes; the exact published 1.0.1 APK was not device-tested or hash-matched. On 16 October, the owner asked for 1.0.2 / code 4 (place and district announcements without the repeated “Entering” / “தற்போது … வந்துள்ளீர்கள்” filler) to be published without a device test; run 38840264469 published it after Oor test run 38840000191 passed. No build of the 1.0.2 source has been device-tested.
 
-- Automatic power delivery cannot rely solely on Android8+ manifest implicit broadcasts.
-  Runtime receivers must be owner-scoped to the visible app or existing enabled monitor/
-  visual fallback, with honest registration evidence and no cold-background guarantee
-  when no owner runs. Do not silently enable a persistent service to mask this limitation.
+## Shared app and release requirements
 
-- Owner explicitly lifted the source-only hold on 11 October 2026: **build the next
-  version and publish after verification**. Prepare Live Guard2.39/code44; execute
-  all required tests/build/package/signing gates before publication. Never claim a
-  failed or untested candidate is a verified released APK.
-- **2026-10-11 owner decision (option 1, already answered — do not re-ask):** after
-  Play Protect blocked installation, prepare the main Live Guard app **without
-  notification/message reading**. Remove the capability from production completely —
-  never merely switch it off, hide the screen, disable a component or leave a hidden
-  activation path. Keep every other feature. The 2.39 reader sources are archived in
-  `docs/archived-notification-reader-2.39/` as reference only: not a Gradle source
-  set, not a flavor/module, never distributed as a workaround. Any future redesign
-  needs a fresh owner decision plus policy and device review.
-- Do **not** disable or bypass Play Protect, conceal the installation source, rename
-  the package or change the signing identity, and do not call the removal of one
-  capability a guaranteed fix. The blocked APK hash is unconfirmed from the
-  screenshot. Update the public installation advisory
-  (`docs/live-guard-play-protect-install-block.md`) before recommending any APK, and
-  never erase historical CI results or replace older published asset bytes.
-- Use correct corresponding Tamil/English throughout Live Guard, its launcher
-  widget and notification text; notifications follow the selected app language.
-  Human-visible clock times use **12-hour AM/PM**; preserve machine/feed parsing formats.
-- Bound and cancel assistant requests; show progress/errors, discard superseded
-  results, and do not invent live-web success/current prices. Exact Redmi13 5G
-  evidence must not be replaced by Redmi12/13C/4G Wikipedia prices.
-- Confirmed answer voice choice: **alternate two selected/previewed voices BETWEEN
-  answers, reading each answer ONCE**. Do not re-ask that choice or infer gender
-  from Android voice metadata. Missing suitable voices must be honestly reported.
-- Preserve the genuine last completed permission-review date across navigation/
-  restart. A saved dated summary is not a fresh check or a safety verdict; do not
-  fabricate a review date just by opening the app. Keep unknown/incomplete states
-  and opt-in package-specific history distinct.
+- The five active app UIs are Tamil-first with an in-app English option. When adding visible text, add both translations, preserve dynamic placeholders, and run the localization checks.
+- Do not label any contributor “Author.” About pages credit shared contributors accurately, include Ramesh prathap .R (`universalrp2003@gmail.com`) and Arena.ai Agent Mode as software assistance (no invented contact), and link to the current release pages.
+- Use the verified stable GitHub Releases updater. Check official release sources, offer only a newer stable version, verify official asset URL, size, SHA-256, package/version and pinned signing certificate, then hand off to Android. Never install silently, bypass Play Protect, or claim that the app can grant/revoke Android's per-app “Install unknown apps” access temporarily.
+- Oor Arivippu uses package `com.oorarivippu.voiceannouncer`, version 1.0.0 / code 2 for its first stable release, then 1.0.1 / code 3, 1.0.2 / code 4, and 1.1.0 / code 5 as the current stable release (published 18 October 2026 by run 39105539892: `Oor-Arivippu-v1.1.0.apk`, 12,211,781 bytes, SHA-256 `34858e8c6e4831e725ac7503f6613c96bcb896d659ebbdb588dcd139afc7c8b3`), the existing pinned RP Ideas signing identity, and a standalone release workflow gated by an explicit `[publish-oorarivippu]` commit on the authorized branch (or a future authorized manual dispatch). Prior test APKs were debug-signed; if Android rejects an update because of the signer, explain that the test build must be uninstalled before installing the stable build. Do not overstate exact-byte device testing.
+- Oor Arivippu must continue to suppress place/destination announcements when internet is unavailable. Its selectable offline-status reminders are Off/5/10/15/30 minutes (default 5 since 1.1.0 at the owner's request; 15 before); use an on-device TTS voice when a local voice exists, otherwise a short local beep. Do not use network TTS for offline reminders.
+- Keep package IDs, signing identity and existing released asset bytes unchanged. Use a new app version/tag for changed APK bytes; never overwrite an existing version's asset.
+- The Live Guard release permission-delta gate is mandatory. A device evidence record is required when a release adds a dangerous permission; fail closed if the previous release cannot be inspected. App-op/signature permissions are not runtime-dangerous permissions. If evidence exists, publish only the exact tested APK bytes. Never describe CI as a phone test or claim Play Protect approval.
+- The repository currently supports direct APK sideloading. Any store listing or certification claim must be separately verified.
 
-- **2026-10-12 owner request (Live Guard 2.41/code46):** prepare the next candidate with
-  four changes only — (1) honest watts/amps (battery-side, measured-only, labelled, no
-  amp-for-watt substitution), (2) a screen-on/off charging note, (3) a bounded AI output
-  budget plus a provider model check, (4) one owner-set **44 °C** battery heat warning with
-  an honest sensor name and a hush window. The owner did **not** authorize publication:
-  2.41 is published only after the owner installs the exact candidate APK on his phone and
-  the real Play Protect wording plus installer outcome are recorded with the tested digest
-  and run id in `docs/live-guard-2.41-device-evidence.md`. **That happened on 12 October
-  2026:** the owner installed the candidate (Play Protect "App scan recommended" → "Scanning…"
-  → "This app looks safe"), and 2.41 was published as `v2026.10.12-1` from the tested bytes in
-  run 38202739572. Never publish a rebuilt digest as if the device test covered it; keep 2.40's published assets, the 2.39 history and the
-  install-block advisory intact, and keep `releases/latest-tag.txt` at `v2026.10.11-4` until
-  a real publication happens.
+## Oor Arivippu (Place Announcer)
 
-- **2026-10-12 owner decision (Live Guard 2.42/code47) — publication rule changed:** from now
-  on a release does **not** need a recorded physical-device install unless it **adds a dangerous
-  permission**. Owner's words: *"now from further no need to verify everytime instalation
-  verification untill dager permission we add to the application so fix build and publish."*
-  The tag release step compares this build's merged-manifest permissions with the previously
-  published release APK using `aapt2`, and `tools/verify_release_permission_delta.py` decides;
-  appop/signature permissions (`MANAGE_EXTERNAL_STORAGE`, `PACKAGE_USAGE_STATS`,
-  `SYSTEM_ALERT_WINDOW`, `REQUEST_INSTALL_PACKAGES`, `QUERY_ALL_PACKAGES`) are **not** runtime
-  prompts and never count as an addition. It fails closed when the previous release cannot be
-  read. **Unchanged and still enforced:** when a device-evidence file *does* exist, publication
-  still publishes only the tested bytes (a rebuild reproducing the recorded SHA-256, or the
-  recorded run's promoted artifact), so a rebuilt digest can never inherit an earlier device
-  test; Play Protect is never disabled or bypassed; the package name and signing key never
-  change; and release notes must **never** claim a device test that did not happen. A release
-  published without one must say so in its own words — see `releases/v2026.10.12-2.md`.
-- **2026-10-12 owner request (Live Guard 2.42/code47) — the nine-item work list:** (1) restore
-  charging watts on phones whose `BATTERY_PROPERTY_CURRENT_NOW` reports nothing by falling back
-  to the battery broadcast's `current_now` extra (public as `BatteryManager.EXTRA_CURRENT_NOW`
-  only from API 34, so the literal key is used — minSdk is 26), keeping one unit decider and one watts
-  decider and never faking `0.00 W`; (2) choose Voice A / Voice B automatically from the real
-  installed inventory and never show the "choose and preview two voices" error again; (3) the
-  ongoing status-bar charging meter defaults ON and is re-armed by an update or reboot even when
-  the preference was never written; (4) background battery-health monitoring defaults ON, keeping
-  the switch and the honest "OFF is not a failure" wording; (5) the Security screen's "Include
-  preinstalled system apps" defaults ON; (6) permission findings must open **that app's own**
-  permission page, not MIUI's "Other permissions" hub, with per-ROM ordering and the existing
-  honest text fallback; (7) one spacing scale on the main screen and no clipping under the
-  header; (8) one language source of truth, resolved before the first composition, so no card
-  renders the opposite language; (9) the publication-rule change above. The **floating pill stays
-  opt-in** (overlay access is never granted automatically) and automatic *online* daily summaries
-  stay a separate consent. Item 1 still needs the owner's OPPO A3s screenshot and item 6 still
-  needs both ROMs checked: see `docs/live-guard-2.42-device-test-plan.md`. Do not describe
-  either as proven on hardware until that happens.
+- Keep connectivity-loss status explicit, suppress place/destination speech while offline, and offer only the configured periodic offline-status reminder. The reminder uses a verified local TTS voice or a short notification-stream beep; it must not invoke online geocoding/voice for offline-status speech.
+- Keep tracking user-controlled and visible in the ongoing foreground notification. Preserve the optional headset “Where am I?” control and avoid announcing while call audio is active.
+- The service field declaration is `private val travelDetector = TravelStateDetector()`; preserve that exact declaration when making related edits.
+- Owner-requested fixes (16 October 2026, after 1.0.2), done in 1.1.0: do not announce the geocoder's “Unnamed Road” placeholder (Tamil “பெயரில்லாத சாலை”) as an area, and do not announce the same town again when the geocoder only switches its script (for example ஆலங்குடி, then Alangudi about a minute and a half later). 1.1.0 filters such placeholders (`PlaceDataPolicy.isPlaceholder`), compares Tamil and English spellings by their consonant sounds (exact match within one script), and does not repeat a town announced in the last 10 minutes (`RecentPlaces`). Further 1.1.0 owner requests (18 October): destination chooser listing every geocoder match with district, state, PIN code and distance (never silently use the first match; speak the chosen place's name), same-town next area off by default, all Android voices of the language best quality first with speech speed, long texts folded behind Details, compact language rows, and a Secret Message link in About. Place announcements speak only the names since 1.0.2; keep them free of filler such as “Entering” or “தற்போது … வந்துள்ளீர்கள்”.
+- About content must include the project and AI-assistance credits, source/download repository links, current app release links, and the verified updater. Keep the updater language synchronized with the app's Tamil/English preference.
 
-- **2026-10-12 owner device test result (2.42 → 2.43):** the owner installed 2.42 on **both**
-  phones with Play Protect ON (recorded in `docs/live-guard-2.42-device-evidence.md`, two phones,
-  one build) and reported the OPPO A3s charging card **still showed 0.00 W**. That kernel answers
-  zero through *both* the current property and the battery broadcast, so 2.42's "broadcast zero is
-  a measured trickle" branch was wrong and is gone: **a zero is never a measurement** — non-zero
-  property, else non-zero broadcast, else *not reported*. `tools/verify_cleaner_next_update_source.py`
-  fails the build if that branch returns. No app can show real watts on a kernel that reports no
-  current through either path; do not claim otherwise, and keep asking for one A3s screenshot of
-  the new "not reported" wording.
+## Live Guard (CleanSweep)
 
-## Latest reviewed source batch — build/publication now authorized
+- Preserve the no-notification/message-reading production design. Do not restore the retired notification listener, Accessibility, SMS, contacts/call-log, or device-admin capabilities without a fresh owner decision and policy/device review. Do not bypass or disable Play Protect to address an install block.
+- Show battery, CPU, RAM, network and age estimates only from truthful available measurements; label OEM-dependent/unavailable readings honestly. A saved review date must be a real completed review, never invented by opening a screen.
+- The 44 °C owner setting is a warning, not an automatic pause threshold. Do not add a processing pause at that temperature without separate rationale.
+- Respect opt-in monitoring/history, saved OFF settings and the current compact Battery/Data/Phone launcher-widget choices. Do not silently enable persistent monitoring, permissions or deletion.
+- Home news is for the phone's local day with real publication timestamps; do not synthesize “today” headlines or repeat read items automatically. Keep security review separate from news.
+- AI/web requests must be bounded, cancellable and user-controlled, with explicit disclosure of what leaves the phone. Do not invent current prices, live-web success, audible speech or OEM background guarantees. Keep the confirmed voice behavior: alternate the two selected/previewed voices between answers, read each answer once, and never infer gender from Android voice metadata.
 
-Owner choices: **reviewed_setup**, **on_device_only** notification translation,
-**lmarena** exact/datable ratings. Respect saved OFF choices; no silent sensitive
-access, private-message upload, online message TTS fallback, APK installation or
-Play Protect bypass/scan guarantee. The **compact Battery/Data/Phone launcher
-profiles supersede the old large BOTH widget default**; floating pill unchanged.
-Only real observed unplug events may create its timestamp/level. System app
-inclusion is review/scope, never automatic selection or deletion.
+## Audio apps
 
-New source-only helpers/screens/services and dependency declarations are NOT
-compiled/verified APK behavior. Current gate: **349 required cases EACH variant,
-39 suites** (2.42 added the battery-current source, automatic answer voices, monitor
-defaults, language authority and home spacing suites; the retired reader's 12
-historical cases still run from test sources); declaration counts are not executed
-tests. See
-`docs/live-guard-next-update-review.md` and run the static contracts with
-`python3 tools/verify_cleaner_next_update_source.py` before any authorized build.
-Owner has now explicitly authorized commit/push/CI/build and verified publication.
-Until the checks succeed this remains a candidate. Browser background
-or screen-off is not a guarantee of an active Arena turn surviving suspension;
-saved files persist independently.
+- **RP Vocal Remover Studio:** never upload selected audio or use an external audio-processing service. Model delivery over the internet is allowed; processing stays on-device. The first pass creates an instrumental WAV and never alters the original. A second reduction pass is optional and user-started after listening. Offer separate 320 kb/s CBR MP3 export, disclose that MP3 is lossy, and retain the WAV.
+- Keep Slow/Medium/Fast on the main processing screen; support pause/resume and durable long jobs. Low-RAM pauses may auto-resume only after recovery; user, thermal, storage and Android service-limit pauses remain manual. Use a foreground service/wake lock for background processing, with a keep-screen-awake option; do not promise Android battery-optimization exemptions.
+- Report CPU temperature, RAM and load only when available, and label OEM-dependent/missing values. Do not apply the Live Guard 44 °C warning as an automatic pause threshold.
+- **Ramesh Radio / PulseEQ:** process local audio locally. Describe any external-player or system-wide effect as device/ROM-dependent; do not imply universal system-wide equalization.
 
-- Current authorization: build the **2.40 / code45 core candidate** (notification
-  reader removed) and run every gate — but **publishing 2.40+ is gated**: the tag
-  release step refuses a CleanSweep version newer than 2.39 unless
-  `docs/live-guard-2.40-device-evidence.md` records the owner's real Play Protect
-  and installer outcome **and quotes the exact candidate APK SHA-256**. Do not
-  delete that gate, and never publish a rebuilt digest as if the device test covered
-  it. *(Superseded on 2026-10-12 by the owner's 2.42 decision below: the evidence
-  file is now required only when a release **adds a dangerous permission**. The
-  tested-bytes rule inside the gate is unchanged, and 2.40 and 2.41 were published
-  under the old, stricter rule — their records stay exactly as written.)* Required gate: **301 cases EACH Cleaner debug/release variant, 33 suites**,
-  `:radio:testDebugUnitTest`, all-module APK/AAB, package/version/API26/
-  non-debuggable/stable-certificate/packaged-feature/actual-size checks and the
-  retired-capability source+merged-manifest+debug/release-DEX rejection. The last
-  published release stays **2.39 / code44, tag v2026.10.11-3**; its assets and CI
-  records are immutable. Preserve the2.37 and older assets too. Device limitations
-  must remain visible.
+## Verification before release
 
--2.38 compiled/published successfully, then its82,630,093-byte universal APK
-  exposed the updater's50MiB cap. Do NOT replace its assets. Final2.39/code44
-  supersedes it:128MiB guarded cap, compressed/extracted JNI with allABIs retained,
-  and CI checks actual APK fits the update cap before publication. Unchanged
-  Radio/EQ companions are carried byte-for-byte from verified2.37 rather than
-  changing binaries under their unchanged versions.
-
-## Final verified publication
-
--2.39/code44 is verified/published as stable/latest`v2026.10.11-3`, source`6790a96b591b5a3215f5f28193726f0cd607c04f`,
-  CI38143638654/job114482383017SUCCESS6m00s; all295 required tests EACH variant and APK/AAB/
-  stable-certificate/API26/feature/actual-size gates passed. Actual44,610,589-byte
-  universalAPK fits both128MiB and prior50MiB caps. Never replace its assets.
--2.38 was published then superseded for updater-size correction, not overwritten.
-  Companion1.8/1.2 assets in2.39 match verified2.37 bytes/digests exactly. Older
-  assets preserved. Metadata/notes/README should identify actual compiled source,
-  not a later documentation commit. Phone/native/voice/notification tests remain
-  unperformed. Any further code change needs another unique version/tag.
+- Run `python3 tools/verify_cleaner_localization.py`, `python3 tools/verify_apps_localization.py`, `python3 tools/verify_cleaner_core_manifest.py`, `python3 tools/verify_cleaner_next_update_source.py`, and `python3 -m unittest discover -s tools/tests -p 'test_*.py' -v` when relevant. Also run Oor Arivippu unit tests, lint, and a signed release build for its standalone release.
+- CI must build the four legacy batch modules, run their unit tests and required CleanSweep regression suites, verify package/version/minimum SDK/permissions/signature/assets, and compare GitHub release-asset sizes and SHA-256 values before and after publication. Oor Arivippu is verified/published by its dedicated workflow; require both repositories to serve the same signed APK before considering publication complete.
+- Give an honest validation summary and call out any remaining real-device tests. User reports, static checks, CI builds and release metadata are distinct kinds of evidence.

@@ -17,13 +17,13 @@ import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.universalrp.pulseeq.EqViewModel
+import com.universalrp.updates.AppLanguageToggle
 
 @Composable
 fun AboutScreen(vm: EqViewModel) {
@@ -69,8 +69,31 @@ fun AboutScreen(vm: EqViewModel) {
                 runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
                     android.net.Uri.parse("https://github.com/universalrp2003/InternetRadio"))) }
             }) { Text("Source code · GNU GPL v3") }
-            Text("Audio processing stays on your phone. Optional daily update checks contact GitHub and can be turned off below.", color = TextSecondary)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("App language", Modifier.weight(1f), color = TextSecondary)
+                AppLanguageToggle()
+            }
+            Text("Audio processing stays on your phone. GitHub update checks can be turned off below.", color = TextSecondary)
             com.universalrp.updates.AppUpdates.Control("PulseEQ")
+            PanelCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("Contributors", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Cyan)
+                    Text("Project development: Ramesh prathap .R", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    androidx.compose.material3.TextButton(onClick = {
+                        runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_SENDTO,
+                            android.net.Uri.parse("mailto:universalrp2003@gmail.com"))) }
+                    }) { Text("universalrp2003@gmail.com", color = Cyan) }
+                    Text("AI software-assistance contributor: Arena.ai Agent Mode", color = TextSecondary)
+                    Spacer(Modifier.height(4.dp))
+                    Text("App releases", fontWeight = FontWeight.Bold, color = TextPrimary)
+                    // All six apps, one shared list (was four hard-coded links to the old repo).
+                    com.universalrp.updates.SisterApps.releaseLinks().forEach { (label, url) ->
+                        androidx.compose.material3.TextButton(onClick = {
+                            runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
+                        }) { Text(label, color = Cyan) }
+                    }
+                }
+            }
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(

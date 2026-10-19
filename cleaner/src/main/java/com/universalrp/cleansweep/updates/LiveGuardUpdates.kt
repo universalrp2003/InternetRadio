@@ -10,19 +10,21 @@ import android.provider.Settings
 import androidx.core.content.FileProvider
 import com.universalrp.cleansweep.BuildConfig
 import com.universalrp.cleansweep.net.BoundedHttp
+import com.universalrp.updates.ReleaseRepositorySources
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import org.json.JSONArray
+import kotlin.coroutines.coroutineContext
 import java.io.File
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.UUID
 
-/** Cleaner-only updater. Radio/PulseEQ keep their shared updater; no silent install, browser download or CI asset. */
+/** Live Guard updater. The other three apps use the shared updater; no silent install, browser download or CI asset. */
 object LiveGuardUpdates {
     data class Release(val version: String, val notes: String, val tag: String, val assetUrl: String, val bytes: Long,
-        val sha256: String, val publishedAt: Long)
+        val sha256: String, val publishedAt: Long, val repository: String)
     data class State(val busy: Boolean = false, val downloading: Boolean = false, val bytes: Long = 0,
         val release: Release? = null, val verifiedApk: File? = null, val checkedAt: Long? = null,
         val message: String? = null)
@@ -34,39 +36,97 @@ object LiveGuardUpdates {
     private fun prefs(context: Context) = context.getSharedPreferences("app_updates", Context.MODE_PRIVATE)
     fun automatic(context: Context) = prefs(context).getBoolean("automatic", true) // Preserve the existing saved OFF choice.
     fun setAutomatic(context: Context, value: Boolean) { prefs(context).edit().putBoolean("automatic", value).apply() }
+    fun isDismissed(context: Context, version: String): Boolean =
+        prefs(context).getString("liveguard_dismissed_version", null) == version
+    fun dismiss(context: Context, version: String) {
+        prefs(context).edit().putString("liveguard_dismissed_version", version).apply()
+    }
     fun checkOnLaunch(context: Context) {
         if (!automatic(context)) return
-        val age = System.currentTimeMillis() - prefs(context).getLong("liveguard_checked", 0)
-        if (age in 0 until 86_400_000L) return
+        // The owner asked for a launch check, not a daily cache window. The prompt itself is
+        // suppressed for a version the user already dismissed until a newer APK is published.
         check(context)
     }
     fun check(context: Context) {
         if (job?.isActive == true) return
-        val app = context.applicationContext; val mine = ++revision
+        val app = context.applicationContext
+        val mine = ++revision
         mutable.value = mutable.value.copy(busy = true, message = null)
         job = scope.launch {
             try {
-                val reply = BoundedHttp.request("https://api.github.com/repos/universalrp2003/InternetRadio/releases?per_page=30", 15_000,
-                    headers = mapOf("Accept" to "application/vnd.github+json", "User-Agent" to "LiveGuard-update-check"))
-                check(reply.code == 200)
-                val found = withContext(Dispatchers.Default) {
-                    val releases = JSONArray(reply.body); var best: Release? = null
-                    for (i in 0 until releases.length()) {
-                        val release = releases.getJSONObject(i)
-                        if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue
-                        val tag = release.optString("tag_name").takeIf { it.matches(Regex("[a-zA-Z0-9._-]+")) } ?: continue
-                        val published = runCatching { Instant.parse(release.getString("published_at")).toEpochMilli() }.getOrNull() ?: continue
-                        val assets = release.optJSONArray("assets") ?: continue
-                        for (j in 0 until assets.length()) {
-                            val asset = assets.getJSONObject(j); val name = asset.optString("name")
-                            val version = Regex("^CleanSweep-v([0-9]+(?:\\.[0-9]+){1,3})\\.apk$").matchEntire(name)?.groupValues?.get(1) ?: continue
-                            val hash = UpdatePolicy.digest(asset.optString("digest")) ?: continue
-                            val url = asset.optString("browser_download_url"); val bytes = asset.optLong("size")
-                            if (asset.optString("state") != "uploaded" || (!UpdatePolicy.officialAsset(url, name) || Uri.parse(url).path != "/universalrp2003/InternetRadio/releases/download/$tag/$name") || !UpdatePolicy.validSize(bytes)) continue
-                            if (!UpdatePolicy.newer(version, BuildConfig.VERSION_NAME)) continue
-                            if (best == null || UpdatePolicy.newer(version, best!!.version)) best = Release(version,
-                                release.optString("body").take(12_000), tag, url, bytes, hash, published)
+                val found = withContext(Dispatchers.IO) {
+                    var best: Release? = null
+                    var reachableRepositories = 0
+                    var lastFailure: Exception? = null
+                    val headers = mapOf("Accept" to "application/vnd.github+json", "User-Agent" to "LiveGuard-update-check")
+
+                    fun isBetter(candidate: Release, current: Release): Boolean {
+                        if (UpdatePolicy.newer(candidate.version, current.version)) return true
+                        if (UpdatePolicy.newer(current.version, candidate.version)) return false
+                        val candidateRank = ReleaseRepositorySources.ordered.indexOfFirst { it.slug == candidate.repository }
+                        val currentRank = ReleaseRepositorySources.ordered.indexOfFirst { it.slug == current.repository }
+                        return if (candidateRank != currentRank) candidateRank < currentRank
+                        else candidate.publishedAt > current.publishedAt
+                    }
+
+                    for (source in ReleaseRepositorySources.ordered) {
+                        for (page in 1..ReleaseRepositorySources.MAX_RELEASE_PAGES) {
+                            coroutineContext.ensureActive()
+                            val reply = try {
+                                BoundedHttp.request(source.releasesPage(page), 15_000, headers = headers)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (failure: Exception) {
+                                lastFailure = failure
+                                break
+                            }
+                            if (reply.code != 200) {
+                                lastFailure = java.io.IOException("${source.slug} release check returned HTTP ${reply.code}")
+                                break
+                            }
+                            if (page == 1) reachableRepositories++
+                            val releases = JSONArray(reply.body)
+                            for (i in 0 until releases.length()) {
+                                coroutineContext.ensureActive()
+                                val release = releases.getJSONObject(i)
+                                if (release.optBoolean("draft") || release.optBoolean("prerelease")) continue
+                                val tag = release.optString("tag_name")
+                                    .takeIf { it.matches(Regex("[A-Za-z0-9._-]{1,120}")) } ?: continue
+                                if (!ReleaseRepositorySources.isOfficialReleasePage(release.optString("html_url"), source, tag)) continue
+                                val published = runCatching {
+                                    Instant.parse(release.optString("published_at")).toEpochMilli()
+                                }.getOrNull() ?: continue
+                                val assets = release.optJSONArray("assets") ?: continue
+                                for (j in 0 until assets.length()) {
+                                    val asset = assets.getJSONObject(j)
+                                    val name = asset.optString("name")
+                                    val version = Regex("^CleanSweep-v([0-9]+(?:\\.[0-9]+){1,3})\\.apk$")
+                                        .matchEntire(name)?.groupValues?.get(1) ?: continue
+                                    if (asset.optString("state") != "uploaded" ||
+                                        !UpdatePolicy.officialAsset(asset.optString("browser_download_url"), name, tag, source) ||
+                                        !UpdatePolicy.validSize(asset.optLong("size", -1L))
+                                    ) continue
+                                    val hash = UpdatePolicy.digest(asset.optString("digest")) ?: continue
+                                    if (!UpdatePolicy.newer(version, BuildConfig.VERSION_NAME)) continue
+                                    val candidate = Release(
+                                        version = version,
+                                        notes = release.optString("body").take(12_000),
+                                        tag = tag,
+                                        assetUrl = asset.optString("browser_download_url"),
+                                        bytes = asset.optLong("size", -1L),
+                                        sha256 = hash,
+                                        publishedAt = published,
+                                        repository = source.slug,
+                                    )
+                                    val old = best
+                                    if (old == null || isBetter(candidate, old)) best = candidate
+                                }
+                            }
+                            if (releases.length() < ReleaseRepositorySources.PAGE_SIZE) break
                         }
+                    }
+                    if (reachableRepositories == 0) {
+                        throw java.io.IOException("Could not check either official release repository", lastFailure)
                     }
                     best
                 }

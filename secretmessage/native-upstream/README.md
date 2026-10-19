@@ -1,0 +1,9 @@
+# Upstream OpenMLS dependency-migration candidate (TEST ONLY)
+
+This directory is a separate feasibility lane. It reuses the same isolated in-memory MLS/JNI harness source from `secretmessage/native/src/lib.rs`, but resolves OpenMLS workspace crates from the pinned upstream development commit `e0b21a70a55a9014b8de2772b36bf3d638adad51` instead of the published OpenMLS 0.9.0 crates. That upstream commit uses the newer `hpke-rs` 0.8 dependency line and resolves `libcrux-kem` 0.0.10; it also raises the Rust MSRV to 1.94.
+
+This is an unreleased candidate, not a replacement for the separately pinned 0.9.0 feasibility result. The code is not linked into the Secret Message product app. Hosted run [38659236776](https://github.com/universalrp2003/InternetRadio/actions/runs/38659236776) passed the candidate host test, Clippy, JNI host check, active Android dependency inspection, all-four-ABI APK build, API 35 emulator smoke, and standard `cargo audit` command.
+
+That run is **test-only feasibility evidence**, not security clearance. RustSec still reports `proc-macro-error2` 2.0.1 as unmaintained (RUSTSEC-2026-0173); `cargo-audit` classifies it as an allowed warning and returns success, so CI surfaces it as a warning without hiding or ignoring it. The candidate lock resolved `libcrux-kem` 0.0.10 and the audit did not report the earlier 0.0.9 advisories, but the remaining warning means this is not a clean production audit. The upstream source is unreleased and has not had an independent security review; emulator testing also does not establish physical-device or connected two-phone behavior. Do not integrate, publish, or use this candidate for sensitive communications.
+
+No local crypto code or provider implementation is patched. Keep the original published 0.9.0 baseline and its blocked result unchanged; the candidate is a separate evaluation lane only.

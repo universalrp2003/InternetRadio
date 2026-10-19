@@ -1,0 +1,323 @@
+name: Oor Arivippu stable release
+
+# The push path is restricted to the authorized session branch. Build/release publication runs
+# only when a commit explicitly contains [publish-oorarivippu]; ordinary pushes cannot publish.
+# 1.0.0 was published from arena/a56e1b40-internetradio (run 38748688974); 1.0.1 was published
+# from arena/d4fb2344-internetradio (run 38826899278), which is also authorized for 1.0.2 and 1.1.0.
+on:
+  push:
+    branches: [arena/d4fb2344-internetradio]
+    # Workflow-only edits are not a release candidate and must not start this workflow.
+    paths-ignore:
+      - ".github/workflows/build-apk.yml"
+      - ".github/workflows/oorarivippu-release.yml"
+      - ".github/workflows/oorarivippu-test-apk.yml"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Publish the verified APK to both official repositories (otherwise build and upload a candidate only)"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: oorarivippu-stable-release
+  cancel-in-progress: false
+
+jobs:
+  build-verify-publish:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[publish-oorarivippu]') }}
+    name: Test, sign, verify, and optionally publish Oor Arivippu
+    runs-on: ubuntu-latest
+    env:
+      PUBLISH_REQUESTED: ${{ (github.event_name == 'workflow_dispatch' && inputs.publish) || (github.event_name == 'push' && contains(github.event.head_commit.message, '[publish-oorarivippu]')) }}
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify bilingual UI and About links
+        run: python3 tools/verify_apps_localization.py
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Run unit tests and release lint, then build the signed release APK
+        run: >-
+          ./gradlew --no-daemon --stacktrace
+          :oorarivippu:testReleaseUnitTest
+          :oorarivippu:lintRelease
+          :oorarivippu:assembleRelease
+
+      - name: Verify package, version, stable signer, APK size, and SHA-256
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_version="1.1.0"
+          expected_code="5"
+          expected_package="com.oorarivippu.voiceannouncer"
+          expected_signer="9e30f4eab8afce5e4ab444ff9578fec354d6d1414d245253590a9703d5985d55"
+          tag="oor-arivippu-v${expected_version}"
+          asset="Oor-Arivippu-v${expected_version}.apk"
+
+          grep -Fq "versionName = \"${expected_version}\"" oorarivippu/build.gradle.kts
+          grep -Fq "versionCode = ${expected_code}" oorarivippu/build.gradle.kts
+          mapfile -t built_apks < <(find oorarivippu/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print)
+          if [[ "${#built_apks[@]}" -ne 1 ]]; then
+            echo "::error::Expected one signed Oor Arivippu release APK, found ${#built_apks[@]}"
+            printf '%s\n' "${built_apks[@]}"
+            exit 1
+          fi
+
+          apk="${built_apks[0]}"
+          mkdir -p "$RUNNER_TEMP/oorarivippu-release"
+          cp "$apk" "$RUNNER_TEMP/oorarivippu-release/$asset"
+          apk="$RUNNER_TEMP/oorarivippu-release/$asset"
+          test -s "$apk"
+          size="$(stat -c '%s' "$apk")"
+          if (( size < 1 || size > 134217728 )); then
+            echo "::error::APK size is outside the updater's allowed range: $size"
+            exit 1
+          fi
+
+          sdk_root="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          build_tools="$(find "$sdk_root/build-tools" -mindepth 1 -maxdepth 1 -type d -print | sort -V | tail -n 1)"
+          aapt="$build_tools/aapt"
+          apksigner="$build_tools/apksigner"
+          test -x "$aapt" && test -x "$apksigner"
+          "$aapt" dump badging "$apk" > "$RUNNER_TEMP/oorarivippu-badging.txt"
+          grep -Fq "package: name='${expected_package}' versionCode='${expected_code}' versionName='${expected_version}'" "$RUNNER_TEMP/oorarivippu-badging.txt"
+          if grep -q "application-debuggable" "$RUNNER_TEMP/oorarivippu-badging.txt"; then
+            echo "::error::Release APK is marked debuggable."
+            exit 1
+          fi
+          if ! grep -Eiq "(^|[[:space:]])(sdkVersion|minSdkVersion)[[:space:]]*[:=][[:space:]]*['\"]?26(['\"]|[[:space:]]|$)" "$RUNNER_TEMP/oorarivippu-badging.txt"; then
+            echo "::error::Release APK minSdk is not API 26."
+            exit 1
+          fi
+          keytool -exportcert -keystore ci-keystore/release.p12 -storepass cleansweep-ci \
+            -alias cleansweep -file "$RUNNER_TEMP/project-certificate.der"
+          expected_cert="$(sha256sum "$RUNNER_TEMP/project-certificate.der" | cut -d ' ' -f 1)"
+          if [[ "$expected_cert" != "$expected_signer" ]]; then
+            echo "::error::Stable signing key differs from the updater's pinned certificate."
+            exit 1
+          fi
+          "$apksigner" verify --print-certs "$apk" > "$RUNNER_TEMP/oorarivippu-signature.txt"
+          cat "$RUNNER_TEMP/oorarivippu-signature.txt"
+          signer="$(sed -n 's/.*certificate SHA-256 digest:[[:space:]]*//p' "$RUNNER_TEMP/oorarivippu-signature.txt" | tr -d ' :\r' | tr 'A-F' 'a-f' | sort -u)"
+          if [[ -z "$signer" || "$signer" != "$expected_signer" ]]; then
+            echo "::error::Unexpected stable signing certificate: $signer"
+            exit 1
+          fi
+          sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+          echo "$sha256  $apk"
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$expected_version" >> "$GITHUB_OUTPUT"
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Verified Oor Arivippu candidate"
+            echo "- Version: $expected_version / code $expected_code"
+            echo "- Package: $expected_package"
+            echo "- Stable signer SHA-256: $signer"
+            echo "- APK: $asset ($size bytes)"
+            echo "- SHA-256: $sha256"
+            echo "- Publish requested: ${{ env.PUBLISH_REQUESTED }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload signed candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: oorarivippu-stable-candidate-${{ github.run_number }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Preflight both official repositories and release tags
+        if: ${{ env.PUBLISH_REQUESTED == 'true' }}
+        env:
+          SOURCE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
+          TAG: ${{ steps.apk.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_repo="universalrp2003/InternetRadio"
+          target_repo="universalrp2003/RP-Android-Apps"
+          if [[ -z "$TARGET_TOKEN" ]]; then
+            echo "::error::RP_ANDROID_APPS_RELEASE_TOKEN is missing; no release was created."
+            exit 1
+          fi
+          GH_TOKEN="$SOURCE_TOKEN" gh api "repos/$source_repo" --jq '.full_name'
+          GH_TOKEN="$TARGET_TOKEN" gh api "repos/$target_repo" --jq '.full_name'
+          destination_branch="$(GH_TOKEN="$TARGET_TOKEN" gh api "repos/$target_repo" --jq '.default_branch')"
+          if [[ -z "$destination_branch" ]]; then
+            echo "::error::Could not determine the destination repository's default branch."
+            exit 1
+          fi
+          for repo in "$source_repo" "$target_repo"; do
+            if [[ "$repo" == "$source_repo" ]]; then token="$SOURCE_TOKEN"; else token="$TARGET_TOKEN"; fi
+            if GH_TOKEN="$token" gh release view "$TAG" --repo "$repo" >/dev/null 2>&1 || \
+               GH_TOKEN="$token" gh api "repos/$repo/git/ref/tags/$TAG" >/dev/null 2>&1; then
+              echo "::error::Release or tag already exists at $repo/$TAG; refusing to overwrite it."
+              exit 1
+            fi
+          done
+          echo "Both release repositories are reachable and the version tag is unused."
+          echo "Destination branch: $destination_branch"
+          echo "destination_branch=$destination_branch" >> "$GITHUB_ENV"
+
+      - name: Create both draft releases and upload the exact verified APK bytes
+        if: ${{ env.PUBLISH_REQUESTED == 'true' }}
+        env:
+          SOURCE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
+          SOURCE_REPO: universalrp2003/InternetRadio
+          TARGET_REPO: universalrp2003/RP-Android-Apps
+          TAG: ${{ steps.apk.outputs.tag }}
+          ASSET: ${{ steps.apk.outputs.asset }}
+          APK: ${{ steps.apk.outputs.path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          title="Oor Arivippu ${TAG#oor-arivippu-v} — Stable"
+          notes="releases/oor-arivippu-v${TAG#oor-arivippu-v}.md"
+          test -s "$APK" && test -s "$notes"
+
+          # Create the target draft first: the updater checks RP-Android-Apps before InternetRadio.
+          GH_TOKEN="$TARGET_TOKEN" gh release create "$TAG" --repo "$TARGET_REPO" \
+            --target "$destination_branch" --draft --title "$title" --notes-file "$notes"
+          GH_TOKEN="$TARGET_TOKEN" gh release upload "$TAG" "$APK" --repo "$TARGET_REPO"
+
+          GH_TOKEN="$SOURCE_TOKEN" gh release create "$TAG" --repo "$SOURCE_REPO" \
+            --target "$GITHUB_SHA" --draft --title "$title" --notes-file "$notes"
+          GH_TOKEN="$SOURCE_TOKEN" gh release upload "$TAG" "$APK" --repo "$SOURCE_REPO"
+
+      - name: Verify both draft assets are identical before publication
+        if: ${{ env.PUBLISH_REQUESTED == 'true' }}
+        env:
+          SOURCE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
+          SOURCE_REPO: universalrp2003/InternetRadio
+          TARGET_REPO: universalrp2003/RP-Android-Apps
+          TAG: ${{ steps.apk.outputs.tag }}
+          ASSET: ${{ steps.apk.outputs.asset }}
+          APK: ${{ steps.apk.outputs.path }}
+          EXPECTED_SIZE: ${{ steps.apk.outputs.size }}
+          EXPECTED_SHA256: ${{ steps.apk.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify_asset() {
+            local repo="$1" token="$2" expected_draft="$3"
+            local response="$RUNNER_TEMP/${repo##*/}-${TAG}-releases.json"
+            GH_TOKEN="$token" gh api --paginate "repos/$repo/releases?per_page=100" > "$response"
+            python3 - "$response" "$repo" "$TAG" "$ASSET" "$APK" "$EXPECTED_SIZE" "$EXPECTED_SHA256" "$expected_draft" <<'PY'
+          import hashlib, json, pathlib, sys
+          response, repo, tag, name, apk_path, size, digest, draft = sys.argv[1:]
+          pages = [json.loads(line) for line in pathlib.Path(response).read_text().splitlines() if line.strip()]
+          matches = [release for page in pages for release in page if release.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one release for {repo}/{tag}, found {len(matches)}"
+          release = matches[0]
+          is_draft = draft == "true"
+          assert release.get("draft") is is_draft, f"unexpected draft state for {repo}/{tag}"
+          assert release.get("prerelease") is False, f"{repo}/{tag} is marked prerelease"
+          expected_digest = "sha256:" + hashlib.sha256(pathlib.Path(apk_path).read_bytes()).hexdigest()
+          assert expected_digest == "sha256:" + digest, "local APK digest changed during publication"
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+          assert len(assets) == 1, f"expected exactly one {name} asset at {repo}/{tag}"
+          asset = assets[0]
+          assert asset.get("state") == "uploaded", f"asset upload is incomplete at {repo}/{tag}"
+          assert str(asset.get("size")) == size, f"asset size mismatch at {repo}/{tag}"
+          assert asset.get("digest") == expected_digest, f"asset digest mismatch at {repo}/{tag}: {asset.get('digest')}"
+          canonical_asset = f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          canonical_page = f"https://github.com/{repo}/releases/tag/{tag}"
+          assert asset.get("browser_download_url", "").startswith(f"https://github.com/{repo}/releases/download/")
+          assert asset.get("browser_download_url", "").endswith("/" + name)
+          if is_draft:
+              assert release.get("html_url", "").startswith(f"https://github.com/{repo}/releases/tag/")
+          else:
+              assert release.get("html_url") == canonical_page, f"non-canonical page for {repo}/{tag}"
+              assert asset.get("browser_download_url") == canonical_asset, f"non-canonical asset URL for {repo}/{tag}"
+          print(f"VERIFIED {'DRAFT' if is_draft else 'PUBLIC'} {repo}/{tag}: {name}, {size} bytes, {expected_digest}")
+          PY
+          }
+          verify_asset "$TARGET_REPO" "$TARGET_TOKEN" true
+          verify_asset "$SOURCE_REPO" "$SOURCE_TOKEN" true
+
+      - name: Publish verified destination release, then the source fallback
+        if: ${{ env.PUBLISH_REQUESTED == 'true' }}
+        env:
+          SOURCE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
+          SOURCE_REPO: universalrp2003/InternetRadio
+          TARGET_REPO: universalrp2003/RP-Android-Apps
+          TAG: ${{ steps.apk.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          GH_TOKEN="$TARGET_TOKEN" gh release edit "$TAG" --repo "$TARGET_REPO" --draft=false
+          GH_TOKEN="$SOURCE_TOKEN" gh release edit "$TAG" --repo "$SOURCE_REPO" --draft=false
+
+      - name: Verify both public releases and final asset digests
+        if: ${{ env.PUBLISH_REQUESTED == 'true' }}
+        env:
+          SOURCE_TOKEN: ${{ github.token }}
+          TARGET_TOKEN: ${{ secrets.RP_ANDROID_APPS_RELEASE_TOKEN }}
+          SOURCE_REPO: universalrp2003/InternetRadio
+          TARGET_REPO: universalrp2003/RP-Android-Apps
+          TAG: ${{ steps.apk.outputs.tag }}
+          ASSET: ${{ steps.apk.outputs.asset }}
+          APK: ${{ steps.apk.outputs.path }}
+          EXPECTED_SIZE: ${{ steps.apk.outputs.size }}
+          EXPECTED_SHA256: ${{ steps.apk.outputs.sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Reuse the same strict API-asset checks after promotion; include canonical public URLs.
+          for repo in "$TARGET_REPO" "$SOURCE_REPO"; do
+            if [[ "$repo" == "$TARGET_REPO" ]]; then token="$TARGET_TOKEN"; else token="$SOURCE_TOKEN"; fi
+            response="$RUNNER_TEMP/${repo##*/}-${TAG}-public.json"
+            GH_TOKEN="$token" gh api --paginate "repos/$repo/releases?per_page=100" > "$response"
+            python3 - "$response" "$repo" "$TAG" "$ASSET" "$APK" "$EXPECTED_SIZE" "$EXPECTED_SHA256" <<'PY'
+          import hashlib, json, pathlib, sys
+          response, repo, tag, name, apk_path, size, digest = sys.argv[1:]
+          pages = [json.loads(line) for line in pathlib.Path(response).read_text().splitlines() if line.strip()]
+          matches = [release for page in pages for release in page if release.get("tag_name") == tag]
+          assert len(matches) == 1, f"expected one public release for {repo}/{tag}"
+          release = matches[0]
+          assert release.get("draft") is False and release.get("prerelease") is False, f"{repo}/{tag} is not a stable public release"
+          assert release.get("html_url") == f"https://github.com/{repo}/releases/tag/{tag}", f"non-canonical release page for {repo}/{tag}"
+          expected_digest = "sha256:" + hashlib.sha256(pathlib.Path(apk_path).read_bytes()).hexdigest()
+          assert expected_digest == "sha256:" + digest
+          assets = [asset for asset in release.get("assets", []) if asset.get("name") == name]
+          assert len(assets) == 1, f"expected one {name} asset at {repo}/{tag}"
+          asset = assets[0]
+          assert asset.get("state") == "uploaded" and str(asset.get("size")) == size
+          assert asset.get("digest") == expected_digest, f"final digest mismatch at {repo}/{tag}"
+          assert asset.get("browser_download_url") == f"https://github.com/{repo}/releases/download/{tag}/{name}"
+          print(f"PUBLIC {repo}/{tag}: {name}, {size} bytes, {expected_digest}")
+          PY
+          done
+          {
+            echo "### Oor Arivippu stable release published and verified"
+            echo "- Tag: $TAG"
+            echo "- Asset: $ASSET ($EXPECTED_SIZE bytes)"
+            echo "- SHA-256: $EXPECTED_SHA256"
+            echo "- Destination: https://github.com/$TARGET_REPO/releases/tag/$TAG"
+            echo "- Source fallback: https://github.com/$SOURCE_REPO/releases/tag/$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"

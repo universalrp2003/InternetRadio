@@ -1,291 +1,83 @@
-## Maintained-app release checklist (2026-10-08)
+# Build and release guide — RP Ideas
 
-Actively publish CleanSweep, Ramesh Radio and PulseEQ only. Bump an app version/code
-when its APK changes, update its changelog, README download links and
-`releases/<tag>.md`, then set `releases/latest-tag.txt`. Do not advertise unfinished
-features. Verify Android 8+ compatibility and report limits of device testing.
+This guide covers the four legacy batch modules and the separately released Oor Arivippu app. GitHub Releases are the verified direct-download channel. A successful CI build is required before publication; CI success is not Play Protect approval or a device-compatibility certification.
 
-The Build APK workflow publishes only after unit tests, compilation and APK checks
-pass. A session-branch push whose final commit message contains `[publish]` explicitly
-requests publication; ordinary pushes remain test builds. The normal route is a version tag
-(`refs/tags/vYYYY.MM.DD-N`) whose commit already contains `releases/<tag>.md`.
-`releases/latest-tag.txt` is flipped **after** a publication succeeds, never before: the
-publication step reads it to find the previous release for the permission comparison, so
-pointing it at the tag being published would leave nothing to compare against.
+## Latest published release batch — 14 October 2026
 
-**Device-evidence gate (added after the 2026-10-11 Play Protect install block; narrowed by
-owner decision on 2026-10-12, Live Guard 2.42).** For a CleanSweep version newer than
-2.39/code44, publication needs `docs/live-guard-<versionName>-device-evidence.md` **only when
-that release adds a dangerous permission** compared with the previously published release. The
-comparison is made on the *built artifacts*, not the source manifest, because only the merged
-manifest shows what the phone is actually asked to grant: the step runs `aapt2 dump badging` on
-the candidate APK and on the CleanSweep APK published under `releases/latest-tag.txt`, and
-`tools/verify_release_permission_delta.py` decides. Appop/signature-level declarations
-(`MANAGE_EXTERNAL_STORAGE`, `PACKAGE_USAGE_STATS`, `SYSTEM_ALERT_WINDOW`,
-`REQUEST_INSTALL_PACKAGES`, `QUERY_ALL_PACKAGES`) are **not** runtime prompts and never count as
-an addition. The tool **fails closed**: if the previous release cannot be downloaded or read, or
-its report lists no permission, evidence is required rather than assumed unnecessary.
+| App | Gradle module | Version / code | Release tag | APK |
+|---|---|---:|---|---|
+| Live Guard / CleanSweep | `cleaner` | 2.46 / 51 | `live-guard-v2.46` | `CleanSweep-v2.46.apk` |
+| Ramesh Radio | `radio` | 1.11 / 11 | `ramesh-radio-v1.11` | `Ramesh-Radio-v1.11.apk` |
+| PulseEQ | `equalizer` | 1.5 / 6 | `pulseeq-v1.5` | `PulseEQ-v1.5.apk` |
+| RP Vocal Remover Studio | `vocalremover` | 0.1.11 / 12 | `rp-vocal-remover-studio-v0.1.11` | `RP-Vocal-Remover-Studio-v0.1.11.apk` |
 
-When evidence *is* required, that file must record the real **Play Protect** result and the
-**installer outcome** and carry the machine-readable `TESTED-APK-SHA256` and `TESTED-RUN-ID`
-lines. When an evidence file exists at all — required or not — the step still publishes the
-**tested bytes**: the fresh build only if it reproduces that digest byte-for-byte, otherwise the
-recorded run's `cleansweep-apk` artifact after verifying its digest, so a rebuilt APK can never
-inherit an earlier device test. A release published without an install record must say so
-plainly in its own notes, in the changelog and in the README; never claim a device test that did
-not happen. Do not delete or weaken the gate to publish. The advisory and next steps live in
-`docs/live-guard-play-protect-install-block.md`; the per-version checklists in
-`docs/live-guard-2.4x-device-test-plan.md`; the 2.40 and 2.41 records, which were published
-under the older every-release rule, stay exactly as written. Manual dispatch also accepts
-`release_tag` when the GitHub connection has Actions-write permission. Published
-assets are release APKs/AABs for the three maintained apps, never debug or legacy APKs.
-A new release is assembled as a draft, then published after uploading all assets.
-Existing releases are not overwritten. Merge the reviewed PR so the default-branch
-README matches the public release. GitHub publishing is not app-store approval.
+[Publication run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) passed the builds, unit/regression suites, APK checks and dual-repository release verification. All four stable releases are published on both [`RP-Android-Apps`](https://github.com/universalrp2003/RP-Android-Apps/releases) and [`InternetRadio`](https://github.com/universalrp2003/InternetRadio/releases). The published asset digests—not build-only candidate hashes—are recorded in [`docs/published-release-digests.md`](docs/published-release-digests.md). The latest non-public build record is [run 38523346072](https://github.com/universalrp2003/InternetRadio/actions/runs/38523346072), in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md); earlier candidate-run records are retained in Git history.
 
-# Publishing these apps to a store — what is ready, what you must do
+The previously published releases, tags and assets for retired modules are retained as history. They are not built or included in new release batches.
 
-**Route chosen (6 Oct 2026, revised):** **free open stores, no Google Play** — the $25 Play
-account is not worth it for these apps, and Play would refuse CleanSweep's All-files access
-anyway. The project is licensed **GNU GPL-3.0**, the `:app` id is
-`com.universalrp.internetradio`, and the submission is prepared end to end:
+## Oor Arivippu standalone stable release
 
-* **IzzyOnDroid** (fastest, keeps your signing key) — paste-ready request text in
-  [store/fdroid/README.md](store/fdroid/README.md) section A.
-* **F-Droid main repository** — the five recipe files are written in
-  [store/fdroid/metadata/](store/fdroid/metadata/), the steps are in section B, and a
-  paste-ready tracker issue is in [store/fdroid/RFP_ISSUE.md](store/fdroid/RFP_ISSUE.md).
-* Google Play: **skipped on purpose.** [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md)
-  stays in the repo in case you change your mind later; nothing depends on it.
+Oor Arivippu is a fifth active product but remains intentionally excluded from the existing four-app batch. Its owner-authorized first stable release, version 1.0.0 / code 2 (`Oor-Arivippu-v1.0.0.apk`), was published separately through `.github/workflows/oorarivippu-release.yml` in [run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). The [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.0) and [InternetRadio fallback](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.0) are public and unchanged.
 
-Screenshots still to come — they belong in
-`<module>/fastlane/metadata/android/<locale>/images/phoneScreenshots/`
-(see [store/README.md](store/README.md)).
+Version 1.0.1 / code 3 (`Oor-Arivippu-v1.0.1.apk`, 12,195,397 bytes, SHA-256 `ec10c7369807748c9a5608f1a5c6a37eff5f8e1f7433cc16e984c75d8958457d`) was published the same way on 16 October 2026 in [run 38826899278](https://github.com/universalrp2003/InternetRadio/actions/runs/38826899278), after the Oor test workflow passed on the identical app source in [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762). The current stable release, 1.0.2 / code 4 (`Oor-Arivippu-v1.0.2.apk`, 12,195,401 bytes, SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`), followed later that day in [run 38840264469](https://github.com/universalrp2003/InternetRadio/actions/runs/38840264469), after the Oor test workflow passed on the identical app source in [run 38840000191](https://github.com/universalrp2003/InternetRadio/actions/runs/38840000191); at the owner's request it was published without a device test. The [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2) and [InternetRadio fallback](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.2) serve identical bytes, and the 1.0.1 releases are unchanged. Each new Oor release raises `versionCode` by one and the last `versionName` component, and updates the workflow's expected version/code, the About page's own release link with its verifier expectation, and `releases/oor-arivippu-v<version>.md` together.
 
-Short answer:
+The standalone workflow runs the Oor Arivippu release unit tests, release lint and signed release build; checks package/version, APK size, SHA-256 and the pinned release certificate; then stages identical APK bytes as drafts in both repositories. It verifies both draft assets before publishing the destination release and then the `InternetRadio` source fallback, and checks their canonical URLs and matching size/digest again. Publication requires the source repository's `RP_ANDROID_APPS_RELEASE_TOKEN` secret with destination-release write access.
 
-* **F-Droid** — possible for all five apps, but **F-Droid signs the APK with its own key**.
-  Your family would have to uninstall the version installed from GitHub once, then install
-  from F-Droid. (Unless we set up *reproducible builds*, see below.)
-* **IzzyOnDroid** (an F-Droid-compatible store) — possible, **keeps your own signature**, no
-  uninstall, and updates arrive within about a day of each GitHub release. This is the closest
-  to "everything you want".
-* **Google Play** — possible for **Ramesh Radio, PulseEQ, Internet Radio and AppForge**, but
-  **not for CleanSweep as it is designed**: Play only allows "All files access"
-  (MANAGE_EXTERNAL_STORAGE) for file managers, backup/restore apps, anti-virus apps, document
-  management apps, on-device file search, encryption, and device-to-device migration. A cleaner
-  is not on that list, and Play rejects the declaration. It costs $25 once.
-* **Your own F-Droid repository on GitHub Pages** — no store, no review, no account, keeps your
-  key, and the F-Droid client (or Droid-ify / Neo Store) can install and update from it. This
-  is the best fit for "family" — see section 6.
+Version 1.1.0 / code 5 (`Oor-Arivippu-v1.1.0.apk`, 12,211,781 bytes, SHA-256 `34858e8c6e4831e725ac7503f6613c96bcb896d659ebbdb588dcd139afc7c8b3`) was published the same way on 18 October 2026 in [run 39105539892](https://github.com/universalrp2003/InternetRadio/actions/runs/39105539892) from commit `fbdcc1b`, after Oor test [run 39105368624](https://github.com/universalrp2003/InternetRadio/actions/runs/39105368624) passed; at the owner's request it was published as soon as the automatic checks passed, without a device test.
 
-Nothing here replaces your own accounts: I cannot create a GitLab, Codeberg, Google Play or
-Amazon account for you, and I should not. What I *can* do — and what is done — is make the repo
-ready so that submitting is a matter of copying a file and pressing a button.
+The workflow is restricted to the authorized Arena branch (1.0.1, 1.0.2 and 1.1.0: `arena/d4fb2344-internetradio`). A commit containing `[publish-oorarivippu]` is the explicit publication trigger; do not use that marker until the Oor test workflow and required hosted checks have passed and publication is authorized. Ordinary commits do not publish. Never overwrite either repository's existing tag or reuse a version for changed APK bytes.
 
----
+The push trigger ignores workflow-only edits, and GitHub does not start a path-filtered workflow for a push that changes no files, so an empty marker commit will not start a release. The 1.0.1 marker commit changed only `oorarivippu/README.md`, which is not packaged in the APK and does not start the legacy batch workflow. Oor commit messages must never contain the legacy batch's bare publish marker.
 
-## 1. What was done in the repo (v2.6)
+Earlier Oor Arivippu test APKs were debug-signed. They are not production updater builds and may not be updatable to the stable-signed APK; Android may require uninstalling a test APK first, which removes that installation's local settings and history. The owner reports successful two-device testing and that the stable app is working; screenshots show the v1.0.0 (code 2) package and running app, but do not show the APK SHA-256. For 1.0.1, the owner tested the debug APK from [run 38776902130](https://github.com/universalrp2003/InternetRadio/actions/runs/38776902130), built from the same app source before the version was raised, and after publication the debug APK of the exact 1.0.1 source from [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762), which reported 1.0.1 (3); a debug-signed build cannot share the stable APK's bytes. Do not describe the exact published APK bytes as device-tested unless a hash is matched.
 
-| Done | Why it matters |
-|---|---|
-| **Release APKs are built and signed** with the same `ci-keystore/release.p12` as before | Every store rejects an APK with `android:debuggable`, which is exactly what the old `assembleDebug` artifacts were. Both variants use the same key, so a phone that has the debug build updates to the release one without uninstalling. |
-| **A version tag publishes a GitHub Release** with `CleanSweep-v2.6.apk`, `Ramesh-Radio-v1.2.apk`, `Internet-Radio-v1.0.apk`, `AppForge-v1.0.apk`, `PulseEQ-v1.0.apk` | Actions artifacts are deleted after 90 days; Releases are permanent. This is also the download that IzzyOnDroid and the Obtainium app look for. |
-| **`fastlane/metadata/android/...` listings** for all five apps, in English, plus Tamil for CleanSweep and Ramesh Radio | F-Droid, IzzyOnDroid and Google Play all read this exact layout. Placing it *inside each module* is the supported way to describe several apps that live in one repository. |
-| **A check that no release APK is debuggable**, and the release APK's **signing certificate is printed in the CI log** | No surprises at submission time. |
-| **No proprietary dependencies** (verified: no Play Services, Firebase, ads, analytics, crash reporting anywhere) | This is the first thing F-Droid and IzzyOnDroid review. |
-| **The Gradle wrapper is committed by CI** | F-Droid's build server and anyone building locally want `gradlew` present, because it pins Gradle 8.14.3. |
+## Secret Message standalone release
 
-Still required before any submission:
+Secret Message (`com.rpideas.secretmessage`) is a separate app, outside the four-app batch and the Oor workflow. At the owner's explicit request, version 1.0.0 / code 1 (`Secret-Message-v1.0.0.apk`, 29,345,617 bytes, SHA-256 `17ecabe0af808a48c790f631c6a069d39d107ff948fe99ed5e2ee32f164038f7`) was published on 17 October 2026 without an independent security review, which its release notes and About page say plainly. It was published by `.github/workflows/secret-message-wifi-test.yml` in [run 39052903146](https://github.com/universalrp2003/InternetRadio/actions/runs/39052903146) from source commit `8b7aee99ba975ef79543d97ef32aee49758fbb9d`. The [RP-Android-Apps release](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/secret-message-v1.0.0) and [InternetRadio fallback](https://github.com/universalrp2003/InternetRadio/releases/tag/secret-message-v1.0.0) serve identical bytes.
 
-1. ~~**A licence file.**~~ **Done — GNU GPL-3.0.** CI commits the verbatim licence text as
-   `LICENSE` on the next build (copyright (C) 2026 Ramesh prathap .R), and the About screen now
-   carries the GPL notice. Store metadata must say `License: GPL-3.0-only`.
-2. ~~**Version tags.**~~ **Done** — `v2026.10.06` published the first GitHub Release.
-3. **Screenshots** — still to come. Send the phone screenshots and I will drop them into
-   `fastlane/metadata/android/<locale>/images/phoneScreenshots/` for every app, and you can
-   upload the same files to Play. Play also needs a **512×512 icon** and a **1024×500 feature
-   graphic** (the repo's launcher icon is a vector, which the Play uploader will not take).
-4. ~~**The placeholder application id.**~~ **Done** — `:app` is now
-   `com.universalrp.internetradio`. Anyone with the old build must uninstall it once; it counts
-   as a new app.
+Version 1.1.0 / code 2 (`Secret-Message-v1.1.0.apk`, 29,443,977 bytes, SHA-256 `cc9a69d0022e49c1f653291e033bca8de0e1c4e0477731df1741cc3ddfbc5e10`) was published on 18 October 2026 by the same workflow in [run 39101002517](https://github.com/universalrp2003/InternetRadio/actions/runs/39101002517) from source commit `e928819`, after the owner tested the 1.1.0 test builds on two phones and asked to publish. The published bytes are identical to the phone-tested build of run 39098419129. Its release notes, like 1.0.0's, say plainly that the app has not been independently security-reviewed.
 
----
+That workflow builds the four-ABI JNI library and the debug and unsigned release APKs and runs the unit tests. It signs the release APK with the project's own key (`secretmessage/signing/secretmessage-release.p12`, created once in CI and protected by the owner's `SECRETMESSAGE_SIGNING_PASSWORD` secret; certificate SHA-256 `58e370e417cf6f33234689acd5bf379474f5a8c55f79181d9e892a321bc04f08`). It checks the pinned certificate, package, version, debuggable flag and minimum SDK, and runs the emulator smoke on the signed APK through the live relay. Only then does a separate job stage drafts in both repositories, verify their size and SHA-256 (`secretmessage/wifi-test/verify-release-asset.py`), publish both and verify them again. Publication needs a push to `arena/d4fb2344-internetradio` whose commit message contains the Secret Message publish marker; that marker must not appear in any other commit message. Each new version raises `versionCode` by one and the last `versionName` part, updates `EXPECTED_CODE`/`EXPECTED_VERSION` in the workflow, and adds `secretmessage/releases/secret-message-v<version>.md`. Never overwrite a tag or replace the signing key.
 
-**The first release already exists:**
-<https://github.com/universalrp2003/InternetRadio/releases/tag/v2026.10.06> — CleanSweep-v2.6,
-Ramesh-Radio-v1.2, Internet-Radio-v1.0, AppForge-v1.0 and PulseEQ-v1.0, all signed with the
-project keystore and verified non-debuggable by CI. That link is what you share with family,
-and the one to paste into an IzzyOnDroid inclusion request.
+## CI build
 
-## 2. How the channels compare
+The GitHub Actions workflow `.github/workflows/build-apk.yml` builds the four legacy-batch debug and signed release APKs, runs unit and required CleanSweep regression tests, checks localization and source contracts, validates package/version/minimum SDK/permissions/icons/signatures, and verifies release asset size and SHA-256 against the local APK bytes. Oor Arivippu has its own test workflow and the standalone stable workflow described above.
 
-| | Google Play | F-Droid (main repo) | IzzyOnDroid | Your own repo (GitHub Pages) | GitHub Releases + Obtainium |
-|---|---|---|---|---|---|
-| Who signs the APK | You (or Play) | **F-Droid key** (yours only with reproducible builds) | **You** | **You** | **You** |
-| Family must reinstall | No | **Yes, once** | No | No | No |
-| Review time | Days–weeks | Weeks (then 24–48 h to appear) | ~1 day | none | none |
-| Cost | $25 once | free | free | free | free |
-| Auto-updates on the phone | via Play | via F-Droid app | via F-Droid app | via F-Droid app | via Obtainium |
-| CleanSweep allowed? | **No** (see above) | yes | yes | yes | yes |
-| Needs an account | Google | GitLab (for the MR) | Codeberg (issue) or email | GitHub (you have it) | none |
+The legacy batch workflow also produces Android App Bundles for `cleaner`, `radio` and `equalizer`. RP Vocal Remover Studio and Oor Arivippu are standalone direct-download APKs and have no AAB in that workflow.
 
----
+Local commands (JDK 17, Android SDK and NDK required):
 
-## 3. IzzyOnDroid — the easiest real store (recommended first)
+```sh
+./gradlew :cleaner:testDebugUnitTest :cleaner:testReleaseUnitTest \
+  :radio:testDebugUnitTest :radio:testReleaseUnitTest \
+  :equalizer:testDebugUnitTest :equalizer:testReleaseUnitTest \
+  :vocalremover:testDebugUnitTest :vocalremover:testReleaseUnitTest
 
-Requirements are exactly what the repo now produces: an APK **signed by you with a release
-key**, **not debuggable**, attached to a **GitHub release**, with text descriptions in the
-repo. What to do:
+./gradlew :cleaner:assembleRelease :radio:assembleRelease \
+  :equalizer:assembleRelease :vocalremover:assembleRelease
 
-1. Tag a release so a GitHub Release exists (see section 5) — for example `v2.6`.
-2. Open an issue at **https://codeberg.org/IzzyOnDroid/repo/issues/new/choose** using the
-   "app inclusion request" template, one per app. Give: app name, package id, source repo
-   `https://github.com/universalrp2003/InternetRadio`, the homepage for the release
-   (`https://github.com/universalrp2003/InternetRadio/releases`), and the licence.
-3. They scan the APK, check the source and test on a device. Usually about a day.
-4. From then on, every GitHub Release you cut is picked up automatically — your signature,
-   the family never reinstalls anything.
-
-If an app is later accepted into the *official* F-Droid repo, IzzyOnDroid removes it (to avoid
-signature confusion). So: do IzzyOnDroid now, F-Droid only if you actually want it.
-
----
-
-## 4. F-Droid — the big one, and the honest catch
-
-**The catch:** F-Droid builds your app from source on their own machines and **signs it with a
-key they generate for you**. An APK signed by someone else cannot update an app you signed —
-so your family uninstalls the GitHub build once and reinstalls from F-Droid. After that,
-updates come through the F-Droid client.
-
-There is one way to keep your own signature *and* be in the main F-Droid repo: **reproducible
-builds**. If a build on their server produces a byte-identical APK to yours (apart from the
-signature), they publish *your* signed APK and mark the app "verified reproducible". This is
-real work (the build must not embed timestamps, paths or build-machine data), and it is a
-follow-up project, not a first step. Our setup is a decent starting point: fixed Gradle
-version, fixed keystore, no minification.
-
-Steps when you are ready:
-
-1. Create a GitLab account (free) — fdroiddata lives on GitLab.
-2. Fork **https://gitlab.com/fdroid/fdroiddata** and clone it.
-3. Add one metadata file per app: `metadata/<applicationId>.yml`. I will write the five YAML
-   files for you (they need the licence choice, the commit hash of the tag, and the exact
-   build commands `assembleRelease` plus `subdir:` for each module).
-4. Run their linter locally if you want (`pip install fdroidserver`, then
-   `fdroid lint <package-id>`), or just open the merge request — their CI lints it for you.
-5. Open the Merge Request. Reviewers check the licence, the dependencies and the build; they
-   may ask questions. After the merge, the app appears in the F-Droid repo within a day or two.
-
-Useful facts for the submission:
-
-* The build command per app is a **release** build in the module's own directory, e.g. for
-  CleanSweep `subdir: cleaner` + `gradle: [assembleRelease]`.
-* `UpdateCheckMode: RepoManifest` (reads the version from the repo) is the practical choice for
-  several apps in one repository; `Tags` wants one tag per app version, which our single
-  repo-wide tag cannot express.
-* Tell them the descriptions are already in the repo under
-  `<module>/fastlane/metadata/android/`, so the reviewers do not need to write them.
-
----
-
-## 5. Cutting a release (what the family installs from now on)
-
-The GitHub Release is created automatically by CI when a tag starting with `v` is pushed. The
-repository holds five apps with five different versions, so the tag is a **build date**, while
-each APK file name carries its own app version:
-
-```bash
-git tag v2026.10.06          # any v* name; date tags avoid "which app is v2.6?"
-git push origin v2026.10.06
+./gradlew :oorarivippu:testDebugUnitTest :oorarivippu:testReleaseUnitTest \
+  :oorarivippu:lintDebug :oorarivippu:lintRelease :oorarivippu:assembleRelease
 ```
 
-That runs the normal build, then attaches **`CleanSweep-v2.6.apk`**, **`Ramesh-Radio-v1.2.apk`**
-and the other three release APKs to a Release. Anyone can then install straight from
-`https://github.com/universalrp2003/InternetRadio/releases` — a link that does not expire.
+## Verified GitHub Releases
 
-Inside each app the version stays in the file name, exactly as you asked.
+1. Update the relevant module's `versionName` and `versionCode`; do not reuse a release version for changed APK bytes.
+2. Update that app's notes in `releases/` and `CHANGELOG.md`. State plainly whether those exact APK bytes were installed on a phone; never turn a CI pass into a device-test claim.
+3. Push the verified changes to the authorized branch. For a normal batch publication, the workflow's branch trigger requires `[publish]` in the commit message. The 14 October release batch used this push path (run [38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254)); the workflow creates the four version-specific app release tags from the Gradle versions. A manual batch tag such as `v2026.10.14` is only a workflow input, not an additional app-release tag.
+4. The workflow fails closed unless `universalrp2003/RP-Android-Apps` is public, initialized, unarchived and reachable. Before publishing, configure the source repository Actions secret `RP_ANDROID_APPS_RELEASE_TOKEN` with `contents:write` access limited to `RP-Android-Apps`; never paste the credential into chat. If it is absent or invalid, the release step fails before creating any draft, so installed clients do not receive a bridge release before the new source is seeded.
+5. **One-time bridge seeding (completed):** the earlier bridge releases were already mirrored by publication run [38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254). Do not rerun `mirror_existing=true` for tags that now exist; the workflow intentionally refuses to overwrite a target tag. For a future migration-only mirror, verify that the target tags are new and run the workflow's mirror path only with owner authorization.
+6. Wait for all build, regression, permission, package, signer and asset checks to pass. The workflow stages the four releases as drafts, verifies size and SHA-256 on every configured destination, promotes only after draft checks, and verifies public URLs and asset digests again.
+7. Confirm each release is stable (not a draft or prerelease), each canonical release page contains the expected APK, and both repositories' copies match the recorded ledger in [`docs/published-release-digests.md`](docs/published-release-digests.md).
 
----
+The four legacy batch releases (Live Guard 2.46, Ramesh Radio 1.11, PulseEQ 1.5 and RP Vocal Remover Studio 0.1.11) are published on both `universalrp2003/RP-Android-Apps` and `universalrp2003/InternetRadio`. Oor Arivippu 1.1.0 (current), 1.0.2, 1.0.1 and 1.0.0 are also public on both repositories from separate standalone release runs; their matching sizes, digests and canonical URLs are recorded in [`docs/published-release-digests.md`](docs/published-release-digests.md). The four legacy apps remain in the original batch, and their one-to-two-month migration grace period began on 14 October 2026. Keep the old repository, historical release pages, tags and assets intact; do not rename or archive it before grace-period/device validation. See [`docs/repository-migration.md`](docs/repository-migration.md) for the current gate and sequence.
 
-## 6. The nicest option for family: your own F-Droid repository
+### Live Guard permission gate
 
-This gives F-Droid-style automatic updates **with your own signing key**, no store and no
-review:
+The release workflow compares the merged CleanSweep APK manifest with the most recently published Live Guard release. A newly added dangerous permission requires a truthful physical-device evidence record that identifies the exact tested APK bytes. If an evidence record exists, only its matching bytes may be released. Missing or unreadable prior-release data fails closed. App-op/signature permissions are not treated as Android runtime-dangerous permissions.
 
-1. CI runs `fdroid update` after each release tag, signing the index with a key you keep.
-2. The generated repository is published to a `gh-pages` branch (free hosting on GitHub).
-3. On the phone, open F-Droid (or Droid-ify / Neo Store) → Settings → Repositories → add
-   `https://universalrp2003.github.io/InternetRadio/repo`.
-4. The five apps appear there, install normally, and **update themselves** when you push a new
-   tag — same signature as the APKs already on the phone, so no uninstalling ever.
+No release process disables Play Protect or bypasses Android's installer. Users may need to grant the per-app **Install unknown apps** permission in Settings, and Android shows its own confirmation for each installation.
 
-Say the word and I will build that CI job. It is the only route that gives automatic updates
-while keeping your keystore.
+## Store metadata
 
-The no-work alternative is **Obtainium** (a free app): add the repo URL
-`https://github.com/universalrp2003/InternetRadio`, pick the APK you want, and it checks the
-GitHub Releases for new versions and installs them for you. Nothing to build, nothing to sign.
-
----
-
-## 7. Google Play (for the apps that qualify)
-
-Play is the only store that needs real paperwork:
-
-* a Google Play developer account ($25 once) and an identity check;
-* a **privacy policy URL** (a page in this repo is enough);
-* the **Data safety** form — for these apps: no data collected, no data shared; the optional AI
-  sends the text you type to a provider whose key you supplied, and only when you tap Analyse;
-* **Android App Bundle (.aab)** — Play does not accept APKs for new apps, so CI must also run
-  `bundleRelease` (a two-line change I can make);
-* **screenshots** (at least 2), a 512×512 icon and a 1024×500 feature graphic;
-* a content rating questionnaire, and target API level compliance (we already target API 36).
-
-And the blocker to be clear about: **CleanSweep will very likely be rejected** because of
-`MANAGE_EXTERNAL_STORAGE`. Options if you want it on Play anyway:
-
-1. Ship a **separate "Play edition"** that uses the system file picker (Storage Access
-   Framework) instead of all-files access. It could still scan the folders you hand it, but it
-   is a noticeably weaker cleaner and a lot of work.
-2. Publish the other four apps on Play, keep CleanSweep on F-Droid/IzzyOnDroid/GitHub.
-
-My honest advice: don't fight Google over all-files access. The people who want this app are
-exactly the people who install from F-Droid or a link.
-
----
-
-## 8. Other stores, briefly
-
-* **Amazon Appstore** — free developer account, accepts APKs, and CleanSweep's all-files access
-  is not policed the way Play does. Realistically only worth it if you want the Fire-tablet
-  audience; the radio app would fit there better than the cleaner.
-* **Samsung Galaxy Store / Huawei AppGallery** — free seller accounts, both accept APKs. Worth
-  doing for **Ramesh Radio** later (Tamil audience is large on both), not a first step.
-* **Aptoide / APKPure / APKMirror** — self-service uploads, no real review, and they do not
-  help the family; they mostly mirror what is already public. Not recommended as a primary
-  channel, though harmless.
-
----
-
-## 9. Checklist
-
-- [x] Licence: **GNU GPL-3.0** — committed by CI, GPL notice in About.
-- [x] Application id renamed to `com.universalrp.internetradio`.
-- [x] Release APKs + `.aab` bundles built and verified non-debuggable.
-- [x] GitHub Release `v2026.10.06` with the version-named APKs (and now bundles).
-- [x] Store listing text for all five apps (English + Tamil where written).
-- [x] Privacy policy: [PRIVACY.md](PRIVACY.md).
-- [x] Play copy-paste pack kept for later (not being used): [store/PLAY_SUBMISSION.md](store/PLAY_SUBMISSION.md).
-- [x] F-Droid recipes for all five apps: [store/fdroid/metadata/](store/fdroid/metadata/).
-- [x] IzzyOnDroid request text + F-Droid steps: [store/fdroid/README.md](store/fdroid/README.md).
-- [x] RFP tracker issue text: [store/fdroid/RFP_ISSUE.md](store/fdroid/RFP_ISSUE.md).
-- [x] Store icons (512x512) and feature graphics (1024x500) for all five apps, generated from
-  the real launcher vectors and rebuilt by CI: `tools/make_store_assets.py`,
-  `tools/make_feature_graphics.sh`, preview in [store/asset-preview.png](store/asset-preview.png).
-- [ ] Send screenshots — I place them with `tools/make_screenshots.py`; see
-  [store/README.md](store/README.md) for exactly where they go.
-- [ ] Open the IzzyOnDroid issue (section A) and, if you want the main repo, the fdroiddata MR
-  or the RFP issue — both need your own free GitLab / Codeberg account, which is the only part
-  I cannot do for you.
+The active store-art pipeline covers CleanSweep, Ramesh Radio and PulseEQ. F-Droid metadata is present for those three modules; it is preparation, not a claim that F-Droid has accepted or published them. RP Vocal Remover Studio and Oor Arivippu ship through their GitHub Releases only. See [`store/README.md`](store/README.md).

@@ -5,6 +5,16 @@ object BatteryValuePolicy {
     fun microAmpsToAmps(value: Int?): Float? = value?.takeIf { it != Int.MIN_VALUE && it.toLong() in -20_000_000L..20_000_000L }
         ?.let { it / 1_000_000f }
 
+    /** ACTION_BATTERY_CHANGED voltage is millivolts; reject sentinels and implausible values. */
+    fun voltageMillivoltsToVolts(value: Int?): Float? = value
+        ?.takeIf { it in 2_000..12_000 }
+        ?.div(1_000f)
+
+    /** ACTION_BATTERY_CHANGED temperature is tenths of a degree Celsius; zero is valid. */
+    fun temperatureTenthsToCelsius(value: Int?): Float? = value
+        ?.takeIf { it in -300..900 }
+        ?.div(10f)
+
     /**
      * Which Android plumbing a usable battery-current reading came from.
      *

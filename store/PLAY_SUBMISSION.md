@@ -1,114 +1,32 @@
-# Google Play submission pack
+# Store submission readiness — current scope
 
-Everything below is copy-paste ready. The only steps that need *you* are the ones that need a
-Google account. Play will show these apps under the developer name on your Play account
-(Ramesh prathap .R, `universalrp2003@gmail.com`) — change it in the Console if you want a
-different public name.
+This file is a checklist, not evidence that any app is listed, submitted, accepted or approved by a store. Confirm the current status in each store's console before making availability claims.
 
----
+## Active apps and artifacts
 
-## 0. What is already prepared
+| App | Module | Current release | Google Play bundle built by CI | F-Droid recipe |
+|---|---|---:|---|---|
+| Live Guard (CleanSweep) | `cleaner` | 2.46 / code 51 | Yes | `com.universalrp.cleansweep.yml` |
+| Ramesh Radio | `radio` | 1.11 / code 11 | Yes | `com.universalrp.tamilnadufm.yml` |
+| PulseEQ | `equalizer` | 1.5 / code 6 | Yes | `com.universalrp.pulseeq.yml` |
+| RP Vocal Remover Studio | `vocalremover` | 0.1.11 / code 12 | No; direct APK distribution | No recipe in this store-art pipeline |
 
-* **App bundles** — CI now builds `cleaner/build/outputs/bundle/release/*.aab` together with the
-  APKs, renamed with their versions (`CleanSweep-v2.6.aab`, `Ramesh-Radio-v1.2.aab`,
-  `Internet-Radio-v1.0.aab`, `AppForge-v1.0.aab`, `PulseEQ-v1.0.aab`) and uploaded as the
-  **`store-bundles`** artifact. Play has not accepted APKs for new apps since 2021 — a `.aab` is
-  the only thing it takes.
-* **Listing text** for every app lives in the repository, ready to paste:
-  `app/fastlane/metadata/android/en-US/…`, `radio/…`, `cleaner/…`, `builder/…`, `equalizer/…`
-  (`title.txt`, `short_description.txt`, `full_description.txt`), with Tamil for CleanSweep and
-  Ramesh Radio under `ta-IN/`.
-* **Privacy policy** — [PRIVACY.md](PRIVACY.md). Play needs a public URL; use
-  **https://github.com/universalrp2003/InternetRadio/blob/arena/01a10b15-internetradio/PRIVACY.md**
-  now, or the identical `main` URL once this branch is merged into `main`.
-* **The placeholder app id is gone**: `:app` is now `com.universalrp.internetradio`.
-* **No proprietary SDKs, no ads, no analytics** — nothing to declare in the "Ads" section.
+All four versions passed build and release verification in [run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) and have public stable APK releases on both GitHub repositories. CI also built AABs for the three store-packaged apps. Release publication and AAB generation do not mean an app was submitted to, accepted by, or published in Google Play; use the exact matching run artifact and current store-console requirements for any future submission.
 
-## 1. The apps that qualify, and the one that does not
+All four have stable direct-download APKs in GitHub Releases. An AAB produced by CI, fastlane metadata, or an F-Droid recipe does not establish store acceptance or availability. See [`../PUBLISHING.md`](../PUBLISHING.md) and [`../docs/published-release-digests.md`](../docs/published-release-digests.md).
 
-| App | Package id | Play? |
-|---|---|---|
-| Ramesh Radio | `com.universalrp.tamilnadufm` | **Yes** |
-| Internet Radio | `com.universalrp.internetradio` | **Yes** |
-| AppForge | `com.universalrp.appforge` | **Yes** |
-| PulseEQ | `com.universalrp.pulseeq` | **Yes** |
-| CleanSweep | `com.universalrp.cleansweep` | **No — see below** |
+## Before a Google Play submission
 
-**Why CleanSweep cannot go to Play as it is:** it declares `MANAGE_EXTERNAL_STORAGE`
-("All files access"). Play permits that permission only for file managers, backup/restore apps,
-anti-virus apps, document management apps, on-device file search, disk/file encryption and
-device-to-device migration. A junk cleaner is not on that list, and the Permissions Declaration
-Form is rejected for it. Load-shedding the feature would mean using the system file picker
-(Storage Access Framework) instead, which cannot see the junk the app exists to find. Keep
-CleanSweep on the GitHub Release / F-Droid / IzzyOnDroid channels.
+1. Confirm that a Play Console app exists for the exact package ID and that the owner has selected the intended app name, countries, pricing and track.
+2. Download the AAB generated from the same verified source/release run. Do not upload debug builds or substitute an APK for the bundle.
+3. Use current listing text and graphics under the relevant module's `fastlane/metadata/android/` directory. Current store art is maintained for `cleaner`, `radio` and `equalizer`; RP Vocal Remover Studio is not currently prepared for Play submission.
+4. Use the current public privacy policy: <https://github.com/universalrp2003/InternetRadio/blob/main/PRIVACY.md>. Reconfirm the URL loads the current policy after this branch is merged.
+5. Complete the target audience, content rating, data-safety, permission and other Play Console declarations from the app's actual behavior and the current Google Play requirements. Do not copy generic answers from an old checklist.
+6. Live Guard uses Android all-files access for its file-review/cleanup functionality. Review the current Play policy and required declaration carefully before submitting; a CI AAB does not establish permission eligibility or store approval.
+7. Keep release notes aligned with the exact version code and bytes submitted. Record the submission/review outcome separately from CI results.
 
-## 2. One-time account setup (you)
+## Screenshots and privacy
 
-1. Create a Google Play developer account at <https://play.google.com/console> — **$25 once**,
-   plus an identity check (ID and address). This can take a day or two.
-2. In **Play Console → Settings → Developer account → Account details**, check the developer
-   name and contact email shown publicly. Set the contact email to
-   `universalrp2003@gmail.com` if it is not already.
-3. Nothing else is needed before uploading.
+Screenshots must be genuine app captures. Review them for personal files, installed-app lists, account names, public/private IP addresses, router details, SIM/operator information and notifications. Sanitize on the device before placing the screenshots in the public repository. Never add selected audio, private logs, API keys or user-identifying data to store metadata.
 
-## 3. Per-app upload (about 15 minutes the first time, 5 after that)
-
-For each of the four apps:
-
-1. **Create app** → app name, default language **English (United States)**, type **App**,
-   **Free**.
-2. **Store listing** → paste from the repo:
-   * App name: `cat radio/fastlane/metadata/android/en-US/title.txt` (≤30 characters)
-   * Short description: `short_description.txt` (≤80)
-   * Full description: `full_description.txt` (≤4000)
-   * Graphics: 512×512 icon, 1024×500 feature graphic, and 2–8 phone screenshots
-     (send me the screenshots and I will place them in the repo for every store at once).
-   * Contact email: `universalrp2003@gmail.com`
-   * Privacy policy URL: the PRIVACY.md link above.
-3. **App content** (the questionnaire section):
-   * **Privacy policy**: the URL above.
-   * **Ads**: “No, my app does not contain ads”.
-   * **App access**: “All functionality is available without special access”.
-   * **Content rating**: fill the questionnaire — for all four: no violence, no sexuality, no
-     profanity, no gambling, no drugs, no user-generated content, no user interaction, no
-     location sharing, no purchases. PulseEQ/Ramesh Radio: “Music/audio”.
-   * **Target audience**: 13+ (or 18+). Not designed for children.
-   * **News app**: answer **No**, even for Ramesh Radio — it *streams* radio stations, it does
-     not publish news content itself.
-   * **Data safety** — the answers, per app:
-     * *Does your app collect or share any of the required user data types?* → **No.**
-     * *Is all of the user data collected by your app encrypted in transit?* → not applicable
-       (nothing is collected).
-     * *Do you provide a way for users to request that their data is deleted?* → not
-       applicable; there is no server-side data.
-     * If the form insists on the AI feature: the request is user-initiated and carries only
-       the text the user chose to send, using the user's own API key, straight to the provider.
-       The developer receives nothing. Declare it honestly as
-       **“App functionality — user-initiated transmission to a third-party service the user
-       configured”**, and note the provider in the description if you want to be extra clear.
-   * **Government apps / financial features / health**: No to all.
-4. **Production → Create new release** → upload the `.aab` from the `store-bundles` artifact
-   (download it from the GitHub Actions run of the tag you are publishing).
-   * **Release notes**: copy `changelogs/<versionCode>.txt` from the app's fastlane folder.
-   * **Play App Signing**: leave it ON (the default). Play re-signs the app with its own key —
-     that is normal and is why a Play install cannot replace a GitHub-installed copy, and vice
-     versa. Choose one channel per app per phone and stay on it.
-5. **Countries/regions**: all, or India + wherever your family lives.
-6. **Send for review.** First review usually takes a few days; later updates are faster.
-
-## 4. After the first review
-
-* Every new version: build a new tag (`git tag v2026.11.01 && git push origin v2026.11.01`),
-  download the fresh `.aab`, and upload it in **Production → Create new release**.
-* Keep the version code going up — Play refuses a bundle with a version code it has already
-  seen. CI takes it from each module's `versionCode`, so bump it there.
-
-## 5. What is still missing before you press upload
-
-* **Screenshots** (2 minimum per app, 8 maximum). Send them and I will put them in the repo,
-  and you can upload the same files to Play.
-* **512×512 icon** and **1024×500 feature graphic**. The launcher icon in the repo is a vector
-  asset, which Play's uploader cannot take; send me a screenshot of the app icon, or say the
-  word and I will generate a matching 512 icon and feature graphic for each app.
-* **The developer account itself** ($25 + identity check) — only you can do that, and only from
-  your own Google account.
+For current app behavior and third-party data flows, see [`../PRIVACY.md`](../PRIVACY.md). For F-Droid recipe scope and signing caveats, see [`fdroid/README.md`](fdroid/README.md) and [`fdroid/REPORT.md`](fdroid/REPORT.md).

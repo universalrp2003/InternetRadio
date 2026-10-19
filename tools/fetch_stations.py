@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Builds stations_seed.json for the Tamilnadu FM Radio app.
+Builds stations_seed.json for Ramesh Radio.
 
 Two sources, merged:
 
@@ -43,7 +43,7 @@ MIRRORS = [
     "https://fi1.api.radio-browser.info",
 ]
 
-UA = "TamilnaduFMRadio/1.3 (+https://github.com/universalrp2003/InternetRadio)"
+UA = "RameshRadio (+https://github.com/universalrp2003/InternetRadio)"
 
 # (category, query parameters, max kept, keep_unverified)
 # keep_unverified=True is only used for Tamil, where the directory is genuinely
@@ -548,6 +548,8 @@ def main():
         time.sleep(0.6)
 
     # ------------------------------------------------------------------ order
+    # The app re-ranks its Tamil/All views across category boundaries; within this
+    # generated JSON keep each category together, verified streams first, then votes.
     category_order = {
         "tamil": 0,
         "tamil_fm": 1,
@@ -562,8 +564,8 @@ def main():
         key=lambda s: (
             category_order.get(s["category"], 9),
             0 if s["verified"] else 1,
+            -max(0, s["votes"]),
             -s["order"],
-            -s["votes"],
             s["name"].lower(),
         ),
     )

@@ -107,7 +107,7 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(onClick = { vm.goBack() }) {
-                    Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                    Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
                 }
                 Text(
                     tr("Mobile & data"),
@@ -116,7 +116,7 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
                     modifier = Modifier.weight(1f),
                 )
                 IconButton(onClick = { vm.loadMobile() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary)
                 }
             }
         }
@@ -179,6 +179,10 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
 
         // -------------------------------------------------------------- data usage
         item { DataUsageCard(state, vm) }
+
+        // v2.47: separate 4G/5G counters, the 5G-unlimited switch and the in-app voice volume.
+        // Placed directly under the data card because both answer "how much is left?".
+        item { RadioSplitCard() }
 
         item {
             Text(
@@ -752,7 +756,7 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
                     )
                 }
                 IconButton(onClick = { vm.scanAppTrackers() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Inspect", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Inspect"), tint = TextSecondary)
                 }
             }
             Spacer(Modifier.height(8.dp))
@@ -774,46 +778,68 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
             )
 
             if (report != null) {
+                val liveConnections = report.connections.filter {
+                    it.evidenceSource == com.universalrp.cleansweep.data.AppNetworkTracker.EvidenceSource.LIVE_ESTABLISHED_TCP
+                }
+                val historicalTraffic = report.connections.filter {
+                    it.evidenceSource == com.universalrp.cleansweep.data.AppNetworkTracker.EvidenceSource.NETWORK_STATS_LAST_24_HOURS
+                }
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "${report.connections.size} connection(s)",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = AccentCyan,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        if (report.trackerCount > 0) {
-                            Text(
-                                "• ${report.trackerCount} tracker(s)",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = DangerRed,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
+                Text(
+                    tr("%s apps with currently visible established TCP connections", report.visibleEstablishedAppCount),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = AccentCyan,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    tr("%s visible TCP sockets in this snapshot · %s", report.visibleEstablishedConnectionCount,
+                        java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(report.timestamp))),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+                if (report.trackerCount > 0) {
                     Text(
-                        report.mode,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
+                        tr("%s heuristic tracker-labelled live sockets", report.trackerCount),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = DangerRed,
+                        fontWeight = FontWeight.Bold,
                     )
                 }
-                Spacer(Modifier.height(8.dp))
-                if (report.connections.isEmpty()) {
+                Text(
+                    if (report.liveSocketVisibilityAvailable) {
+                        tr("/proc TCP socket files were readable for this best-effort snapshot; Android may still hide per-app connections.")
+                    } else {
+                        tr("Live TCP socket visibility is unavailable on this device; no current app count can be confirmed.")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                if (liveConnections.isNotEmpty()) {
+                    Spacer(Modifier.height(8.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        liveConnections.take(16).forEach { conn -> TrackerItemCard(conn, vm) }
+                    }
+                } else if (report.liveSocketVisibilityAvailable) {
                     Text(
-                        tr("No outward connections were visible in this read. Android may restrict access; this does not prove there are none."),
+                        tr("No established TCP app sockets were visible in this read. This does not prove that no app is connected."),
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary,
                     )
-                } else {
+                }
+                Spacer(Modifier.height(10.dp))
+                Text(
+                    if (report.networkStatsHistoryAvailable) {
+                        tr("NetworkStats is a separate historical byte counter: %s apps exceeded the display threshold in the last 24 hours. It is not a live-connection count.", report.historicalTrafficAppCount)
+                    } else {
+                        tr("Historical per-app NetworkStats is unavailable or restricted; it is not used in the live connection count.")
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                )
+                if (historicalTraffic.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        report.connections.take(16).forEach { conn ->
-                            TrackerItemCard(conn)
-                        }
+                        historicalTraffic.take(16).forEach { conn -> TrackerItemCard(conn, vm) }
                     }
                 }
             }
@@ -822,7 +848,12 @@ private fun AppTrackerCard(state: UiState, vm: MainViewModel) {
 }
 
 @Composable
-private fun TrackerItemCard(conn: com.universalrp.cleansweep.data.AppNetworkTracker.ActiveConnection) {
+private fun TrackerItemCard(
+    conn: com.universalrp.cleansweep.data.AppNetworkTracker.ActiveConnection,
+    vm: MainViewModel,
+) {
+    val isLiveSocket = conn.evidenceSource ==
+        com.universalrp.cleansweep.data.AppNetworkTracker.EvidenceSource.LIVE_ESTABLISHED_TCP
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(10.dp),
@@ -845,21 +876,29 @@ private fun TrackerItemCard(conn: com.universalrp.cleansweep.data.AppNetworkTrac
             }
             Spacer(Modifier.height(2.dp))
             Text(
-                "Company / Provider: ${conn.orgOrCompany}",
+                tr("Company / provider label (heuristic): %s", conn.orgOrCompany),
                 style = MaterialTheme.typography.bodySmall,
                 color = TextPrimary,
             )
-            val destinationLine = if (conn.localPort == 0 && conn.destinationHost?.contains("transferred") == true) {
-                // Today's total data usage entry
-                "Data Transferred: ${conn.destinationHost}"
-            } else {
-                "Destination: ${conn.destinationHost ?: conn.remoteIp}:${conn.remotePort}"
-            }
             Text(
-                destinationLine,
+                if (isLiveSocket) tr("Visible established TCP destination: %s:%s", conn.destinationHost ?: conn.remoteIp, conn.remotePort)
+                else tr("NetworkStats history: %s", conn.destinationHost ?: "—"),
                 style = MaterialTheme.typography.labelSmall,
                 color = AccentCyan,
             )
+            if (!conn.packageName.startsWith("uid:")) {
+                TextButton(
+                    onClick = { vm.openAppInfo(conn.packageName) },
+                    contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp),
+                ) {
+                    Text(tr("Open Android App Info"), fontWeight = FontWeight.SemiBold)
+                }
+                Text(
+                    tr("Use Android's Force stop control there if available. Live Guard cannot force-stop another app."),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = TextSecondary,
+                )
+            }
         }
     }
 }
@@ -883,7 +922,7 @@ private fun DataUsageCard(state: UiState, vm: MainViewModel) {
                     )
                 }
                 IconButton(onClick = { vm.loadUsage() }) {
-                    Icon(Icons.Outlined.Refresh, contentDescription = "Refresh", tint = TextSecondary)
+                    Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh"), tint = TextSecondary)
                 }
             }
             Spacer(Modifier.height(8.dp))

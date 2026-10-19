@@ -14,9 +14,9 @@ RepoType: git
 Repo: https://github.com/universalrp2003/InternetRadio.git
 
 Builds:
-  - versionName: '1.7'
-    versionCode: 7
-    commit: v2026.10.06
+  - versionName: '1.9'
+    versionCode: 9
+    commit: ramesh-radio-v1.9
     subdir: radio
     sudo:
       - apt-get update
@@ -26,11 +26,11 @@ Builds:
       - yes
 
 MaintainerNotes: >
-  One of five apps in this Gradle project (see :cleaner's maintainer notes).
-  Station list is shipped in the APK; the online radio-browser directory is only
-  searched when the user taps search.
+  Ramesh Radio is one of four actively maintained apps. Its station seed list is
+  shipped in the APK; the online Radio-Browser directory is contacted only when
+  the user explicitly searches. The current source module is :radio.
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
-CurrentVersion: '1.7'
-CurrentVersionCode: 7
+CurrentVersion: '1.9'
+CurrentVersionCode: 9

@@ -1,0 +1,31 @@
+# Secret Message TEST relay: forwards a test chat's encrypted bytes between two phones.
+# Owner-approved test deployment (17 October 2026) to the owner's Cloudflare account on the free
+# plan, deployed only by .github/workflows/secret-message-relay.yml. Not security-reviewed.
+name = "secretmessage-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+workers_dev = true
+preview_urls = false
+
+# No request logs or traces are kept by this Worker.
+[observability]
+enabled = false
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# From app 1.1.0: one inbox per phone that is ready for chats (its doorbell).
+[[durable_objects.bindings]]
+name = "INBOXES"
+class_name = "Inbox"
+
+# The free plan offers only SQLite-backed Durable Objects; the rooms store nothing but their alarm.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]
+
+# Inboxes also store nothing; they hold the phone's WebSocket while it hibernates.
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["Inbox"]

@@ -115,7 +115,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.goBack() }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Phone health"),
                 style = MaterialTheme.typography.titleLarge,
@@ -123,7 +123,7 @@ fun HealthScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.refreshHealth() }) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Refresh now", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Refresh now"), tint = TextSecondary)
             }
         }
 
@@ -311,17 +311,22 @@ private fun BatteryCard(battery: BatteryReading, screenOn: Boolean) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox(
                     "Temperature",
-                    battery.temperatureC?.let { "%.1f °C".format(it) } ?: "Not reported",
+                    ChargingHonestyPolicy.temperatureText(battery.temperatureC) ?: tr("Not reported"),
                     battery.temperatureC?.let { temperatureColor(it) } ?: TextSecondary,
                     Modifier.weight(1f),
                 )
                 StatBox(
                     "Voltage",
-                    battery.voltageV?.let { "%.2f V".format(it) } ?: "Not reported",
+                    ChargingHonestyPolicy.voltsText(battery.voltageV) ?: tr("Not reported"),
                     TextPrimary,
                     Modifier.weight(1f),
                 )
             }
+            Text(
+                tr("Battery temperature and voltage above are validated Android battery-broadcast readings; OEM support may vary."),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
             Spacer(Modifier.height(10.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox(
@@ -332,7 +337,7 @@ private fun BatteryCard(battery: BatteryReading, screenOn: Boolean) {
                 )
                 StatBox(
                     if (battery.charging) "Charging power" else "Power draw",
-                    battery.powerW?.let { "%.2f W".format(it) } ?: "Not reported",
+                    ChargingHonestyPolicy.wattsText(battery.powerW) ?: tr("Not reported"),
                     AccentCyan,
                     Modifier.weight(1f),
                 )
@@ -446,9 +451,9 @@ private fun ThermalCard(health: HealthSnapshot) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 StatBox(
                     "Battery sensor",
-                    health.battery.temperatureC?.let { "%.1f °C".format(it) }
-                        ?: health.batteryTempFromKernelC?.let { "%.1f °C".format(it) }
-                        ?: "Not reported",
+                    health.battery.temperatureC?.let { ChargingHonestyPolicy.temperatureText(it) }
+                        ?: health.batteryTempFromKernelC?.let { ChargingHonestyPolicy.temperatureText(it) }
+                        ?: tr("Not reported"),
                     health.battery.temperatureC?.let { temperatureColor(it) } ?: TextSecondary,
                     Modifier.weight(1f),
                 )
@@ -459,6 +464,18 @@ private fun ThermalCard(health: HealthSnapshot) {
                     Modifier.weight(1f),
                 )
             }
+            Text(
+                tr(when (health.batteryTemperatureSource) {
+                    com.universalrp.cleansweep.data.BatteryMeasurementSource.ANDROID_BATTERY_BROADCAST ->
+                        "Battery temperature source: Android battery broadcast (validated)."
+                    com.universalrp.cleansweep.data.BatteryMeasurementSource.KERNEL_THERMAL_ZONE ->
+                        "Battery temperature source: kernel thermal zone (OEM-dependent)."
+                    com.universalrp.cleansweep.data.BatteryMeasurementSource.UNAVAILABLE ->
+                        "Battery temperature is unavailable; this system may restrict sensor access."
+                }),
+                style = MaterialTheme.typography.labelSmall,
+                color = TextSecondary,
+            )
             Spacer(Modifier.height(8.dp))
             Text(
                 "The hottest sensor is often a charging or modem sensor, not the processor — it can " +

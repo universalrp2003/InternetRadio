@@ -14,9 +14,9 @@ RepoType: git
 Repo: https://github.com/universalrp2003/InternetRadio.git
 
 Builds:
-  - versionName: '2.13'
-    versionCode: 18
-    commit: v2026.10.06
+  - versionName: '2.44'
+    versionCode: 49
+    commit: live-guard-v2.44
     subdir: cleaner
     sudo:
       - apt-get update
@@ -26,11 +26,11 @@ Builds:
       - yes
 
 MaintainerNotes: >
-  CleanSweep, Ramesh Radio, Internet Radio, AppForge and PulseEQ all live in one
-  Gradle project; the subdir field picks this app's module. The listing text and
-  the Tamil translation are in cleaner/fastlane/metadata/android/.
+  This recipe builds the maintained :cleaner module. Ramesh Radio and PulseEQ
+  have separate recipes in this folder. RP Vocal Remover Studio is currently
+  distributed directly from GitHub Releases and has no F-Droid recipe here.
 
 AutoUpdateMode: Version
 UpdateCheckMode: RepoManifest
-CurrentVersion: '2.13'
-CurrentVersionCode: 18
+CurrentVersion: '2.44'
+CurrentVersionCode: 49

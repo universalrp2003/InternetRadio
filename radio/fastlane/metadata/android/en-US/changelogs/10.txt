@@ -1,0 +1,4 @@
+Ramesh Radio 1.10
+• Prefer HTTPS streams; keep HTTP stations with a clear legacy warning.
+• Refresh the station catalog and retain custom-stream guidance.
+• Verify release URL, APK digest, package, version and signer before installer hand-off.

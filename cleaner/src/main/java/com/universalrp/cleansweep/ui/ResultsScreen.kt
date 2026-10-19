@@ -86,7 +86,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             IconButton(onClick = { vm.navigate(com.universalrp.cleansweep.Screen.HOME) }) {
-                Icon(Icons.Outlined.ArrowBack, contentDescription = "Home", tint = TextSecondary)
+                Icon(Icons.Outlined.ArrowBack, contentDescription = tr("Home"), tint = TextSecondary)
             }
             Text(tr("Scan results"),
                 style = MaterialTheme.typography.titleLarge,
@@ -94,7 +94,7 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                 modifier = Modifier.weight(1f),
             )
             IconButton(onClick = { vm.startScan() }) {
-                Icon(Icons.Outlined.Refresh, contentDescription = "Scan again", tint = TextSecondary)
+                Icon(Icons.Outlined.Refresh, contentDescription = tr("Scan again"), tint = TextSecondary)
             }
         }
 
@@ -111,6 +111,15 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                     style = MaterialTheme.typography.displayLarge,
                 )
                 Spacer(Modifier.height(12.dp))
+                if (report?.duplicateScanCapped == true) {
+                    Text(
+                        tr("Duplicate scan hit the 1,500-candidate limit. There may be more duplicates than shown."),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = WarnAmber,
+                        textAlign = TextAlign.Center,
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
                 Text(tr("Nothing to clean!"),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
@@ -150,6 +159,14 @@ fun ResultsScreen(state: UiState, vm: MainViewModel) {
                             color = TextSecondary,
                         )
                     }
+                }
+                if (report.duplicateScanCapped) {
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        tr("Duplicate scan hit the 1,500-candidate limit. There may be more duplicates than shown."),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarnAmber,
+                    )
                 }
                 Spacer(Modifier.height(8.dp))
                 // Nothing is ticked automatically any more: you pick, then Clean.
@@ -375,7 +392,7 @@ private fun CategoryCard(category: CategoryResult, revision: Long, vm: MainViewM
                 }
                 Icon(
                     if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ChevronRight,
-                    contentDescription = if (expanded) "Collapse" else "Expand",
+                    contentDescription = tr(if (expanded) "Collapse" else "Expand"),
                     tint = TextSecondary,
                 )
             }

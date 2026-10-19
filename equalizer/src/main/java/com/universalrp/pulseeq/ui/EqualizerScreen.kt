@@ -34,7 +34,6 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -53,6 +52,7 @@ import com.universalrp.pulseeq.EqUiState
 import com.universalrp.pulseeq.EqViewModel
 import com.universalrp.pulseeq.audio.Bands
 import com.universalrp.pulseeq.audio.EqCore
+import com.universalrp.updates.AppStrings
 
 @Composable
 fun EqualizerScreen(state: EqUiState, vm: EqViewModel) {
@@ -125,12 +125,12 @@ private fun Header(state: EqUiState, vm: EqViewModel) {
             )
         }
         IconButton(onClick = { vm.resetFlat() }) {
-            Icon(Icons.Outlined.Refresh, contentDescription = "Reset to flat", tint = TextSecondary)
+            Icon(Icons.Outlined.Refresh, contentDescription = AppStrings.translate("Reset to flat"), tint = TextSecondary)
         }
         IconButton(onClick = { vm.setBypass(!state.bypass) }) {
             Icon(
                 Icons.Outlined.PowerSettingsNew,
-                contentDescription = "Bypass",
+                contentDescription = AppStrings.translate("Bypass"),
                 tint = if (state.bypass) Danger else Good,
             )
         }

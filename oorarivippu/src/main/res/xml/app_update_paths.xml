@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Verified APKs are staged only in this app's private cache subdirectory. -->
+    <cache-path name="verified_updates" path="verified-updates/" />
+</paths>

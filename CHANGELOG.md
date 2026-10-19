@@ -1,356 +1,111 @@
-# Changelog — maintained Android apps
+# Changelog — RP Ideas Android apps
 
-## Live Guard 2.43/code48 — published 12 October 2026: a zero is never a measurement
+This file indexes the five actively maintained apps. App-specific details, installation notes and verified APK digests are linked below. Historical GitHub Releases, tags and assets remain available even when no longer represented in the active source tree.
 
-**Published** as stable/latest `v2026.10.12-3`, package `com.universalrp.cleansweep`, unchanged
-stable signing key, minSdk 26, target/compileSdk 36. Ramesh Radio 1.8 and PulseEQ 1.2 unchanged.
-**No device test covered these bytes** before publication (the owner's 12 October rule requires
-one only when a release adds a dangerous permission; this one adds none, and the gate compared
-this build's merged-manifest permissions against the published 2.42 APK). CI ran all **349**
-required cases in both variants. Published asset `CleanSweep-v2.43.apk`, **13,574,748 bytes**,
-SHA-256 `6f922f078e3561890aae13a38e4bc6387e3bed3a26da16d5a22591e8596657d7` (CI run 38226682047). The A3s outcome
-("not reported" instead of `0.00 W`) still needs one owner screenshot.
+## Unreleased
 
-- **A zero is never a measurement** (`data/BatteryValuePolicy.kt`): the owner installed 2.42 on
-  the OPPO A3s and reported the charging card **still showed 0.00 W** — diagnostic, because that
-  kernel answers zero through *both* the documented current property and the battery broadcast
-  extra, so there is no current to rescue. 2.42's fallback had treated a broadcast zero as a
-  *measured trickle*, reprinting the fake number. From 2.43 a non-zero property value wins, then a
-  non-zero broadcast value, otherwise the reading is **not reported**. A working counter reports a
-  trickle as a small non-zero value, so genuine low-current charging still shows real watts; only
-  the impossible "exactly zero microamps" reading disappears. Watts still come from one place and
-  units from one place. Regression tests assert zero-from-both is `NONE` with no watts, that a
-  small non-zero value is still used, and that the removed broadcast-zero branch cannot return.
-- **2.42 device evidence recorded — two phones, one build**
-  ([`docs/live-guard-2.42-device-evidence.md`](docs/live-guard-2.42-device-evidence.md)): the owner
-  installed 2.42 on **both** the Redmi 13 5G and the OPPO A3s with Play Protect ON; Play Protect
-  said "App scan recommended", the owner scanned, then **"This app looks safe — You can continue to
-  install it"**, the installer completed in place over 2.41 (46) and About shows 2.42. The installed
-  digest matched the published asset exactly (`79400ed9e61898f6e6f3e85c75dc3ee694c580ec58709a3d687fd6ef2af2f9e0`,
-  CI run 38222530199). The six screenshots were delivered in chat but did not persist into the
-  workspace, so the record quotes their content instead of committing images.
+### Ramesh Radio 1.12
 
-## Live Guard 2.42/code47 — published 12 October 2026: the owner's nine-item work list
+- **Fix — crash when opening the live station list (நேரடி நிலையப் பட்டியல்).** The directory
+  can return the same stream URL twice (relays, the same station under two names). The list
+  used the URL as its Compose key, and a duplicate key throws
+  `IllegalArgumentException: Key <url> was already used`, which closed the app. That is why
+  it only happened *sometimes*: it depended on the answer the directory happened to send.
+  `DirectoryClient` now de-duplicates by URL, the visible list is de-duplicated too, and the
+  directory list key is `url + name` so a future duplicate cannot take the app down again.
+- **New — draggable seek bar in Now Playing.** Recorded audio (local files) seeks anywhere in
+  the file; live radio shows a LIVE pill and moves only inside the buffer, because a live
+  stream has no "forward".
+- About now lists **all six apps** from one shared list (`SisterApps`) — the old hard-coded
+  four pointed at the `InternetRadio` repository and left out Oor Arivippu and Secret Message.
 
-**Published** as stable/latest `v2026.10.12-2`, package `com.universalrp.cleansweep`, unchanged
-stable signing key, minSdk 26, target/compileSdk 36. Ramesh Radio 1.8 and PulseEQ 1.2 are
-unchanged and travel as their previously verified bytes.
+### Live Guard 2.47
 
-> **No device test covered these bytes.** 2.42 is published without a recorded physical-device
-> install, which the owner's 12 October 2026 decision permits because the release **adds no
-> dangerous permission** (see the publication-rule change below). CI compiled the app, ran all
-> **349** required cases in **both** the debug and release variants with no skips, and passed the
-> APK/AAB, package, version, API 26, non-debuggable, stable-certificate and size gates. That
-> verifies the build; it is not a device test. Two items are **open device work**, not proven
-> fixes: the OPPO A3s charging watts and the per-ROM permission routing —
-> [`docs/live-guard-2.42-device-test-plan.md`](docs/live-guard-2.42-device-test-plan.md). The
-> published digest is recorded in the tag run's log and in
-> [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md). Scope, decisions and the
-> two judgement calls: [`docs/live-guard-2.42-scope.md`](docs/live-guard-2.42-scope.md). Full
-> notes: [`releases/v2026.10.12-2.md`](releases/v2026.10.12-2.md).
+- **New — 4G and 5G counted separately.** Android keeps one mobile byte counter, so the app
+  samples it every 3 seconds and files each delta under the radio that was active. A new
+  `RadioWatchService` (foreground, `dataSync`, started only when the feature is on) does this
+  and sends the ongoing notification "4G x left · 5G Unlimited".
+- **New — 4G ⇄ 5G announcements**, Tamil and English, with their own switch and a 20-second
+  minimum gap so a flapping modem cannot narrate every hop. Wi-Fi ⇄ mobile stays a separate
+  switch.
+- **New — in-app volume slider** for everything the app speaks (0–100 %), applied per
+  utterance with `KEY_PARAM_VOLUME`; the phone's own volume is never changed. The old "Louder
+  voice" switch still works and is used as the default when the slider has never been moved.
+- **New — 5G-unlimited switch (Auto / On / Off)** with the operator's real terms: Jio needs
+  ₹349+ **and** 2 GB/day; Airtel needs an eligible ₹349+ pack, the one-time claim in the
+  Airtel Thanks app, and is capped at 300 GB per 28-day cycle. The card shows the reason.
+- New permission: `FOREGROUND_SERVICE_DATA_SYNC` (Android 14+ requires the service type to be
+  declared). `READ_PHONE_STATE` was already granted.
+- About now lists all six apps from the shared `SisterApps` list.
 
-- **Charging watts on phones whose current counter reports nothing** (`data/BatteryValuePolicy.kt`,
-  `data/DeviceHealth.kt`): the OPPO A3s regression — `0.00 W` / `-0.00 A` while charging, though
-  its own charge history recorded real 4.6–4.8 W sessions. The current was read only from
-  `BatteryManager.BATTERY_PROPERTY_CURRENT_NOW`, which older/OEM kernels answer with `0` or
-  "unsupported" while the broadcast extra `BatteryManager.EXTRA_CURRENT` still carries the real
-  charge current; `4.36 V × 0 A` then looked like a measurement. The fallback reads the
-  broadcast's `current_now` key (public as `BatteryManager.EXTRA_CURRENT_NOW` only from API 34,
-  so the literal is used — minSdk 26; a constant reference would trip NewApi lint). One policy
-  now decides which
-  reading may be used **and records its source**: a real non-zero property value, then the
-  broadcast extra, then a broadcast zero (a genuine trickle/full reading), otherwise nothing. A
-  bare property `0` with no broadcast corroboration is *not* reported as 0 A — an unsupported
-  sensor is still never rendered as `0.00 W`. `microAmpsToAmps` remains the single unit decider
-  (magnitude is never treated as evidence of a unit) and `ChargingHonestyPolicy` the single watts
-  decider, so the card, health screen, pill, history and voice still cannot disagree. When the
-  broadcast rescued the reading, the screen says so. A test reproduces the owner's own evidence:
-  4.36 V with a zero property and a 1 100 000 µA broadcast yields **4.80 W**.
-- **Voice A / Voice B chosen automatically** (`voice/AnswerVoicePolicy.kt`,
-  `voice/AnswerVoicePreferences.kt`, `MainViewModel.kt`): the *"Choose and preview two voices…"*
-  error is gone — the string was removed from the catalog with its Tamil pair so it cannot
-  return. With no saved choice, the first two usable installed voices for the answer's language
-  become A and B; with one, both slots use it; with none, nothing is spoken and the voice
-  diagnostics report the real stage instead of an error in the chat. Tamil and English stay
-  separate, a saved voice the engine dropped is replaced, and an empty inventory is treated as an
-  uninitialised engine rather than as evidence against the saved pair. The Voice & daily watch
-  card stays and now says A/B are automatic and can be previewed or swapped; a **manual** save
-  still needs a completed preview and two distinct voices, and each answer is still read once in
-  its assigned voice.
-- **Ongoing meter and background monitor default ON and survive an update**
-  (`data/MonitorDefaultsPolicy.kt`, `data/SettingsRepo.kt`, `notify/ChargeMonitorService.kt`,
-  `notify/BootReceiver.kt`): both are opt-out now, and `MY_PACKAGE_REPLACED` / `BOOT_COMPLETED`
-  re-arm them even when the preference was never written — previously the receiver read a
-  preference nobody had set and left the meter dark after every update. One policy object owns
-  the defaults for the DataStore flow, the plain-prefs mirror and the UI state, which used to
-  carry three separate literal `false` values and could disagree. A saved OFF is still honoured
-  and never overwritten; Settings now says turning one off is a choice, not a failure, and the
-  reviewed-setup entry keeps the OEM/force-stop caveat. The hourly health watch is armed by the
-  monitor's own switch too, not only by voice and the daily check.
-- **The floating pill deliberately stays opt-in:** Android needs "Display over other apps" before
-  anything can be drawn beside the clock and that access is never granted automatically, so
-  defaulting it ON would promise a reading the phone has not allowed. Automatic **online** daily
-  summaries also stay a separate explicit consent, default OFF — turning on local background
-  monitoring is not consent to send report facts to a provider.
-- **Security check includes preinstalled system apps by default** (`MainViewModel.kt`,
-  `data/MonitorDefaultsPolicy.kt`): the switch labelled "Include preinstalled system apps" in the
-  Security screen defaulted OFF; it is ON now, and the security review scope and app-cache scope
-  read the same policy object so the three cannot drift. Inclusion is **inspection only** — no
-  permission granted, nothing selected or removed automatically — and an unchecked or unknown
-  hash still proves nothing; a hit on a read-only preinstalled partition is information, not an
-  available action.
-- **Permission findings open that app's own permission page** (`data/SecuritySettingsRoutes.kt`):
-  **Manage** on the iMobile SMS item used to open MIUI's app-level "Other permissions" hub — a
-  different page listing MIUI extras such as autostart and pop-up windows. Two causes fixed: the
-  generic all-permissions action was fired first (MIUI claims it and ignores the package), and
-  the package travelled only as the `PACKAGE_NAME` extra, never as the intent's `package:` data
-  URI. Routes are now ROM-aware and most-specific-first — the ROM's own package-scoped editor on
-  a Xiaomi, then the editor for the **exact** permission (`MANAGE_APP_PERMISSION` +
-  `EXTRA_PERMISSION`), then the app's whole permission list, then App info as the guaranteed last
-  resort — and every candidate carries the package both ways. ColorOS is recognised with its own
-  manual path. No OEM component name was invented: a candidate the ROM does not expose fails to
-  resolve and the next is tried, ending in the existing honest manual-path text. Routing differs
-  per ROM and release, so it still needs checking on both phones.
-- **Main screen: one spacing scale, nothing clipped** (`ui/HomeLayoutPolicy.kt`,
-  `ui/HomeScreen.kt`): the home `LazyColumn` had **no top padding at all**, so the first card was
-  drawn flush against the header and LED strip; the screen also mixed four hand-picked edges
-  (14/16/14/16 dp) with card padding at 12/14/16 dp. One 4 dp-based scale now owns every edge,
-  gap and card padding — one screen edge, an even card gap raised from 14 to 16 dp so rows no
-  longer crowd, a real top inset, a bottom inset, two card-padding sizes only, and
-  `onScale`/`scaled`/`isCoherent` so a one-off number is corrected instead of shipped. This is a
-  *layout* contract: clipping at the largest font scale, on a small screen or in split screen
-  still needs a phone. Typography was left alone rather than "improved" blind.
-- **One language source of truth** (`data/LanguageSourcePolicy.kt`, `MainActivity.kt`,
-  `ui/AppRoot.kt` and six screens): cards could render the opposite language from the header.
-  `tr()` read the process-wide language while several composables read the ViewModel's copy with
-  nothing keeping them equal, and on a cold start the process default was English until the
-  settings flow emitted. Worse, a card observing no state (the update card) was skipped by Compose
-  on a toggle and kept text composed in the old language — which is why *"Verified in-app
-  download; Android confirms installation."* stayed English in **both** directions. The work list
-  reported that pair as missing from `data/Lang.kt`; it was **not** missing, it has been in the
-  catalog since the update card shipped, and a test now asserts it and the four other named cards
-  have real Tamil values — a duplicate would have failed the localization gate. There is now one
-  authority, resolved from the saved choice **before** the first composition and updated on every
-  toggle, and the screen tree is rebuilt on a toggle so every string re-reads it. All display
-  sites moved onto the authority; the state copy exists only to trigger the rebuild, and the
-  source contract fails the build if a display site reads it again. The owner's phone-age estimate
-  stays on the home dashboard, still labelled an estimate.
-- **Publication rule: device evidence only for a new dangerous permission**
-  (`.github/workflows/build-apk.yml`, `tools/verify_release_permission_delta.py`): owner decision
-  that supersedes the every-release install rule. The gate now requires
-  `docs/live-guard-<versionName>-device-evidence.md` only when the build **adds** a dangerous
-  permission versus the previously published release APK, compared on the built artifacts with
-  `aapt2 dump badging` — never on the source manifest, because only the merged manifest shows
-  what the phone is asked to grant. Appop/signature permissions are correctly not counted as
-  runtime prompts, and the tool **fails closed** when the previous release cannot be read.
-  Unchanged and still enforced: when an evidence file exists, publication publishes only the
-  tested bytes (a rebuild reproducing the recorded digest, else the recorded run's promoted
-  artifact), so a rebuilt digest can never inherit an earlier device test; Play Protect is never
-  disabled or bypassed; the package and signing key never change; and notes must never claim a
-  device test that did not happen. The policy and its reason are recorded in
-  [`AGENTS.md`](AGENTS.md) and [`PUBLISHING.md`](PUBLISHING.md). 2.40 and 2.41 were published
-  under the older, stricter rule and their records are untouched.
-- **Gates:** 349 required cases / 39 suites each variant (new suites for the battery-current
-  source, automatic answer voices, monitor defaults, language authority and home spacing; the
-  retired reader's 12 historical cases still run from test sources); **945** EN/TA catalog keys
-  with no duplicates or placeholder mismatches (five new strings with Tamil pairs, one retired
-  string removed with its pair); the retired notification-reader capability still absent from the
-  manifest, production sources, build scripts and compiled DEX; 16 `tools/tests` unit tests
-  including 8 for the new permission-delta gate. Static and JVM checks only — not
-  Kotlin/Compose rendering, not device delivery, not Play Protect.
+### All apps
 
-## Live Guard 2.41/code46 — verified/published 12 October 2026: honest charging readings, 44 °C heat warning, AI budgets
+- One shared list of the six apps (`shared/.../SisterApps.kt`). Oor Arivippu and Secret
+  Message already showed six; Live Guard, Ramesh Radio, PulseEQ and Vocal Remover showed
+  four with stale `InternetRadio` links.
 
-**Published** as stable/latest `v2026.10.12-1` after the owner installed the exact candidate
-APK on the phone with Play Protect **ON**. The published APK is the exact device-tested build:
-`CleanSweep-v2.41.apk`, **13,565,004 bytes**, SHA-256
-`f728a3435f12952370759feed743431c01179b95e84ba48259bae89a35ba7a03`, built in CI run
-**38202739572** (source `e31828f74bbe25f6c8e59c278284c06fe24826f3`). With Play Protect **on**, on
-the same Redmi 13 5G as 2.40, Play Protect showed "App scan recommended" → "Scanning…" →
-"This app looks safe — You can continue to install it", Android's installer completed and
-About shows CleanSweep v2.41, upgrading in place over 2.40 (45). That is one phone, one build —
-not Google's approval, not all-device certification and not proof of any cause. Record:
-[`docs/live-guard-2.41-device-evidence.md`](docs/live-guard-2.41-device-evidence.md). Full
-write-up: [`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md).
+## Oor Arivippu 1.0.2 — 16 October 2026
 
-- **Honest watts/amps** (`data/ChargingHonestyPolicy.kt`): charging power and current are
-  labelled battery-side, shown only when measured, never substituted for one another and
-  never turned into `0.00 W` when a sensor is missing. Implausible kernel values
-  (volts outside 2–12, current beyond 20 A, watts beyond 150 W, non-finite spikes) are
-  refused. The battery reader now uses the same policy, so the card, the health screen and
-  the pill cannot disagree.
-- **Screen-on/off charging note**: while charging, the card and the battery screen explain
-  that the screen's own draw changes the battery-side figure, and that it is measured at the
-  battery — not the charger adapter's output. Plain measurement note, no fault and no claim
-  about the charger.
-- **AI output-budget + provider model check** (`ai/AiOutputBudgetPolicy.kt`): every
-  generation ask is clamped to 32–4 000 output tokens (listing models keeps 0), a request
-  whose deadline is nearly spent asks for a *shorter* answer instead of timing out, and a
-  model absent from the provider's own `/models` list is rejected with the existing
-  translatable message — in the connection test and after "Load models". An unavailable list
-  is never evidence against a model.
-- **44 °C heat warning** (`data/ThermalWarningPolicy.kt`): one owner-set battery threshold
-  (44 °C; the voice path used 45 °C and one plug-in check used 42 °C), the sensor is named
-  honestly (battery vs CPU zone), the temperature text is formatted from the real reading or
-  omitted, and a repeat is hushed for 3 hours. No cause and no diagnosis are claimed.
-- Gates: **36 required suites / 321 prepared declarations** (`tools/verify_cleaner_regressions.py`
-  +3 suites, +20 declarations), 941 audited EN/TA catalog keys (931 before), the unchanged
-  core-manifest/retired-capability gate, plus a new CI DEX check that `batterySideWatts`,
-  `screenNote`, `shouldAnnounce`, `effectiveOutputTokens` and `checkModel` are compiled into
-  **both** shipped variants. Publication required the recorded device test above; the
-  device-evidence gate published the tested bytes and was not weakened.
+- Place and district announcements speak only the place names. The repeated filler is gone: English no longer says “Entering”, and Tamil no longer says “தற்போது … ஊருக்குள் வந்துள்ளீர்கள்” or “… பகுதிக்கு வந்துள்ளீர்கள்” (for example “Alangudi.” / “ஆலங்குடி.”, and “Pudukkottai district.” / “புதுக்கோட்டை மாவட்டம்.”). The Tamil next-area form with “அடுத்த பகுதி” is unchanged, as are announcement timing, offline suppression and reminders, Plus Code filtering and the voice choices. No permissions changed. See [`releases/oor-arivippu-v1.0.2.md`](releases/oor-arivippu-v1.0.2.md).
+- Published by standalone [GitHub Actions run 38840264469](https://github.com/universalrp2003/InternetRadio/actions/runs/38840264469) from commit `50bd12b2a2b205d5adfce7bb70b47df23b2ccc16`, after the Oor test workflow passed on the identical app source in [run 38840000191](https://github.com/universalrp2003/InternetRadio/actions/runs/38840000191). The workflow and a separate public-API check confirmed that both repositories serve the same stable APK (`Oor-Arivippu-v1.0.2.apk`, 12,195,401 bytes, SHA-256 `bffdf37f525becc3a631c83988e56ca9881e620b76fd2e60bd7ce5b31efdd78b`) at canonical release and download URLs. The 1.0.0 and 1.0.1 releases and assets are unchanged.
+- At the owner's request, 1.0.2 was published without a device test; no build of the 1.0.2 source has been installed on a phone.
 
-## Live Guard 2.40/code45 — verified/published 11 October 2026: notification/message reading removed
+## Oor Arivippu 1.0.1 — 16 October 2026
 
-**Published** as stable/latest `v2026.10.11-4` after Google Play Protect blocked
-installation of the published Live Guard APK ("App blocked to protect your device") and
-the owner chose to ship the main app **without notification/message reading**. The
-screenshot shows no hash and Google gave no hash-linked verdict, so the blocked artifact
-is unconfirmed and the 2.38/2.39 reader is the leading suspect, not a proven cause; its
-removal is not a guaranteed clearance. The published APK is the exact device-tested
-build: `CleanSweep-v2.40.apk`, **13,558,548 bytes**, SHA-256
-`9a802bffc6e4ff17bc572be3c19f612f92a23c133790042f87234da20fe20869`, built in CI run
-38149080790 (job 114498516971, source `92ffd31b4cf8a4141769ca5dd1d141354807eefa`).
-With Play Protect **on**, on one Redmi 13 5G (Xiaomi HyperOS
-3.0.303.0, Android 16, build BP2A.250605.031.A3) Play Protect showed "This app looks
-safe - You can continue to install it" and Android's installer completed; About shows
-CleanSweep v2.40. The same
-phone had blocked the 2.39 APK. This is one phone, one build — not Google's approval, not
-all-device certification and not proof of the cause. Record:
-`docs/live-guard-2.40-device-evidence.md`.
+- Oor Arivippu filters Plus Codes and coordinate-only labels, compares normalized place names before speaking, prefers named landmarks such as hospitals/bus stands, and offers up to four Android TTS voices per language where available. Network voices are identified; offline reminders continue to use a local voice or beep. No permissions changed. See [`releases/oor-arivippu-v1.0.1.md`](releases/oor-arivippu-v1.0.1.md).
+- Published by standalone [GitHub Actions run 38826899278](https://github.com/universalrp2003/InternetRadio/actions/runs/38826899278) from commit `6f14f65c7cb54ab48c1a3460bab73fb75178951c`, after the Oor test workflow passed on the identical app source in [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762). The workflow and a separate public-API check confirmed that both repositories serve the same stable APK (`Oor-Arivippu-v1.0.1.apk`, 12,195,397 bytes, SHA-256 `ec10c7369807748c9a5608f1a5c6a37eff5f8e1f7433cc16e984c75d8958457d`) at canonical release and download URLs. The 1.0.0 releases and assets are unchanged.
+- The owner device-tested the debug APK from [run 38776902130](https://github.com/universalrp2003/InternetRadio/actions/runs/38776902130), built from the same app source before the version was raised, and authorized this release. That build reported 1.0.0. After publication, the owner also installed the debug APK of the exact 1.0.1 source from Oor test [run 38826564762](https://github.com/universalrp2003/InternetRadio/actions/runs/38826564762); it reported 1.0.1 (3), passed Play Protect's “This app looks safe” check and showed no newer release, and the owner reports it works. Both test builds were debug-signed; the exact 1.0.1 stable bytes were not device-tested.
 
-- Removed completely (not switched off, not hidden): `MessageReaderService`, the
-  `BIND_NOTIFICATION_LISTENER_SERVICE` permission, the `NotificationListenerService`
-  intent filter, the reader screen/route/links/setup row, `SetupGuides.NOTIFICATIONS`, the
-  reader-only ML Kit translate/language-id dependencies, the reader service-label
-  resources, and the private-message speech plumbing
-  (`Announcer.KEY_MESSAGES`/`Event.MESSAGES`/`speakNotification`/`cancelNotifications`).
-  The 2.39 sources are archived byte-for-byte in
-  `docs/archived-notification-reader-2.39/` (reference only; never compiled, no hidden
-  flavor/module, never distributed as a workaround). Re-adding any notification/message
-  access needs a separate owner decision plus policy and device review.
-- The retired pure `NotificationReadingPolicy` now lives in the **test** source set so its
-  12 historical cases still run. CI rejects the retired class names in **both** debug and
-  release APK DEX, and `tools/verify_cleaner_core_manifest.py` (+8 unit tests) checks the
-  source manifest, the merged manifest, the production tree, the archive discipline and
-  removed dependencies.
-- One-time scoped cleanup (`CorePrivacyMigration`, 6 prepared cases) retires only the
-  reader's preferences file, the `voice_messages` key, the reader's stale voice diagnostics
-  (only when `voice_last_event == "MESSAGES"`) and the obsolete `reader` setup-reminder id.
-  A completion marker is written only when every step succeeds, so an interrupted cleanup
-  retries on a later start; nothing private is logged. API keys, language, A/B voice
-  selections, switches (including saved OFF), data plan, histories, genuine
-  permission-review records and other apps' data are untouched.
-- Kept: `POST_NOTIFICATIONS` and every ordinary Live Guard alert, general speech, installed
-  voice previews, the two selected A/B answer voices, widgets, health/cleanup/security/data
-  features, the verified updater with mandatory Android installer confirmation, package,
-  stable certificate, API 26 support and all supported ABIs. Both languages now state the
-  no-notification-reading position (931 EN/TA keys audited).
-- Gates run before publication: **301 cases in each** Cleaner debug/release variant
-  (**33 suites**), `:radio:testDebugUnitTest`, all-module APK/AAB and
-  package/version/API26/non-debuggable/stable-signature/packaged-feature checks, the
-  retired-capability/DEX gate and measured APK size (128MiB cap plus the existing 2.39
-  client's 50MiB bound) — all green in run 38149080790. Publication additionally
-  required the owner's recorded Play Protect + installer outcome for the exact APK
-  SHA-256 in `docs/live-guard-2.40-device-evidence.md`; the workflow refuses a newer
-  CleanSweep version without it and publishes the tested bytes (a rebuild with a
-  different digest falls back to run 38149080790's `cleansweep-apk` artifact after
-  digest verification). Previous release assets and CI records are never overwritten or erased.
+## Latest published releases — as of 16 October 2026
 
-## Live Guard2.39/code44 — verified/published11 October2026
+| App | Version | Release notes | RP-Android-Apps | InternetRadio fallback |
+|---|---:|---|---|---|
+| Oor Arivippu | 1.0.2 / code 4 | [`releases/oor-arivippu-v1.0.2.md`](releases/oor-arivippu-v1.0.2.md) | [oor-arivippu-v1.0.2](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2) | [oor-arivippu-v1.0.2](https://github.com/universalrp2003/InternetRadio/releases/tag/oor-arivippu-v1.0.2) |
+| Live Guard (CleanSweep) | 2.46 / code 51 | [`releases/live-guard-v2.46.md`](releases/live-guard-v2.46.md) | [live-guard-v2.46](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/live-guard-v2.46) | [live-guard-v2.46](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46) |
+| Ramesh Radio | 1.11 / code 11 | [`releases/ramesh-radio-v1.11.md`](releases/ramesh-radio-v1.11.md) | [ramesh-radio-v1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11) | [ramesh-radio-v1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11) |
+| PulseEQ | 1.5 / code 6 | [`releases/pulseeq-v1.5.md`](releases/pulseeq-v1.5.md) | [pulseeq-v1.5](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5) | [pulseeq-v1.5](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5) |
+| RP Vocal Remover Studio | 0.1.11 / code 12 | [`releases/rp-vocal-remover-studio-v0.1.11.md`](releases/rp-vocal-remover-studio-v0.1.11.md) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11) | [rp-vocal-remover-studio-v0.1.11](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11) |
 
-Follow-up to the passed/published2.38: its universal APK is82,630,093 bytes,
-above the updater's50MiB limit.2.39 uses a128MiB bounded cap, compresses/extracts
-native libraries without dropping supported ABIs, and gates publication on the
-actual APK fitting the updater. Same package/certificate/API26. No changed file
-is uploaded under the existing2.38 version. Unchanged Radio/EQ assets are carried
-byte-for-byte from verified2.37; rebuilt changed-hash companions are not reused.
-All2.38 functional changes below retained; all295 required cases EACH variant,
-all-module/signature and new size gates passed again in CI38143638654/job114482383017
-(6m00s), source6790a96…, published13:38:57Z as stable/latestv2026.10.11-3.
-Actual universal APK44,610,589 bytes fits new128MiB and old50MiB caps. Device tests
-remain pending; release assets/tag/latest/source/digests and copied companion bytes
-were independently checked. Older2.37/2.38 assets remain untouched.
+GitHub Actions [run 38521705254](https://github.com/universalrp2003/InternetRadio/actions/runs/38521705254) passed the four-app build, unit/regression tests, APK and signature checks, and dual-repository publication. Both repositories now serve the four stable APKs. A live public-API check confirmed the destination releases are non-draft/non-prerelease, use canonical release and download URLs, are newer than the bridge versions, and have exactly matching asset sizes and SHA-256 values on both repositories. Owner-provided phone screenshots show update-available notices for all four bridge versions, confirming device-side metadata discovery. They do not show a completed download/install of these exact bytes or identify the supplying repository. The updater source order and selection logic prefer `RP-Android-Apps`. See [`docs/published-release-digests.md`](docs/published-release-digests.md). The build-only hashes in [`docs/candidate-build-digests.md`](docs/candidate-build-digests.md) are from a different run and must not be treated as the published asset digests.
 
-## Live Guard2.38/code43 — verified/published; superseded by2.39 size correction
+Oor Arivippu's first stable release, 1.0.0 / code 2 ([`releases/oor-arivippu-v1.0.0.md`](releases/oor-arivippu-v1.0.0.md)), was then published separately, outside that four-app batch, by standalone [GitHub Actions run 38748688974](https://github.com/universalrp2003/InternetRadio/actions/runs/38748688974). The public API confirmed that both repositories serve the same stable APK (`Oor-Arivippu-v1.0.0.apk`, 12,179,013 bytes, SHA-256 `b438e0dbe76c0de975a4ce35bf126b8825cd5af0976fe3db93a11ae8b6f6794d`) at canonical release and download URLs. The owner reports successful two-device testing and that the app is working. Supplied screenshots show the v1.0.0 (code 2) package and the app running at v1.0.0, but do not provide the APK SHA-256 or link the installed bytes to the published digest.
 
-Owner now authorizes the next build and verified publication on11 October2026.
-Candidate **2.38/code43**, tag `v2026.10.11-2`; do not publish failed builds or
-replace the existing **2.37/code42** assets. CI38142967677 succeeded (5m57s); all295 required cases each variant,
-all-module builds and APK/API26/signature gates passed. Published11October2026
-13:28:59Z from `f04467580a6e6a2b98984634d6d56cc53c58f5cb`.
-Its assets stay immutable; the discovered updater-size issue is fixed in2.39.
+## Previous stable bridge releases — 14 October 2026
 
-- Reviewed feature setup with saved-OFF respect, explicit access/voice/background
-  choices and optional quiet aggregate reminders. No blanket permission grant.
-- Cleaner-only Home Update control: eligible official-release pulse, bounded
-  browser-free private APK download, hash/package/version/signing checks, explained
-  unknown-apps access and mandatory Android installer confirmation. No forced or
-  bypassed Play Protect claim. Radio/PulseEQ shared updater remains unchanged.
-- Opt-in multi-app/multi-sender notification reading: sender-only default,
-  per-app full-message option, consented local EN/TA language models and non-network
-  installed TTS. No notification-to-AI/upload/history path; unknown translation
-  means sender only. Android/OEM/privacy gates still apply.
-- Nearby official provider/VirusTotal key links and bilingual text/voice guides.
-  Exact LM Arena source/category/date/no-match card; the verified public feed is
-  December2025, so it is dated, **not a current October2026 score or IQ**.
-- Three compact launcher widget profiles replace the large `% + W` default:
-  current battery, genuine observed unplug time/level, metered usage or useful
-  Wi-Fi/user-set unlimited5G phone details. Floating pill unchanged. System-app
-  review/cache inclusion defaults ON when unset; cache opens fresh without new
-  automatic selections/deletion.
-- Previous 45-second cancellable chat/exact-product/TODAY news, localized stable
-  errors, mode-aware welcomes, genuine saved-review/12-hour times and actual A/B
-  voice-preview/alternate-between-answers fixes retained. Heavy report/device-AI
-  whole operations now have owned 90-second progress/cancel/stale-result gates;
-  network scan+AI uses one batch and never saves guesses as verified user names.
+| App | Version | Release notes | GitHub Release |
+|---|---:|---|---|
+| Live Guard (CleanSweep) | 2.45 / code 50 | [`releases/live-guard-v2.45.md`](releases/live-guard-v2.45.md) | [live-guard-v2.45](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.45) |
+| Ramesh Radio | 1.10 / code 10 | [`releases/ramesh-radio-v1.10.md`](releases/ramesh-radio-v1.10.md) | [ramesh-radio-v1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.10) |
+| PulseEQ | 1.4 / code 5 | [`releases/pulseeq-v1.4.md`](releases/pulseeq-v1.4.md) | [pulseeq-v1.4](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.4) |
+| RP Vocal Remover Studio | 0.1.10 / code 11 | [`releases/rp-vocal-remover-studio-v0.1.10.md`](releases/rp-vocal-remover-studio-v0.1.10.md) | [rp-vocal-remover-studio-v0.1.10](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.10) |
 
-**Actual2.38 validation:** CI38142967677 succeeded, all295 required cases EACH
-variant and all-module/API26/non-debuggable/signature/packaging gates passed; no
-phone/live-provider tests. All22 shipped tests unchanged in source.2.39 repeats
-that gate with size/companion immutability checks, recorded above. Dynamic legacy
-translation meaning/layout and device behavior remain uncertified. See
-[next-update review](docs/live-guard-next-update-review.md). Previous assets unchanged.
+Publication run **38501139771** built and verified the four bridge APKs and published them on the old `InternetRadio` endpoint so existing installations could discover an increasing-version update. Those earlier release pages, tags and assets remain available and were not overwritten by the new batch.
 
-Detailed historical notes remain in [`releases/`](releases/). This summary does not
-claim app-store publication or physical-device certification.
+The Live Guard permission-delta check for 2.45 found no newly added dangerous permission, so no physical-device evidence record was required. The exact CI-generated bridge APK bytes were not installed on a phone during that publication; no exact-build device test is claimed. CI and release validation are not Play Protect approval or an all-device compatibility claim. On 14 October, the owner reported the bridge apps were working and manual update checks completed without errors. The subsequent 2.46 / 1.11 / 1.5 / 0.1.11 batch has now seeded `RP-Android-Apps`; API/source-selection verification is recorded above and in the migration ledger. On-device retrieval/installation of those latest exact bytes remains a separate grace-period check.
 
-## CleanSweep / Live Guard 2.37 (code 42) — 11 October 2026
+Full APK filenames, byte sizes and SHA-256 digests for the current and previous releases are in [`docs/published-release-digests.md`](docs/published-release-digests.md).
 
-**Verified/published** as `v2026.10.11-1` at2026-10-11T09:08:41Z, immutable source
-`325576df99dc3d56ad635e5a2d229a0e468dd7da`. [CI 38127107781](https://github.com/universalrp2003/InternetRadio/actions/runs/38127107781) passed 177 required cases
-in each Cleaner variant plus build/feature/version/API26/signing gates; six assets checked.
-See [release notes](releases/v2026.10.11-1.md) for details and physical-device limits.
+## Previous stable releases — 13 October 2026
 
-- Automatic TTS main-thread initialization, bounded per-language queue, callbacks,
-  checked return values, awaited background events, one same-language offline retry,
-  start-based cooldowns and connection/job deduplication. Runtime power/battery/network
-  receivers are owner-scoped; registration evidence is shown, and manifest-only
-  cold-background power delivery is not guaranteed. Voice diagnostics distinguish
-  queued/blocked/failed/engine outcomes; real-gated automatic test and guarded TTS settings.
-- Real publication-today Tamil RSS/Atom news in phone-local timezone, canonical title/URL
-  deduplication, day-scoped unseen rotation ending when caught up, no publisher ribbon,
-  old/static/synthetic fallback or refresh reset of seen titles.
-- Local configured API/model identity answers without web/API calls; relevant unique
-  collapsed evidence for other questions, not an unrelated first-hit Wikipedia fallback.
-- Larger resizable launcher widget: battery% + battery-side W, per-widget views,
-  available measurements and snapshot time, unique actions and coalesced off-main queries.
-  Only genuinely reported fine percent resolution; two W decimals do not certify accuracy.
-- Correct microamp API conversion without a magnitude multiplier; fractional SOC does
-  not falsely certify exact20→80 charging-history boundaries.
-- Retain active Home phone-age estimate, all six 2.35 tools/privacy controls, targeted
-  settings and floating pill behaviour. Add52 required cases, retaining all 125 prior.
-- Ramesh Radio1.8/PulseEQ1.2 and the two legacy modules unchanged in source.
+| App | Version | Release notes | GitHub Release |
+|---|---:|---|---|
+| Live Guard (CleanSweep) | 2.44 / code 49 | [`releases/live-guard-v2.44.md`](releases/live-guard-v2.44.md) | [live-guard-v2.44](https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.44) |
+| Ramesh Radio | 1.9 / code 9 | [`releases/ramesh-radio-v1.9.md`](releases/ramesh-radio-v1.9.md) | [ramesh-radio-v1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.9) |
+| PulseEQ | 1.3 / code 4 | [`releases/pulseeq-v1.3.md`](releases/pulseeq-v1.3.md) | [pulseeq-v1.3](https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.3) |
+| RP Vocal Remover Studio | 0.1.9 / code 10 | [`releases/rp-vocal-remover-studio-v0.1.9.md`](releases/rp-vocal-remover-studio-v0.1.9.md) | [rp-vocal-remover-studio-v0.1.9](https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.9) |
 
-## CleanSweep / Live Guard 2.36 (code41)
+CI publication run **38380663566** built and verified those releases, including CleanSweep regression tests, package/version/signature checks and public-asset size/SHA-256 verification. The Live Guard permission-delta check found no newly added dangerous permission relative to 2.43. The exact Live Guard CI release APK was not installed during that run; CI is not a phone test or Play Protect approval. The owner separately reported installing all four then-current apps and that they worked on their phone on 13 October 2026; that report is not an all-device compatibility claim. Their release pages, tags, APK assets and original SHA-256 records remain unchanged as historical releases.
 
-[Verified release](releases/v2026.10.11.md): restored wrapping/tappable estimated-age
-badge to active Home with truthful unsupported evidence and off-main daily cache.
-125 required Cleaner cases each variant. All six2.35 improvements retained.
+## Recent Live Guard history
 
-## CleanSweep / Live Guard 2.35 (code40)
+- **2.44 / code 49:** added update verification, safer APK hand-off and contributor/release links. The permission-delta gate found no new dangerous permission relative to 2.43. See [`releases/live-guard-v2.44.md`](releases/live-guard-v2.44.md).
+- **2.43 / code 48:** corrected charging measurements so unsupported zero current is unavailable rather than a false zero-watt reading. See [`releases/v2026.10.12-3.md`](releases/v2026.10.12-3.md).
+- **2.42 / code 47:** device-health, voice-selection and monitoring refinements; associated device evidence and scope are linked from the release notes. See [`releases/v2026.10.12-2.md`](releases/v2026.10.12-2.md).
+- **2.41 / code 46:** honest charging readings, a local 44 °C warning, and bounded AI output/provider checks. The temperature warning is not an automatic pause threshold. See [`releases/v2026.10.12-1.md`](releases/v2026.10.12-1.md).
+- **2.40 / code 45:** removed notification/message-reading capability from the app. See [`releases/v2026.10.11-4.md`](releases/v2026.10.11-4.md) and the [Play Protect installation record](docs/live-guard-play-protect-install-block.md).
 
-[Verified release](releases/v2026.10.10-9.md): truthful dated dashboard, allowlisted
-compatibility diagnostics, opt-in security history, observed charging/charts,
-conditional configurable data budgeting/history, and grounded manually reviewed
-checklists/fresh rechecks.113 required Cleaner cases per variant.
+Older release notes and device-test records remain in `releases/` and `docs/` as historical records. They describe the scope and test process at the time of those versions and are not current feature or build instructions.
+
+## Project scope
+
+The current source, Gradle build and CI cover five active apps: Live Guard, Ramesh Radio, PulseEQ, RP Vocal Remover Studio and Oor Arivippu. The existing four-app batch workflow remains separate from Oor Arivippu's standalone release workflow; store-art preparation currently covers the three apps with store metadata. Releases for retired modules are preserved on GitHub as history and are not part of current builds or future release batches. The repository slug stays unchanged until the staged updater migration is complete; see [`docs/repository-migration.md`](docs/repository-migration.md).

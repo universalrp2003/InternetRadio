@@ -1,0 +1,92 @@
+name: OorArivippu test APK
+
+# GitHub exposes manual dispatch only after this file is on the default branch.
+# Until then, matching Arena-branch pushes can run this test-only build.
+on:
+  push:
+    branches: [main, "arena/**"]
+    paths:
+      - "oorarivippu/**"
+      - "shared/src/main/java/**"
+      - "tools/verify_apps_localization.py"
+      - ".github/workflows/oorarivippu-release.yml"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle/**"
+      - "gradle.properties"
+      - "gradlew"
+      - ".github/workflows/oorarivippu-test-apk.yml"
+  pull_request:
+    paths:
+      - "oorarivippu/**"
+      - "shared/src/main/java/**"
+      - "tools/verify_apps_localization.py"
+      - ".github/workflows/oorarivippu-release.yml"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle/**"
+      - "gradle.properties"
+      - "gradlew"
+      - ".github/workflows/oorarivippu-test-apk.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-debug-apk:
+    name: Build test-only debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify bilingual UI and About links
+        run: python3 tools/verify_apps_localization.py
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.14.3"
+
+      - name: Run app unit tests, Android lint, and build debug APK
+        run: >-
+          ./gradlew --no-daemon --stacktrace
+          :oorarivippu:testDebugUnitTest
+          :oorarivippu:lintDebug
+          :oorarivippu:assembleDebug
+
+      - name: Verify debug APK and calculate SHA-256
+        id: apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find oorarivippu/build/outputs/apk/debug -maxdepth 1 -type f -name '*.apk' -print)
+          if [[ "${#apks[@]}" -ne 1 ]]; then
+            echo "Expected one OorArivippu debug APK, found ${#apks[@]}"
+            printf '%s\n' "${apks[@]}"
+            exit 1
+          fi
+          apk="${apks[0]}"
+          test -s "$apk"
+          sha256="$(sha256sum "$apk" | cut -d ' ' -f 1)"
+          echo "$sha256  $apk"
+          echo "path=$apk" >> "$GITHUB_OUTPUT"
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          echo "APK=$apk" >> "$GITHUB_STEP_SUMMARY"
+          echo "SHA-256=$sha256" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test-only debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: oorarivippu-test-debug-apk-${{ github.run_number }}
+          path: ${{ steps.apk.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14

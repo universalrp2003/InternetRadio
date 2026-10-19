@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">RP VOCAL REMOVER STUDIO</string>
+    <string name="processing_channel_name">சாதனத்திலேயே குரல் பிரிப்பு</string>
+    <string name="processing_channel_description">உள்ளூர் ஒலி செயலாக்க முன்னேற்றமும் கட்டுப்பாடுகளும்</string>
+</resources>

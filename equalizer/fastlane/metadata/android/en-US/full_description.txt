@@ -1,13 +1,7 @@
-PulseEQ is a 20-band equalizer that does its own audio processing instead of borrowing a
-system effect: peaking biquad filters, a preamp and a soft limiter, so a boosted preset does
-not clip.
+PulseEQ is a 20-band equalizer with its own digital signal processing: peaking biquad filters, a preamp and a soft limiter help prevent boosted presets from clipping.
 
-* 20 bands from 31 Hz to 20 kHz, with presets for music, movies, speech, podcasts, gaming and
-  more — and room to move every band yourself.
-* A spectrum light-bar driven by real audio energy (not a decoration), plus a built-in 20-band
-  player so you can hear the difference immediately.
-* Works with cooperating music players that expose their audio session, and keeps running in
-  the background with a foreground service and a small notification showing the active preset.
+* Twenty bands from 31 Hz to 20 kHz, with presets for music, movies, speech, podcasts, gaming and more.
+* Adjust individual bands and preamp, save settings, and view the spectrum while audio plays.
+* Built-in local player plus support for cooperating music players that expose an audio session. Background behavior and effects outside PulseEQ depend on Android and the device/ROM; system-wide equalization is not guaranteed.
 
-PulseEQ uses Internet only for optional GitHub release checks. It has no ads and collects
-nothing. It is an equalizer, an audio tool — it does not download music.
+Audio processing stays on the device. Selected audio is not uploaded. The optional GitHub release check sends ordinary request metadata to GitHub, not audio. There are no ads or developer-operated analytics.

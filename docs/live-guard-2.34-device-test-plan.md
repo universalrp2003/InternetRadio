@@ -1,5 +1,7 @@
 # Live Guard / CleanSweep 2.34 — validation and device test plan
 
+> Historical validation record for the 2.34 release, from the project scope at that time. Its build and device-test notes are not instructions for the current four-module CI pipeline.
+
 ## Scope
 
 Based on the published v2.33 source (tag `v2026.10.10-7`), not the older default
@@ -15,7 +17,7 @@ Before publication, Build APK must pass:
   - twelve settings routing/identity/API/OEM fallback tests;
   - nine complete AI-prompt, privacy and unavailable-data tests.
 - Existing CleanSweep and Ramesh Radio unit tests.
-- Debug/release APK and release AAB compilation for all five preserved modules.
+- Debug/release APK and release AAB compilation for all app modules then present in the source checkout.
 - Existing APK/manifest/Dex checks, non-debuggable release checks, API-26/version
   matching and mandatory signature verification for every release APK against the
   existing project certificate. XML report validation rejects missing/skipped
