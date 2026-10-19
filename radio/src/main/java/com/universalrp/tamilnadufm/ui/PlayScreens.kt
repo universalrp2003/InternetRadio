@@ -860,12 +860,8 @@ fun MoreScreen(vm: MainViewModel, state: UiState) {
                             android.net.Uri.parse("mailto:universalrp2003@gmail.com"))) }
                     }) { Text("universalrp2003@gmail.com", color = Teal) }
                     Text("App releases", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    listOf(
-                        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46",
-                        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11",
-                        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5",
-                        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11",
-                    ).forEach { (label, url) ->
+                    // All six apps, one shared list (was four hard-coded links to the old repo).
+                    com.universalrp.updates.SisterApps.releaseLinks().forEach { (label, url) ->
                         androidx.compose.material3.TextButton(onClick = {
                             runCatching { aboutContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                         }) { Text(label, color = Teal) }
@@ -987,7 +983,13 @@ fun NowPlayingSheet(vm: MainViewModel, state: UiState) {
                 )
             }
 
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(18.dp))
+
+            // v1.12: draggable seek. Live radio offers the buffer only; recorded audio
+            // seeks anywhere in the file.
+            SeekBar(Modifier.padding(horizontal = 6.dp))
+
+            Spacer(Modifier.height(14.dp))
 
             Row(
                 Modifier.fillMaxWidth(),

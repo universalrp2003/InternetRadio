@@ -65,5 +65,12 @@ class BootReceiver : BroadcastReceiver() {
                 com.universalrp.cleansweep.work.ChargerWatchWorker.schedule(app)
             }
         }
+
+        // 4. v2.47: re-arm the 4G/5G watch if the owner turned on split counting or
+        //    radio-change announcements. Without this the counters silently stop at reboot
+        //    and the announcement switch looks broken until the app is opened again.
+        if (com.universalrp.cleansweep.notify.RadioWatchService.needed(app)) {
+            runCatching { com.universalrp.cleansweep.notify.RadioWatchService.start(app) }
+        }
     }
 }

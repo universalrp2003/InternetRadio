@@ -1219,12 +1219,8 @@ private fun TextButtonCompact(text: String, onClick: () -> Unit) {
 @Composable
 private fun AboutDialog(onDismiss: () -> Unit, onModelCredits: () -> Unit) {
     val context = LocalContext.current
-    val releaseLinks = listOf(
-        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46",
-        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11",
-        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5",
-        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11",
-    )
+    // All six apps from one shared list (this used to be four links to the old repository).
+    val releaseLinks = com.universalrp.updates.SisterApps.releaseLinks()
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = SoftWhite,

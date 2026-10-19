@@ -86,12 +86,8 @@ fun AboutScreen(vm: EqViewModel) {
                     Text("AI software-assistance contributor: Arena.ai Agent Mode", color = TextSecondary)
                     Spacer(Modifier.height(4.dp))
                     Text("App releases", fontWeight = FontWeight.Bold, color = TextPrimary)
-                    listOf(
-                        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46",
-                        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11",
-                        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5",
-                        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11",
-                    ).forEach { (label, url) ->
+                    // All six apps, one shared list (was four hard-coded links to the old repo).
+                    com.universalrp.updates.SisterApps.releaseLinks().forEach { (label, url) ->
                         androidx.compose.material3.TextButton(onClick = {
                             runCatching { sourceContext.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))) }
                         }) { Text(label, color = Cyan) }

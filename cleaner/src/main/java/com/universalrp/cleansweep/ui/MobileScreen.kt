@@ -180,6 +180,10 @@ fun MobileScreen(state: UiState, vm: MainViewModel) {
         // -------------------------------------------------------------- data usage
         item { DataUsageCard(state, vm) }
 
+        // v2.47: separate 4G/5G counters, the 5G-unlimited switch and the in-app voice volume.
+        // Placed directly under the data card because both answer "how much is left?".
+        item { RadioSplitCard() }
+
         item {
             Text(
                 tr(

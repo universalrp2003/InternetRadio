@@ -338,7 +338,9 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             s.category in VOTE_ORDERED_CATEGORIES -> StationOrdering.mostPopular(list)
             else -> list
         }
-        mutate { it.copy(visible = ordered) }
+        // Same reason as DirectoryClient: a saved custom station can repeat a shipped
+        // URL, and the list key is the URL.
+        mutate { it.copy(visible = ordered.distinctBy { it.url }) }
     }
 
     // -------------------------------------------------------------- directory

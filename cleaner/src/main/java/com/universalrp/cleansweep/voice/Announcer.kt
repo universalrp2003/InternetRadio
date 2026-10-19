@@ -46,6 +46,16 @@ object Announcer {
      */
     const val KEY_ONLINE = "voice_online"
     const val KEY_LOUDER = "voice_louder"
+
+    /**
+     * v2.47: in-app volume for everything this app speaks, 0…1.
+     * It rides on each utterance through KEY_PARAM_VOLUME, so the phone's own volume is
+     * never changed behind the user's back.
+     */
+    const val KEY_VOLUME = "voice_volume"
+
+    /** v2.47: announce 4G ⇄ 5G changes, separately from Wi-Fi ⇄ mobile data. */
+    const val KEY_RADIO_CHANGE = "voice_radio_change"
     const val KEY_QUIET_START = "voice_quiet_start"
     const val KEY_QUIET_END = "voice_quiet_end"
     const val KEY_LOW = "voice_battery_low"
@@ -113,6 +123,9 @@ object Announcer {
         STORAGE_LOW(KEY_STORAGE),
         UNPLUGGED_EARLY(KEY_UNPLUGGED),
         NETWORK_CHANGE(KEY_NET_CHANGE),
+
+        /** 4G ⇄ 5G on the same SIM. Off by default: phones hop between radios constantly. */
+        RADIO_CHANGE(KEY_RADIO_CHANGE),
         NEW_DEVICE(KEY_NEW_DEVICE),
         BATTERY_HEALTH(KEY_BATTERY_HEALTH),
         CHARGER_IDLE(KEY_IDLE_CHARGE),
@@ -166,6 +179,22 @@ object Announcer {
     /** Louder voice alerts: boost alert speech volume (off by default). */
     fun louderVoice(context: Context): Boolean = prefs(context).getBoolean(KEY_LOUDER, false)
 
+    /**
+     * The level used for the next utterance. A stored slider value wins; otherwise the old
+     * louder switch still decides (1.0 vs 0.9), so upgrading changes nothing for anyone who
+     * never touched the slider.
+     */
+    fun voiceVolume(context: Context): Float {
+        val p = prefs(context)
+        return if (p.contains(KEY_VOLUME)) {
+            p.getFloat(KEY_VOLUME, 1f).coerceIn(0f, 1f)
+        } else if (p.getBoolean(KEY_LOUDER, false)) 1f else 0.9f
+    }
+
+    fun setVoiceVolume(context: Context, value: Float) {
+        prefs(context).edit().putFloat(KEY_VOLUME, value.coerceIn(0f, 1f)).apply()
+    }
+
     fun setLouderVoice(context: Context, on: Boolean) {
         prefs(context).edit().putBoolean(KEY_LOUDER, on).apply()
     }
@@ -178,7 +207,12 @@ object Announcer {
     /** Per-event switch. Everything defaults to on; quiet hours do the rest. */
     fun allows(context: Context, event: Event): Boolean {
         val key = event.key ?: return true
-        return prefs(context).getBoolean(key, true)
+        val default = when (event) {
+            // A phone that hops between radios must not narrate it until asked.
+            Event.RADIO_CHANGE, Event.NETWORK_CHANGE -> false
+            else -> true
+        }
+        return prefs(context).getBoolean(key, default)
     }
 
     fun setAllows(context: Context, event: Event, on: Boolean) {
@@ -414,7 +448,7 @@ object Announcer {
             engine.setPitch(1.02f); engine.setSpeechRate(0.96f)
             val params = android.os.Bundle().apply {
                 putInt(TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_MUSIC)
-                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, if (louderVoice(context)) 1f else 0.9f)
+                putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, voiceVolume(context))
             }
             request.attemptId = request.id + if (request.retried) "-offline" else "-first"
             val result = engine.speak(plain(request.text).take(TextToSpeech.getMaxSpeechInputLength()), TextToSpeech.QUEUE_FLUSH, params, request.attemptId)

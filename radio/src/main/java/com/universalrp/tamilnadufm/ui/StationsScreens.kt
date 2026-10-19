@@ -552,7 +552,9 @@ fun DirectorySheet(vm: MainViewModel, state: UiState) {
                     .padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(state.directoryResults, key = { it.url }) { station ->
+                // url+name: still stable across refreshes, but two entries that share a
+                // stream URL can no longer collide and crash the list.
+                items(state.directoryResults, key = { it.url + "|" + it.name }) { station ->
                     PanelCard(Modifier.fillMaxWidth()) {
                         Row(
                             Modifier

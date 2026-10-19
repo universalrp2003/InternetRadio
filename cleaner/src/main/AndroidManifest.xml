@@ -56,6 +56,9 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- v2.47: 4G/5G split counting. Local sampling only; no network transfer. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
     <!--
       The "watt reading beside the clock" the user asked for: Android offers no API for a
       third-party status-bar item, so CleanSweep draws one tiny, touch-through overlay in
@@ -118,6 +121,16 @@
             The charging status card. It only runs while the charger is connected, shows
             watts / percentage / time to full, and stops itself when the cable comes out.
         -->
+        <!--
+            v2.47: the 4G/5G watch. Started only when the user turns on split counting or
+            radio-change announcements; it samples the local byte counter every 3 seconds and
+            listens for TelephonyDisplayInfo (the only reliable 5G signal on NSA networks).
+        -->
+        <service
+            android:name=".notify.RadioWatchService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
         <service
             android:name=".notify.ChargeMonitorService"
             android:exported="false"

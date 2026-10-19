@@ -4,7 +4,45 @@ This file indexes the five actively maintained apps. App-specific details, insta
 
 ## Unreleased
 
-- No unreleased changes are recorded.
+### Ramesh Radio 1.12
+
+- **Fix — crash when opening the live station list (நேரடி நிலையப் பட்டியல்).** The directory
+  can return the same stream URL twice (relays, the same station under two names). The list
+  used the URL as its Compose key, and a duplicate key throws
+  `IllegalArgumentException: Key <url> was already used`, which closed the app. That is why
+  it only happened *sometimes*: it depended on the answer the directory happened to send.
+  `DirectoryClient` now de-duplicates by URL, the visible list is de-duplicated too, and the
+  directory list key is `url + name` so a future duplicate cannot take the app down again.
+- **New — draggable seek bar in Now Playing.** Recorded audio (local files) seeks anywhere in
+  the file; live radio shows a LIVE pill and moves only inside the buffer, because a live
+  stream has no "forward".
+- About now lists **all six apps** from one shared list (`SisterApps`) — the old hard-coded
+  four pointed at the `InternetRadio` repository and left out Oor Arivippu and Secret Message.
+
+### Live Guard 2.47
+
+- **New — 4G and 5G counted separately.** Android keeps one mobile byte counter, so the app
+  samples it every 3 seconds and files each delta under the radio that was active. A new
+  `RadioWatchService` (foreground, `dataSync`, started only when the feature is on) does this
+  and sends the ongoing notification "4G x left · 5G Unlimited".
+- **New — 4G ⇄ 5G announcements**, Tamil and English, with their own switch and a 20-second
+  minimum gap so a flapping modem cannot narrate every hop. Wi-Fi ⇄ mobile stays a separate
+  switch.
+- **New — in-app volume slider** for everything the app speaks (0–100 %), applied per
+  utterance with `KEY_PARAM_VOLUME`; the phone's own volume is never changed. The old "Louder
+  voice" switch still works and is used as the default when the slider has never been moved.
+- **New — 5G-unlimited switch (Auto / On / Off)** with the operator's real terms: Jio needs
+  ₹349+ **and** 2 GB/day; Airtel needs an eligible ₹349+ pack, the one-time claim in the
+  Airtel Thanks app, and is capped at 300 GB per 28-day cycle. The card shows the reason.
+- New permission: `FOREGROUND_SERVICE_DATA_SYNC` (Android 14+ requires the service type to be
+  declared). `READ_PHONE_STATE` was already granted.
+- About now lists all six apps from the shared `SisterApps` list.
+
+### All apps
+
+- One shared list of the six apps (`shared/.../SisterApps.kt`). Oor Arivippu and Secret
+  Message already showed six; Live Guard, Ramesh Radio, PulseEQ and Vocal Remover showed
+  four with stale `InternetRadio` links.
 
 ## Oor Arivippu 1.0.2 — 16 October 2026
 

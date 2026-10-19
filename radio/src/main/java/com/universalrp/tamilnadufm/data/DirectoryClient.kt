@@ -95,7 +95,12 @@ object DirectoryClient {
                     )
                 }
             }
-            return stations
+            // The directory returns the same stream URL more than once (relays, duplicate
+            // entries, the same station under two names). Compose's LazyColumn treats the
+            // key as unique and THROWS "Key <url> was already used" when it is not — which
+            // is why opening the live station list only crashed sometimes: it depended on
+            // whether that particular directory answer happened to contain a duplicate.
+            return stations.distinctBy { it.url }
         } finally {
             runCatching { connection.disconnect() }
         }

@@ -216,12 +216,8 @@ fun AboutScreen(state: com.universalrp.cleansweep.UiState, vm: MainViewModel) {
             PanelCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp)) {
                     Text(tr("App releases"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    listOf(
-                        "Live Guard — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/live-guard-v2.46",
-                        "Ramesh Radio — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/ramesh-radio-v1.11",
-                        "PulseEQ — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/pulseeq-v1.5",
-                        "RP VOCAL REMOVER STUDIO — GitHub release" to "https://github.com/universalrp2003/InternetRadio/releases/tag/rp-vocal-remover-studio-v0.1.11",
-                    ).forEach { (label, url) ->
+                    // All six apps, one shared list (was four hard-coded links to the old repo).
+                    com.universalrp.updates.SisterApps.releaseLinks().forEach { (label, url) ->
                         TextButton(onClick = {
                             runCatching { sourceContext.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         }) { Text(tr(label), color = AccentCyan) }

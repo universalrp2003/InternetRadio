@@ -173,7 +173,7 @@ private val OTHER_APPS = listOf(
     "Ramesh Radio" to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
     "PulseEQ" to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
     "RP Vocal Remover Studio" to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
-    "Oor Arivippu" to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2",
+    "Oor Arivippu" to "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.1.0",
 )
 
 @Composable
