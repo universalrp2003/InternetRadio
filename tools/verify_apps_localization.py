@@ -25,7 +25,7 @@ EXPECTED_OOR_RELEASE_URLS = {
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/ramesh-radio-v1.11",
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/pulseeq-v1.5",
     "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/rp-vocal-remover-studio-v0.1.11",
-    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.0.2",
+    "https://github.com/universalrp2003/RP-Android-Apps/releases/tag/oor-arivippu-v1.1.0",
 }
 
 
@@ -164,12 +164,32 @@ def verify_about_links() -> None:
         "equalizer": ROOT / "equalizer/src/main/java/com/universalrp/pulseeq/ui/AboutScreen.kt",
         "vocalremover": ROOT / "vocalremover/src/main/java/com/universalrp/vocalremover/MainActivity.kt",
     }
+    sister_apps_path = ROOT / "shared/src/main/java/com/universalrp/updates/SisterApps.kt"
+    sister_apps_source = sister_apps_path.read_text(encoding="utf-8") if sister_apps_path.exists() else ""
+    shared_links = "fun releaseLinks()" in sister_apps_source
+    if shared_links:
+        expected_sister_tags = (
+            'tagPrefix = "live-guard"', 'version = "2.46"',
+            'tagPrefix = "ramesh-radio"', 'version = "1.11"',
+            'tagPrefix = "pulseeq"', 'version = "1.5"',
+            'tagPrefix = "rp-vocal-remover-studio"', 'version = "0.1.11"',
+            'tagPrefix = "oor-arivippu"', 'version = "1.1.0"',
+            'tagPrefix = "secret-message"', 'version = "1.1.0"',
+        )
+        missing_tags = [tag for tag in expected_sister_tags if tag not in sister_apps_source]
+        if missing_tags:
+            raise ValueError(f"Shared sister-app list is missing current app/version entries: {missing_tags}")
+
     for app, path in about_files.items():
         source = path.read_text(encoding="utf-8")
-        urls = set(re.findall(r'https://github\.com/universalrp2003/InternetRadio/releases/tag/[^"\\]+', source))
-        missing = EXPECTED_RELEASE_URLS - urls
-        if missing:
-            raise ValueError(f"{app} About is missing release links: {sorted(missing)}")
+        if shared_links:
+            if "com.universalrp.updates.SisterApps.releaseLinks()" not in source:
+                raise ValueError(f"{app} About does not render the shared six-app release list")
+        else:
+            urls = set(re.findall(r'https://github\.com/universalrp2003/InternetRadio/releases/tag/[^"\\]+', source))
+            missing = EXPECTED_RELEASE_URLS - urls
+            if missing:
+                raise ValueError(f"{app} About is missing release links: {sorted(missing)}")
         if "universalrp2003@gmail.com" not in source or "Arena.ai Agent Mode" not in source or "Project development" not in source:
             raise ValueError(f"{app} About must include the user contact, project-development credit and Arena.ai Agent Mode credit.")
         if re.search(r'\bAuthor\b', source, re.I):
